@@ -13,55 +13,55 @@ use zip::ZipArchive;
 pub struct InitArgs {
     /// Path to initialize the project (default: current directory)
     #[arg(default_value = ".")]
-    path: String,
+    pub path: String,
 
     /// Project ID (default: folder name)
     #[arg(long)]
-    id: Option<String>,
+    pub id: Option<String>,
 
     /// Project name (default: "My Module")
     #[arg(long)]
-    name: Option<String>,
+    pub name: Option<String>,
 
     /// Project version (default: "1.0.0")
     #[arg(long)]
-    version: Option<String>,
+    pub version: Option<String>,
 
     /// Author name (default: "Author")
     #[arg(long)]
-    author: Option<String>,
+    pub author: Option<String>,
 
     /// Description (default: "A module description")
     #[arg(long)]
-    description: Option<String>,
+    pub description: Option<String>,
 
     /// Force overwrite existing files
     #[arg(short, long)]
-    force: bool,
+    pub force: bool,
 
     /// Create a library module (no module.prop, provides dependencies)
     #[arg(long)]
-    lib: bool,
+    pub lib: bool,
 
     /// Create a template project
     #[arg(long)]
-    tmpl: bool,
+    pub tmpl: bool,
 
     /// Template zip file to implement
     #[arg(long)]
-    r#impl: Option<String>,
+    pub r#impl: Option<String>,
 
     /// Create META-INF folder for traditional Magisk modules
     #[arg(long)]
-    meta_inf: bool,
+    pub meta_inf: bool,
 
     /// Create WEB-ROOT folder for web interface
     #[arg(long)]
-    web_root: bool,
+    pub web_root: bool,
 
     /// Template variables in key=value format
     #[arg(long)]
-    var: Vec<String>,
+    pub var: Vec<String>,
 }
 
 /// Run the init command
@@ -124,7 +124,7 @@ pub fn run(args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
                 return Err(format!("Invalid template variable format: {}. Expected key=type:required:default", var).into());
             }
         }
-        let kt = crate::types::kam_toml::KamToml::new_template(
+        let mut kt = crate::types::kam_toml::KamToml::new_template(
             id.clone(),
             name_map,
             version.clone(),
