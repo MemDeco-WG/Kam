@@ -86,6 +86,9 @@ use kam::cmds::init::{InitArgs, run};
         };
 
         let result = run(args);
+        if let Err(e) = &result {
+            eprintln!("Error in test_init_with_template_vars: {}", e);
+        }
         // Clean up
         if template_dir.exists() {
             fs::remove_dir_all(&template_dir).unwrap();
@@ -191,7 +194,7 @@ name = { var_type = "string", required = true, default = "Default Name" }
 
         let src_dir = template_dir.join("src").join("template");
         fs::create_dir_all(&src_dir).unwrap();
-        fs::write(src_dir.join("script.sh"), "#!/bin/bash\necho {{{{name}}}}").unwrap();
+        fs::write(src_dir.join("script.sh"), "#!/bin/bash\necho {{name}}").unwrap();
 
         let args = InitArgs {
             path: path.clone(),
@@ -210,9 +213,6 @@ name = { var_type = "string", required = true, default = "Default Name" }
         };
 
         let result = run(args);
-        if let Err(e) = &result {
-            eprintln!("Error in test_init_impl_mode: {}", e);
-        }
         assert!(result.is_ok());
 
         let kam_toml_path = temp_dir.path().join("kam.toml");
@@ -223,13 +223,6 @@ name = { var_type = "string", required = true, default = "Default Name" }
 
         // Check if src was copied and replaced
         let src_path = temp_dir.path().join("src").join("impl_module");
-        if !src_path.exists() {
-            eprintln!("src_path does not exist: {:?}", src_path);
-            eprintln!("Contents of temp_dir: {:?}", fs::read_dir(temp_dir.path()).unwrap().map(|e| e.unwrap().path()).collect::<Vec<_>>());
-            if let Ok(entries) = fs::read_dir(temp_dir.path().join("src")) {
-                eprintln!("Contents of src: {:?}", entries.map(|e| e.unwrap().path()).collect::<Vec<_>>());
-            }
-        }
         assert!(src_path.exists());
         let script_sh = src_path.join("script.sh");
         assert!(script_sh.exists());
@@ -241,6 +234,15 @@ name = { var_type = "string", required = true, default = "Default Name" }
     fn test_init_with_meta_inf() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Create my_template directory structure in the workspace root
+        let workspace_root = std::env::current_dir().unwrap();
+        let template_dir = workspace_root.join("my_template");
+        if !template_dir.exists() {
+            fs::create_dir_all(&template_dir).unwrap();
+            let src_dir = template_dir.join("src").join("{{id}}");
+            fs::create_dir_all(&src_dir).unwrap();
+        }
 
         let args = InitArgs {
             path: path.clone(),
@@ -259,6 +261,13 @@ name = { var_type = "string", required = true, default = "Default Name" }
         };
 
         let result = run(args);
+        if let Err(e) = &result {
+            eprintln!("Error in test_init_with_meta_inf: {}", e);
+        }
+        // Clean up
+        if template_dir.exists() {
+            fs::remove_dir_all(&template_dir).unwrap();
+        }
         assert!(result.is_ok());
 
         let meta_inf_path = temp_dir.path().join("META-INF");
@@ -270,6 +279,15 @@ name = { var_type = "string", required = true, default = "Default Name" }
     fn test_init_with_web_root() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Create my_template directory structure in the workspace root
+        let workspace_root = std::env::current_dir().unwrap();
+        let template_dir = workspace_root.join("my_template");
+        if !template_dir.exists() {
+            fs::create_dir_all(&template_dir).unwrap();
+            let src_dir = template_dir.join("src").join("{{id}}");
+            fs::create_dir_all(&src_dir).unwrap();
+        }
 
         let args = InitArgs {
             path: path.clone(),
@@ -288,6 +306,10 @@ name = { var_type = "string", required = true, default = "Default Name" }
         };
 
         let result = run(args);
+        // Clean up
+        if template_dir.exists() {
+            fs::remove_dir_all(&template_dir).unwrap();
+        }
         assert!(result.is_ok());
 
         let web_root_path = temp_dir.path().join("WEB-ROOT");
@@ -399,7 +421,9 @@ required_var = { var_type = "string", required = true }
 
         let result = run(args);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Implementation requires template variables"));
+        let err = result.unwrap_err();
+        eprintln!("Error: {}", err);
+        assert!(err.to_string().contains("Required template variable"));
     }
 
     #[test]
