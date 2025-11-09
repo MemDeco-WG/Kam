@@ -346,6 +346,26 @@ impl KamToml {
         dep.source.as_deref().unwrap_or(DEFAULT_DEPENDENCY_SOURCE)
     }
 
+    /// Resolve all dependency groups, handling includes and detecting cycles
+    pub fn resolve_dependencies(&self) -> Result<crate::dependency_resolver::FlatDependencyGroups, crate::dependency_resolver::DependencyResolutionError> {
+        if let Some(dependency_section) = &self.kam.dependency {
+            let resolver = crate::dependency_resolver::DependencyResolver::new(dependency_section);
+            resolver.resolve()
+        } else {
+            Ok(crate::dependency_resolver::FlatDependencyGroups::new())
+        }
+    }
+
+    /// Validate that all dependency group includes are valid
+    pub fn validate_dependencies(&self) -> Result<(), crate::dependency_resolver::DependencyResolutionError> {
+        if let Some(dependency_section) = &self.kam.dependency {
+            let resolver = crate::dependency_resolver::DependencyResolver::new(dependency_section);
+            resolver.validate()
+        } else {
+            Ok(())
+        }
+    }
+
     /// Validate ID against the regex: ^[a-zA-Z][a-zA-Z0-9._-]+$
     pub fn validate_id(id: &str) -> ValidationResult {
         let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9._-]+$").unwrap();
@@ -591,6 +611,7 @@ readme = "README.md"
 [kam]
 min_api = 29
 supported_arch = ["arm64-v8a"]
+module_type = "Normal"
 "#;
         fs::write(temp_dir.join("kam.toml"), sample_toml).unwrap();
 
@@ -636,6 +657,7 @@ changelog = "https://example.com/changelog.md"
 
 [kam]
 min_api = 29
+module_type = "Normal"
 "#;
         fs::write(temp_dir.join("kam.toml"), invalid_toml).unwrap();
 
@@ -643,5 +665,152 @@ min_api = 29
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("format"));
         fs::remove_dir_all(temp_dir).unwrap();
+    }
+
+    #[test]
+    fn test_dependency_resolution_simple() {
+        let mut name = std::collections::HashMap::new();
+        name.insert("en".to_string(), "Test Module".to_string());
+        let mut description = std::collections::HashMap::new();
+        description.insert("en".to_string(), "Test Description".to_string());
+
+        let mut kt = KamToml::new(
+            "test".to_string(),
+            name,
+            "1.0.0".to_string(),
+            1,
+            "Author".to_string(),
+            description,
+            None,
+        );
+
+        // Add dependencies
+        let dep1 = Dependency {
+            id: "dep1".to_string(),
+            version: Some("1.0.0".to_string()),
+            source: None,
+        };
+        let dep2 = Dependency {
+            id: "dep2".to_string(),
+            version: Some("2.0.0".to_string()),
+            source: None,
+        };
+
+        kt.kam.dependency = Some(DependencySection {
+            normal: Some(vec![dep1, dep2]),
+            dev: None,
+        });
+
+        let resolved = kt.resolve_dependencies().unwrap();
+        let normal_group = resolved.get("normal").unwrap();
+        assert_eq!(normal_group.dependencies.len(), 2);
+        assert_eq!(normal_group.dependencies[0].id, "dep1");
+        assert_eq!(normal_group.dependencies[1].id, "dep2");
+    }
+
+    #[test]
+    fn test_dependency_resolution_with_includes() {
+        let mut name = std::collections::HashMap::new();
+        name.insert("en".to_string(), "Test Module".to_string());
+        let mut description = std::collections::HashMap::new();
+        description.insert("en".to_string(), "Test Description".to_string());
+
+        let mut kt = KamToml::new(
+            "test".to_string(),
+            name,
+            "1.0.0".to_string(),
+            1,
+            "Author".to_string(),
+            description,
+            None,
+        );
+
+        // Add dependencies with includes
+        let normal_dep = Dependency {
+            id: "normal-dep".to_string(),
+            version: Some("1.0.0".to_string()),
+            source: None,
+        };
+        let dev_include = Dependency {
+            id: "include:normal".to_string(),
+            version: None,
+            source: None,
+        };
+        let dev_dep = Dependency {
+            id: "dev-dep".to_string(),
+            version: Some("2.0.0".to_string()),
+            source: None,
+        };
+
+        kt.kam.dependency = Some(DependencySection {
+            normal: Some(vec![normal_dep]),
+            dev: Some(vec![dev_include, dev_dep]),
+        });
+
+        let resolved = kt.resolve_dependencies().unwrap();
+        let dev_group = resolved.get("dev").unwrap();
+        assert_eq!(dev_group.dependencies.len(), 2);
+        assert_eq!(dev_group.dependencies[0].id, "normal-dep");
+        assert_eq!(dev_group.dependencies[1].id, "dev-dep");
+    }
+
+    #[test]
+    fn test_dependency_validation() {
+        let mut name = std::collections::HashMap::new();
+        name.insert("en".to_string(), "Test Module".to_string());
+        let mut description = std::collections::HashMap::new();
+        description.insert("en".to_string(), "Test Description".to_string());
+
+        let mut kt = KamToml::new(
+            "test".to_string(),
+            name,
+            "1.0.0".to_string(),
+            1,
+            "Author".to_string(),
+            description,
+            None,
+        );
+
+        // Add dependency with invalid include
+        let invalid_include = Dependency {
+            id: "include:nonexistent".to_string(),
+            version: None,
+            source: None,
+        };
+
+        kt.kam.dependency = Some(DependencySection {
+            normal: Some(vec![invalid_include]),
+            dev: None,
+        });
+
+        let result = kt.validate_dependencies();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dependency_cycle_detection() {
+        use std::collections::BTreeMap;
+        
+        // Create a resolver directly to test cycle detection
+        let mut groups = BTreeMap::new();
+        
+        let cycle_a = vec![Dependency {
+            id: "include:group-b".to_string(),
+            version: None,
+            source: None,
+        }];
+        let cycle_b = vec![Dependency {
+            id: "include:group-a".to_string(),
+            version: None,
+            source: None,
+        }];
+        
+        groups.insert("group-a".to_string(), cycle_a);
+        groups.insert("group-b".to_string(), cycle_b);
+        
+        let resolver = crate::dependency_resolver::DependencyResolver::from_groups(groups);
+        let result = resolver.resolve();
+        
+        assert!(result.is_err());
     }
 }
