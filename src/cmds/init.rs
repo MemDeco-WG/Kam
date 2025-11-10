@@ -192,6 +192,8 @@ pub fn run(args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
         let template_kam_path = template_path.join("kam.toml");
         if template_kam_path.exists() {
             let kt_template = crate::types::kam_toml::KamToml::load_from_file(&template_kam_path)?;
+            // Update zip_id from the template's id
+            zip_id = kt_template.prop.id.clone();
             if let Some(tmpl) = &kt_template.kam.tmpl {
                 for (var_name, var_def) in &tmpl.variables {
                     if !template_vars.contains_key(var_name) {

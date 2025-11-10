@@ -1,9 +1,68 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde::de::IntoDeserializer;
 use regex::Regex;
+use std::collections::BTreeMap;
 use std::path::Path;
+use std::str::FromStr;
+use thiserror::Error;
 
 /// Default source for dependencies if not specified
 const DEFAULT_DEPENDENCY_SOURCE: &str = "https://github.com/MemDeco-WG/Kam-Index/";
+
+/// Errors that can occur when parsing or validating kam.toml
+#[derive(Error, Debug)]
+pub enum KamTomlError {
+    #[error(transparent)]
+    TomlSyntax(#[from] toml_edit::TomlError),
+    #[error(transparent)]
+    TomlSchema(#[from] toml_edit::de::Error),
+    #[error(transparent)]
+    TomlDe(#[from] toml::de::Error),
+    #[error(transparent)]
+    TomlSer(#[from] toml::ser::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error("kam.toml not found")]
+    NotFound,
+    #[error("kam.toml is empty")]
+    EmptyFile,
+    #[error("prop.id is required and cannot be empty")]
+    MissingId,
+    #[error("prop.name is required and cannot be empty")]
+    MissingName,
+    #[error("prop.version is required and cannot be empty")]
+    MissingVersion,
+    #[error("prop.author is required and cannot be empty")]
+    MissingAuthor,
+    #[error("prop.description is required and cannot be empty")]
+    MissingDescription,
+    #[error("mmrl section is required")]
+    MissingMmrl,
+    #[error("mmrl.zip_url is required for MMRL and cannot be empty")]
+    MissingZipUrl,
+    #[error("mmrl.changelog is required for MMRL and cannot be empty")]
+    MissingChangelog,
+    #[error("ID '{0}' must start with a letter and contain only letters, digits, '.', '_', or '-'")]
+    InvalidId(String),
+    #[error("prop.version must be in format x.y.z (e.g., 1.0.0)")]
+    InvalidVersionFormat,
+    #[error("license file '{0}' not found")]
+    LicenseNotFound(String),
+    #[error("license file '{0}' is empty")]
+    LicenseEmpty(String),
+    #[error("readme file '{0}' not found")]
+    ReadmeNotFound(String),
+    #[error("readme file '{0}' is empty")]
+    ReadmeEmpty(String),
+    #[error("unsupported arch '{0}', valid: {1:?}")]
+    UnsupportedArch(String, Vec<&'static str>),
+    #[error("Template module must have tmpl section")]
+    TemplateMissingTmpl,
+    #[error("Library module must have lib section")]
+    LibraryMissingLib,
+    #[error("duplicate key '{0}' found")]
+    DuplicateKey(String),
+}
 
 /// Validation result for metadata checks
 #[derive(Debug, Clone)]
@@ -12,9 +71,58 @@ pub enum ValidationResult {
     Invalid(String),  // Contains error message
 }
 
+/// Helper function to deserialize a map while ensuring all keys are unique.
+fn deserialize_unique_map<'de, D, K, V, F>(
+    deserializer: D,
+    error_msg: F,
+) -> Result<BTreeMap<K, V>, D::Error>
+where
+    D: Deserializer<'de>,
+    K: Deserialize<'de> + Ord + std::fmt::Display,
+    V: Deserialize<'de>,
+    F: FnOnce(&K) -> String,
+{
+    struct Visitor<K, V, F>(F, std::marker::PhantomData<(K, V)>);
+
+    impl<'de, K, V, F> serde::de::Visitor<'de> for Visitor<K, V, F>
+    where
+        K: Deserialize<'de> + Ord + std::fmt::Display,
+        V: Deserialize<'de>,
+        F: FnOnce(&K) -> String,
+    {
+        type Value = BTreeMap<K, V>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a map with unique keys")
+        }
+
+        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where
+            M: serde::de::MapAccess<'de>,
+        {
+            use std::collections::btree_map::Entry;
+
+            let mut map = BTreeMap::new();
+            while let Some((key, value)) = access.next_entry::<K, V>()? {
+                match map.entry(key) {
+                    Entry::Occupied(entry) => {
+                        return Err(serde::de::Error::custom((self.0)(entry.key())));
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(value);
+                    }
+                }
+            }
+            Ok(map)
+        }
+    }
+
+    deserializer.deserialize_map(Visitor(error_msg, std::marker::PhantomData))
+}
+
 
 /// Core module.prop fields
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 pub struct PropSection {
     pub id: String,
@@ -39,7 +147,7 @@ impl PropSection {
 }
 
 /// MMRL-related metadata
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct MmrlSection {
     pub zip_url: Option<String>,  // Required for MMRL
     pub changelog: Option<String>,  // Required for MMRL
@@ -73,7 +181,7 @@ pub struct MmrlSection {
 }
 
 /// Note section for MMRL
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct NoteSection {
     pub title: Option<String>,
     pub message: String,
@@ -81,7 +189,7 @@ pub struct NoteSection {
 }
 
 /// Manager-specific configurations
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ManagerConfig {
     pub min: Option<u64>,
     pub devices: Option<Vec<String>>,
@@ -89,7 +197,7 @@ pub struct ManagerConfig {
     pub require: Option<Vec<String>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ManagerSection {
     pub magisk: Option<ManagerConfig>,
     pub kernelsu: Option<ManagerConfig>,
@@ -97,19 +205,19 @@ pub struct ManagerSection {
 }
 
 /// Options section
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct OptionsSection {
     pub archive: Option<ArchiveOptions>,
     pub disable_remote_metadata: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveOptions {
     pub compression: Option<String>,
 }
 
 /// Individual dependency with version spec (supports ranges like ">=1.0.0, <2.0.0")
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Dependency {
     pub id: String,
     pub version: Option<String>,
@@ -117,39 +225,39 @@ pub struct Dependency {
 }
 
 /// Dependency section
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DependencySection {
     pub normal: Option<Vec<Dependency>>,
     pub dev: Option<Vec<Dependency>>,
 }
 
 /// Kam custom fields
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum ModuleType {
     Normal,
     Template,
     Library,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct VariableDefinition {
     pub var_type: String,  // e.g., "string", "int", "bool"
     pub required: bool,
     pub default: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct TmplSection {
     pub used_template: Option<String>,
     pub variables: std::collections::HashMap<String, VariableDefinition>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct LibSection {
     pub dependencies: std::collections::HashMap<String, String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct KamSection {
     pub min_api: Option<u32>,
     pub max_api: Option<u32>,
@@ -181,7 +289,7 @@ impl Default for KamSection {
 }
 
 /// Build-related fields
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct BuildSection {
     pub target_dir: Option<String>,
     pub output_file: Option<String>,
@@ -201,6 +309,9 @@ pub struct KamToml {
     pub tool: Option<serde_json::Value>,
     pub tmpl: Option<TmplSection>,
     pub lib: Option<LibSection>,
+    /// The raw unserialized document.
+    #[serde(skip)]
+    pub raw: String,
 }
 
 impl Default for KamToml {
@@ -273,6 +384,7 @@ impl Default for KamToml {
             tool: None,
             tmpl: None,
             lib: None,
+            raw: String::new(),
         }
     }
 }
@@ -315,6 +427,7 @@ impl KamToml {
             tool: None,
             tmpl: None,
             lib: None,
+            raw: String::new(),
         }
     }
 
@@ -329,6 +442,15 @@ impl KamToml {
         kt.kam.module_type = ModuleType::Template;
         kt.kam.tmpl = Some(TmplSection { used_template: None, variables: std::collections::HashMap::new() });
         kt
+    }
+
+    /// Parse a `KamToml` from a raw TOML string.
+    pub fn from_string(raw: String) -> Result<Self, KamTomlError> {
+        let kamtoml = toml_edit::DocumentMut::from_str(&raw)
+            .map_err(KamTomlError::TomlSyntax)?;
+        let kamtoml = Self::deserialize(kamtoml.into_deserializer())
+            .map_err(KamTomlError::TomlSchema)?;
+        Ok(Self { raw, ..kamtoml })
     }
 
     /// Load from TOML string
@@ -346,6 +468,26 @@ impl KamToml {
         dep.source.as_deref().unwrap_or(DEFAULT_DEPENDENCY_SOURCE)
     }
 
+    /// Resolve all dependency groups, handling includes and detecting cycles
+    pub fn resolve_dependencies(&self) -> Result<crate::dependency_resolver::FlatDependencyGroups, crate::dependency_resolver::DependencyResolutionError> {
+        if let Some(dependency_section) = &self.kam.dependency {
+            let resolver = crate::dependency_resolver::DependencyResolver::new(dependency_section);
+            resolver.resolve()
+        } else {
+            Ok(crate::dependency_resolver::FlatDependencyGroups::new())
+        }
+    }
+
+    /// Validate that all dependency group includes are valid
+    pub fn validate_dependencies(&self) -> Result<(), crate::dependency_resolver::DependencyResolutionError> {
+        if let Some(dependency_section) = &self.kam.dependency {
+            let resolver = crate::dependency_resolver::DependencyResolver::new(dependency_section);
+            resolver.validate()
+        } else {
+            Ok(())
+        }
+    }
+
     /// Validate ID against the regex: ^[a-zA-Z][a-zA-Z0-9._-]+$
     pub fn validate_id(id: &str) -> ValidationResult {
         let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9._-]+$").unwrap();
@@ -357,7 +499,7 @@ impl KamToml {
     }
 
     /// Write the KamToml to a file named "kam.toml" in the given directory
-    pub fn write_to_dir(&self, dir_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn write_to_dir(&self, dir_path: &Path) -> Result<(), KamTomlError> {
         std::fs::create_dir_all(dir_path)?;
         let file_path = dir_path.join("kam.toml");
         let content = self.to_toml()?;
@@ -366,53 +508,53 @@ impl KamToml {
     }
 
     /// Load KamToml from "kam.toml" in the given directory, with validation
-    pub fn load_from_dir(dir_path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_dir(dir_path: &Path) -> Result<Self, KamTomlError> {
         let file_path = dir_path.join("kam.toml");
         if !file_path.exists() {
-            return Err("kam.toml not found".into());
+            return Err(KamTomlError::NotFound);
         }
         let content = std::fs::read_to_string(&file_path)?;
         if content.trim().is_empty() {
-            return Err("kam.toml is empty".into());
+            return Err(KamTomlError::EmptyFile);
         }
-        let kt: KamToml = KamToml::from_toml(&content)?;
+        let kt: KamToml = KamToml::from_string(content)?;
 
         // Check required fields
         if kt.prop.id.is_empty() {
-            return Err("prop.id is required and cannot be empty".into());
+            return Err(KamTomlError::MissingId);
         }
         if kt.prop.name.is_empty() {
-            return Err("prop.name is required and cannot be empty".into());
+            return Err(KamTomlError::MissingName);
         }
         if kt.prop.version.is_empty() {
-            return Err("prop.version is required and cannot be empty".into());
+            return Err(KamTomlError::MissingVersion);
         }
         if kt.prop.author.is_empty() {
-            return Err("prop.author is required and cannot be empty".into());
+            return Err(KamTomlError::MissingAuthor);
         }
         if kt.prop.description.is_empty() {
-            return Err("prop.description is required and cannot be empty".into());
+            return Err(KamTomlError::MissingDescription);
         }
         if let Some(mmrl) = &kt.mmrl {
             if mmrl.zip_url.as_ref().map_or(true, |s| s.is_empty()) {
-                return Err("mmrl.zip_url is required for MMRL and cannot be empty".into());
+                return Err(KamTomlError::MissingZipUrl);
             }
             if mmrl.changelog.as_ref().map_or(true, |s| s.is_empty()) {
-                return Err("mmrl.changelog is required for MMRL and cannot be empty".into());
+                return Err(KamTomlError::MissingChangelog);
             }
         } else {
-            return Err("mmrl section is required for MMRL".into());
+            return Err(KamTomlError::MissingMmrl);
         }
 
         // Validate id
-        if let ValidationResult::Invalid(msg) = KamToml::validate_id(&kt.prop.id) {
-            return Err(msg.into());
+        if let ValidationResult::Invalid(_) = KamToml::validate_id(&kt.prop.id) {
+            return Err(KamTomlError::InvalidId(kt.prop.id.clone()));
         }
 
         // Validate version format (semver-like: x.y.z)
-        let version_re = Regex::new(r"^\d+\.\d+\.\d+$")?;
+        let version_re = Regex::new(r"^\d+\.\d+\.\d+$").unwrap();
         if !version_re.is_match(&kt.prop.version) {
-            return Err("prop.version must be in format x.y.z (e.g., 1.0.0)".into());
+            return Err(KamTomlError::InvalidVersionFormat);
         }
 
         // Check license file if specified
@@ -420,10 +562,10 @@ impl KamToml {
             if let Some(license) = &mmrl.license {
                 let license_path = dir_path.join(license);
                 if !license_path.exists() {
-                    return Err(format!("license file '{}' not found", license).into());
+                    return Err(KamTomlError::LicenseNotFound(license.clone()));
                 }
                 if license_path.metadata()?.len() == 0 {
-                    return Err(format!("license file '{}' is empty", license).into());
+                    return Err(KamTomlError::LicenseEmpty(license.clone()));
                 }
             }
 
@@ -431,20 +573,20 @@ impl KamToml {
             if let Some(readme) = &mmrl.readme {
                 let readme_path = dir_path.join(readme);
                 if !readme_path.exists() {
-                    return Err(format!("readme file '{}' not found", readme).into());
+                    return Err(KamTomlError::ReadmeNotFound(readme.clone()));
                 }
                 if readme_path.metadata()?.len() == 0 {
-                    return Err(format!("readme file '{}' is empty", readme).into());
+                    return Err(KamTomlError::ReadmeEmpty(readme.clone()));
                 }
             }
         }
 
         // Validate supported_arch
         if let Some(archs) = &kt.kam.supported_arch {
-            let valid_archs = ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"];
+            let valid_archs = vec!["arm64-v8a", "armeabi-v7a", "x86", "x86_64"];
             for arch in archs {
                 if !valid_archs.contains(&arch.as_str()) {
-                    return Err(format!("unsupported arch '{}', valid: {:?}", arch, valid_archs).into());
+                    return Err(KamTomlError::UnsupportedArch(arch.clone(), valid_archs));
                 }
             }
         }
@@ -453,12 +595,12 @@ impl KamToml {
         match kt.kam.module_type {
             ModuleType::Template => {
                 if kt.kam.tmpl.is_none() {
-                    return Err("Template module must have tmpl section".into());
+                    return Err(KamTomlError::TemplateMissingTmpl);
                 }
             }
             ModuleType::Library => {
                 if kt.kam.lib.is_none() {
-                    return Err("Library module must have lib section".into());
+                    return Err(KamTomlError::LibraryMissingLib);
                 }
             }
             ModuleType::Normal => {}
@@ -468,16 +610,36 @@ impl KamToml {
     }
 
     /// Write the KamToml to a specific file path
-    pub fn write_to_file(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn write_to_file(&self, path: &Path) -> Result<(), KamTomlError> {
         let content = self.to_toml()?;
         std::fs::write(path, content)?;
         Ok(())
     }
 
     /// Load KamToml from a specific file path
-    pub fn load_from_file(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_file(path: &Path) -> Result<Self, KamTomlError> {
         let content = std::fs::read_to_string(path)?;
-        Ok(Self::from_toml(&content)?)
+        Ok(Self::from_string(content)?)
+    }
+}
+
+// Ignore raw document in comparison.
+impl PartialEq for KamToml {
+    fn eq(&self, other: &Self) -> bool {
+        self.prop == other.prop
+            && self.mmrl == other.mmrl
+            && self.kam == other.kam
+            && self.tool == other.tool
+            && self.tmpl == other.tmpl
+            && self.lib == other.lib
+    }
+}
+
+impl Eq for KamToml {}
+
+impl AsRef<[u8]> for KamToml {
+    fn as_ref(&self) -> &[u8] {
+        self.raw.as_bytes()
     }
 }
 
@@ -591,6 +753,7 @@ readme = "README.md"
 [kam]
 min_api = 29
 supported_arch = ["arm64-v8a"]
+module_type = "Normal"
 "#;
         fs::write(temp_dir.join("kam.toml"), sample_toml).unwrap();
 
@@ -636,12 +799,161 @@ changelog = "https://example.com/changelog.md"
 
 [kam]
 min_api = 29
+module_type = "Normal"
 "#;
         fs::write(temp_dir.join("kam.toml"), invalid_toml).unwrap();
 
         let result = KamToml::load_from_dir(&temp_dir);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("format"));
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("format") || error.to_string().contains("x.y.z"));
         fs::remove_dir_all(temp_dir).unwrap();
+    }
+
+    #[test]
+    fn test_dependency_resolution_simple() {
+        let mut name = std::collections::HashMap::new();
+        name.insert("en".to_string(), "Test Module".to_string());
+        let mut description = std::collections::HashMap::new();
+        description.insert("en".to_string(), "Test Description".to_string());
+
+        let mut kt = KamToml::new(
+            "test".to_string(),
+            name,
+            "1.0.0".to_string(),
+            1,
+            "Author".to_string(),
+            description,
+            None,
+        );
+
+        // Add dependencies
+        let dep1 = Dependency {
+            id: "dep1".to_string(),
+            version: Some("1.0.0".to_string()),
+            source: None,
+        };
+        let dep2 = Dependency {
+            id: "dep2".to_string(),
+            version: Some("2.0.0".to_string()),
+            source: None,
+        };
+
+        kt.kam.dependency = Some(DependencySection {
+            normal: Some(vec![dep1, dep2]),
+            dev: None,
+        });
+
+        let resolved = kt.resolve_dependencies().unwrap();
+        let normal_group = resolved.get("normal").unwrap();
+        assert_eq!(normal_group.dependencies.len(), 2);
+        assert_eq!(normal_group.dependencies[0].id, "dep1");
+        assert_eq!(normal_group.dependencies[1].id, "dep2");
+    }
+
+    #[test]
+    fn test_dependency_resolution_with_includes() {
+        let mut name = std::collections::HashMap::new();
+        name.insert("en".to_string(), "Test Module".to_string());
+        let mut description = std::collections::HashMap::new();
+        description.insert("en".to_string(), "Test Description".to_string());
+
+        let mut kt = KamToml::new(
+            "test".to_string(),
+            name,
+            "1.0.0".to_string(),
+            1,
+            "Author".to_string(),
+            description,
+            None,
+        );
+
+        // Add dependencies with includes
+        let normal_dep = Dependency {
+            id: "normal-dep".to_string(),
+            version: Some("1.0.0".to_string()),
+            source: None,
+        };
+        let dev_include = Dependency {
+            id: "include:normal".to_string(),
+            version: None,
+            source: None,
+        };
+        let dev_dep = Dependency {
+            id: "dev-dep".to_string(),
+            version: Some("2.0.0".to_string()),
+            source: None,
+        };
+
+        kt.kam.dependency = Some(DependencySection {
+            normal: Some(vec![normal_dep]),
+            dev: Some(vec![dev_include, dev_dep]),
+        });
+
+        let resolved = kt.resolve_dependencies().unwrap();
+        let dev_group = resolved.get("dev").unwrap();
+        assert_eq!(dev_group.dependencies.len(), 2);
+        assert_eq!(dev_group.dependencies[0].id, "normal-dep");
+        assert_eq!(dev_group.dependencies[1].id, "dev-dep");
+    }
+
+    #[test]
+    fn test_dependency_validation() {
+        let mut name = std::collections::HashMap::new();
+        name.insert("en".to_string(), "Test Module".to_string());
+        let mut description = std::collections::HashMap::new();
+        description.insert("en".to_string(), "Test Description".to_string());
+
+        let mut kt = KamToml::new(
+            "test".to_string(),
+            name,
+            "1.0.0".to_string(),
+            1,
+            "Author".to_string(),
+            description,
+            None,
+        );
+
+        // Add dependency with invalid include
+        let invalid_include = Dependency {
+            id: "include:nonexistent".to_string(),
+            version: None,
+            source: None,
+        };
+
+        kt.kam.dependency = Some(DependencySection {
+            normal: Some(vec![invalid_include]),
+            dev: None,
+        });
+
+        let result = kt.validate_dependencies();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dependency_cycle_detection() {
+        use std::collections::BTreeMap;
+        
+        // Create a resolver directly to test cycle detection
+        let mut groups = BTreeMap::new();
+        
+        let cycle_a = vec![Dependency {
+            id: "include:group-b".to_string(),
+            version: None,
+            source: None,
+        }];
+        let cycle_b = vec![Dependency {
+            id: "include:group-a".to_string(),
+            version: None,
+            source: None,
+        }];
+        
+        groups.insert("group-a".to_string(), cycle_a);
+        groups.insert("group-b".to_string(), cycle_b);
+        
+        let resolver = crate::dependency_resolver::DependencyResolver::from_groups(groups);
+        let result = resolver.resolve();
+        
+        assert!(result.is_err());
     }
 }
