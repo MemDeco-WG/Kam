@@ -1,3 +1,4 @@
+name: Release Cross-Platform Binaries
 
 on:
   push:
@@ -26,42 +27,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64 (native build)
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             artifact_name: kam
             asset_name: kam-linux-x86_64
             use_cross: false
-          
-          # Linux ARM64 (cross-compile)
           - os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             artifact_name: kam
             asset_name: kam-linux-aarch64
             use_cross: true
-          
-          # macOS x86_64 (native build)
           - os: macos-13
             target: x86_64-apple-darwin
             artifact_name: kam
             asset_name: kam-macos-x86_64
             use_cross: false
-          
-          # macOS ARM64 (native build on Apple Silicon)
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: kam
             asset_name: kam-macos-aarch64
             use_cross: false
-          
-          # Windows x86_64 (native build)
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: kam.exe
             asset_name: kam-windows-x86_64.exe
             use_cross: false
-          
-          # Android ARM64 (cross-compile)
           - os: ubuntu-22.04
             target: aarch64-linux-android
             artifact_name: kam
@@ -119,23 +109,19 @@ jobs:
 
       - name: Build binary (native)
         if: ${{ !matrix.use_cross }}
-        working-directory: .
         run: cargo build --bin kam --release --target ${{ matrix.target }}
 
       - name: Build binary (cross)
         if: matrix.use_cross
-        working-directory: .
         env:
           PYO3_NO_PYTHON: "1"
         run: cross build --bin kam --release --target ${{ matrix.target }}
 
       - name: Strip binary (Linux and macOS)
         if: runner.os != 'Windows' && !matrix.use_cross
-        working-directory: .
         run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
       - name: Verify binary
-        working-directory: .
         shell: bash
         run: |
           if [ ! -f "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" ]; then
@@ -146,7 +132,6 @@ jobs:
 
       - name: Rename binary for upload
         shell: bash
-        working-directory: .
         run: |
           cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} target/${{ matrix.target }}/release/${{ matrix.asset_name }}
           ls -lh target/${{ matrix.target }}/release/${{ matrix.asset_name }}
@@ -158,48 +143,4 @@ jobs:
           path: target/${{ matrix.target }}/release/${{ matrix.asset_name }}
           retention-days: 7
 
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          cat << 'EOF' > release-notes.md
-          ## Build Information
-          
-          - **Commit**: ${{ github.sha }}
-          - **Branch**: ${{ github.ref_name }}
-          - **Build Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
-          - **Triggered by**: ${{ github.event_name }}
-          
-          ## Available Binaries
-          
-          This release includes pre-built binaries for the following platforms:
-          
-          - **Linux x86_64**: `rmm-linux-x86_64`
-          - **Linux ARM64**: `rmm-linux-aarch64`
-          - **macOS x86_64**: `rmm-macos-x86_64`
-          - **macOS ARM64 (Apple Silicon)**: `rmm-macos-aarch64`
-          - **Windows x86_64**: `rmm-windows-x86_64.exe`
-          - **Android ARM64**: `rmm-android-aarch64`
-          
-          ## Installation
-          
-          1. Download the appropriate binary for your system
-          2. Make it executable (Linux/macOS): `chmod +x kam-*`
-          3. Run: `./kam-* --help`
-          
-          For more information, see the [README](https://github.com/${{ github.repository }}/blob/main/README.md).
-          EOF
-          
-          echo "notes_file=release-notes.md" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release-assets/*
-          name: ${{ steps.release_info.outputs.release_name }}
-          tag_name: ${{ steps.release_info.outputs.tag_name }}
-          body_path: release-notes.md
-          draft: false
-          prerelease: ${{ steps.release_info.outputs.is_prerelease }}
-          make_latest: ${{ !fromJSON(steps.release_info.outputs.is_prerelease) }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ 
