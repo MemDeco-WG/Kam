@@ -1,0 +1,6 @@
+{
+  "version": "v1.0.0",
+  "versionCode": 1,
+  "zipUrl": "https://example.com/module.zip",
+  "changelog": "Initial release of the example module for testing Kam sync functionality."
+}

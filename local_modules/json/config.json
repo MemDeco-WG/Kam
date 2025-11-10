@@ -1,0 +1,7 @@
+{
+  "name": "Local Kam Test Repo",
+  "base_url": "file:///C:/Users/light/Documents/GitHub/Kam/local_modules/",
+  "max_num": 10,
+  "enable_log": true,
+  "log_dir": "log"
+}

@@ -1,0 +1,9 @@
+id=com.example.dependency
+name=Dependency Module
+version=v1.0.0
+versionCode=1
+author=Test Author
+description=A dependency module for testing Kam dependency resolution
+minApi=21
+maxApi=33
+minMagisk=24000

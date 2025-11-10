@@ -1,0 +1,26 @@
+[prop]
+id = "test_fix"
+version = "1.0.0"
+versionCode = 1762776762576
+author = "Author"
+updateJson = "https://example.com/update.json"
+
+[prop.name]
+en = "My Module"
+
+[prop.description]
+en = "A module description"
+
+[mmrl]
+zip_url = "https://example.com/module.zip"
+changelog = "https://example.com/changelog.md"
+license = "MIT"
+homepage = "https://github.com/example/repo"
+readme = "https://github.com/example/repo#readme"
+categories = ["Kam"]
+keywords = ["android", "root", "module"]
+support = "https://github.com/example/repo/issues"
+donate = "https://paypal.me/example"
+
+[kam]
+module_type = "Normal"

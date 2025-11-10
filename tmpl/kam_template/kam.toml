@@ -1,0 +1,22 @@
+[prop]
+id = "kam_template"
+version = "1.0.0"
+versionCode = 1762776344578
+author = "Author"
+
+[prop.name]
+en = "My Module"
+
+[prop.description]
+en = "A module description"
+
+[mmrl]
+zip_url = "https://example.com/module.zip"
+changelog = "https://example.com/changelog.md"
+categories = ["Kam"]
+keywords = ["android", "root", "module"]
+
+[kam]
+module_type = "Template"
+
+[kam.tmpl.variables]

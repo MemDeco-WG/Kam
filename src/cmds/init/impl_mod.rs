@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io;
 use std::path::Path;
 use tempfile::TempDir;
 use zip::ZipArchive;
+use crate::types::kam_toml::module::TmplSection;
 
 pub fn init_impl(
     path: &Path,
@@ -43,7 +44,9 @@ pub fn init_impl(
         zip_id = root.clone();
         (temp_dir.path().join(root), Some(temp_dir))
     } else {
-        (Path::new(impl_zip).to_path_buf(), None)
+        let template_path = Path::new(impl_zip).to_path_buf();
+        zip_id = template_path.file_name().unwrap_or(std::ffi::OsStr::new("unknown")).to_str().unwrap_or("unknown").to_string();
+        (template_path, None)
     };
 
     // Load template variables and insert defaults
@@ -52,7 +55,7 @@ pub fn init_impl(
         let kt_template = crate::types::kam_toml::KamToml::load_from_file(&template_kam_path)?;
         if let Some(tmpl) = &kt_template.kam.tmpl {
             for (var_name, var_def) in &tmpl.variables {
-                if !template_vars.contains_key(var_name) {
+                if !template_vars.contains_key(var_name.as_str()) {
                     if var_def.required {
                         if let Some(default) = &var_def.default {
                             template_vars.insert(var_name.clone(), default.clone());
@@ -67,19 +70,23 @@ pub fn init_impl(
         }
     }
 
-    let mut kt = crate::types::kam_toml::KamToml::new_with_current_timestamp(
-        id.to_string(),
-        name_map.clone(),
-        version.to_string(),
-        author.to_string(),
-        description_map.clone(),
-        None,
-    );
-    kt.kam.tmpl = Some(crate::types::kam_toml::TmplSection { used_template: Some(zip_id.clone()), variables: HashMap::new() });
-    kt.write_to_dir(path)?;
+    let name_map_btree: BTreeMap<_, _> = name_map.clone().into_iter().collect();
+    let description_map_btree: BTreeMap<_, _> = description_map.clone().into_iter().collect();
+
     let kam_toml_path = path.join("kam.toml");
     let kam_toml_rel = "kam.toml".to_string();
     super::common::print_status(&kam_toml_path, &kam_toml_rel, false, force);
+
+    let mut kt = crate::types::kam_toml::KamToml::new_with_current_timestamp(
+        id.to_string(),
+        name_map_btree,
+        version.to_string(),
+        author.to_string(),
+        description_map_btree,
+        None,
+    );
+    kt.kam.tmpl = Some(TmplSection { used_template: Some(zip_id.clone()), variables: BTreeMap::new() });
+    kt.write_to_dir(path)?;
 
     // Replace in kam.toml
     if !template_vars.is_empty() {
@@ -106,9 +113,9 @@ pub fn init_impl(
             let src_temp = template_path.join("src").join(&zip_id);
             if src_temp.exists() {
                 let src_dir = path.join("src").join(id);
-                std::fs::create_dir_all(&src_dir)?;
                 let src_rel = format!("src/{}/", id);
                 super::common::print_status(&src_dir, &src_rel, true, force);
+                std::fs::create_dir_all(&src_dir)?;
                 for entry in std::fs::read_dir(&src_temp)? {
                     let entry = entry?;
                     let filename = entry.file_name();
@@ -117,9 +124,9 @@ pub fn init_impl(
                         content = content.replace(&format!("{{{{{}}}}}", key), value);
                     }
                     let dest_file = src_dir.join(&filename);
-                    std::fs::write(&dest_file, content)?;
                     let file_rel = format!("src/{}/{}", id, filename.to_string_lossy());
                     super::common::print_status(&dest_file, &file_rel, false, force);
+                    std::fs::write(&dest_file, content)?;
                 }
             }
         } else {
@@ -130,9 +137,9 @@ pub fn init_impl(
             let src_temp = template_path.join("src").join(&zip_id);
             if src_temp.exists() {
                 let src_dir = path.join("src").join(id);
-                std::fs::create_dir_all(&src_dir)?;
                 let src_rel = format!("src/{}/", id);
                 super::common::print_status(&src_dir, &src_rel, true, force);
+                std::fs::create_dir_all(&src_dir)?;
                 for entry in std::fs::read_dir(&src_temp)? {
                     let entry = entry?;
                     let filename = entry.file_name();
@@ -141,9 +148,9 @@ pub fn init_impl(
                         content = content.replace(&format!("{{{{{}}}}}", key), value);
                     }
                     let dest_file = src_dir.join(&filename);
-                    std::fs::write(&dest_file, content)?;
                     let file_rel = format!("src/{}/{}", id, filename.to_string_lossy());
                     super::common::print_status(&dest_file, &file_rel, false, force);
+                    std::fs::write(&dest_file, content)?;
                 }
             }
         } else {

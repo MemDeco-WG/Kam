@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::types::kam_toml::{Dependency, DependencySection};
+use crate::types::kam_toml::sections::dependency::{Dependency, DependencySection};
 
 /// A flattened dependency group with all includes resolved
 #[derive(Debug, Clone)]

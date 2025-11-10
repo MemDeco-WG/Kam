@@ -1,0 +1,40 @@
+[package]
+name = "{{id}}"
+version = "{{version}}"
+edition = "2021"
+
+[dependencies]
+
+[prop]
+id = "{{id}}"
+name = { en = "{{name}}" }
+version = "{{version}}"
+versionCode = 1
+author = "{{author}}"
+description = { en = "{{description}}" }
+
+[kam]
+module_type = "Normal"
+
+[kam.tmpl]
+used_template = "example_module"
+
+[kam.tmpl.variables.id]
+var_type = "string"
+required = true
+
+[kam.tmpl.variables.name]
+var_type = "string"
+required = true
+
+[kam.tmpl.variables.version]
+var_type = "string"
+required = true
+
+[kam.tmpl.variables.author]
+var_type = "string"
+required = true
+
+[kam.tmpl.variables.description]
+var_type = "string"
+required = true

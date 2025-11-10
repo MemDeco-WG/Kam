@@ -1,0 +1,30 @@
+{
+  "support": "https://github.com/example/repo/issues",
+  "donate": "https://example.com/donate",
+  "cover": "https://example.com/cover.png",
+  "icon": "https://example.com/icon.png",
+  "license": "MIT",
+  "readme": "https://github.com/example/repo#readme",
+  "homepage": "https://example.com",
+  "screenshots": [
+    "https://example.com/screenshot1.png",
+    "https://example.com/screenshot2.png"
+  ],
+  "categories": [
+    "Utility",
+    "Test"
+  ],
+  "devices": [
+    "SM-A705FN"
+  ],
+  "arch": [
+    "arm64-v8a"
+  ],
+  "require": [
+    "com.example.dependency"
+  ],
+  "note": {
+    "title": "Test Note",
+    "message": "This is a test module for Kam."
+  }
+}

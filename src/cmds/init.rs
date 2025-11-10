@@ -4,10 +4,12 @@ use std::path::Path;
 
 mod common;
 mod template_vars;
-mod normal;
+mod kam;
 mod template;
 mod impl_mod;
 mod post_process;
+
+
 
 /// Arguments for the init command
 #[derive(Args, Debug)]
@@ -48,6 +50,10 @@ pub struct InitArgs {
     #[arg(long)]
     pub tmpl: bool,
 
+    /// Create a kam module (supports kernelsu/apatch/magisk)
+    #[arg(long)]
+    pub kam: bool,
+
     /// Template zip file to implement
     #[arg(long)]
     pub r#impl: Option<String>,
@@ -68,6 +74,21 @@ pub struct InitArgs {
 /// Run the init command
 pub fn run(args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
     let path = Path::new(&args.path);
+
+    // Validate conflicting flags
+    let module_flags = [args.tmpl, args.lib, args.kam].iter().filter(|&&x| x).count();
+    if module_flags > 1 {
+        return Err("Cannot specify multiple module types: --tmpl, --lib, --kam".into());
+    }
+
+    // Determine module type
+    let module_type = if args.tmpl {
+        "tmpl"
+    } else if args.lib {
+        "lib"
+    } else {
+        "kam"
+    };
 
     // Determine ID from folder name if not provided
     let id = if let Some(id) = args.id.clone() {
@@ -100,7 +121,7 @@ pub fn run(args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
     } else if let Some(impl_zip) = &args.r#impl {
         impl_mod::init_impl(&path, &id, name_map, &version, &author, description_map, impl_zip, &mut template_vars, args.force)?;
     } else {
-        normal::init_normal(&path, &id, name_map, &version, &author, description_map, &template_vars, args.force)?;
+        kam::init_kam(&path, &id, name_map, &version, &author, description_map, &template_vars, args.force, module_type)?;
     }
 
     post_process::post_process(&path, &args, &mut template_vars, &id, &name, &version, &author, &description)?;

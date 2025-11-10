@@ -6,5 +6,6 @@
 MODDIR=${0%/*}
 
 # Your module code here
+# This template can be used recursively to create other templates
 
 echo "Module {{name}} loaded"

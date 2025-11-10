@@ -1,6 +1,7 @@
 
 
 use clap::{Parser, Subcommand};
+use dotenvy::dotenv;
 
 #[derive(Parser)]
 struct Cli {
@@ -12,18 +13,19 @@ struct Cli {
 enum Commands {
     /// Initialize a new Kam project
     Init(kam::cmds::init::InitArgs),
-    
+
     /// Manage the global cache
     Cache(kam::cmds::cache::CacheArgs),
-    
+
     /// Synchronize dependencies
     Sync(kam::cmds::sync::SyncArgs),
-    
+
     /// Build the module
     Build(kam::cmds::build::BuildArgs),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
     let cli = Cli::parse();
 
     match cli.command {

@@ -1,0 +1,22 @@
+{
+  "name": {
+    "en": "Example Module"
+  },
+  "description": {
+    "en": "A test module for Kam sync and dependency resolution testing. This module demonstrates basic MMRL formatting."
+  },
+  "categories": [
+    "Utility",
+    "Test"
+  ],
+  "devices": [
+    "SM-A705FN"
+  ],
+  "arch": [
+    "arm64-v8a"
+  ],
+  "require": [],
+  "support": "https://github.com/example/repo/issues",
+  "donate": "https://example.com/donate",
+  "license": "MIT"
+}

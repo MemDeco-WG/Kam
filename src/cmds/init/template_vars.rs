@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::types::kam_toml::module::VariableDefinition;
 
 pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
     let mut template_vars = HashMap::new();
@@ -12,7 +13,7 @@ pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, B
     Ok(template_vars)
 }
 
-pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, crate::types::kam_toml::VariableDefinition>, Box<dyn std::error::Error>> {
+pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, VariableDefinition>, Box<dyn std::error::Error>> {
     let mut variables = HashMap::new();
     for var in vars {
         if let Some((key, value)) = var.split_once('=') {
@@ -21,7 +22,7 @@ pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, crate
                 let var_type = parts[0].to_string();
                 let required = parts[1] == "true";
                 let default = if parts[2].is_empty() { None } else { Some(parts[2].to_string()) };
-                variables.insert(key.to_string(), crate::types::kam_toml::VariableDefinition {
+                variables.insert(key.to_string(), VariableDefinition {
                     var_type,
                     required,
                     default,
