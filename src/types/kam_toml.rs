@@ -232,9 +232,9 @@ pub struct DependencySection {
 }
 
 /// Kam custom fields
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub enum ModuleType {
-    Normal,
+    #[default] Normal,
     Template,
     Library,
 }
@@ -266,6 +266,7 @@ pub struct KamSection {
     pub dependency: Option<DependencySection>,
     pub build: Option<BuildSection>,
     pub proxy: Option<Vec<String>>,
+    #[serde(default)]
     pub module_type: ModuleType,
     pub tmpl: Option<TmplSection>,
     pub lib: Option<LibSection>,
@@ -805,8 +806,7 @@ module_type = "Normal"
 
         let result = KamToml::load_from_dir(&temp_dir);
         assert!(result.is_err());
-        let error = result.unwrap_err();
-        assert!(error.to_string().contains("format") || error.to_string().contains("x.y.z"));
+        assert!(result.unwrap_err().to_string().contains("must be in format"));
         fs::remove_dir_all(temp_dir).unwrap();
     }
 

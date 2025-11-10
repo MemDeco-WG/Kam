@@ -1,7 +1,7 @@
 [prop]
-id = "my_module"
+id = "test_template"
 version = "1.0.0"
-versionCode = 1762772001779
+versionCode = 1762772063579
 author = "Author"
 
 [prop.name]
