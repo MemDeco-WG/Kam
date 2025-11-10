@@ -1,4 +1,8 @@
-name: Release Cross-Platform Binaries
+- name: Upload artifacts
+  uses: actions/upload-artifact@v4
+  with:
+    name: ${{ matrix.asset_name }}
+    path: rust/target/${{ matrix.target }}/release/${{ matrix.asset_name }}name: Release Cross-Platform Binaries
 
 on:
   push:
@@ -156,7 +160,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: rust/target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.asset_name }}
           retention-days: 7
 
       - name: Generate release notes
