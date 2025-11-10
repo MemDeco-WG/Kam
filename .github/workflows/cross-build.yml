@@ -30,42 +30,42 @@ jobs:
           # Linux x86_64 (native build)
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            artifact_name: rmm
-            asset_name: rmm-linux-x86_64
+            artifact_name: kam
+            asset_name: kam-linux-x86_64
             use_cross: false
           
           # Linux ARM64 (cross-compile)
           - os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
-            artifact_name: rmm
-            asset_name: rmm-linux-aarch64
+            artifact_name: kam
+            asset_name: kam-linux-aarch64
             use_cross: true
           
           # macOS x86_64 (native build)
           - os: macos-13
             target: x86_64-apple-darwin
-            artifact_name: rmm
-            asset_name: rmm-macos-x86_64
+            artifact_name: kam
+            asset_name: kam-macos-x86_64
             use_cross: false
           
           # macOS ARM64 (native build on Apple Silicon)
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: rmm
-            asset_name: rmm-macos-aarch64
+            artifact_name: kam
+            asset_name: kam-macos-aarch64
             use_cross: false
           
           # Windows x86_64 (native build)
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: rmm.exe
+            artifact_name: kam.exe
             asset_name: rmm-windows-x86_64.exe
             use_cross: false
           
           # Android ARM64 (cross-compile)
           - os: ubuntu-22.04
             target: aarch64-linux-android
-            artifact_name: rmm
+            artifact_name: kam
             asset_name: rmm-android-aarch64
             use_cross: true
 
@@ -121,14 +121,14 @@ jobs:
       - name: Build binary (native)
         if: ${{ !matrix.use_cross }}
         working-directory: ./rust
-        run: cargo build --bin rmm --release --target ${{ matrix.target }}
+        run: cargo build --bin kam --release --target ${{ matrix.target }}
 
       - name: Build binary (cross)
         if: matrix.use_cross
         working-directory: ./rust
         env:
           PYO3_NO_PYTHON: "1"
-        run: cross build --bin rmm --release --target ${{ matrix.target }}
+        run: cross build --bin kam --release --target ${{ matrix.target }}
 
       - name: Strip binary (Linux and macOS)
         if: runner.os != 'Windows' && !matrix.use_cross
@@ -184,8 +184,8 @@ jobs:
           ## Installation
           
           1. Download the appropriate binary for your system
-          2. Make it executable (Linux/macOS): `chmod +x rmm-*`
-          3. Run: `./rmm-* --help`
+          2. Make it executable (Linux/macOS): `chmod +x kam-*`
+          3. Run: `./kam-* --help`
           
           For more information, see the [README](https://github.com/${{ github.repository }}/blob/main/README.md).
           EOF
