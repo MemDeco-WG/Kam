@@ -120,9 +120,9 @@ impl DependencyResolver {
     pub fn new(dependency_section: &DependencySection) -> Self {
         let mut groups = BTreeMap::new();
 
-        // Add normal dependencies
-        if let Some(normal) = &dependency_section.normal {
-            let entries = normal
+        // Add kam dependencies
+        if let Some(kam) = &dependency_section.kam {
+            let entries = kam
                 .iter()
                 .map(|dep| {
                     // Check if this is an include (id starts with "include:")

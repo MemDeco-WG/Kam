@@ -12,6 +12,7 @@
 use clap::{Args, Subcommand};
 use colored::Colorize;
 use crate::cache::KamCache;
+use crate::errors::KamError;
 
 /// Arguments for the cache command
 #[derive(Args, Debug)]
@@ -57,7 +58,7 @@ pub enum CacheCommands {
 /// kam cache clear-dir log
 /// kam cache path
 /// ```
-pub fn run(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(args: CacheArgs) -> Result<(), KamError> {
     match args.command {
         CacheCommands::Info => show_info(),
         CacheCommands::Clear { yes } => clear_cache(yes),
@@ -67,7 +68,7 @@ pub fn run(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Show cache information
-fn show_info() -> Result<(), Box<dyn std::error::Error>> {
+fn show_info() -> Result<(), KamError> {
     let cache = KamCache::new()?;
     
     println!("{}", "Kam Cache Information".bold().cyan());
@@ -93,7 +94,7 @@ fn show_info() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Clear all cache
-fn clear_cache(skip_confirm: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn clear_cache(skip_confirm: bool) -> Result<(), KamError> {
     let cache = KamCache::new()?;
     
     if !skip_confirm {
@@ -120,15 +121,15 @@ fn clear_cache(skip_confirm: bool) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Clear a specific cache directory
-fn clear_dir(dir: &str, skip_confirm: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn clear_dir(dir: &str, skip_confirm: bool) -> Result<(), KamError> {
     // Validate directory name
     const VALID_DIRS: &[&str] = &["bin", "lib", "log", "profile"];
     if !VALID_DIRS.contains(&dir) {
-        return Err(format!(
+        return Err(KamError::Other(format!(
             "Invalid directory '{}'. Valid options: {}",
             dir,
             VALID_DIRS.join(", ")
-        ).into());
+        )));
     }
     
     let cache = KamCache::new()?;
@@ -156,7 +157,7 @@ fn clear_dir(dir: &str, skip_confirm: bool) -> Result<(), Box<dyn std::error::Er
 }
 
 /// Show the cache root path
-fn show_path() -> Result<(), Box<dyn std::error::Error>> {
+fn show_path() -> Result<(), KamError> {
     let cache = KamCache::new()?;
     println!("{}", cache.root().display());
     Ok(())

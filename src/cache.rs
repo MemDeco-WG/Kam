@@ -14,7 +14,7 @@
 /// 
 /// ## Example Usage
 /// 
-/// ```ignore
+/// ```rust,no_run
 /// use kam::cache::KamCache;
 /// 
 /// let cache = KamCache::new()?;
@@ -27,21 +27,10 @@
 /// ```
 
 use std::path::{Path, PathBuf};
-use std::io;
-use thiserror::Error;
+use crate::errors::cache::CacheError;
 
-/// Errors that can occur when working with the cache
-#[derive(Error, Debug)]
-pub enum CacheError {
-    #[error("Failed to determine cache directory")]
-    CacheDirNotFound,
-    
-    #[error("IO error: {0}")]
-    Io(#[from] io::Error),
-    
-    #[error("Invalid path: {0}")]
-    InvalidPath(String),
-}
+// CacheError is defined in `src/errors/cache.rs` and re-exported here for
+// backwards compatibility as `crate::cache::CacheError`.
 
 /// Global cache for Kam modules
 /// 
@@ -63,7 +52,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// let cache = KamCache::new()?;
     /// println!("Cache root: {}", cache.root().display());
     /// ```
@@ -76,7 +65,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// let cache = KamCache::with_root("/custom/cache/path")?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -147,7 +136,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// let cache = KamCache::new()?;
     /// cache.ensure_dirs()?;
     /// ```
@@ -169,7 +158,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// let module_path = cache.lib_module_path("core-lib", "1.0.0");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -185,7 +174,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// let bin_path = cache.bin_path("mytool");
     /// ```
     pub fn bin_path(&self, name: &str) -> PathBuf {
@@ -201,7 +190,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// let template_path = cache.profile_path("my-template", "1.0.0");
     /// ```
     pub fn profile_path(&self, id: &str, version: &str) -> PathBuf {
@@ -214,7 +203,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// cache.clear_all()?;
     /// ```
     pub fn clear_all(&self) -> Result<(), CacheError> {
@@ -232,7 +221,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// cache.clear_dir("log")?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -261,7 +250,7 @@ impl KamCache {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// let stats = cache.stats()?;
     /// println!("Cache size: {} bytes, {} files", stats.total_size, stats.file_count);
 /// # Ok::<(), Box<dyn std::error::Error>>(())

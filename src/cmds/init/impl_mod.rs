@@ -17,7 +17,8 @@ pub fn init_impl(
     template_vars: &mut HashMap<String, String>,
     force: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut zip_id = "unknown".to_string();
+    // Declare zip_id here; it will be assigned in the branches below.
+    let zip_id: String;
     let (template_path, _temp_dir) = if impl_zip.ends_with(".zip") {
         let file = File::open(impl_zip)?;
         let mut archive = ZipArchive::new(file)?;
@@ -88,74 +89,46 @@ pub fn init_impl(
     kt.kam.tmpl = Some(TmplSection { used_template: Some(zip_id.clone()), variables: BTreeMap::new() });
     kt.write_to_dir(path)?;
 
-    // Replace in kam.toml
-    if !template_vars.is_empty() {
-        let name = name_map.get("en").unwrap_or(&"".to_string()).clone();
-        let description = description_map.get("en").unwrap_or(&"".to_string()).clone();
-        let mut content = std::fs::read_to_string(&kam_toml_path)?;
-        for (key, value) in template_vars.iter() {
-            let default_value = match key.as_str() {
-                "id" => id,
-                "name" => &name,
-                "version" => version,
-                "author" => author,
-                "description" => &description,
-                _ => continue,
-            };
-            content = content.replace(default_value, value);
-        }
-        std::fs::write(&kam_toml_path, content)?;
-    }
+    // NOTE: For `impl` initialization, `kam.toml` is created from the
+    // generated KamToml (`kt.write_to_dir`) and must NOT be modified by
+    // template variables. Template variables are intended to affect files
+    // other than `kam.toml` (for example source files under `src/`).
+    // Therefore we intentionally do not perform any replacements inside
+    // `kam.toml` here.
 
-    // Copy src from template with replace
-    if impl_zip.ends_with(".zip") {
-        if template_path.exists() {
-            let src_temp = template_path.join("src").join(&zip_id);
-            if src_temp.exists() {
-                let src_dir = path.join("src").join(id);
-                let src_rel = format!("src/{}/", id);
-                super::common::print_status(&src_dir, &src_rel, true, force);
-                std::fs::create_dir_all(&src_dir)?;
-                for entry in std::fs::read_dir(&src_temp)? {
-                    let entry = entry?;
-                    let filename = entry.file_name();
-                    let mut content = std::fs::read_to_string(entry.path())?;
-                    for (key, value) in template_vars.iter() {
-                        content = content.replace(&format!("{{{{{}}}}}", key), value);
-                    }
-                    let dest_file = src_dir.join(&filename);
-                    let file_rel = format!("src/{}/{}", id, filename.to_string_lossy());
-                    super::common::print_status(&dest_file, &file_rel, false, force);
-                    std::fs::write(&dest_file, content)?;
-                }
+    // Copy src from template with replace.
+    if template_path.exists() {
+        // Try layouts in order of preference:
+        // 1) src/<zip_id>
+        // 2) src/ (flat)
+        let mut src_temp = template_path.join("src").join(&zip_id);
+        if !src_temp.exists() {
+            let alt2 = template_path.join("src");
+            if alt2.exists() {
+                src_temp = alt2;
             }
-        } else {
-            return Err("Template not found".into());
+        }
+
+        if src_temp.exists() {
+            let src_dir = path.join("src").join(id);
+            let src_rel = format!("src/{}/", id);
+            super::common::print_status(&src_dir, &src_rel, true, force);
+            std::fs::create_dir_all(&src_dir)?;
+            for entry in std::fs::read_dir(&src_temp)? {
+                let entry = entry?;
+                let filename = entry.file_name();
+                let mut content = std::fs::read_to_string(entry.path())?;
+                for (key, value) in template_vars.iter() {
+                    content = content.replace(&format!("{{{{{}}}}}", key), value);
+                }
+                let dest_file = src_dir.join(&filename);
+                let file_rel = format!("src/{}/{}", id, filename.to_string_lossy());
+                super::common::print_status(&dest_file, &file_rel, false, force);
+                std::fs::write(&dest_file, content)?;
+            }
         }
     } else {
-        if template_path.exists() {
-            let src_temp = template_path.join("src").join(&zip_id);
-            if src_temp.exists() {
-                let src_dir = path.join("src").join(id);
-                let src_rel = format!("src/{}/", id);
-                super::common::print_status(&src_dir, &src_rel, true, force);
-                std::fs::create_dir_all(&src_dir)?;
-                for entry in std::fs::read_dir(&src_temp)? {
-                    let entry = entry?;
-                    let filename = entry.file_name();
-                    let mut content = std::fs::read_to_string(entry.path())?;
-                    for (key, value) in template_vars.iter() {
-                        content = content.replace(&format!("{{{{{}}}}}", key), value);
-                    }
-                    let dest_file = src_dir.join(&filename);
-                    let file_rel = format!("src/{}/{}", id, filename.to_string_lossy());
-                    super::common::print_status(&dest_file, &file_rel, false, force);
-                    std::fs::write(&dest_file, content)?;
-                }
-            }
-        } else {
-            return Err("Template not found".into());
-        }
+        return Err("Template not found".into());
     }
 
     Ok(())

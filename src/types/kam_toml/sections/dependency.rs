@@ -11,6 +11,25 @@ pub struct Dependency {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
 pub struct DependencySection {
-    pub normal: Option<Vec<Dependency>>,
+    pub kam: Option<Vec<Dependency>>,
     pub dev: Option<Vec<Dependency>>,
+}
+
+impl Default for Dependency {
+    fn default() -> Self {
+        Dependency {
+            id: String::new(),
+            version: None,
+            source: None,
+        }
+    }
+}
+
+impl Default for DependencySection {
+    fn default() -> Self {
+        DependencySection {
+            kam: Some(Vec::new()),
+            dev: Some(Vec::new()),
+        }
+    }
 }

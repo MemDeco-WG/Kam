@@ -10,13 +10,15 @@ en = "My Module"
 [prop.description]
 en = "A module description"
 
-[mmrl]
-zip_url = "https://example.com/module.zip"
-changelog = "https://example.com/changelog.md"
+
+[mmrl.repo]
+license = "LICENSE"
+homepage = "https://github.com/example/repo"
+readme = "README.md"
 categories = ["Kam"]
 keywords = ["android", "root", "module"]
 
 [kam]
-module_type = "Template"
+module_type = "Library"
 
 [kam.tmpl.variables]

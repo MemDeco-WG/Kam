@@ -1,0 +1,82 @@
+[prop]
+id = "repo_templeta"
+version = "1.0.0"
+versionCode = 1762784036225
+author = "Author"
+updateJson = "https://example.com/update.json"
+
+[prop.name]
+en = "My Module"
+
+[prop.description]
+en = "A module description"
+
+[mmrl.repo]
+license = "LICENSE"
+homepage = ""
+readme = "README.md"
+screenshots = []
+categories = []
+keywords = []
+maintainers = []
+repository = ""
+documentation = ""
+issues = ""
+funding = ""
+support = ""
+donate = ""
+cover = ""
+icon = ""
+devices = []
+arch = []
+require = []
+antifeatures = []
+max_num = 0
+min_api = 0
+max_api = 0
+verified = false
+features = []
+
+[mmrl.repo.note]
+title = ""
+message = ""
+
+[mmrl.repo.manager.magisk]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.kernelsu]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.apatch]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.options.archive]
+compression = ""
+
+[kam]
+min_api = 0
+max_api = 0
+supported_arch = []
+conflicts = []
+module_type = "kam"
+
+[kam.dependency]
+kam = []
+dev = []
+
+[kam.build]
+target_dir = "dist"
+output_file = ""
+pre_build = ""
+post_build = ""
+
+[kam.tmpl.variables]
+
+[kam.lib]
+dependencies = []

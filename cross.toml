@@ -1,0 +1,38 @@
+# cross.toml - configuration for cross (https://github.com/cross-rs/cross)
+#
+# This file contains optional per-target configuration for cross. It is
+# intentionally conservative: cross will use sensible defaults when entries
+# are omitted. You can customize Docker images or environment variables per
+# target here.
+
+[build]
+# Default target for local `cross build` when none is provided on the CLI.
+target = "x86_64-unknown-linux-gnu"
+
+[env]
+# Example: pass extra RUSTFLAGS to all builds
+# RUSTFLAGS = "-C target-cpu=native"
+
+## Per-target Docker images: pin cross images to reduce surprise changes.
+## These images are the official cross images hosted on Docker Hub.
+[target.x86_64-unknown-linux-gnu]
+# uses the default cross image for this target
+
+[target.aarch64-unknown-linux-gnu]
+#image = "rustembedded/cross:aarch64-unknown-linux-gnu"
+
+[target.x86_64-pc-windows-gnu]
+image = "rustembedded/cross:x86_64-pc-windows-gnu"
+
+## Android targets
+[target.aarch64-linux-android]
+image = "rustembedded/cross:aarch64-linux-android"
+
+[target.armv7-linux-androideabi]
+image = "rustembedded/cross:armv7-linux-androideabi"
+
+[target.i686-linux-android]
+image = "rustembedded/cross:i686-linux-android"
+
+[target.x86_64-linux-android]
+image = "rustembedded/cross:x86_64-linux-android"

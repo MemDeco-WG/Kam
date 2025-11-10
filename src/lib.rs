@@ -5,3 +5,4 @@ pub mod cmds;
 pub mod dependency_resolver;
 pub mod cache;
 pub mod venv;
+pub mod errors;

@@ -34,3 +34,21 @@ impl PropSection {
         }
     }
 }
+
+impl Default for PropSection {
+    fn default() -> Self {
+        let mut name = std::collections::BTreeMap::new();
+        name.insert("en".to_string(), "My Module".to_string());
+        let mut description = std::collections::BTreeMap::new();
+        description.insert("en".to_string(), "A module description".to_string());
+        PropSection {
+            id: "my_module".to_string(),
+            name,
+            version: "0.1.0".to_string(),
+            versionCode: 1,
+            author: "Author".to_string(),
+            description,
+            updateJson: Some("https://example.com/update.json".to_string()),
+        }
+    }
+}

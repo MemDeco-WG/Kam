@@ -1,0 +1,201 @@
+name: Cross + native multi-platform build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish a GitHub Release with artifacts (true/false)'
+        required: false
+        default: 'false'
+      prerelease:
+        description: 'Mark the release as a prerelease (true/false)'
+        required: false
+        default: 'false'
+      tag:
+        description: 'Tag name to use for the release (optional)'
+        required: false
+        default: ''
+
+jobs:
+  linux-cross:
+    name: Linux (cross)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (rustup)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "source $HOME/.cargo/env" >> $GITHUB_ENV
+          source $HOME/.cargo/env
+          rustup default stable
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross --force
+
+      - name: Build x86_64-unknown-linux-gnu (cross)
+        run: cross build --release --target x86_64-unknown-linux-gnu
+
+      - name: Build aarch64-unknown-linux-gnu (cross)
+        run: cross build --release --target aarch64-unknown-linux-gnu
+
+      - name: Upload linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            target/x86_64-unknown-linux-gnu/release/*
+            target/aarch64-unknown-linux-gnu/release/*
+
+  android-cross:
+    name: Android (cross)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (rustup)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "source $HOME/.cargo/env" >> $GITHUB_ENV
+          source $HOME/.cargo/env
+          rustup default stable
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross --force
+
+      - name: Build aarch64-linux-android (cross)
+        run: cross build --release --target aarch64-linux-android
+
+      - name: Build armv7-linux-androideabi (cross)
+        run: cross build --release --target armv7-linux-androideabi
+
+      - name: Build x86_64-linux-android (cross)
+        run: cross build --release --target x86_64-linux-android
+
+      - name: Build i686-linux-android (cross)
+        run: cross build --release --target i686-linux-android
+
+      - name: Upload android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            target/aarch64-linux-android/release/*
+            target/armv7-linux-androideabi/release/*
+            target/x86_64-linux-android/release/*
+            target/i686-linux-android/release/*
+
+  windows-native:
+    name: Windows (native MSVC)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (rustup on Windows)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://win.rustup.rs -OutFile rustup-init.exe
+          .\rustup-init.exe -y
+          $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+          rustup default stable
+
+      - name: Build x86_64-pc-windows-msvc
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Upload windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: target/x86_64-pc-windows-msvc/release/*
+
+  macos-native:
+    name: macOS (native)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (rustup)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "source $HOME/.cargo/env" >> $GITHUB_ENV
+          source $HOME/.cargo/env
+          rustup default stable
+
+      - name: Add macOS targets
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+      - name: Build x86_64-apple-darwin
+        run: cargo build --release --target x86_64-apple-darwin
+
+      - name: Build aarch64-apple-darwin
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            target/x86_64-apple-darwin/release/*
+            target/aarch64-apple-darwin/release/*
+
+  release:
+    name: Create GitHub Release (optional)
+    runs-on: ubuntu-latest
+    needs: [linux-cross, android-cross, windows-native, macos-native]
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' }}
+    steps:
+      - name: Download linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts
+          path: artifacts/linux
+
+      - name: Download android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-artifacts
+          path: artifacts/android
+
+      - name: Download windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: artifacts/windows
+
+      - name: Download macos artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-artifacts
+          path: artifacts/macos
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p dist/linux dist/android dist/windows dist/macos
+          cp -r artifacts/linux/* dist/linux/ || true
+          cp -r artifacts/android/* dist/android/ || true
+          cp -r artifacts/windows/* dist/windows/ || true
+          cp -r artifacts/macos/* dist/macos/ || true
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag || format('run-{0}', github.run_number) }}
+          name: ${{ github.event.inputs.tag || format('run-{0}', github.run_number) }}
+          files: |
+            dist/linux/**
+            dist/android/**
+            dist/windows/**
+            dist/macos/**
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

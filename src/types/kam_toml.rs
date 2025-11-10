@@ -1,10 +1,5 @@
-pub mod error;
 pub mod sections;
 pub mod implementations;
-#[cfg(test)]
-pub mod tests;
-
-pub use error::*;
 pub use sections::*;
 
 
@@ -32,73 +27,28 @@ pub struct KamToml {
 
 impl Default for KamToml {
     fn default() -> Self {
-        let mut name = std::collections::BTreeMap::new();
-        name.insert("en".to_string(), "My Module".to_string());
-        let mut description = std::collections::BTreeMap::new();
-        description.insert("en".to_string(), "A module description".to_string());
-        let keywords = vec![
-            "android".to_string(),
-            "root".to_string(),
-            "module".to_string(),
-        ];
-        let categories = vec!["Kam".to_string()];
+        // Use defaults from section Default impls where appropriate.
+        let mut default = KamToml::from_prop(PropSection::default());
+        default.mmrl = Some(crate::types::kam_toml::sections::mmrl::MmrlSection::default());
+        default.kam = crate::types::kam_toml::sections::module::KamSection::default();
+        default.raw = "".to_string();
+        default
+    }
+}
 
+impl KamToml {
+    /// Construct a KamToml starting from a PropSection (useful for default
+    /// composition). This helper keeps the same signature shape as other
+    /// constructors in this module.
+    pub fn from_prop(prop: PropSection) -> Self {
         KamToml {
-            prop: PropSection {
-                id: "my_module".to_string(),
-                name,
-                version: "0.1.0".to_string(),
-                versionCode: 1,
-                author: "Author".to_string(),
-                description,
-                updateJson: Some("https://example.com/update.json".to_string()),
-            },
-            mmrl: Some(MmrlSection {
-                repo: Some(crate::types::kam_toml::sections::mmrl::RepoSection {
-                    license: Some("MIT".to_string()),
-                    homepage: Some("https://github.com/example/repo".to_string()),
-                    readme: Some("https://github.com/example/repo#readme".to_string()),
-                    screenshots: None,
-                    categories: Some(categories),
-                    keywords: Some(keywords),
-                    maintainers: None,
-                    repository: None,
-                    documentation: None,
-                    issues: None,
-                    funding: None,
-                    support: Some("https://github.com/example/repo/issues".to_string()),
-                    donate: Some("https://paypal.me/example".to_string()),
-                    cover: None,
-                    icon: None,
-                    devices: None,
-                    arch: None,
-                    require: None,
-                    note: None,
-                    manager: None,
-                    antifeatures: None,
-                    options: None,
-                    max_num: None,
-                    min_api: None,
-                    max_api: None,
-                    verified: None,
-                    features: None,
-                }),
-            }),
-            kam: KamSection {
-                min_api: None,
-                max_api: None,
-                supported_arch: None,
-                conflicts: None,
-                dependency: None,
-                build: None,
-                module_type: crate::types::kam_toml::sections::module::ModuleType::Normal,
-                tmpl: None,
-                lib: None,
-            },
+            prop,
+            mmrl: Some(crate::types::kam_toml::sections::mmrl::MmrlSection::default()),
+            kam: crate::types::kam_toml::sections::module::KamSection::default(),
             tool: None,
             tmpl: None,
             lib: None,
-            raw: "".to_string(),
+            raw: String::new(),
         }
     }
 }

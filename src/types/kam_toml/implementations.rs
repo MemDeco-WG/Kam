@@ -1,5 +1,6 @@
 
-use super::error::*;
+use crate::errors::KamTomlError;
+use crate::errors::ValidationResult;
 use super::*;
 use chrono;
 use regex::Regex;
@@ -145,11 +146,9 @@ impl KamToml {
             return Err(KamTomlError::MissingDescription);
         }
         if let Some(mmrl) = &kt.mmrl {
-            if mmrl.repo.as_ref().and_then(|r| r.zip_url.as_ref()).as_ref().map_or(true, |s| s.is_empty()) {
-                return Err(KamTomlError::MissingZipUrl);
-            }
-            if mmrl.repo.as_ref().and_then(|r| r.changelog.as_ref()).as_ref().map_or(true, |s| s.is_empty()) {
-                return Err(KamTomlError::MissingChangelog);
+            // Ensure repo section exists under [mmrl]
+            if mmrl.repo.is_none() {
+                return Err(KamTomlError::MissingMmrl);
             }
         } else {
             return Err(KamTomlError::MissingMmrl);
@@ -168,7 +167,8 @@ impl KamToml {
 
         // Check license file if specified
         if let Some(mmrl) = &kt.mmrl {
-            if let Some(license) = &mmrl.licensemmrl.repo.as_ref().and_then(|r| r.license.as_ref()) {
+            // Check license file if specified
+            if let Some(license) = mmrl.repo.as_ref().and_then(|r| r.license.as_ref()) {
                 let license_path = dir_path.join(license);
                 if !license_path.exists() {
                     return Err(KamTomlError::LicenseNotFound(license.clone()));
@@ -179,7 +179,7 @@ impl KamToml {
             }
 
             // Check readme file if specified
-            if let Some(readme) = &mmrl.readmemmrl.repo.as_ref().and_then(|r| r.readme.as_ref()) {
+            if let Some(readme) = mmrl.repo.as_ref().and_then(|r| r.readme.as_ref()) {
                 let readme_path = dir_path.join(readme);
                 if !readme_path.exists() {
                     return Err(KamTomlError::ReadmeNotFound(readme.clone()));
@@ -190,12 +190,13 @@ impl KamToml {
             }
         }
 
-        // Validate supported_arch
+        // Validate supported_arch (compare canonical string forms)
         if let Some(archs) = &kt.kam.supported_arch {
             let valid_archs = vec!["arm64-v8a".to_string(), "armeabi-v7a".to_string(), "x86".to_string(), "x86_64".to_string()];
             for arch in archs {
-                if !valid_archs.contains(arch) {
-                    return Err(KamTomlError::UnsupportedArch(arch.clone(), valid_archs));
+                let arch_s = arch.to_string();
+                if !valid_archs.contains(&arch_s) {
+                    return Err(KamTomlError::UnsupportedArch(arch_s, valid_archs));
                 }
             }
         }
@@ -212,7 +213,7 @@ impl KamToml {
                     return Err(KamTomlError::LibraryMissingLib);
                 }
             }
-            ModuleType::Normal => {}
+            ModuleType::Kam => {}
         }
 
         Ok(kt)

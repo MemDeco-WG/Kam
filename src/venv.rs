@@ -22,24 +22,8 @@
 
 use std::path::{Path, PathBuf};
 use std::fs;
-use thiserror::Error;
+use crate::errors::KamError;
 use crate::cache::KamCache;
-
-/// Virtual environment errors
-#[derive(Error, Debug)]
-pub enum VenvError {
-    #[error("Virtual environment already exists at {0}")]
-    AlreadyExists(PathBuf),
-    
-    #[error("Virtual environment not found at {0}")]
-    NotFound(PathBuf),
-    
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-    
-    #[error("Cache error: {0}")]
-    Cache(#[from] crate::cache::CacheError),
-}
 
 /// Virtual environment type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,11 +61,11 @@ impl KamVenv {
     /// let venv = KamVenv::create(".kam-venv", VenvType::Development)?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn create<P: AsRef<Path>>(root: P, venv_type: VenvType) -> Result<Self, VenvError> {
+    pub fn create<P: AsRef<Path>>(root: P, venv_type: VenvType) -> Result<Self, KamError> {
         let root = root.as_ref().to_path_buf();
         
         if root.exists() {
-            return Err(VenvError::AlreadyExists(root));
+            return Err(KamError::Other(format!("Virtual environment already exists at {}", root.display())));
         }
         
         // Create directory structure
@@ -102,11 +86,11 @@ impl KamVenv {
     /// ## Arguments
     /// 
     /// - `root`: Path to the venv directory
-    pub fn load<P: AsRef<Path>>(root: P) -> Result<Self, VenvError> {
+    pub fn load<P: AsRef<Path>>(root: P) -> Result<Self, KamError> {
         let root = root.as_ref().to_path_buf();
         
         if !root.exists() {
-            return Err(VenvError::NotFound(root));
+            return Err(KamError::Other(format!("Virtual environment not found at {}", root.display())));
         }
         
         // Try to detect venv type from marker file
@@ -140,7 +124,7 @@ impl KamVenv {
     }
     
     /// Generate activation and deactivation scripts
-    fn generate_scripts(&self) -> Result<(), VenvError> {
+    fn generate_scripts(&self) -> Result<(), KamError> {
         let is_dev = self.venv_type == VenvType::Development;
         
         // Mark as dev if needed
@@ -207,14 +191,14 @@ echo "Run 'deactivate' to exit"
         
         // Write Unix scripts
         let activate_path = self.root.join("activate");
-        fs::write(&activate_path, &unix_activate)?;
+    fs::write(&activate_path, &unix_activate)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&activate_path, fs::Permissions::from_mode(0o755))?;
         }
         
-        fs::write(self.root.join("activate.sh"), &unix_activate)?;
+    fs::write(self.root.join("activate.sh"), &unix_activate)?;
         
         // PowerShell script
         let ps_activate = format!(
@@ -267,7 +251,7 @@ Write-Host "Run 'deactivate' to exit" -ForegroundColor Green
             if is_dev { "development" } else { "runtime" }
         );
         
-        fs::write(self.root.join("activate.ps1"), ps_activate)?;
+    fs::write(self.root.join("activate.ps1"), ps_activate)?;
         
         // Windows batch script
         let bat_activate = format!(
@@ -295,7 +279,7 @@ echo Run 'deactivate' to exit
             if is_dev { "development" } else { "runtime" }
         );
         
-        fs::write(self.root.join("activate.bat"), bat_activate)?;
+    fs::write(self.root.join("activate.bat"), bat_activate)?;
         
         // Standalone deactivate script (Unix)
         let deactivate_script = r#"#!/bin/sh
@@ -314,7 +298,7 @@ fi
 "#;
         
         let deactivate_path = self.root.join("deactivate");
-        fs::write(&deactivate_path, deactivate_script)?;
+    fs::write(&deactivate_path, deactivate_script)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -330,12 +314,12 @@ fi
     /// 
     /// - `name`: Binary name
     /// - `cache`: Reference to KamCache
-    pub fn link_binary(&self, name: &str, cache: &KamCache) -> Result<(), VenvError> {
+    pub fn link_binary(&self, name: &str, cache: &KamCache) -> Result<(), KamError> {
         let cache_bin = cache.bin_path(name);
         let venv_bin = self.bin_dir().join(name);
         
         if !cache_bin.exists() {
-            return Err(VenvError::Io(std::io::Error::new(
+            return Err(KamError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("Binary not found in cache: {}", name),
             )));
@@ -365,12 +349,12 @@ fi
     /// - `id`: Module ID
     /// - `version`: Module version
     /// - `cache`: Reference to KamCache
-    pub fn link_library(&self, id: &str, version: &str, cache: &KamCache) -> Result<(), VenvError> {
+    pub fn link_library(&self, id: &str, version: &str, cache: &KamCache) -> Result<(), KamError> {
         let cache_lib = cache.lib_module_path(id, version);
         let venv_lib = self.lib_dir().join(format!("{}-{}", id, version));
         
         if !cache_lib.exists() {
-            return Err(VenvError::Io(std::io::Error::new(
+            return Err(KamError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("Library not found in cache: {} v{}", id, version),
             )));
@@ -397,7 +381,7 @@ fi
     }
     
     /// Remove the virtual environment
-    pub fn remove(self) -> Result<(), VenvError> {
+    pub fn remove(self) -> Result<(), KamError> {
         if self.root.exists() {
             fs::remove_dir_all(&self.root)?;
         }
@@ -469,8 +453,10 @@ mod tests {
         let _venv = KamVenv::create(&temp_dir, VenvType::Development).unwrap();
         let result = KamVenv::create(&temp_dir, VenvType::Development);
         
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), VenvError::AlreadyExists(_)));
+    assert!(result.is_err());
+    // After switching to the global `KamError`, we surface existence
+    // as `KamError::Other(...)` with a descriptive message.
+    assert!(matches!(result.unwrap_err(), KamError::Other(_)));
         
         let _ = fs::remove_dir_all(temp_dir);
     }
@@ -480,8 +466,9 @@ mod tests {
         let temp_dir = std::env::temp_dir().join("kam_venv_test_nonexistent");
         let result = KamVenv::load(&temp_dir);
         
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), VenvError::NotFound(_)));
+    assert!(result.is_err());
+    // Not-found is now represented by `KamError::Other(...)`.
+    assert!(matches!(result.unwrap_err(), KamError::Other(_)));
     }
     
     #[test]

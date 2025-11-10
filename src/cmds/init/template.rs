@@ -35,8 +35,9 @@ pub fn init_template(
     // Extract builtin tmpl template
     let (_temp_dir, template_path) = super::common::extract_builtin_template("tmpl")?;
 
-    // Copy src from template
-    let src_temp = template_path.join("src").join("module");
+    // Copy src from template.
+    // Use `src/` as the canonical template source directory (no `src/module`).
+    let src_temp = template_path.join("src");
     if src_temp.exists() {
         let src_dir = path.join("src").join(id);
         let src_rel = format!("src/{}/", id);

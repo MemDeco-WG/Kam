@@ -1,9 +1,0 @@
-id=com.example.module
-name=Example Module
-version=v1.0.0
-versionCode=1
-author=Test Author
-description=A test module for Kam sync and dependency resolution testing
-minApi=21
-maxApi=33
-minMagisk=24000
