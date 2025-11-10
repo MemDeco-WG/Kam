@@ -25,6 +25,7 @@ use std::path::Path;
 use std::fs;
 use crate::cache::KamCache;
 use crate::types::kam_toml::KamToml;
+use crate::venv::{KamVenv, VenvType};
 
 /// Arguments for the sync command
 #[derive(Args, Debug)]
@@ -36,6 +37,10 @@ pub struct SyncArgs {
     /// Include dev dependencies
     #[arg(long)]
     pub dev: bool,
+    
+    /// Create virtual environment
+    #[arg(long)]
+    pub venv: bool,
 }
 
 /// Run the sync command
@@ -112,6 +117,32 @@ pub fn run(args: SyncArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
     
     println!("{} Synced {} dependencies", "✓".green().bold(), total_synced.to_string().green().bold());
+    
+    // Create virtual environment if requested
+    if args.venv {
+        println!();
+        println!("{}", "Creating virtual environment...".bold().cyan());
+        
+        let venv_path = project_path.join(".kam-venv");
+        let venv_type = if args.dev {
+            VenvType::Development
+        } else {
+            VenvType::Runtime
+        };
+        
+        // Remove existing venv if it exists
+        if venv_path.exists() {
+            fs::remove_dir_all(&venv_path)?;
+        }
+        
+        let _venv = KamVenv::create(&venv_path, venv_type)?;
+        println!("  {} Created at: {}", "✓".green(), venv_path.display());
+        println!();
+        println!("{}", "To activate the virtual environment:".dimmed());
+        println!("  {}: source .kam-venv/activate", "Unix".yellow());
+        println!("  {}: .kam-venv\\activate.bat", "Windows".yellow());
+        println!("  {}: .kam-venv\\activate.ps1", "PowerShell".yellow());
+    }
     
     Ok(())
 }
