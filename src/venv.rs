@@ -55,7 +55,7 @@ impl KamVenv {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
+    /// ```rust,no_run
     /// use kam::venv::{KamVenv, VenvType};
     /// 
     /// let venv = KamVenv::create(".kam-venv", VenvType::Development)?;
