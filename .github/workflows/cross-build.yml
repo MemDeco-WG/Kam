@@ -1,201 +1,206 @@
-name: Cross + native multi-platform build
+name: Release Cross-Platform Binaries
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
-      publish_release:
-        description: 'Publish a GitHub Release with artifacts (true/false)'
+      release_name:
+        description: 'Release name (leave empty for auto-generated)'
         required: false
-        default: 'false'
+        type: string
       prerelease:
-        description: 'Mark the release as a prerelease (true/false)'
+        description: 'Mark as pre-release'
         required: false
-        default: 'false'
-      tag:
-        description: 'Tag name to use for the release (optional)'
-        required: false
-        default: ''
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
 
 jobs:
-  linux-cross:
-    name: Linux (cross)
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (native build)
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifact_name: rmm
+            asset_name: rmm-linux-x86_64
+            use_cross: false
+          
+          # Linux ARM64 (cross-compile)
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            artifact_name: rmm
+            asset_name: rmm-linux-aarch64
+            use_cross: true
+          
+          # macOS x86_64 (native build)
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact_name: rmm
+            asset_name: rmm-macos-x86_64
+            use_cross: false
+          
+          # macOS ARM64 (native build on Apple Silicon)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: rmm
+            asset_name: rmm-macos-aarch64
+            use_cross: false
+          
+          # Windows x86_64 (native build)
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: rmm.exe
+            asset_name: rmm-windows-x86_64.exe
+            use_cross: false
+          
+          # Android ARM64 (cross-compile)
+          - os: ubuntu-22.04
+            target: aarch64-linux-android
+            artifact_name: rmm
+            asset_name: rmm-android-aarch64
+            use_cross: true
+
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Rust (rustup)
-        run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          echo "source $HOME/.cargo/env" >> $GITHUB_ENV
-          source $HOME/.cargo/env
-          rustup default stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cross
+        if: matrix.use_cross
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cross
+          key: cross-${{ runner.os }}-v0.2.5
+          restore-keys: |
+            cross-${{ runner.os }}-
 
       - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross --force
+        if: matrix.use_cross
+        run: |
+          if [ ! -f ~/.cargo/bin/cross ]; then
+            cargo install cross --git https://github.com/cross-rs/cross --tag v0.2.5
+          fi
 
-      - name: Build x86_64-unknown-linux-gnu (cross)
-        run: cross build --release --target x86_64-unknown-linux-gnu
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
 
-      - name: Build aarch64-unknown-linux-gnu (cross)
-        run: cross build --release --target aarch64-unknown-linux-gnu
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
 
-      - name: Upload linux artifacts
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: rust/target
+          key: ${{ runner.os }}-${{ matrix.target }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-target-
+
+      - name: Build binary (native)
+        if: ${{ !matrix.use_cross }}
+        working-directory: ./rust
+        run: cargo build --bin rmm --release --target ${{ matrix.target }}
+
+      - name: Build binary (cross)
+        if: matrix.use_cross
+        working-directory: ./rust
+        env:
+          PYO3_NO_PYTHON: "1"
+        run: cross build --bin rmm --release --target ${{ matrix.target }}
+
+      - name: Strip binary (Linux and macOS)
+        if: runner.os != 'Windows' && !matrix.use_cross
+        working-directory: ./rust
+        run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+      - name: Verify binary
+        working-directory: ./rust
+        shell: bash
+        run: |
+          if [ ! -f "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" ]; then
+            echo "Error: Binary not found!"
+            exit 1
+          fi
+          ls -lh target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+      - name: Rename binary for upload
+        shell: bash
+        working-directory: ./rust
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+          ls -lh target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-artifacts
-          path: |
-            target/x86_64-unknown-linux-gnu/release/*
-            target/aarch64-unknown-linux-gnu/release/*
+          name: ${{ matrix.asset_name }}
+          path: rust/target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+          retention-days: 7
 
-  android-cross:
-    name: Android (cross)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust (rustup)
+      - name: Generate release notes
+        id: release_notes
         run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          echo "source $HOME/.cargo/env" >> $GITHUB_ENV
-          source $HOME/.cargo/env
-          rustup default stable
+          cat << 'EOF' > release-notes.md
+          ## Build Information
+          
+          - **Commit**: ${{ github.sha }}
+          - **Branch**: ${{ github.ref_name }}
+          - **Build Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          - **Triggered by**: ${{ github.event_name }}
+          
+          ## Available Binaries
+          
+          This release includes pre-built binaries for the following platforms:
+          
+          - **Linux x86_64**: `rmm-linux-x86_64`
+          - **Linux ARM64**: `rmm-linux-aarch64`
+          - **macOS x86_64**: `rmm-macos-x86_64`
+          - **macOS ARM64 (Apple Silicon)**: `rmm-macos-aarch64`
+          - **Windows x86_64**: `rmm-windows-x86_64.exe`
+          - **Android ARM64**: `rmm-android-aarch64`
+          
+          ## Installation
+          
+          1. Download the appropriate binary for your system
+          2. Make it executable (Linux/macOS): `chmod +x rmm-*`
+          3. Run: `./rmm-* --help`
+          
+          For more information, see the [README](https://github.com/${{ github.repository }}/blob/main/README.md).
+          EOF
+          
+          echo "notes_file=release-notes.md" >> $GITHUB_OUTPUT
 
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross --force
-
-      - name: Build aarch64-linux-android (cross)
-        run: cross build --release --target aarch64-linux-android
-
-      - name: Build armv7-linux-androideabi (cross)
-        run: cross build --release --target armv7-linux-androideabi
-
-      - name: Build x86_64-linux-android (cross)
-        run: cross build --release --target x86_64-linux-android
-
-      - name: Build i686-linux-android (cross)
-        run: cross build --release --target i686-linux-android
-
-      - name: Upload android artifacts
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: android-artifacts
-          path: |
-            target/aarch64-linux-android/release/*
-            target/armv7-linux-androideabi/release/*
-            target/x86_64-linux-android/release/*
-            target/i686-linux-android/release/*
-
-  windows-native:
-    name: Windows (native MSVC)
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust (rustup on Windows)
-        shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri https://win.rustup.rs -OutFile rustup-init.exe
-          .\rustup-init.exe -y
-          $env:PATH += ";$env:USERPROFILE\.cargo\bin"
-          rustup default stable
-
-      - name: Build x86_64-pc-windows-msvc
-        run: cargo build --release --target x86_64-pc-windows-msvc
-
-      - name: Upload windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifacts
-          path: target/x86_64-pc-windows-msvc/release/*
-
-  macos-native:
-    name: macOS (native)
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust (rustup)
-        run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          echo "source $HOME/.cargo/env" >> $GITHUB_ENV
-          source $HOME/.cargo/env
-          rustup default stable
-
-      - name: Add macOS targets
-        run: |
-          rustup target add x86_64-apple-darwin aarch64-apple-darwin
-
-      - name: Build x86_64-apple-darwin
-        run: cargo build --release --target x86_64-apple-darwin
-
-      - name: Build aarch64-apple-darwin
-        run: cargo build --release --target aarch64-apple-darwin
-
-      - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-artifacts
-          path: |
-            target/x86_64-apple-darwin/release/*
-            target/aarch64-apple-darwin/release/*
-
-  release:
-    name: Create GitHub Release (optional)
-    runs-on: ubuntu-latest
-    needs: [linux-cross, android-cross, windows-native, macos-native]
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' }}
-    steps:
-      - name: Download linux artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-artifacts
-          path: artifacts/linux
-
-      - name: Download android artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: android-artifacts
-          path: artifacts/android
-
-      - name: Download windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-artifacts
-          path: artifacts/windows
-
-      - name: Download macos artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-artifacts
-          path: artifacts/macos
-
-      - name: Prepare release assets
-        run: |
-          mkdir -p dist/linux dist/android dist/windows dist/macos
-          cp -r artifacts/linux/* dist/linux/ || true
-          cp -r artifacts/android/* dist/android/ || true
-          cp -r artifacts/windows/* dist/windows/ || true
-          cp -r artifacts/macos/* dist/macos/ || true
-
-      - name: Create GitHub Release and upload assets
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.event.inputs.tag || format('run-{0}', github.run_number) }}
-          name: ${{ github.event.inputs.tag || format('run-{0}', github.run_number) }}
-          files: |
-            dist/linux/**
-            dist/android/**
-            dist/windows/**
-            dist/macos/**
+          files: release-assets/*
+          name: ${{ steps.release_info.outputs.release_name }}
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          body_path: release-notes.md
           draft: false
-          prerelease: ${{ github.event.inputs.prerelease }}
+          prerelease: ${{ steps.release_info.outputs.is_prerelease }}
+          make_latest: ${{ !fromJSON(steps.release_info.outputs.is_prerelease) }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
