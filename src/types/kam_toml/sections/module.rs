@@ -6,7 +6,7 @@ use crate::types::kam_toml::dependency::{DependencySection};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 表示库模块向外提供的单个提供项（类似 Cargo 的 [[bin]] 中的 name/path）
+/// 表示库模块向外提供的单个提供项（类似 Cargo 的 `[[bin]]` 中的 name/path）
 pub struct Provide {
     /// 提供的名称，作为其他模块在依赖时可以引用的 id
     pub name: String,
@@ -171,7 +171,7 @@ impl PartialEq<SupportedArch> for String {
 ///
 /// `provides` 列表描述该库模块对外提供的接口/标识及可选的版本信息。
 pub struct LibSection {
-    /// 对外提供的条目（name + 可选 path），类似 Cargo 的 [[bin]] 声明。
+    /// 对外提供的条目（name + 可选 path），类似 Cargo 的 `[[bin]]` 声明。
     pub provides: Option<Vec<Provide>>,
 }
 

@@ -53,7 +53,8 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
-    /// let cache = KamCache::new()?;
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
     /// println!("Cache root: {}", cache.root().display());
     /// ```
     pub fn new() -> Result<Self, CacheError> {
@@ -66,8 +67,9 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
-    /// let cache = KamCache::with_root("/custom/cache/path")?;
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::with_root(std::env::temp_dir().join("kam_cache_custom")).unwrap();
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn with_root<P: AsRef<Path>>(root: P) -> Result<Self, CacheError> {
         let root = root.as_ref().to_path_buf();
@@ -137,8 +139,9 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
-    /// let cache = KamCache::new()?;
-    /// cache.ensure_dirs()?;
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
+    /// cache.ensure_dirs().unwrap();
     /// ```
     pub fn ensure_dirs(&self) -> Result<(), CacheError> {
         std::fs::create_dir_all(&self.root)?;
@@ -159,8 +162,10 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
     /// let module_path = cache.lib_module_path("core-lib", "1.0.0");
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn lib_module_path(&self, id: &str, version: &str) -> PathBuf {
         self.lib_dir().join(format!("{}-{}", id, version))
@@ -175,6 +180,8 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
     /// let bin_path = cache.bin_path("mytool");
     /// ```
     pub fn bin_path(&self, name: &str) -> PathBuf {
@@ -191,6 +198,8 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
     /// let template_path = cache.profile_path("my-template", "1.0.0");
     /// ```
     pub fn profile_path(&self, id: &str, version: &str) -> PathBuf {
@@ -204,7 +213,9 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
-    /// cache.clear_all()?;
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
+    /// cache.clear_all().unwrap();
     /// ```
     pub fn clear_all(&self) -> Result<(), CacheError> {
         if self.root.exists() {
@@ -222,8 +233,10 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
-    /// cache.clear_dir("log")?;
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
+    /// cache.clear_dir("log").unwrap();
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn clear_dir(&self, dir: &str) -> Result<(), CacheError> {
         let path = match dir {
@@ -251,9 +264,11 @@ impl KamCache {
     /// ## Example
     /// 
     /// ```rust,no_run
-    /// let stats = cache.stats()?;
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
+    /// let stats = cache.stats().unwrap();
     /// println!("Cache size: {} bytes, {} files", stats.total_size, stats.file_count);
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn stats(&self) -> Result<CacheStats, CacheError> {
         let mut stats = CacheStats::default();
@@ -301,8 +316,10 @@ impl CacheStats {
     /// 
     /// ## Example
     /// 
-    /// ```ignore
-    /// let stats = cache.stats()?;
+    /// ```rust,no_run
+    /// use kam::cache::KamCache;
+    /// let cache = KamCache::new().unwrap();
+    /// let stats = cache.stats().unwrap();
     /// println!("Cache size: {}", stats.format_size());
     /// ```
     pub fn format_size(&self) -> String {

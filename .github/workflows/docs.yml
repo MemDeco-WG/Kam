@@ -1,0 +1,36 @@
+name: Build and Deploy docs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install rustup and toolchain (manual)
+        run: |
+          # Install rustup using the official script non-interactively
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          # Load cargo env for the rest of the steps
+          source $HOME/.cargo/env
+          # Ensure stable toolchain is installed and set as default
+          rustup toolchain install stable
+          rustup default stable
+          # Keep a minimal profile (components can be added as needed)
+          rustup set profile minimal || true
+        shell: bash
+
+      - name: Build documentation (no-deps)
+        run: cargo doc --no-deps
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/doc
