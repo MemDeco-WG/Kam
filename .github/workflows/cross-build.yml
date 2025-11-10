@@ -82,7 +82,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cross
-          key: cross-${{ runner.os }}-v0.2.5
+          key: cross-${{ runner.os }}-1.0.5
           restore-keys: |
             cross-${{ runner.os }}-
 
@@ -90,7 +90,7 @@ jobs:
         if: matrix.use_cross
         run: |
           if [ ! -f ~/.cargo/bin/cross ]; then
-            cargo install cross --git https://github.com/cross-rs/cross --tag v0.2.5
+            cargo install cross --git https://github.com/cross-rs/cross --tag v1.0.5
           fi
 
       - name: Cache cargo registry
