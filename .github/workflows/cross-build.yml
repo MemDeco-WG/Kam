@@ -113,30 +113,30 @@ jobs:
       - name: Cache target directory
         uses: actions/cache@v4
         with:
-          path: rust/target
+          path: target
           key: ${{ runner.os }}-${{ matrix.target }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-target-
 
       - name: Build binary (native)
         if: ${{ !matrix.use_cross }}
-        working-directory: ./rust
+        working-directory: .
         run: cargo build --bin kam --release --target ${{ matrix.target }}
 
       - name: Build binary (cross)
         if: matrix.use_cross
-        working-directory: ./rust
+        working-directory: .
         env:
           PYO3_NO_PYTHON: "1"
         run: cross build --bin kam --release --target ${{ matrix.target }}
 
       - name: Strip binary (Linux and macOS)
         if: runner.os != 'Windows' && !matrix.use_cross
-        working-directory: ./rust
+        working-directory: .
         run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
       - name: Verify binary
-        working-directory: ./rust
+        working-directory: .
         shell: bash
         run: |
           if [ ! -f "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" ]; then
@@ -147,7 +147,7 @@ jobs:
 
       - name: Rename binary for upload
         shell: bash
-        working-directory: ./rust
+        working-directory: .
         run: |
           cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} target/${{ matrix.target }}/release/${{ matrix.asset_name }}
           ls -lh target/${{ matrix.target }}/release/${{ matrix.asset_name }}
