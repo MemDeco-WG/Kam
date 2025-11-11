@@ -71,7 +71,7 @@ dev = []
 
 [kam.build]
 target_dir = "../../src/assets/tmpl"
-output_file = "tmpl_template.zip"
+output_file = "tmpl_template"
 pre_build = 'echo "pre build..."'
 post_build = 'echo "post build..."'
 
