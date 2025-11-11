@@ -1,0 +1,10 @@
+root = true
+
+[*.{js,ts,rs,py,css,scss,html,md,txt,sh,ps1,bash,bat}]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{png,jpg,jpeg,gif,ico,svg}]
+binary = true

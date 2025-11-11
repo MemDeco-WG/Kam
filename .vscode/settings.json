@@ -1,4 +1,11 @@
 {
+    // Force LF line endings in this workspace
+    "files.eol": "\n",
+    // Helpful defaults for consistent text files
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true
+}
+{
     "cSpell.words": [
         "antifeatures",
         "mmrl"

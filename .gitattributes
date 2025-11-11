@@ -1,0 +1,10 @@
+# Enforce LF for text files in this repository
+* text=auto eol=lf
+
+# Ensure common script types use LF
+*.sh text eol=lf
+*.ps1 text eol=lf
+*.bat text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
