@@ -80,7 +80,7 @@ jobs:
         if: matrix.use_cross
         run: |
           if [ ! -f ~/.cargo/bin/cross ]; then
-            cargo install cross --git https://github.com/cross-rs/cross --tag v1.0.5
+            cargo install cross --git https://github.com/cross-rs/cross
           fi
 
       - name: Cache cargo registry
