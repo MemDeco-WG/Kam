@@ -52,11 +52,6 @@ jobs:
             artifact_name: kam.exe
             asset_name: kam-windows-x86_64.exe
             use_cross: false
-          - os: ubuntu-22.04
-            target: aarch64-linux-android
-            artifact_name: kam
-            asset_name: kam-android-aarch64
-            use_cross: true
 
     steps:
       - name: Checkout code
@@ -80,6 +75,7 @@ jobs:
         if: matrix.use_cross
         run: |
           if [ ! -f ~/.cargo/bin/cross ]; then
+            # Install from repository default branch to avoid relying on a specific tag
             cargo install cross --git https://github.com/cross-rs/cross
           fi
 
@@ -165,4 +161,3 @@ jobs:
           path: target/${{ matrix.target }}/release/${{ matrix.asset_name }}
           retention-days: 7
 
- 
