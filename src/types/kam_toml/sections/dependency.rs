@@ -4,9 +4,27 @@ use serde::{Deserialize, Serialize};
 #[allow(non_snake_case)]
 pub struct Dependency {
     pub id: String,
-    pub version: Option<String>,
-    pub versionCode: Option<i64>,
+    /// versionCode may be either a single integer (exact version code)
+    /// or a range expressed as a string, e.g. "[1000,2000)".
+    pub versionCode: Option<VersionSpec>,
     pub source: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[allow(non_camel_case_types)]
+#[serde(untagged)]
+pub enum VersionSpec {
+    Exact(i64),
+    Range(String),
+}
+
+impl VersionSpec {
+    pub fn as_display(&self) -> String {
+        match self {
+            VersionSpec::Exact(v) => v.to_string(),
+            VersionSpec::Range(s) => s.clone(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -20,7 +38,6 @@ impl Default for Dependency {
     fn default() -> Self {
         Dependency {
             id: String::new(),
-            version: None,
             versionCode: None,
             source: None,
         }

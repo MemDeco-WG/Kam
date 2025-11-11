@@ -239,15 +239,43 @@ impl DependencyResolver {
             }
         }
 
-        // Merge dependencies by id, choosing the one with the largest versionCode
-        // If versionCode is missing, treat it as 0. This implements the
-        // "based on versionCode" selection: higher versionCode wins.
+        // Merge dependencies by id, choosing the one with the largest
+        // representative versionCode. For exact version specs we use the
+        // exact value; for ranges we fall back to their lower bound when
+        // available, otherwise 0.
         let mut best: BTreeMap<String, Dependency> = BTreeMap::new();
         for dep in dependencies {
             let id = dep.id.clone();
-            let cand_vc = dep.versionCode.unwrap_or(0);
+            // compute representative version code for comparison
+            let cand_vc = match &dep.versionCode {
+                Some(crate::types::kam_toml::sections::dependency::VersionSpec::Exact(v)) => *v,
+                Some(crate::types::kam_toml::sections::dependency::VersionSpec::Range(s)) => {
+                    // try to parse lower bound like "[123," or "[123,456)"
+                    if let Some(pos) = s.find(',') {
+                        let prefix = s[..pos].trim();
+                        // strip leading bracket
+                        let num = prefix.trim_start_matches(['[', '('].as_ref()).trim();
+                        num.parse::<i64>().unwrap_or(0)
+                    } else {
+                        // unable to parse, treat as 0
+                        0
+                    }
+                }
+                None => 0,
+            };
+
             if let Some(existing) = best.get(&id) {
-                let exist_vc = existing.versionCode.unwrap_or(0);
+                let exist_vc = match &existing.versionCode {
+                    Some(crate::types::kam_toml::sections::dependency::VersionSpec::Exact(v)) => *v,
+                    Some(crate::types::kam_toml::sections::dependency::VersionSpec::Range(s)) => {
+                        if let Some(pos) = s.find(',') {
+                            let prefix = s[..pos].trim();
+                            let num = prefix.trim_start_matches(['[', '('].as_ref()).trim();
+                            num.parse::<i64>().unwrap_or(0)
+                        } else { 0 }
+                    }
+                    None => 0,
+                };
                 if cand_vc > exist_vc {
                     best.insert(id, dep);
                 }

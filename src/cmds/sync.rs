@@ -41,10 +41,6 @@ pub struct SyncArgs {
     /// Include dev dependencies
     #[arg(long)]
     pub dev: bool,
-
-    /// Create virtual environment
-    #[arg(long)]
-    pub venv: bool,
 }
 
 /// Ensure a dependency module exists in the cache. Returns `Ok(true)` if a new
@@ -53,8 +49,53 @@ fn ensure_module_synced(
     cache: &KamCache,
     dep: &crate::types::kam_toml::sections::dependency::Dependency,
 ) -> Result<bool, KamError> {
-    let version = dep.version.as_deref().unwrap_or("latest");
-    let module_path = cache.lib_module_path(&dep.id, version);
+    // Resolve a concrete version string to use for cache paths. If the
+    // dependency specifies an exact versionCode, use it. If it specifies a
+    // range, try to choose the highest cached version matching the range.
+    // If nothing is available, fall back to the lower bound or 0.
+    use crate::types::kam_toml::sections::dependency::VersionSpec;
+
+    let version = match &dep.versionCode {
+        Some(VersionSpec::Exact(v)) => v.to_string(),
+        Some(VersionSpec::Range(s)) => {
+            // parse a range like "[1000,2000)" or "[1000,)" or "(,2000]"
+            // extract min and max if present
+            let s = s.trim();
+            let min_incl = s.starts_with('[');
+            let max_incl = s.ends_with(']');
+            let inner = s.trim_start_matches('[').trim_start_matches('(').trim_end_matches(']').trim_end_matches(')');
+            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+            let min_opt = if parts.get(0).map(|p| !p.is_empty()).unwrap_or(false) {
+                parts[0].parse::<i64>().ok()
+            } else { None };
+            let max_opt = if parts.len() > 1 && parts[1].len() > 0 { parts[1].parse::<i64>().ok() } else { None };
+
+            // list cached versions for id
+            let mut candidates: Vec<i64> = Vec::new();
+            if let Ok(entries) = std::fs::read_dir(cache.lib_dir()) {
+                for e in entries.flatten() {
+                    if let Some(name) = e.file_name().to_str() {
+                        if let Some(rest) = name.strip_prefix(&format!("{}-", dep.id)) {
+                            if let Ok(n) = rest.parse::<i64>() {
+                                // test against range
+                                let mut ok = true;
+                                if let Some(minv) = min_opt { ok = ok && (if min_incl { n >= minv } else { n > minv }); }
+                                if let Some(maxv) = max_opt { ok = ok && (if max_incl { n <= maxv } else { n < maxv }); }
+                                if ok { candidates.push(n); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(max_match) = candidates.into_iter().max() {
+                max_match.to_string()
+            } else if let Some(minv) = min_opt { minv.to_string() } else { "0".to_string() }
+        }
+        None => "0".to_string(),
+    };
+
+    let module_path = cache.lib_module_path(&dep.id, &version);
 
     // Already cached
     if module_path.exists() {
@@ -79,13 +120,13 @@ fn ensure_module_synced(
     // Try local candidates first
     for repo_root in local_candidates {
         let candidate = repo_root.join(&zip_name);
-        if candidate.exists() {
+            if candidate.exists() {
             // Extract zip into module_path
             let file = std::fs::File::open(&candidate)?;
             let mut archive = zip::ZipArchive::new(file)?;
             archive.extract(&module_path).map_err(KamError::from)?;
             let marker = module_path.join(".synced");
-            fs::write(marker, format!("Synced: {} @ {} (local)", dep.id, version))?;
+                fs::write(marker, format!("Synced: {} @ {} (local)", dep.id, version))?;
             return Ok(true);
         }
     }
@@ -218,21 +259,22 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
     println!("  {} {}", "✓".green(), format!("Cache: {}", cache.root().display()).dimmed());
     println!();
 
-    // Prepare virtual environment if requested (create now so we can link as we sync)
-    let mut maybe_venv: Option<KamVenv> = None;
-    if args.venv {
-        println!();
-        println!("{} Creating virtual environment...", "→".cyan());
-        let venv_path = project_path.join(".kam-venv");
-        let venv_type = if args.dev { VenvType::Development } else { VenvType::Runtime };
-        if venv_path.exists() {
-            fs::remove_dir_all(&venv_path)?;
-        }
-        let venv = KamVenv::create(&venv_path, venv_type)
-            .map_err(|e| KamError::Other(format!("Venv error: {}", e)))?;
-        println!("  {} Created at: {}", "✓".green(), venv.root().display());
-        maybe_venv = Some(venv);
+    // Ensure virtual environment exists and is up-to-date.
+    // Per project policy, `kam sync` should always ensure the venv is present
+    // and refreshed. The dedicated `kam venv` command remains available for
+    // manual management.
+    println!();
+    println!("{} Ensuring virtual environment is present...", "→".cyan());
+    let venv_path = project_path.join(".kam-venv");
+    let venv_type = if args.dev { VenvType::Development } else { VenvType::Runtime };
+    if venv_path.exists() {
+        // recreate to ensure it's the latest
+        fs::remove_dir_all(&venv_path)?;
     }
+    let venv = KamVenv::create(&venv_path, venv_type)
+        .map_err(|e| KamError::Other(format!("Venv error: {}", e)))?;
+    println!("  {} Created/updated at: {}", "✓".green(), venv.root().display());
+    let maybe_venv: Option<KamVenv> = Some(venv);
 
     // Process each group
     let mut total_synced = 0;
@@ -245,12 +287,12 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
         println!("{} {} dependencies:", "Syncing".bold(), group_name.yellow());
 
         for dep in &group.dependencies {
-            let version = dep.version.as_deref().unwrap_or("latest");
-            println!("  {} {}{}{}",
+            // Use versionCode for dependency selection (fall back to 0 when absent)
+            let version_code = dep.versionCode.as_ref().map(|v| v.as_display()).unwrap_or_else(|| "0".to_string());
+            println!("  {} {}@{}",
                 "→".cyan(),
                 dep.id.bold(),
-                "@".dimmed(),
-                version.dimmed()
+                version_code.dimmed()
             );
 
             // Delegate the (simulated) cache write to a helper to keep the
@@ -261,8 +303,8 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
 
             // If a venv was requested, link the library into it
             if let Some(venv) = &maybe_venv {
-                let ver = dep.version.as_deref().unwrap_or("latest");
-                match venv.link_library(&dep.id, ver, &cache) {
+                let ver = dep.versionCode.as_ref().map(|v| v.as_display()).unwrap_or_else(|| "0".to_string());
+                match venv.link_library(&dep.id, &ver, &cache) {
                     Ok(_) => println!("  {} Linked {}@{} into venv", "✓".green(), dep.id, ver),
                     Err(e) => println!("  {} Failed to link {}@{}: {}", "!".yellow(), dep.id, ver, e),
                 }
@@ -274,28 +316,12 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
 
     println!("{} Synced {} dependencies", "✓".green().bold(), total_synced.to_string().green().bold());
 
-    // If a virtual environment was requested, ensure it's present and print activation
-    // instructions only once. We created it earlier (so `maybe_venv` is Some). If for
-    // some reason it wasn't created earlier, create it now.
-    if args.venv {
-        let venv_path = project_path.join(".kam-venv");
-        if maybe_venv.is_none() {
-            // create now
-            println!();
-            println!("{} Creating virtual environment...", "→".cyan());
-            let venv_type = if args.dev { VenvType::Development } else { VenvType::Runtime };
-            if venv_path.exists() { fs::remove_dir_all(&venv_path)?; }
-            let _venv = KamVenv::create(&venv_path, venv_type)
-                .map_err(|e| KamError::Other(format!("Venv error: {}", e)))?;
-            println!("  {} Created at: {}", "✓".green(), venv_path.display());
-        }
-
+    // Print activation instructions for the always-managed venv
     println!();
     println!("{} To activate the virtual environment:", "•".dimmed());
-        println!("  {}: source .kam-venv/activate", "Unix".yellow());
-        println!("  {}: .kam-venv\\activate.bat", "Windows".yellow());
-        println!("  {}: .kam-venv\\activate.ps1", "PowerShell".yellow());
-    }
+    println!("  {}: source .kam-venv/activate", "Unix".yellow());
+    println!("  {}: .kam-venv\\activate.bat", "Windows".yellow());
+    println!("  {}: .kam-venv\\activate.ps1", "PowerShell".yellow());
 
     Ok(())
 }

@@ -31,7 +31,7 @@ Kam 提供了受 Python PEP 735 和 uv 包管理器启发的高级依赖解析�
 
 类似 Python virtualenv 的隔离环境：
 
-- **开发环境**：包含开发依赖（`kam sync --dev --venv`）
+- **开发环境**：包含开发依赖（`kam sync --dev`）
 - **运行时环境**：仅生产依赖
 - **跨平台支持**：Unix、Windows、PowerShell 激活脚本
 - **路径管理**：自动更新 PATH 和提示符
@@ -42,14 +42,14 @@ Kam 提供了受 Python PEP 735 和 uv 包管理器启发的高级依赖解析�
 [kam.dependency]
 # 基础运行时依赖
 normal = [
-    { id = "core-lib", version = "1.0.0" },
-    { id = "utils", version = "2.0.0" }
+    { id = "core-lib", versionCode = 1000 },
+    { id = "utils", versionCode = 2000 }
 ]
 
 # 开发依赖包含所有运行时依赖
 dev = [
     { id = "include:normal" },
-    { id = "test-framework", version = "3.0.0" }
+    { id = "test-framework", versionCode = 3000 }
 ]
 ```
 
@@ -67,7 +67,7 @@ kam init my-module --name "My Module" --author "Your Name"
 ```bash
 kam sync              # 同步普通依赖
 kam sync --dev        # 包含开发依赖
-kam sync --dev --venv # 创建虚拟环境
+kam sync --dev # 创建虚拟环境并同步依赖（venv 自动管理）
 ```
 
 ### 构建模块
@@ -86,8 +86,8 @@ kam cache path        # 显示缓存路径
 
 ### 使用虚拟环境
 ```bash
-# 创建并激活
-kam sync --venv
+# 创建并激活（`kam sync` 会自动管理虚拟环境）
+kam sync
 source .kam-venv/activate  # Unix
 .kam-venv\activate.bat     # Windows CMD
 .kam-venv\activate.ps1     # PowerShell
@@ -106,7 +106,7 @@ kam init my-project
 
 # 3. 同步依赖
 cd my-project
-kam sync --dev --venv
+kam sync --dev
 
 # 4. 激活虚拟环境
 source .kam-venv/activate

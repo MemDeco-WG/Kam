@@ -189,7 +189,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             // Ensure virtual environment exists, sync dependencies, and print activation instructions.
             println!("{} Ensuring virtual environment and synchronizing dependencies...", "→".cyan());
             // Reuse sync command logic: request venv creation and linking.
-            let sync_args = crate::cmds::sync::SyncArgs { path: args.path.clone(), dev: false, venv: true };
+            let sync_args = crate::cmds::sync::SyncArgs { path: args.path.clone(), dev: false };
             crate::cmds::sync::run(sync_args)?;
             // After sync/run, activation hints are printed by sync when appropriate.
             Ok(())
