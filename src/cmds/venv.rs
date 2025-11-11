@@ -14,7 +14,7 @@ pub struct VenvArgs {
     pub path: String,
 
     #[command(subcommand)]
-    pub command: VenvCommands,
+    pub command: Option<VenvCommands>,
 }
 
 /// Subcommands for venv
@@ -67,7 +67,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
     let venv_path = project_path.join(".kam-venv");
 
     match args.command {
-        VenvCommands::Create { dev, force } => {
+        Some(VenvCommands::Create { dev, force }) => {
             if venv_path.exists() {
                 if force {
                     std::fs::remove_dir_all(&venv_path)?;
@@ -91,7 +91,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             Ok(())
         }
 
-        VenvCommands::Remove { yes } => {
+        Some(VenvCommands::Remove { yes }) => {
             if !venv_path.exists() {
                 println!("{} No virtual environment found at {}", "!".yellow(), venv_path.display());
                 return Ok(());
@@ -115,7 +115,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             Ok(())
         }
 
-        VenvCommands::Info => {
+        Some(VenvCommands::Info) => {
             if !venv_path.exists() {
                 return Err(KamError::Other(format!("Virtual environment not found at {}", venv_path.display())));
             }
@@ -145,7 +145,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             Ok(())
         }
 
-        VenvCommands::Activate => {
+        Some(VenvCommands::Activate) => {
             println!("To activate the virtual environment:");
             println!("  Unix: source .kam-venv/activate");
             println!("  Windows (cmd): .kam-venv\\activate.bat");
@@ -153,13 +153,13 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             Ok(())
         }
 
-        VenvCommands::Deactivate => {
+        Some(VenvCommands::Deactivate) => {
             println!("To deactivate, run the 'deactivate' function or script provided by the activation environment.");
             println!("  In shells: run 'deactivate' or execute .kam-venv/deactivate");
             Ok(())
         }
 
-        VenvCommands::LinkBin { name } => {
+        Some(VenvCommands::LinkBin { name }) => {
             if !venv_path.exists() {
                 return Err(KamError::Other(format!("Virtual environment not found at {}", venv_path.display())));
             }
@@ -171,7 +171,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             Ok(())
         }
 
-        VenvCommands::LinkLib { id, version } => {
+        Some(VenvCommands::LinkLib { id, version }) => {
             if !venv_path.exists() {
                 return Err(KamError::Other(format!("Virtual environment not found at {}", venv_path.display())));
             }
@@ -181,6 +181,23 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             let ver = if version.is_empty() { "latest" } else { &version };
             venv.link_library(&id, ver, &cache)?;
             println!("{} Linked library '{}@{}' into venv", "✓".green(), id, ver);
+            Ok(())
+        }
+
+        None => {
+            // Default behaviour for `kam venv` with no subcommand:
+            // Ensure virtual environment exists, sync dependencies, and print activation instructions.
+            println!("{} Ensuring virtual environment and synchronizing dependencies...", "→".cyan());
+            // Reuse sync command logic: request venv creation and linking.
+            let sync_args = crate::cmds::sync::SyncArgs { path: args.path.clone(), dev: false, venv: true };
+            crate::cmds::sync::run(sync_args)?;
+            // After sync/run, print activation hints (sync already prints them when venv created,
+            // but print again for clarity)
+            println!();
+            println!("To activate the virtual environment:");
+            println!("  Unix: source .kam-venv/activate");
+            println!("  Windows (cmd): .kam-venv\\activate.bat");
+            println!("  PowerShell: .kam-venv\\activate.ps1");
             Ok(())
         }
     }

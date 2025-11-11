@@ -6,7 +6,7 @@ use crate::types::kam_toml::dependency::{DependencySection};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 表示库模块向外提供的单个提供项（类似 Cargo 的 `[[bin]]` 中的 name/path）
+/// 表示库模块向外提供的单个提供项
 pub struct Provide {
     /// 提供的名称，作为其他模块在依赖时可以引用的 id
     pub name: String,
@@ -23,18 +23,21 @@ impl Default for Provide {
     }
 }
 
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
+#[serde(rename_all = "lowercase")]
 /// 模块类型（序列化为字符串，用于 `kam.toml` 中的 `module_type` 字段）
 ///
 /// - `kam`：代表一个可发布的 Kam 模块
-/// - `Template`：代表一个模板（用于生成其他模块）
-/// - `Library`：代表一个仅作为库使用的模块
+/// - `template`：代表一个模板（用于生成其他模块）
+/// - `library`：代表一个仅作为库使用的模块
+/// - `repo`：代表一个模块仓库
 pub enum ModuleType {
-    #[serde(rename = "kam")]
     Kam,
     Template,
     Library,
+    Repo,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

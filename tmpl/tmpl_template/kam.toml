@@ -1,7 +1,7 @@
 [prop]
 id = "tmpl_template"
 version = "1.0.0"
-versionCode = 1762778546410
+versionCode = 1762850845388
 author = "Author"
 
 [prop.name]
@@ -12,70 +12,74 @@ en = "A module description"
 
 [mmrl.repo]
 license = "LICENSE"
-homepage = "https://github.com/example/repo"
+homepage = ""
 readme = "README.md"
-categories = ["Kam"]
-keywords = ["android", "root", "module"]
-support = "https://github.com/example/repo/issues"
-donate = "https://paypal.me/example"
-
-# Additional optional metadata (placeholders use the literal string "Optional")
+screenshots = []
+categories = []
+keywords = []
 maintainers = []
 repository = ""
 documentation = ""
 issues = ""
 funding = ""
+support = ""
+donate = ""
 cover = ""
 icon = ""
 devices = []
 arch = []
 require = []
-note = { title = "", message = "", color = "" }
-manager = { magisk = { min = "", devices = [], arch = [], require = [] }, kernelsu = { min = "", devices = [], arch = [], require = [] }, apatch = { min = "", devices = [], arch = [], require = [] } }
 antifeatures = []
-options = { archive = { compression = "" } }
+max_num = 0
+min_api = 0
+max_api = 0
+verified = false
 features = []
 
-[kam]
-module_type = "Template"
+[mmrl.repo.note]
+title = ""
+message = ""
 
-# Optional runtime/build metadata. Replace or add concrete values when
-# initializing a real module. Use empty arrays/strings here to keep
-# the template type-correct.
+[mmrl.repo.manager.magisk]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.kernelsu]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.apatch]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.options.archive]
+compression = ""
+
+[kam]
+min_api = 0
+max_api = 0
 supported_arch = []
 conflicts = []
+module_type = "template"
+
+[kam.dependency]
+kam = []
+dev = []
 
 [kam.build]
-# Build configuration for the template. When `kam build` runs it will
-# package the module into `dist/`. The `post_build` hook below will
-# copy the most recently-built zip into the template's `assets/`
-# directory so it can be included as a runnable/testable asset.
-#
-# Note: the hook uses PowerShell commands which are available on Windows
-# (and on systems with PowerShell Core). If you need POSIX shell support
-# too we can add a separate `post_build.sh` and use OS-detection.
-target_dir = "dist"
-# output_file left as default ("<id>-<version>.zip")
-pre_build = ""
-post_build = "powershell -NoProfile -Command \"$zip = Get-ChildItem -Path 'dist' -Filter '*.zip' | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($zip) { New-Item -ItemType Directory -Path 'assets' -Force | Out-Null; Copy-Item -Path $zip.FullName -Destination 'assets' -Force }\""
+target_dir = "../../tmpl"
+output_file = "tmpl_template.zip"
+pre_build = 'echo "pre build..."'
+post_build = 'echo "post build..."'
 
-
-# Template variables for the template engine.
-# Define variables as nested tables under [kam.tmpl.variables.<name>]
-# Each variable uses the shape of `VariableDefinition` in Rust:
-#   var_type: string (e.g. "string", "bool", "number")
-#   required: bool
-#   default: optional string value
-#
-# Example definitions (uncomment or edit as needed):
-[kam.tmpl.variables.module_name]
+[kam.tmpl.variables]
+[kam.tmpl.variables.example]
 var_type = "string"
 required = true
-default = "My Module"
+default = ""
 
-[kam.tmpl.variables.enable_feature_x]
-var_type = "bool"
-required = false
-default = "false"
-
-# If you prefer an empty variables map, remove the example entries above.
+[kam.lib]
+provides = []

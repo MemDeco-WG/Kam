@@ -213,7 +213,7 @@ impl KamToml {
                     return Err(KamTomlError::LibraryMissingLib);
                 }
             }
-            ModuleType::Kam => {}
+            ModuleType::Kam | ModuleType::Repo => {}
         }
 
         Ok(kt)

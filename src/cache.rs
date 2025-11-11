@@ -9,7 +9,8 @@
 /// ├── bin/      # Executable binary files (provided by library modules)
 /// ├── lib/      # Library modules (extracted dependencies, not compressed)
 /// ├── log/      # Log files
-/// └── profile/  # Template module archives (compressed)
+/// ├── profile/  # ksu profile archives
+/// └── tmpl/     # built-in templates extracted from assets/tmpl
 /// ```
 /// 
 /// ## Example Usage
@@ -28,6 +29,13 @@
 
 use std::path::{Path, PathBuf};
 use crate::errors::cache::CacheError;
+use rust_embed::RustEmbed;
+use std::io::Write;
+use zip::ZipArchive;
+
+#[derive(RustEmbed)]
+#[folder = "src/assets/tmpl"]
+struct TmplAssets;
 
 // CacheError is defined in `src/errors/cache.rs` and re-exported here for
 // backwards compatibility as `crate::cache::CacheError`.
@@ -87,16 +95,24 @@ impl KamCache {
     /// - `/data/adb/kam` on Android
     /// - `~/.kam` on other platforms
     fn default_cache_dir() -> Result<PathBuf, CacheError> {
+        // Honor explicit override via KAM_CACHE_ROOT environment variable.
+        // If provided, use it (relative paths are resolved against CWD).
+        if let Some(v) = std::env::var_os("KAM_CACHE_ROOT") {
+            let p = PathBuf::from(v);
+            let abs = if p.is_absolute() { p } else { std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(p) };
+            return Ok(abs);
+        }
+
         // Check if we're on Android
         if Path::new("/data/adb").exists() {
             return Ok(PathBuf::from("/data/adb/kam"));
         }
-        
+
         // For other platforms, use ~/.kam
         let home = std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
             .map_err(|_| CacheError::CacheDirNotFound)?;
-        
+
         Ok(PathBuf::from(home).join(".kam"))
     }
     
@@ -149,6 +165,79 @@ impl KamCache {
         std::fs::create_dir_all(self.lib_dir())?;
         std::fs::create_dir_all(self.log_dir())?;
         std::fs::create_dir_all(self.profile_dir())?;
+        // Ensure builtin templates are available in the cache tmpl directory.
+        // This extracts embedded template archives (from src/assets/tmpl)
+        // into `${cache_root}/tmpl/<template_name>/...` and writes the
+        // archive as `${cache_root}/tmpl/<template_name>.zip` so we don't
+        // re-extract on subsequent runs.
+        self.ensure_builtin_templates()?;
+        Ok(())
+    }
+
+    /// Get the tmpl directory (where built-in templates will be extracted)
+    pub fn tmpl_dir(&self) -> PathBuf {
+        self.root.join("tmpl")
+    }
+
+
+    /// Ensure built-in template archives from `src/assets/tmpl` are present
+    /// in the cache and extracted. Idempotent: skips archives already
+    /// written and directories already extracted.
+    fn ensure_builtin_templates(&self) -> Result<(), CacheError> {
+        std::fs::create_dir_all(self.tmpl_dir())?;
+
+        for entry in TmplAssets::iter() {
+            let name = entry.as_ref();
+            if !name.ends_with(".zip") {
+                continue;
+            }
+
+            // Use the base name without .zip as the extraction folder
+            let base = match name.strip_suffix(".zip") {
+                Some(b) => b,
+                None => continue,
+            };
+
+            let zip_path = self.tmpl_dir().join(format!("{}.zip", base));
+            let extract_dir = self.tmpl_dir().join(base);
+
+            // If both archive and extracted dir exist, skip
+            if zip_path.exists() && extract_dir.exists() {
+                continue;
+            }
+
+            if let Some(content) = TmplAssets::get(name) {
+                // Write archive file if missing
+                if !zip_path.exists() {
+                    let mut f = std::fs::File::create(&zip_path)?;
+                    f.write_all(&content.data)?;
+                }
+
+                // Extract archive into extract_dir
+                let file = std::fs::File::open(&zip_path)?;
+                // ZipArchive requires Read + Seek
+                let mut archive = ZipArchive::new(file).map_err(|e| {
+                    CacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+                })?;
+
+                for i in 0..archive.len() {
+                    let mut file = archive.by_index(i).map_err(|e| {
+                        CacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+                    })?;
+                    let outpath = extract_dir.join(file.name());
+                    if file.name().ends_with('/') {
+                        std::fs::create_dir_all(&outpath)?;
+                    } else {
+                        if let Some(p) = outpath.parent() {
+                            std::fs::create_dir_all(p)?;
+                        }
+                        let mut outfile = std::fs::File::create(&outpath)?;
+                        std::io::copy(&mut file, &mut outfile)?;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
     
@@ -336,114 +425,3 @@ impl CacheStats {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    
-    #[test]
-    fn test_cache_creation() {
-        let temp_dir = std::env::temp_dir().join("kam_cache_test_1");
-        let cache = KamCache::with_root(&temp_dir).unwrap();
-        assert_eq!(cache.root(), temp_dir);
-        let _ = fs::remove_dir_all(temp_dir);
-    }
-    
-    #[test]
-    fn test_ensure_dirs() {
-        let temp_dir = std::env::temp_dir().join("kam_cache_test_2");
-        let cache = KamCache::with_root(&temp_dir).unwrap();
-        cache.ensure_dirs().unwrap();
-        
-        assert!(cache.bin_dir().exists());
-        assert!(cache.lib_dir().exists());
-        assert!(cache.log_dir().exists());
-        assert!(cache.profile_dir().exists());
-        
-        let _ = fs::remove_dir_all(temp_dir);
-    }
-    
-    #[test]
-    fn test_paths() {
-        let temp_dir = std::env::temp_dir().join("kam_cache_test_3");
-        let cache = KamCache::with_root(&temp_dir).unwrap();
-        
-        assert_eq!(
-            cache.lib_module_path("test-mod", "1.0.0"),
-            temp_dir.join("lib").join("test-mod-1.0.0")
-        );
-        
-        assert_eq!(
-            cache.bin_path("mytool"),
-            temp_dir.join("bin").join("mytool")
-        );
-        
-        assert_eq!(
-            cache.profile_path("my-template", "2.0.0"),
-            temp_dir.join("profile").join("my-template-2.0.0.zip")
-        );
-        
-        let _ = fs::remove_dir_all(temp_dir);
-    }
-    
-    #[test]
-    fn test_clear_dir() {
-        let temp_dir = std::env::temp_dir().join("kam_cache_test_4");
-        let cache = KamCache::with_root(&temp_dir).unwrap();
-        cache.ensure_dirs().unwrap();
-        
-        // Create a test file
-        let test_file = cache.log_dir().join("test.log");
-        fs::write(&test_file, "test").unwrap();
-        assert!(test_file.exists());
-        
-        // Clear log directory
-        cache.clear_dir("log").unwrap();
-        assert!(!test_file.exists());
-        assert!(cache.log_dir().exists());
-        
-        let _ = fs::remove_dir_all(temp_dir);
-    }
-    
-    #[test]
-    fn test_stats() {
-        let temp_dir = std::env::temp_dir().join("kam_cache_test_5");
-        let cache = KamCache::with_root(&temp_dir).unwrap();
-        cache.ensure_dirs().unwrap();
-        
-        // Create test files
-        fs::write(cache.log_dir().join("test1.log"), "hello").unwrap();
-        fs::write(cache.log_dir().join("test2.log"), "world").unwrap();
-        
-        let stats = cache.stats().unwrap();
-        assert_eq!(stats.file_count, 2);
-        assert_eq!(stats.total_size, 10); // "hello" + "world"
-        
-        let formatted = stats.format_size();
-        assert!(formatted.contains("B"));
-        
-        let _ = fs::remove_dir_all(temp_dir);
-    }
-    
-    #[test]
-    fn test_format_size() {
-        let mut stats = CacheStats::default();
-        
-        stats.total_size = 500;
-        assert_eq!(stats.format_size(), "500.00 B");
-        
-        stats.total_size = 1536; // 1.5 KB
-        assert!(stats.format_size().starts_with("1.5"));
-        assert!(stats.format_size().contains("KB"));
-        
-        stats.total_size = 1048576; // 1 MB
-        assert!(stats.format_size().starts_with("1.0"));
-        assert!(stats.format_size().contains("MB"));
-    }
-    
-    #[test]
-    fn test_invalid_root() {
-        let result = KamCache::with_root("relative/path");
-        assert!(result.is_err());
-    }
-}

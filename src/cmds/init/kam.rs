@@ -32,13 +32,13 @@ pub fn init_kam(
     let description_map_btree: BTreeMap<_, _> = description_map.into_iter().collect();
     kt.prop.description = description_map_btree;
 
-    // For lib and kam, set module_type
+    // For library and kam, set module_type
     match module_type {
-        "lib" => {
+        "library" => {
             kt.kam.module_type = ModuleType::Library;
         }
         "kam" => {
-            // Already Normal
+            // already the default ModuleType::Kam
         }
         _ => {}
     }

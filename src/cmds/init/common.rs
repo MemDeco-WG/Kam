@@ -25,15 +25,22 @@ pub fn extract_builtin_template(template_type: &str) -> Result<(tempfile::TempDi
         println!("  {}", file.as_ref());
     }
 
+    // Accept legacy short keys ("tmpl","lib") as well as canonical values
+    // used in kam.toml ("template","library","kam"), and also accept
+    // direct asset base names like "tmpl_template".
     let (zip_name, folder_name): (&str, &str) = match template_type {
-        "tmpl" => ("tmpl_template.zip", "tmpl_template"),
-        "lib" => ("lib_template.zip", "lib_template"),
-        "kam" => ("kam_template.zip", "kam_template"),
+        "tmpl" | "template" | "tmpl_template" => ("tmpl_template.zip", "tmpl_template"),
+        "lib" | "library" | "lib_template" => ("lib_template.zip", "lib_template"),
+        "kam" | "kam_template" => ("kam_template.zip", "kam_template"),
         _ => return Err("Unknown template type".into()),
     };
 
     println!("Extracting template: {}, zip_name: {}", template_type, zip_name);
-    let zip_data = Assets::get(zip_name).ok_or("Template not found")?;
+    // The embedded files may be stored under a subfolder (e.g. "tmpl/")
+    // depending on how the assets were packaged. Try both variants.
+    let zip_data = Assets::get(zip_name)
+        .or_else(|| Assets::get(&format!("tmpl/{}", zip_name)))
+        .ok_or("Template not found")?;
     println!("Found zip_data, size: {}", zip_data.data.len());
 
     let temp_dir = TempDir::new()?;

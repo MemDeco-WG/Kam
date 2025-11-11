@@ -175,8 +175,8 @@ impl Rule for ModuleTypeRule {
                     out.push(ValidationEntry::error("kam.lib", Some("module_type is Library but lib section is missing".to_string())));
                 } else { out.push(ValidationEntry::pass("kam.lib", Some("ok".to_string()))); }
             }
-            ModuleType::Kam => {
-                out.push(ValidationEntry::pass("kam.module_type", Some("Kam".to_string())));
+            ModuleType::Kam | ModuleType::Repo => {
+                out.push(ValidationEntry::pass("kam.module_type", Some("Kam/Repo".to_string())));
             }
         }
         out

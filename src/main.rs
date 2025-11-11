@@ -23,6 +23,10 @@ enum Commands {
 
     /// Build the module
     Build(kam::cmds::build::BuildArgs),
+    /// Publish the module to a repository
+    Publish(kam::cmds::publish::PublishArgs),
+    /// Manage virtual environment
+    Venv(kam::cmds::venv::VenvArgs),
 }
 
 fn main() -> Result<(), KamError> {
@@ -34,5 +38,7 @@ fn main() -> Result<(), KamError> {
         Commands::Cache(args) => kam::cmds::cache::run(args).map_err(|e| KamError::Other(format!("{}", e))),
         Commands::Sync(args) => kam::cmds::sync::run(args).map_err(|e| KamError::Other(format!("{}", e))),
         Commands::Build(args) => kam::cmds::build::run(args).map_err(|e| KamError::Other(format!("{}", e))),
+        Commands::Publish(args) => kam::cmds::publish::run(args).map_err(|e| KamError::Other(format!("{}", e))),
+        Commands::Venv(args) => kam::cmds::venv::run(args).map_err(|e| KamError::Other(format!("{}", e))),
     }
 }
