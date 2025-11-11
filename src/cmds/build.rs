@@ -144,23 +144,50 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
             std::fs::create_dir_all(&target_src)?;
 
             // recursively copy files from placeholder_dir into target_src
-            fn copy_and_replace(src: &std::path::Path, dst: &std::path::Path, id: &str) -> Result<(), KamError> {
+            // Support arbitrary placeholders like {{id}}/{{version}}/{{author}} by
+            // building a replacements map from `kam.toml` and applying it to
+            // both filenames and file contents.
+            fn copy_and_replace(src: &std::path::Path, dst: &std::path::Path, kt: &KamToml) -> Result<(), KamError> {
+                let mut replacements: std::collections::HashMap<&str, String> = std::collections::HashMap::new();
+                replacements.insert("id", kt.prop.id.clone());
+                replacements.insert("version", kt.prop.version.clone());
+                replacements.insert("versionCode", kt.prop.versionCode.to_string());
+                replacements.insert("author", kt.prop.author.clone());
+
                 for entry in std::fs::read_dir(src)? {
                     let entry = entry?;
                     let p = entry.path();
                     let file_name = entry.file_name();
-                    let dst_path = dst.join(file_name);
+
+                    // Render filename placeholders (e.g. "{{id}}.txt")
+                    let file_name_str = file_name.to_string_lossy().to_string();
+                    let mut rendered_name = file_name_str.clone();
+                    for (k, v) in &replacements {
+                        let placeholder = format!("{{{{{}}}}}", k);
+                        if rendered_name.contains(&placeholder) {
+                            rendered_name = rendered_name.replace(&placeholder, v);
+                        }
+                    }
+
+                    let dst_path = dst.join(&rendered_name);
                     if p.is_dir() {
                         std::fs::create_dir_all(&dst_path)?;
-                        copy_and_replace(&p, &dst_path, id)?;
+                        copy_and_replace(&p, &dst_path, kt)?;
                     } else {
-                        // read file, replace occurrences of {{id}} in contents
+                        // read file, replace occurrences of any known placeholders in contents
                         let buf = std::fs::read(&p)?;
                         // treat as text replace; if binary, replacement is harmless if not present
                         if let Ok(s) = String::from_utf8(buf.clone()) {
-                            let replaced = s.replace("{{id}}", id);
+                            let mut replaced = s;
+                            for (k, v) in &replacements {
+                                let placeholder = format!("{{{{{}}}}}", k);
+                                if replaced.contains(&placeholder) {
+                                    replaced = replaced.replace(&placeholder, v);
+                                }
+                            }
                             std::fs::write(&dst_path, replaced.as_bytes())?;
                         } else {
+                            // binary file: copy as-is (filenames already rendered)
                             std::fs::copy(&p, &dst_path)?;
                         }
                     }
@@ -168,7 +195,7 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
                 Ok(())
             }
 
-            copy_and_replace(&placeholder_dir, &target_src, module_id)?;
+            copy_and_replace(&placeholder_dir, &target_src, &kam_toml)?;
 
             effective_project_path = td.path().to_path_buf();
             _temp_project = Some(td);
@@ -229,7 +256,7 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
         println!("{} {}", "Note:".yellow().bold(), "kam.build.output_file is ignored for non-'kam' module types".yellow());
     }
 
-    if kam_toml.kam.module_type == ModuleType::Kam {
+    if kam_toml.kam.module_type == ModuleType::Kam && !is_rendered_template {
         // Create module zip archive
         let zip_file = File::create(&module_output_file)?;
         let mut zip = ZipWriter::new(zip_file);
