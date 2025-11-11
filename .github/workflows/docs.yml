@@ -1,24 +1,25 @@
 name: Build and Deploy docs
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
 permissions:
-  contents: read        # 源代码读取
-  pages: write          # 允许写入 Pages 内容
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build docs
+      - name: Build documentation (no-deps)
         run: cargo doc --no-deps --target-dir target
 
       - name: Upload pages artifact
@@ -31,4 +32,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4.0.5
+        uses: actions/deploy-pages@v4

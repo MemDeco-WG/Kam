@@ -70,7 +70,7 @@ kam = []
 dev = []
 
 [kam.build]
-target_dir = "../../tmpl"
+target_dir = "../../src/assets/tmpl"
 output_file = "repo_template"
 pre_build = 'echo "pre build..."'
 post_build = 'echo "post build..."'

@@ -47,6 +47,7 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
     let kam_toml = KamToml::load_from_dir(project_path)?;
     let module_id = kam_toml.prop.id.clone();
     let version = kam_toml.prop.version.clone();
+    let version_code = kam_toml.prop.versionCode;
 
     // Determine output directory to build into
     let output_dir: PathBuf = args
@@ -67,8 +68,8 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
 
     crate::cmds::build::run(build_args)?;
 
-    // Find the produced package file — prefer pattern "{id}-{version}.zip"
-    let default_name = format!("{}-{}.zip", module_id, version);
+    // Find the produced package file — prefer pattern "{id}-{versionCode}.zip"
+    let default_name = format!("{}-{}.zip", module_id, version_code);
     let candidate = output_dir.join(&default_name);
     let package_path = if candidate.exists() {
         candidate
@@ -149,9 +150,11 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
                 };
 
                 let file_name = dest_file.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+                // Include both version (string) and versionCode (numeric) for compatibility.
                 let entry = json!({
                     "id": module_id,
                     "version": version,
+                    "versionCode": version_code,
                     "file": file_name,
                     "timestamp": chrono::Utc::now().to_rfc3339(),
                 });

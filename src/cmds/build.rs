@@ -175,6 +175,11 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
         }
     }
 
+    // If we rendered a template placeholder into a temporary project, treat
+    // this build as a template packaging: only create the source archive
+    // (no module zip) and name it without the `-src` suffix.
+    let is_rendered_template = _temp_project.is_some();
+
     // Determine module output basename. Default is `{{id}}-{{versionCode}}` as requested.
     let default_basename = format!("{}-{}", module_id, kam_toml.prop.versionCode);
 
@@ -279,10 +284,8 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
     }
 
     // --- Create source tar.gz archive ---
-    // Use the same basename for the source archive. If user provided
-    // `kam.build.output_file`, `basename` already reflects that; otherwise
-    // it's the default `{{id}}-{{versionCode}}`.
-    let source_filename = format!("{}-src.tar.gz", &basename);
+    let source_filename = format!("{}.tar.gz", &basename);
+
     let source_output_file = output_dir.join(&source_filename);
     let tar_gz = File::create(&source_output_file)?;
     let enc = GzEncoder::new(tar_gz, Compression::default());

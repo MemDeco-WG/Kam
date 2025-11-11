@@ -1,10 +1,18 @@
 
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, CommandFactory, FromArgMatches, ColorChoice};
 use dotenvy::dotenv;
 use kam::errors::KamError;
 
 #[derive(Parser)]
+#[command(
+    name = "kam",
+    about = "Kam — 模块管理工具",
+    long_about = "Kam 是一个轻量的模块管理工具，提供依赖解析、构建与缓存管理。",
+    version,
+    // custom help template inspired by `uv` to provide grouped sections
+    help_template = "{bin} — {about}\n\nUsage: {usage}\n\nCommands:\n{subcommands}\n\nOptions:\n{options}\n"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -23,15 +31,24 @@ enum Commands {
 
     /// Build the module
     Build(kam::cmds::build::BuildArgs),
+
     /// Publish the module to a repository
     Publish(kam::cmds::publish::PublishArgs),
+
     /// Manage virtual environment
     Venv(kam::cmds::venv::VenvArgs),
 }
 
 fn main() -> Result<(), KamError> {
     dotenv().ok();
-    let cli = Cli::parse();
+    // Build the underlying clap Command to enable colored output and then
+    // parse into our `Cli` struct. We enable `ColorChoice::Always` so the
+    // help output includes ANSI color sequences similar to `uv`.
+    let mut cmd = Cli::command();
+    cmd = cmd.color(ColorChoice::Always);
+    let matches = cmd.get_matches();
+
+    let cli = Cli::from_arg_matches(&matches).map_err(|e| KamError::Other(format!("{}", e)))?;
 
     match cli.command {
         Commands::Init(args) => kam::cmds::init::run(args).map_err(|e| KamError::Other(format!("{}", e))),
