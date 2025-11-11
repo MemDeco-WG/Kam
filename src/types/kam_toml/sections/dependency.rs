@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct Dependency {
     pub id: String,
     pub version: Option<String>,
+    pub versionCode: Option<i64>,
     pub source: Option<String>,
 }
 
@@ -20,6 +21,7 @@ impl Default for Dependency {
         Dependency {
             id: String::new(),
             version: None,
+            versionCode: None,
             source: None,
         }
     }

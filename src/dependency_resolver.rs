@@ -239,9 +239,28 @@ impl DependencyResolver {
             }
         }
 
+        // Merge dependencies by id, choosing the one with the largest versionCode
+        // If versionCode is missing, treat it as 0. This implements the
+        // "based on versionCode" selection: higher versionCode wins.
+        let mut best: BTreeMap<String, Dependency> = BTreeMap::new();
+        for dep in dependencies {
+            let id = dep.id.clone();
+            let cand_vc = dep.versionCode.unwrap_or(0);
+            if let Some(existing) = best.get(&id) {
+                let exist_vc = existing.versionCode.unwrap_or(0);
+                if cand_vc > exist_vc {
+                    best.insert(id, dep);
+                }
+            } else {
+                best.insert(id, dep);
+            }
+        }
+
         visited.remove(group_name);
 
-        Ok(dependencies)
+        // Return collected best dependencies in deterministic order
+        let result: Vec<Dependency> = best.into_iter().map(|(_, v)| v).collect();
+        Ok(result)
     }
 
     /// Validate that all includes reference existing groups

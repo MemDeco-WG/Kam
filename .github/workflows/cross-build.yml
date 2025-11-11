@@ -52,6 +52,12 @@ jobs:
             artifact_name: kam.exe
             asset_name: kam-windows-x86_64.exe
             use_cross: false
+          - os: ubuntu-22.04
+            target: aarch64-linux-android
+            artifact_name: kam
+            asset_name: kam-android-aarch64
+            use_cross: true
+
 
     steps:
       - name: Checkout code
