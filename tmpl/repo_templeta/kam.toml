@@ -1,9 +1,8 @@
 [prop]
-id = "my_module"
+id = "tmpl_template"
 version = "1.0.0"
-versionCode = 1762845843392
+versionCode = 1762850845388
 author = "Author"
-updateJson = "https://example.com/update.json"
 
 [prop.name]
 en = "My Module"
@@ -64,19 +63,27 @@ min_api = 0
 max_api = 0
 supported_arch = []
 conflicts = []
-module_type = "kam"
+module_type = "template"
 
 [kam.dependency]
 kam = []
 dev = []
 
 [kam.build]
-target_dir = "dist"
-output_file = ""
+target_dir = "../../tmpl"
+output_file = "repo_template"
 pre_build = 'echo "pre build..."'
 post_build = 'echo "post build..."'
 
 [kam.tmpl.variables]
+[kam.tmpl.variables.example]
+var_type = "string"
+required = true
+default = ""
+note = "Required for repo template. Provide via --var example=<value> or edit kam.toml after init."
+help = "示例变量，用于说明如何在仓库模板中引用变量。"
+example = "example-value"
+choices = []
 
 [kam.lib]
 provides = []

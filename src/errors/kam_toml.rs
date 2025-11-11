@@ -44,6 +44,10 @@ pub enum KamTomlError {
 	ReadmeNotFound(String),
 	#[error("Readme file is empty: {0}")]
 	ReadmeEmpty(String),
+	#[error("Changelog file not found: {0}")]
+	ChangelogNotFound(String),
+	#[error("Changelog file is empty: {0}")]
+	ChangelogEmpty(String),
 	#[error("Unsupported architecture: {0}, supported: {1:?}")]
 	UnsupportedArch(String, Vec<String>),
 	#[error("Template module missing [kam.tmpl] section")]

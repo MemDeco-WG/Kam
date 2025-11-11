@@ -24,6 +24,8 @@ pub struct RepoSection {
     pub homepage: Option<String>,
     /// README 文件名（相对路径），例如 `README.md`
     pub readme: Option<String>,
+    /// Changelog 文件名（相对路径），例如 `CHANGELOG.md`
+    pub changelog: Option<String>,
     /// 屏幕截图 URL 列表
     pub screenshots: Option<Vec<String>>,
     /// 类别标签列表（可用于分类展示）
@@ -80,6 +82,7 @@ impl Default for RepoSection {
             license: Some("LICENSE".to_string()),
             homepage: Some(String::new()),
             readme: Some("README.md".to_string()),
+            changelog: Some("CHANGELOG.md".to_string()),
             screenshots: Some(vec![]),
             categories: Some(vec![]),
             keywords: Some(vec![]),

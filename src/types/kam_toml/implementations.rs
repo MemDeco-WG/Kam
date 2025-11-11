@@ -188,6 +188,16 @@ impl KamToml {
                     return Err(KamTomlError::ReadmeEmpty(readme.clone()));
                 }
             }
+            // Check changelog file if specified
+            if let Some(changelog) = mmrl.repo.as_ref().and_then(|r| r.changelog.as_ref()) {
+                let changelog_path = dir_path.join(changelog);
+                if !changelog_path.exists() {
+                    return Err(KamTomlError::ChangelogNotFound(changelog.clone()));
+                }
+                if changelog_path.metadata()?.len() == 0 {
+                    return Err(KamTomlError::ChangelogEmpty(changelog.clone()));
+                }
+            }
         }
 
         // Validate supported_arch (compare canonical string forms)

@@ -191,13 +191,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             // Reuse sync command logic: request venv creation and linking.
             let sync_args = crate::cmds::sync::SyncArgs { path: args.path.clone(), dev: false, venv: true };
             crate::cmds::sync::run(sync_args)?;
-            // After sync/run, print activation hints (sync already prints them when venv created,
-            // but print again for clarity)
-            println!();
-            println!("To activate the virtual environment:");
-            println!("  Unix: source .kam-venv/activate");
-            println!("  Windows (cmd): .kam-venv\\activate.bat");
-            println!("  PowerShell: .kam-venv\\activate.ps1");
+            // After sync/run, activation hints are printed by sync when appropriate.
             Ok(())
         }
     }

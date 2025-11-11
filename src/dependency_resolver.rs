@@ -133,7 +133,7 @@ impl DependencyResolver {
                     }
                 })
                 .collect();
-            groups.insert("normal".to_string(), entries);
+                groups.insert("kam".to_string(), entries);
         }
 
         // Add dev dependencies

@@ -21,3 +21,10 @@ colored = "3.0.0"
 dotenvy = "0.15.7"
 anyhow = "1.0.100"
 reqwest = { version = "0.12.24", features = ["blocking", "rustls-tls"] }
+flate2 = "1.1.5"
+tar = "0.4.44"
+git2 = "0.20.2"
+walkdir = "2.3.3"
+
+[dev-dependencies]
+tiny_http = "0.12.0"

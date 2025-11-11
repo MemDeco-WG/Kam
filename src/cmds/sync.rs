@@ -1,20 +1,20 @@
 /// # Kam Sync Command
-/// 
+///
 /// Synchronize dependencies similar to `uv sync`, creating symbolic links.
-/// 
+///
 /// ## Functionality
-/// 
+///
 /// - Resolves dependencies from `kam.toml`
 /// - Downloads and caches modules
 /// - Creates symbolic links to cached modules
 /// - Supports dev dependencies with `--dev` flag
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```bash
-/// # Sync normal dependencies
+/// # Sync kam dependencies
 /// kam sync
-/// 
+///
 /// # Sync including dev dependencies
 /// kam sync --dev
 /// ```
@@ -25,6 +25,9 @@ use std::path::Path;
 use std::fs;
 use crate::cache::KamCache;
 use crate::types::kam_toml::KamToml;
+use crate::types::source::Source;
+use crate::types::modules::KamModule;
+use crate::types::modules::ModuleBackend;
 use crate::venv::{KamVenv, VenvType};
 use crate::errors::KamError;
 
@@ -34,11 +37,11 @@ pub struct SyncArgs {
     /// Path to the project (default: current directory)
     #[arg(default_value = ".")]
     pub path: String,
-    
+
     /// Include dev dependencies
     #[arg(long)]
     pub dev: bool,
-    
+
     /// Create virtual environment
     #[arg(long)]
     pub venv: bool,
@@ -50,7 +53,6 @@ fn ensure_module_synced(
     cache: &KamCache,
     dep: &crate::types::kam_toml::sections::dependency::Dependency,
 ) -> Result<bool, KamError> {
-    use std::io::Write as _;
     let version = dep.version.as_deref().unwrap_or("latest");
     let module_path = cache.lib_module_path(&dep.id, version);
 
@@ -88,30 +90,29 @@ fn ensure_module_synced(
         }
     }
 
-    // Try network sources using KamToml's effective source
-    let source = crate::types::kam_toml::KamToml::get_effective_source(dep);
+    // Try network sources using KamToml's effective source and the new Source/KamModule
+    let source_base = crate::types::kam_toml::KamToml::get_effective_source(dep);
     let candidates = vec![
-        format!("{}/{}", source.trim_end_matches('/'), zip_name),
-        format!("{}/releases/download/{}/{}", source.trim_end_matches('/'), version, zip_name),
-        format!("{}/raw/main/{}", source.trim_end_matches('/'), zip_name),
+        format!("{}/{}", source_base.trim_end_matches('/'), zip_name),
+        format!("{}/releases/download/{}/{}", source_base.trim_end_matches('/'), version, zip_name),
+        format!("{}/raw/main/{}", source_base.trim_end_matches('/'), zip_name),
     ];
 
     for url in candidates {
-        // Attempt download
-        match reqwest::blocking::get(&url) {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    let bytes = resp.bytes().map_err(|e| KamError::Other(format!("download error: {}", e)))?;
-                    // Write to a temp file then extract
-                    let mut tmp = tempfile::NamedTempFile::new()?;
-                    tmp.write_all(&bytes)?;
-                    tmp.flush()?;
-                    let f = tmp.reopen()?;
-                    let mut archive = zip::ZipArchive::new(f)?;
-                    archive.extract(&module_path).map_err(KamError::from)?;
-                    let marker = module_path.join(".synced");
-                    fs::write(marker, format!("Synced: {} @ {} ({})", dep.id, version, url))?;
-                    return Ok(true);
+        // Parse the candidate into a Source and attempt to install into cache using KamModule
+        match Source::parse(&url) {
+            Ok(src) => {
+                let module = KamModule::new(KamToml::default(), Some(src));
+                match install_backend_into_cache(&module, cache) {
+                    Ok(_dst) => {
+                        let marker = module_path.join(".synced");
+                        fs::write(marker, format!("Synced: {} @ {} ({})", dep.id, version, url))?;
+                        return Ok(true);
+                    }
+                    Err(_e) => {
+                        // try next candidate
+                        continue;
+                    }
                 }
             }
             Err(_) => continue,
@@ -122,20 +123,30 @@ fn ensure_module_synced(
     Err(KamError::Other(format!("Failed to fetch module '{}@{}' from local repo or source", dep.id, version)))
 }
 
+/// Install a ModuleBackend into the provided cache via the trait.
+///
+/// This small adapter centralizes the place where callers depend on the
+/// trait rather than the concrete `KamModule` type. It simply delegates to
+/// the backend's `install_into_cache` and exists to make call-sites accept
+/// `impl ModuleBackend` / `&dyn ModuleBackend` more explicitly.
+fn install_backend_into_cache(backend: &impl ModuleBackend, cache: &KamCache) -> Result<std::path::PathBuf, KamError> {
+    backend.install_into_cache(cache)
+}
+
 /// Run the sync command
-/// 
+///
 /// ## Steps
-/// 
+///
 /// 1. Load `kam.toml` configuration
 /// 2. Resolve dependency groups
 /// 3. Ensure cache directories exist
 /// 4. Create symbolic links to cached modules
 pub fn run(args: SyncArgs) -> Result<(), KamError> {
     let project_path = Path::new(&args.path);
-    
+
     println!("{}", "Synchronizing dependencies...".bold().cyan());
     println!();
-    
+
     // Load kam.toml
     let kam_toml = KamToml::load_from_dir(project_path)?;
     println!("  {} {}", "✓".green(), format!("Loaded kam.toml for '{}'", kam_toml.prop.id).dimmed());
@@ -144,20 +155,69 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
     let resolved = kam_toml
         .resolve_dependencies()
         .map_err(|e| KamError::Other(format!("dependency resolution failed: {}", e)))?;
-    
+
     // Determine which groups to sync
     let groups_to_sync = if args.dev {
-        vec!["normal", "dev"]
+        vec!["kam", "dev"]
     } else {
-        vec!["normal"]
+        vec!["kam"]
     };
-    
+
     // Initialize cache
-    let cache = KamCache::new()?;
+    // If the project has a local `.env` containing `KAM_CACHE_ROOT`, prefer
+    // that value for the cache root when operating on this project. We only
+    // read this single variable here to avoid mutating the entire process
+    // environment (and to keep the change minimal and explicit).
+    fn read_project_env_value(project_path: &Path, key: &str) -> Option<String> {
+        let env_file = project_path.join(".env");
+        if !env_file.exists() {
+            return None;
+        }
+
+        let content = std::fs::read_to_string(&env_file).ok()?;
+        content
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .find_map(|line| {
+                line.find('=').and_then(|pos| {
+                    let k = line[..pos].trim();
+                    if k != key {
+                        return None;
+                    }
+                    let mut val = line[pos + 1..].trim().to_string();
+                    // strip optional surrounding quotes
+                    if (val.starts_with('"') && val.ends_with('"')) || (val.starts_with('\'') && val.ends_with('\'')) {
+                        if val.len() >= 2 {
+                            val = val[1..val.len() - 1].to_string();
+                        }
+                    }
+                    Some(val)
+                })
+            })
+    }
+
+    // Initialize cache, honoring project-local `.env` KAM_CACHE_ROOT.
+    // If the value in `.env` is a relative path, resolve it relative to the
+    // project directory (the location of the `.env`), using a canonicalized
+    // absolute base when possible. This allows `.env` to contain `./.kam`.
+    let cache = if let Some(root_val) = read_project_env_value(project_path, "KAM_CACHE_ROOT") {
+        let p = std::path::PathBuf::from(root_val);
+        // Try to get an absolute base path for the project. If the project
+        // path cannot be canonicalized (missing), fall back to current_dir().
+        let base = match project_path.canonicalize() {
+            Ok(abs) => abs,
+            Err(_) => std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+        };
+        let abs = if p.is_absolute() { p } else { base.join(p) };
+        KamCache::with_root(abs)?
+    } else {
+        KamCache::new()?
+    };
     cache.ensure_dirs()?;
     println!("  {} {}", "✓".green(), format!("Cache: {}", cache.root().display()).dimmed());
     println!();
-    
+
     // Prepare virtual environment if requested (create now so we can link as we sync)
     let mut maybe_venv: Option<KamVenv> = None;
     if args.venv {
@@ -171,77 +231,71 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
         let venv = KamVenv::create(&venv_path, venv_type)
             .map_err(|e| KamError::Other(format!("Venv error: {}", e)))?;
         println!("  {} Created at: {}", "✓".green(), venv.root().display());
-        println!();
-        println!("{} To activate the virtual environment:", "•".dimmed());
-        println!("  {}: source .kam-venv/activate", "Unix".yellow());
-        println!("  {}: .kam-venv\\activate.bat", "Windows".yellow());
-        println!("  {}: .kam-venv\\activate.ps1", "PowerShell".yellow());
         maybe_venv = Some(venv);
     }
 
     // Process each group
     let mut total_synced = 0;
     for group_name in groups_to_sync {
-        if let Some(group) = resolved.get(group_name) {
-            println!("{} {} dependencies:", "Syncing".bold(), group_name.yellow());
-            
-            for dep in &group.dependencies {
-                let version = dep.version.as_deref().unwrap_or("latest");
-                println!("  {} {}{}{}", 
-                    "→".cyan(), 
-                    dep.id.bold(), 
-                    "@".dimmed(),
-                    version.dimmed()
-                );
+        let group = match resolved.get(group_name) {
+            Some(g) => g,
+            None => continue,
+        };
 
-                // Delegate the (simulated) cache write to a helper to keep the
-                // loop body small and focused on presentation.
-                if ensure_module_synced(&cache, dep)? {
-                    total_synced += 1;
-                }
+        println!("{} {} dependencies:", "Syncing".bold(), group_name.yellow());
 
-                // If a venv was requested, link the library into it
-                if let Some(venv) = &maybe_venv {
-                    let ver = dep.version.as_deref().unwrap_or("latest");
-                    match venv.link_library(&dep.id, ver, &cache) {
-                        Ok(_) => println!("  {} Linked {}@{} into venv", "✓".green(), dep.id, ver),
-                        Err(e) => println!("  {} Failed to link {}@{}: {}", "!".yellow(), dep.id, ver, e),
-                    }
+        for dep in &group.dependencies {
+            let version = dep.version.as_deref().unwrap_or("latest");
+            println!("  {} {}{}{}",
+                "→".cyan(),
+                dep.id.bold(),
+                "@".dimmed(),
+                version.dimmed()
+            );
+
+            // Delegate the (simulated) cache write to a helper to keep the
+            // loop body small and focused on presentation.
+            if ensure_module_synced(&cache, dep)? {
+                total_synced += 1;
+            }
+
+            // If a venv was requested, link the library into it
+            if let Some(venv) = &maybe_venv {
+                let ver = dep.version.as_deref().unwrap_or("latest");
+                match venv.link_library(&dep.id, ver, &cache) {
+                    Ok(_) => println!("  {} Linked {}@{} into venv", "✓".green(), dep.id, ver),
+                    Err(e) => println!("  {} Failed to link {}@{}: {}", "!".yellow(), dep.id, ver, e),
                 }
             }
-            
-            println!();
-        }
-    }
-    
-    println!("{} Synced {} dependencies", "✓".green().bold(), total_synced.to_string().green().bold());
-    
-    // Create virtual environment if requested
-    if args.venv {
-        println!();
-        println!("{}", "Creating virtual environment...".bold().cyan());
-        
-        let venv_path = project_path.join(".kam-venv");
-        let venv_type = if args.dev {
-            VenvType::Development
-        } else {
-            VenvType::Runtime
-        };
-        
-        // Remove existing venv if it exists
-        if venv_path.exists() {
-            fs::remove_dir_all(&venv_path)?;
         }
 
-        let _venv = KamVenv::create(&venv_path, venv_type)
-            .map_err(|e| KamError::Other(format!("Venv error: {}", e)))?;
-        println!("  {} Created at: {}", "✓".green(), venv_path.display());
         println!();
-        println!("{}", "To activate the virtual environment:".dimmed());
+    }
+
+    println!("{} Synced {} dependencies", "✓".green().bold(), total_synced.to_string().green().bold());
+
+    // If a virtual environment was requested, ensure it's present and print activation
+    // instructions only once. We created it earlier (so `maybe_venv` is Some). If for
+    // some reason it wasn't created earlier, create it now.
+    if args.venv {
+        let venv_path = project_path.join(".kam-venv");
+        if maybe_venv.is_none() {
+            // create now
+            println!();
+            println!("{} Creating virtual environment...", "→".cyan());
+            let venv_type = if args.dev { VenvType::Development } else { VenvType::Runtime };
+            if venv_path.exists() { fs::remove_dir_all(&venv_path)?; }
+            let _venv = KamVenv::create(&venv_path, venv_type)
+                .map_err(|e| KamError::Other(format!("Venv error: {}", e)))?;
+            println!("  {} Created at: {}", "✓".green(), venv_path.display());
+        }
+
+    println!();
+    println!("{} To activate the virtual environment:", "•".dimmed());
         println!("  {}: source .kam-venv/activate", "Unix".yellow());
         println!("  {}: .kam-venv\\activate.bat", "Windows".yellow());
         println!("  {}: .kam-venv\\activate.ps1", "PowerShell".yellow());
     }
-    
+
     Ok(())
 }

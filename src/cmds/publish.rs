@@ -4,6 +4,9 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
+use crate::types::kam_toml::sections::module::ModuleType;
+use serde_json::json;
+use chrono;
 
 /// Arguments for the publish command
 #[derive(Args, Debug)]
@@ -125,6 +128,43 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
         };
 
         fs::create_dir_all(&dest)?;
+
+        // If the destination is itself a Kam module repo (module_type = repo),
+        // treat it as a module repository: copy package into `packages/` and update an index.
+        let maybe_toml = KamToml::load_from_dir(&dest).ok();
+        if let Some(kt) = maybe_toml {
+            if kt.kam.module_type == ModuleType::Repo {
+                let packages_dir = dest.join("packages");
+                fs::create_dir_all(&packages_dir)?;
+                let dest_file = packages_dir.join(package_path.file_name().ok_or_else(|| KamError::Other("invalid package filename".to_string()))?);
+                fs::copy(&package_path, &dest_file)?;
+
+                // Update simple index.json (array of entries) under packages/index.json
+                let index_path = packages_dir.join("index.json");
+                let mut entries: Vec<serde_json::Value> = if index_path.exists() {
+                    let s = std::fs::read_to_string(&index_path)?;
+                    serde_json::from_str(&s).unwrap_or_else(|_| Vec::new())
+                } else {
+                    Vec::new()
+                };
+
+                let file_name = dest_file.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+                let entry = json!({
+                    "id": module_id,
+                    "version": version,
+                    "file": file_name,
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                });
+                entries.push(entry);
+                let idx_s = serde_json::to_string_pretty(&entries).map_err(|e| KamError::Other(format!("json index serialize error: {}", e)))?;
+                std::fs::write(&index_path, idx_s)?;
+
+                println!("  {} Published to module repo: {}", "✓".green(), dest_file.display());
+                return Ok(());
+            }
+        }
+
+        // Fallback: plain directory copy
         let dest_file = dest.join(package_path.file_name().ok_or_else(|| KamError::Other("invalid package filename".to_string()))?);
         fs::copy(&package_path, &dest_file)?;
         println!("  {} Published to local repository: {}", "✓".green(), dest_file.display());

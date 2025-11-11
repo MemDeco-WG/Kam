@@ -1,4 +1,4 @@
-use clap::Args;
+use clap::{Args, Subcommand};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -70,9 +70,87 @@ pub struct InitArgs {
     /// Template variables in key=value format
     #[arg(long)]
     pub var: Vec<String>,
-    /// Initialize a kam module repository project (uses tmpl/repo_templeta)
+
+    /// Subcommands for init (e.g. `kam init repo [path]`)
+    #[command(subcommand)]
+    pub action: Option<InitAction>,
+}
+
+/// Subcommands for `kam init`
+#[derive(Subcommand, Debug)]
+pub enum InitAction {
+    /// Initialize a kam module repository project from template
+    Repo(RepoArgs),
+    /// Initialize a template project (tmpl)
+    Tmpl(TmplArgs),
+    /// Initialize a library module project
+    Lib(LibArgs),
+}
+
+/// Arguments for `kam init repo [path]`
+#[derive(Args, Debug)]
+pub struct RepoArgs {
+    /// Path to initialize the repo (default: current directory)
+    #[arg(default_value = ".")]
+    pub path: String,
+
+    /// Force overwrite existing files
+    #[arg(short, long)]
+    pub force: bool,
+
+    /// Template variables (key=value)
     #[arg(long)]
-    pub module_repo: bool,
+    pub var: Vec<String>,
+}
+
+/// Arguments for `kam init tmpl [path]`
+#[derive(Args, Debug)]
+pub struct TmplArgs {
+    /// Path to initialize the template project (default: current directory)
+    #[arg(default_value = ".")]
+    pub path: String,
+
+    /// Template selector or implementation zip
+    #[arg(long)]
+    pub r#impl: Option<String>,
+
+    /// Force overwrite existing files
+    #[arg(short, long)]
+    pub force: bool,
+
+    /// Template variables (key=value)
+    #[arg(long)]
+    pub var: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct LibArgs {
+    /// Path to initialize the library project (default: current directory)
+    #[arg(default_value = ".")]
+    pub path: String,
+
+    /// Force overwrite existing files
+    #[arg(short, long)]
+    pub force: bool,
+
+    /// Template variables (key=value)
+    #[arg(long)]
+    pub var: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct KamArgs {
+    /// Path to initialize the kam project (default: current directory)
+    #[arg(default_value = ".")]
+    pub path: String,
+
+    /// Force overwrite existing files
+    #[arg(short, long)]
+    pub force: bool,
+
+    /// Template variables (key=value)
+    #[arg(long)]
+    pub var: Vec<String>,
 }
 
 /// Run the init command
@@ -143,11 +221,34 @@ pub fn run(args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
     let mut description_map = HashMap::new();
     description_map.insert("en".to_string(), description.clone());
 
-    // Handle special module repo init, tmpl or impl
-    if args.module_repo {
-        // Initialize a kam module repository project using the repo template
-        repo::init_repo(&path, &id, name_map, &version, &author, description_map, &args.var, args.force)?;
-    } else if args.tmpl {
+    // If a subcommand was provided (e.g. `kam init repo <path>`), handle it first.
+    if let Some(action) = &args.action {
+        match action {
+            InitAction::Repo(rargs) => {
+                let target = Path::new(&rargs.path);
+                repo::init_repo(target, &id, name_map.clone(), &version, &author, description_map.clone(), &rargs.var, rargs.force)?;
+                post_process::post_process(target, &args, &mut template_vars, &id, &name, &version, &author, &description)?;
+                return Ok(());
+            }
+            InitAction::Tmpl(targs) => {
+                let target = Path::new(&targs.path);
+                template::init_template(target, &id, name_map.clone(), &version, &author, description_map.clone(), &targs.var, targs.r#impl.clone(), targs.force)?;
+                post_process::post_process(target, &args, &mut template_vars, &id, &name, &version, &author, &description)?;
+                return Ok(());
+            }
+            InitAction::Lib(largs) => {
+                let target = Path::new(&largs.path);
+                // library init uses init_kam with module_type = "library"
+                kam::init_kam(target, &id, name_map.clone(), &version, &author, description_map.clone(), &template_vars, largs.force, "library")?;
+                post_process::post_process(target, &args, &mut template_vars, &id, &name, &version, &author, &description)?;
+                return Ok(());
+            }
+
+        }
+    }
+
+    // Handle tmpl or impl (repo should be used via the `kam init repo <path>` subcommand)
+    if args.tmpl {
         // Pass optional implementation/template selector through --impl
         template::init_template(&path, &id, name_map, &version, &author, description_map, &args.var, args.r#impl.clone(), args.force)?;
     } else if let Some(impl_zip) = &args.r#impl {

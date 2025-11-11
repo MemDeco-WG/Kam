@@ -58,7 +58,10 @@ dev = [
 ### 初始化项目
 ```bash
 kam init my-module --name "My Module" --author "Your Name"
+    # 使用仓库模板初始化（将创建一个 module repository 项目结构）
+    kam init repo my-repo --name "My Module Repo"
 ```
+仓库模板用于托管多个模块包（packages/），通常配合 `kam publish` 使用以发布模块到本地或远端仓库。
 
 ### 同步依赖
 ```bash

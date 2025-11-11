@@ -3,7 +3,8 @@ use rust_embed::RustEmbed;
 use std::io::Cursor;
 use std::path::Path;
 use tempfile::TempDir;
-use zip::ZipArchive;
+use flate2::read::GzDecoder;
+use tar::Archive as TarArchive;
 
 #[derive(RustEmbed)]
 #[folder = "src/assets/"]
@@ -28,40 +29,50 @@ pub fn extract_builtin_template(template_type: &str) -> Result<(tempfile::TempDi
     // Accept legacy short keys ("tmpl","lib") as well as canonical values
     // used in kam.toml ("template","library","kam"), and also accept
     // direct asset base names like "tmpl_template".
-    let (zip_name, folder_name): (&str, &str) = match template_type {
-        "tmpl" | "template" | "tmpl_template" => ("tmpl_template.zip", "tmpl_template"),
-        "lib" | "library" | "lib_template" => ("lib_template.zip", "lib_template"),
-        "kam" | "kam_template" => ("kam_template.zip", "kam_template"),
+    // Map template type to a stable base name (no version numbers).
+    let (base_name, folder_name): (&str, &str) = match template_type {
+        "tmpl" | "template" | "tmpl_template" => ("tmpl_template", "tmpl_template"),
+        "lib" | "library" | "lib_template" => ("lib_template", "lib_template"),
+        "kam" | "kam_template" => ("kam_template", "kam_template"),
         _ => return Err("Unknown template type".into()),
     };
 
-    println!("Extracting template: {}, zip_name: {}", template_type, zip_name);
-    // The embedded files may be stored under a subfolder (e.g. "tmpl/")
-    // depending on how the assets were packaged. Try both variants.
-    let zip_data = Assets::get(zip_name)
-        .or_else(|| Assets::get(&format!("tmpl/{}", zip_name)))
-        .ok_or("Template not found")?;
-    println!("Found zip_data, size: {}", zip_data.data.len());
+    println!("Extracting template: {}, base: {}", template_type, base_name);
 
-    let temp_dir = TempDir::new()?;
-    println!("Opening zip archive");
-    let mut archive = ZipArchive::new(Cursor::new(zip_data.data.as_ref()))?;
-    println!("Archive opened, len: {}", archive.len());
+    // Try a list of fixed candidate filenames (no wildcard). We no longer
+    // attempt to find versioned filenames - templates must be packaged using
+    // one of these canonical names. Try both direct and `tmpl/` prefixed
+    // locations depending on asset packaging.
+    let candidates = vec![
+        format!("{}.tar.gz", base_name),
+        format!("{}-src.tar.gz", base_name),
+    ];
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        println!("Processing file: {}", file.name());
-        let outpath = temp_dir.path().join(file.name());
-        if file.name().ends_with('/') {
-            std::fs::create_dir_all(&outpath)?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                std::fs::create_dir_all(p)?;
-            }
-            let mut outfile = std::fs::File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
+    let mut found: Option<rust_embed::EmbeddedFile> = None;
+    for cand in &candidates {
+        if let Some(f) = Assets::get(cand) {
+            println!("Found asset: {}", cand);
+            found = Some(f);
+            break;
+        }
+        let pref = format!("tmpl/{}", cand);
+        if let Some(f) = Assets::get(&pref) {
+            println!("Found asset: {}", pref);
+            found = Some(f);
+            break;
         }
     }
+
+    let file = found.ok_or("Template not found")?;
+    println!("Found template data, size: {}", file.data.len());
+
+    let temp_dir = TempDir::new()?;
+
+    // Assume a gzipped tar archive and unpack it.
+    let cursor = Cursor::new(file.data.as_ref());
+    let gz = GzDecoder::new(cursor);
+    let mut archive = TarArchive::new(gz);
+    archive.unpack(temp_dir.path())?;
 
     let template_path = temp_dir.path().join(folder_name);
     println!("Template path exists: {}", template_path.exists());

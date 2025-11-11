@@ -48,17 +48,31 @@ pub fn init_template(
         if let Some(d) = &def.default {
             runtime_values.insert(k.clone(), d.clone());
         } else if def.required {
+            // If non-interactive, surface an error that includes the template-provided
+            // note when available to guide the user how to supply the missing value.
             if std::env::var("KAM_NONINTERACTIVE").is_ok() {
+                if let Some(n) = &def.note {
+                    return Err(format!("Required template variable '{}' not provided (non-interactive): {}", k, n).into());
+                }
                 return Err(format!("Required template variable '{}' not provided (non-interactive)", k).into());
             }
-            // Prompt user for required value
+
+            // Prompt user for required value. If the template provides a human-friendly
+            // note, show it as the prompt; otherwise fall back to a generic prompt.
             use std::io::{stdin, stdout, Write};
             let mut input = String::new();
-            print!("Enter value for required template variable '{}' (type: {}): ", k, def.var_type);
+            if let Some(n) = &def.note {
+                print!("{} ", n);
+            } else {
+                print!("Enter value for required template variable '{}' (type: {}): ", k, def.var_type);
+            }
             let _ = stdout().flush();
             stdin().read_line(&mut input)?;
             let val = input.trim().to_string();
             if val.is_empty() {
+                if let Some(n) = &def.note {
+                    return Err(format!("Required template variable '{}' not provided: {}", k, n).into());
+                }
                 return Err(format!("Required template variable '{}' not provided", k).into());
             }
             runtime_values.insert(k.clone(), val);

@@ -1,14 +1,14 @@
 /// # Kam Virtual Environment System
-/// 
+///
 /// Virtual environment support for Kam modules, similar to Python's virtualenv.
-/// 
+///
 /// ## Environment Types
-/// 
+///
 /// - **Development**: Used during module development with `kam sync --dev`
 /// - **Runtime**: Used when modules are installed and running in production
-/// 
+///
 /// ## Directory Structure
-/// 
+///
 /// ```text
 /// .kam-venv/
 /// ├── bin/         # Symlinks to cached binaries
@@ -84,60 +84,157 @@ impl KamVenv {
             }
         }
 
-        // attempt to find a template zip in cache tmpl dir
-        if let Ok(cache) = KamCache::new() {
-            let tmpl_dir = cache.tmpl_dir();
-            let template_key = std::env::var("KAM_VENV_TEMPLATE").unwrap_or_else(|_| "venv_template".to_string());
-            let base = match template_key.as_str() {
-                "venv" | "venv_template" => "venv_template",
-                other => other,
-            };
-            let zip_path = tmpl_dir.join(format!("{}.zip", base));
-            if zip_path.exists() {
-                // extract zip
-                let file = std::fs::File::open(&zip_path).map_err(|e| KamError::Io(e))?;
-                let mut archive = zip::ZipArchive::new(file).map_err(|e| KamError::Other(format!("zip error: {}", e)))?;
-                for i in 0..archive.len() {
-                    let mut entry = archive.by_index(i).map_err(|e| KamError::Other(format!("zip entry error: {}", e)))?;
-                    let name = entry.name().to_string();
-                    // apply replacements to the path
-                    let mut replaced = name.clone();
+        // Require the venv template to exist in the cache tmpl dir. If the
+        // cache can't be opened or the archive is missing, fail early instead
+        // of generating a fallback script (caller requested strict behavior).
+        let cache = KamCache::new()?;
+        let tmpl_dir = cache.tmpl_dir();
+        let template_key = std::env::var("KAM_VENV_TEMPLATE").unwrap_or_else(|_| "venv_template".to_string());
+        let base = match template_key.as_str() {
+            "venv" | "venv_template" => "venv_template",
+            other => other,
+        };
+        // Try a few forms for the template: zip, tar.gz/tgz, or an unpacked directory
+        let zip_path = tmpl_dir.join(format!("{}.zip", base));
+        if zip_path.exists() {
+            // extract zip
+            let file = std::fs::File::open(&zip_path).map_err(|e| KamError::Io(e))?;
+            let mut archive = zip::ZipArchive::new(file).map_err(|e| KamError::Other(format!("zip error: {}", e)))?;
+            for i in 0..archive.len() {
+                let mut entry = archive.by_index(i).map_err(|e| KamError::Other(format!("zip entry error: {}", e)))?;
+                let name = entry.name().to_string();
+                // small helper closure to apply replacements to a string
+                let replace_placeholders = |s: &str| -> String {
+                    let mut out = s.to_string();
                     for (k, v) in &replacements {
                         if !v.is_empty() {
-                            replaced = replaced.replace(&format!("{{{{{}}}}}", k), v);
+                            out = out.replace(&format!("{{{{{}}}}}", k), v);
                         }
                     }
-                    let outpath = v.root.join(replaced);
-                    if entry.is_dir() {
-                        fs::create_dir_all(&outpath).map_err(|e| KamError::Io(e))?;
-                    } else {
-                        if let Some(p) = outpath.parent() {
-                            fs::create_dir_all(p).map_err(|e| KamError::Io(e))?;
-                        }
-                        let mut data: Vec<u8> = Vec::new();
-                        entry.read_to_end(&mut data).map_err(|e| KamError::Io(e))?;
-                        // attempt text replacement
-                        if let Ok(s) = String::from_utf8(data.clone()) {
-                            let mut s2 = s;
-                            for (k, v) in &replacements {
-                                if !v.is_empty() {
-                                    s2 = s2.replace(&format!("{{{{{}}}}}", k), v);
-                                }
-                            }
+                    out
+                };
+
+                // apply replacements to the path
+                let replaced = replace_placeholders(&name);
+                let outpath = v.root.join(replaced);
+                if entry.is_dir() {
+                    fs::create_dir_all(&outpath).map_err(|e| KamError::Io(e))?;
+                } else {
+                    if let Some(p) = outpath.parent() {
+                        fs::create_dir_all(p).map_err(|e| KamError::Io(e))?;
+                    }
+                    let mut data: Vec<u8> = Vec::new();
+                    entry.read_to_end(&mut data).map_err(|e| KamError::Io(e))?;
+                    match String::from_utf8(data) {
+                        Ok(s) => {
+                            let s2 = replace_placeholders(&s);
                             fs::write(&outpath, s2.as_bytes()).map_err(|e| KamError::Io(e))?;
-                        } else {
-                            fs::write(&outpath, &data).map_err(|e| KamError::Io(e))?;
+                        }
+                        Err(e) => {
+                            let bytes = e.into_bytes();
+                            fs::write(&outpath, &bytes).map_err(|e| KamError::Io(e))?;
                         }
                     }
                 }
-                return Ok(v);
             }
+            return Ok(v);
         }
 
-        // fallback: generate simple activation scripts
-        v.generate_fallback_scripts()?;
+        // tar.gz / tgz support
+        let tar_path = tmpl_dir.join(format!("{}.tar.gz", base));
+        let tgz_path = tmpl_dir.join(format!("{}.tgz", base));
+        let chosen_tar = if tar_path.exists() { Some(tar_path) } else if tgz_path.exists() { Some(tgz_path) } else { None };
+        if let Some(tp) = chosen_tar {
+            let f = std::fs::File::open(&tp).map_err(|e| KamError::Io(e))?;
+            let decompressor = flate2::read::GzDecoder::new(f);
+            let mut archive = tar::Archive::new(decompressor);
+            for entry_res in archive.entries().map_err(|e| KamError::Other(format!("tar entries: {}", e)))? {
+                let mut entry = entry_res.map_err(|e| KamError::Other(format!("tar entry read: {}", e)))?;
+                let path = match entry.path() {
+                    Ok(p) => p.into_owned(),
+                    Err(e) => return Err(KamError::Other(format!("tar entry path: {}", e))),
+                };
+                let name = path.to_string_lossy().to_string();
 
-        Ok(v)
+                let replace_placeholders = |s: &str| -> String {
+                    let mut out = s.to_string();
+                    for (k, v) in &replacements {
+                        if !v.is_empty() {
+                            out = out.replace(&format!("{{{{{}}}}}", k), v);
+                        }
+                    }
+                    out
+                };
+
+                let replaced = replace_placeholders(&name);
+                let outpath = v.root.join(replaced);
+                if entry.header().entry_type().is_dir() {
+                    fs::create_dir_all(&outpath).map_err(|e| KamError::Io(e))?;
+                } else {
+                    if let Some(p) = outpath.parent() {
+                        fs::create_dir_all(p).map_err(|e| KamError::Io(e))?;
+                    }
+                    let mut data: Vec<u8> = Vec::new();
+                    entry.read_to_end(&mut data).map_err(|e| KamError::Io(e))?;
+                    match String::from_utf8(data) {
+                        Ok(s) => {
+                            let s2 = replace_placeholders(&s);
+                            fs::write(&outpath, s2.as_bytes()).map_err(|e| KamError::Io(e))?;
+                        }
+                        Err(e) => {
+                            let bytes = e.into_bytes();
+                            fs::write(&outpath, &bytes).map_err(|e| KamError::Io(e))?;
+                        }
+                    }
+                }
+            }
+            return Ok(v);
+        }
+
+        // finally, accept a pre-unpacked directory named by base
+        let dir_path = tmpl_dir.join(base);
+        if dir_path.exists() && dir_path.is_dir() {
+            // copy directory contents into v.root with placeholder replacement
+            // walk entries
+            for entry in walkdir::WalkDir::new(&dir_path) {
+                let entry = entry.map_err(|e| KamError::Other(format!("walkdir error: {}", e)))?;
+                let rel = entry.path().strip_prefix(&dir_path).map_err(|e| KamError::Other(format!("strip_prefix: {}", e)))?;
+                let name = rel.to_string_lossy().to_string();
+
+                let replace_placeholders = |s: &str| -> String {
+                    let mut out = s.to_string();
+                    for (k, v) in &replacements {
+                        if !v.is_empty() {
+                            out = out.replace(&format!("{{{{{}}}}}", k), v);
+                        }
+                    }
+                    out
+                };
+
+                let replaced = replace_placeholders(&name);
+                let outpath = v.root.join(replaced);
+                if entry.file_type().is_dir() {
+                    fs::create_dir_all(&outpath).map_err(|e| KamError::Io(e))?;
+                } else if entry.file_type().is_file() {
+                    if let Some(p) = outpath.parent() { fs::create_dir_all(p).map_err(|e| KamError::Io(e))?; }
+                    let data = std::fs::read(entry.path()).map_err(|e| KamError::Io(e))?;
+                    match String::from_utf8(data) {
+                        Ok(s) => {
+                            let s2 = replace_placeholders(&s);
+                            fs::write(&outpath, s2.as_bytes()).map_err(|e| KamError::Io(e))?;
+                        }
+                        Err(e) => {
+                            let bytes = e.into_bytes();
+                            fs::write(&outpath, &bytes).map_err(|e| KamError::Io(e))?;
+                        }
+                    }
+                }
+            }
+            return Ok(v);
+        }
+
+        // Not found: fail rather than generating fallback scripts.
+        Err(KamError::Other(format!("venv template '{}' not found in cache tmpl dir: {}", base, zip_path.display())))
     }
 
     /// Load an existing venv (no validation beyond existence)
@@ -154,51 +251,6 @@ impl KamVenv {
     pub fn venv_type(&self) -> VenvType { self.venv_type }
     pub fn bin_dir(&self) -> PathBuf { self.root.join("bin") }
     pub fn lib_dir(&self) -> PathBuf { self.root.join("lib") }
-
-    fn generate_fallback_scripts(&self) -> Result<(), KamError> {
-        if !self.root.exists() {
-            fs::create_dir_all(&self.root).map_err(|e| KamError::Io(e))?;
-        }
-        let bin_dir = self.bin_dir();
-        let lib_dir = self.lib_dir();
-        let _ = fs::create_dir_all(&bin_dir);
-        let _ = fs::create_dir_all(&lib_dir);
-
-        let unix_activate = format!("#!/bin/sh\n# Kam virtual env activate (fallback)\nPATH=\"{}:$PATH\"\nexport PATH\n", bin_dir.display());
-        fs::write(self.root.join("activate"), &unix_activate).map_err(|e| KamError::Io(e))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(self.root.join("activate"), fs::Permissions::from_mode(0o755)).map_err(|e| KamError::Io(e))?;
-        }
-        fs::write(self.root.join("activate.sh"), &unix_activate).map_err(|e| KamError::Io(e))?;
-
-        let ps = format!("$env:PATH = \"{};$env:PATH\"\n$env:KAM_VENV_ACTIVE = '1'\n", bin_dir.display());
-        fs::write(self.root.join("activate.ps1"), &ps).map_err(|e| KamError::Io(e))?;
-
-        let bat = format!("set \"PATH={};%PATH%\"\nset \"KAM_VENV_ACTIVE=1\"\n", bin_dir.display());
-        fs::write(self.root.join("activate.bat"), &bat).map_err(|e| KamError::Io(e))?;
-
-        let deactivate_script = r#"#!/bin/sh
-# Kam Virtual Environment Deactivation Script
-
-if [ -n "${KAM_VENV_ACTIVE:-}" ]; then
-    if type deactivate > /dev/null 2>&1; then
-        deactivate
-    else
-        echo "No active Kam virtual environment found"
-    fi
-fi
-"#;
-        fs::write(self.root.join("deactivate"), deactivate_script).map_err(|e| KamError::Io(e))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(self.root.join("deactivate"), fs::Permissions::from_mode(0o755)).map_err(|e| KamError::Io(e))?;
-        }
-
-        Ok(())
-    }
 
     /// Link a binary from the cache to the venv
     pub fn link_binary(&self, name: &str, cache: &KamCache) -> Result<(), KamError> {
