@@ -74,4 +74,6 @@ jobs:
         with:
           executable-name: kam
           target: ${{ matrix.platform.target }}
+          # Do not require a Changes.md file in the repository; leave blank to skip validation
+          changes-file: ""
 

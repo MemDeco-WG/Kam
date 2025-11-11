@@ -250,11 +250,7 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
 
     // Only create a module zip when module_type == Kam. Other module types
     // must not be packaged as module zips even if `kam.build.output_file`
-    // is provided. If a non-kam type provided output_file, warn that it
-    // will be ignored for module zip creation.
-    if output_file_provided && kam_toml.kam.module_type != ModuleType::Kam {
-        println!("{} {}", "Note:".yellow().bold(), "kam.build.output_file is ignored for non-'kam' module types".yellow());
-    }
+    // is provided.
 
     if kam_toml.kam.module_type == ModuleType::Kam && !is_rendered_template {
         // Create module zip archive
