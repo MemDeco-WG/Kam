@@ -72,7 +72,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cross
-          key: cross-${{ runner.os }}-1.0.5
+          key: cross-${{ runner.os }}
           restore-keys: |
             cross-${{ runner.os }}-
 
