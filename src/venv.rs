@@ -10,7 +10,7 @@
 /// ## Directory Structure
 ///
 /// ```text
-/// .kam-venv/
+/// .kam_venv/
 /// ├── bin/         # Symlinks to cached binaries
 /// ├── lib/         # Symlinks to cached libraries
 /// ├── activate     # Activation script (Unix)
@@ -97,6 +97,12 @@ impl KamVenv {
         // Try a few forms for the template: tar.gz/tgz, zip, or an unpacked directory
         // tar.gz / tgz support
         let tar_path = tmpl_dir.join(format!("{}.tar.gz", base));
+        if !tar_path.exists() {
+            let source = Path::new("src").join("assets").join("tmpl").join(format!("{}.tar.gz", base));
+            if source.exists() {
+                std::fs::copy(&source, &tar_path).map_err(|e| KamError::Io(e))?;
+            }
+        }
         let tgz_path = tmpl_dir.join(format!("{}.tgz", base));
         let chosen_tar = if tar_path.exists() { Some(tar_path) } else if tgz_path.exists() { Some(tgz_path) } else { None };
         if let Some(tp) = chosen_tar {

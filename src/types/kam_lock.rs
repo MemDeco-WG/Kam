@@ -47,14 +47,14 @@ impl KamLock {
     }
 
     /// Load a `KamLock` from a path containing TOML content.
-    pub fn load_from_path(path: &Path) -> anyhow::Result<Self> {
+    pub fn load_from_path(path: &Path) -> crate::errors::Result<Self> {
         let s = std::fs::read_to_string(path)?;
         let kl: KamLock = toml::from_str(&s)?;
         Ok(kl)
     }
 
     /// Write the `KamLock` to the given path as TOML.
-    pub fn write_to_path(&self, path: &Path) -> anyhow::Result<()> {
+    pub fn write_to_path(&self, path: &Path) -> crate::errors::Result<()> {
         let s = toml::to_string(self)?;
         std::fs::write(path, s)?;
         Ok(())

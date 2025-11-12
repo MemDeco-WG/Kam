@@ -1,3 +1,3 @@
 #! bin/sh
 
-# Hello kam_template
+# Hello Kam

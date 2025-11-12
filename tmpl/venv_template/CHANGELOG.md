@@ -2,4 +2,4 @@
 
 All notable changes to this project will be documented in this file.
 
-- Initial placeholder
+- Initial

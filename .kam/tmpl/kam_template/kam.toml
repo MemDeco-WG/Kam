@@ -5,10 +5,10 @@ versionCode = 1762850845388
 author = "Author"
 
 [prop.name]
-en = "My Module"
+en = "kam_template"
 
 [prop.description]
-en = "A module description"
+en = "kam_template: the kam module template."
 
 [mmrl.repo]
 license = "LICENSE"
@@ -37,7 +37,7 @@ verified = false
 features = []
 
 [mmrl.repo.note]
-title = ""
+title = "{{mmrl.repo.note.title}}"
 message = ""
 
 [mmrl.repo.manager.magisk]
@@ -65,15 +65,9 @@ supported_arch = []
 conflicts = []
 module_type = "kam"
 
-[kam.tmpl.variables]
-[kam.tmpl.variables.name]
-var_type = "string"
-required = true
-default = ""
-note = "请使用 --var name=<值> 提供模块名称，例如: --var name=MyModule"
-help = "模块的显示名称，建议使用英文或短语。"
-example = "My Module"
-choices = []
+
+
+
 
 [kam.dependency]
 kam = []

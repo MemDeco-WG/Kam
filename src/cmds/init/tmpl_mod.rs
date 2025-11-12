@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use crate::types::modules::base::TmplSection;
+use crate::types::kam_toml::sections::TmplSection;
+use crate::types::kam_toml::KamToml;
+use crate::types::kam_toml::enums::ModuleType;
 
 use crate::errors::KamError;
 use tempfile::TempDir;
@@ -42,7 +44,7 @@ pub fn init_template(
     force: bool,
 ) -> Result<(), KamError> {
     // Parse template variable definitions from CLI args and template kam.toml
-    let mut variables = super::template_vars::parse_template_variables(vars)?;
+    let mut variables = crate::types::modules::parse_template_variables(vars)?;
 
     // Protect core project parameters from being overridden by template variables.
     // These are provided via CLI flags or inferred (id/name/version/author) and
@@ -101,19 +103,19 @@ pub fn init_template(
     let name_map_btree: BTreeMap<_, _> = name_map.into_iter().collect();
     let description_map_btree: BTreeMap<_, _> = description_map.into_iter().collect();
 
-    let mut kt = crate::types::modules::base::KamToml::new_with_current_timestamp(
+    let mut kt = KamToml::new_with_current_timestamp(
         id.to_string(),
         name_map_btree,
         version.to_string(),
         author.to_string(),
         description_map_btree,
-        Some(crate::types::modules::base::ModuleType::Template),
+        Some(ModuleType::Template),
     );
-    kt.kam.module_type = crate::types::modules::base::ModuleType::Template;
+    kt.kam.module_type = ModuleType::Template;
     let variables_btree: BTreeMap<_, _> = variables.into_iter().collect();
     kt.kam.tmpl = Some(TmplSection { used_template: impl_template.clone(), variables: variables_btree });
     let kam_toml_rel = "kam.toml".to_string();
-    super::common::print_status(&path.join("kam.toml"), &kam_toml_rel, false, force);
+    crate::utils::Utils::print_status(&path.join("kam.toml"), &kam_toml_rel, crate::utils::PrintOp::Create { is_dir: false }, force);
     kt.write_to_dir(path)?;
 
     // Determine which template to use
@@ -124,21 +126,9 @@ pub fn init_template(
     fn prepare_template(template_key: &str) -> Result<(TempDir, PathBuf), KamError> {
         // Normalize template_key into an asset/base name we use, e.g.
         // input: "tmpl" | "template" | "tmpl_template" -> base "tmpl_template"
-        let base = match template_key {
-            "tmpl" | "template" | "tmpl_template" => "tmpl_template",
-            "lib" | "library" | "lib_template" => "lib_template",
-            "kam" | "kam_template" => "kam_template",
-            other => other,
-        };
 
-        // Try embedded built-in template. Try both the normalized base and
-        // the original template_key to be forgiving.
-        if let Ok((p, td)) = super::common::extract_builtin_template(base) {
-            return Ok((td, p));
-        }
-        if let Ok((p, td)) = super::common::extract_builtin_template(template_key) {
-            return Ok((td, p));
-        }
+
+
 
         // If template_key is a URL, try downloading
         if template_key.starts_with("http://") || template_key.starts_with("https://") {
@@ -165,7 +155,7 @@ pub fn init_template(
     let src_temp = template_path.join("src");
     if src_temp.exists() {
         let dst_root = path.join("src").join(id);
-        super::common::print_status(&dst_root, &format!("src/{}/", id), true, force);
+        crate::utils::Utils::print_status(&dst_root, &format!("src/{}/", id), crate::utils::PrintOp::Create { is_dir: true }, force);
         std::fs::create_dir_all(&dst_root)?;
 
         // Recursive copy that replaces variables in path segments and file contents.
@@ -191,7 +181,7 @@ pub fn init_template(
                 let dst_path = dst_base.join(&rel_path);
 
                 if entry.file_type()?.is_dir() {
-                    super::common::print_status(&dst_path, &rel_path.to_string_lossy(), true, force);
+                    crate::utils::Utils::print_status(&dst_path, &rel_path.to_string_lossy(), crate::utils::PrintOp::Create { is_dir: true }, force);
                     std::fs::create_dir_all(&dst_path)?;
                     copy_replace_recursive(&entry.path(), dst_base, &rel_path, runtime_values, force)?;
                 } else {
@@ -203,7 +193,7 @@ pub fn init_template(
                             new_content = new_content.replace(&format!("{{{{{}}}}}", k), v);
                         }
                     }
-                    super::common::print_status(&dst_path, &rel_path.to_string_lossy(), false, force);
+                    crate::utils::Utils::print_status(&dst_path, &rel_path.to_string_lossy(), crate::utils::PrintOp::Create { is_dir: false }, force);
                     // Ensure parent dir exists
                     if let Some(p) = dst_path.parent() {
                         std::fs::create_dir_all(p)?;
@@ -217,13 +207,13 @@ pub fn init_template(
         copy_replace_recursive(&src_temp, &path.join("src"), std::path::Path::new(id), &runtime_values, force)?;
     }
 
-    // Special-case: if the template contains a top-level `.kam-venv` folder,
+    // Special-case: if the template contains a top-level `.kam_venv` folder,
     // copy it to the project root as-is. This allows templates that represent
-    // the virtual env layout (kam-venv) to be applied directly.
-    let venv_temp = template_path.join(".kam-venv");
+    // the virtual env layout (kam_venv) to be applied directly.
+    let venv_temp = template_path.join(".kam_venv");
     if venv_temp.exists() {
-        let dst = path.join(".kam-venv");
-        super::common::print_status(&dst, &".kam-venv/".to_string(), true, force);
+        let dst = path.join(".kam_venv");
+        crate::utils::Utils::print_status(&dst, &".kam_venv/".to_string(), crate::utils::PrintOp::Create { is_dir: true }, force);
         std::fs::create_dir_all(&dst)?;
         // Reuse copy_replace_recursive to copy with replacements inside .kam-venv too
         // Build a small runtime map for names relative to project root: use same runtime_values

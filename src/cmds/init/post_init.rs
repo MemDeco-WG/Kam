@@ -35,7 +35,7 @@ pub fn post_process(
         if !meta_inf_dir.exists() {
             std::fs::create_dir_all(&meta_inf_dir)?;
         }
-        super::common::print_status(&meta_inf_dir, &meta_inf_rel, true, args.force);
+        crate::utils::Utils::print_status(&meta_inf_dir, &meta_inf_rel, crate::utils::PrintOp::Create { is_dir: true }, args.force);
     }
 
     if args.web_root {
@@ -44,7 +44,7 @@ pub fn post_process(
         if !web_root_dir.exists() {
             std::fs::create_dir_all(&web_root_dir)?;
         }
-        super::common::print_status(&web_root_dir, &web_root_rel, true, args.force);
+        crate::utils::Utils::print_status(&web_root_dir, &web_root_rel, crate::utils::PrintOp::Create { is_dir: true }, args.force);
     }
 
     println!("Initialized Kam project in {}", path.display());

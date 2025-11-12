@@ -3,8 +3,8 @@ use colored::Colorize;
 use std::path::{Path, PathBuf};
 use std::fs;
 use crate::errors::KamError;
-use crate::types::modules::base::KamToml;
-use crate::types::modules::base::ModuleType;
+use crate::types::kam_toml::KamToml;
+use crate::types::kam_toml::enums::ModuleType;
 use serde_json::json;
 use chrono;
 

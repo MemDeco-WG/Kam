@@ -1,7 +1,7 @@
 [prop]
 id = "Kam"
 version = "1.0.0"
-versionCode = 1762931917857
+versionCode = 1762963930730
 author = "Author"
 updateJson = "https://example.com/update.json"
 
@@ -80,4 +80,11 @@ post_build = 'echo "post build..."'
 [kam.tmpl.variables]
 
 [kam.lib]
+provides = []
+
+[tool]
+
+[tmpl.variables]
+
+[lib]
 provides = []

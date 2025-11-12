@@ -21,10 +21,9 @@
 
 use clap::Args;
 use colored::Colorize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
 use crate::cache::KamCache;
-use crate::types::modules::base::KamToml;
 use crate::types::source::Source;
 use crate::types::modules::KamModule;
 use crate::types::modules::ModuleBackend;
@@ -47,13 +46,13 @@ pub struct SyncArgs {
 /// placeholder was created, `Ok(false)` if it already existed.
 fn ensure_module_synced(
     cache: &KamCache,
-    dep: &crate::types::modules::base::Dependency,
+    dep: &crate::types::kam_toml::sections::Dependency,
 ) -> Result<bool, KamError> {
     // Resolve a concrete version string to use for cache paths. If the
     // dependency specifies an exact versionCode, use it. If it specifies a
     // range, try to choose the highest cached version matching the range.
     // If nothing is available, fall back to the lower bound or 0.
-    use crate::types::modules::base::VersionSpec;
+    use crate::types::kam_toml::sections::VersionSpec;
 
     let version = match &dep.versionCode {
         Some(VersionSpec::Exact(v)) => v.to_string(),
@@ -132,7 +131,7 @@ fn ensure_module_synced(
     }
 
     // Try network sources using KamToml's effective source and the new Source/KamModule
-    let source_base = crate::types::modules::base::KamToml::get_effective_source(dep);
+    let source_base = crate::types::kam_toml::KamToml::get_effective_source(dep);
     let candidates = vec![
         format!("{}/{}", source_base.trim_end_matches('/'), zip_name),
         format!("{}/releases/download/{}/{}", source_base.trim_end_matches('/'), version, zip_name),
@@ -143,7 +142,7 @@ fn ensure_module_synced(
         // Parse the candidate into a Source and attempt to install into cache using KamModule
         match Source::parse(&url) {
             Ok(src) => {
-                let module = KamModule::new(crate::types::modules::base::KamToml::default(), Some(src));
+                let module = KamModule::new(crate::types::kam_toml::KamToml::default(), Some(src));
                 match install_backend_into_cache(&module, cache) {
                     Ok(_dst) => {
                         let marker = module_path.join(".synced");
@@ -179,36 +178,21 @@ fn install_backend_into_cache(backend: &impl ModuleBackend, cache: &KamCache) ->
 /// ## Steps
 ///
 /// 1. Load `kam.toml` configuration
-/// 2. Resolve dependency groups
-/// 3. Ensure cache directories exist
-/// 4. Create symbolic links to cached modules
+/// 2. Ensure cache directories exist
+/// 3. Ensure virtual environment exists
+/// 4. Resolve dependency groups
+/// 5. Create symbolic links to cached modules
 pub fn run(args: SyncArgs) -> Result<(), KamError> {
     let project_path = Path::new(&args.path);
 
-    println!("{}", "Synchronizing dependencies...".bold().cyan());
-    println!();
-
     // Load kam.toml
-    let kam_toml = KamToml::load_from_dir(project_path)?;
+    let kam_toml = crate::types::kam_toml::KamToml::load_from_dir(project_path)?;
     println!("  {} {}", "✓".green(), format!("Loaded kam.toml for '{}'", kam_toml.prop.id).dimmed());
 
-    // Resolve dependencies
-    let resolved = kam_toml
-        .resolve_dependencies()
-        .map_err(|e| KamError::FetchFailed(format!("dependency resolution failed: {}", e)))?;
-
-    // Determine which groups to sync
-    let groups_to_sync = if args.dev {
-        vec!["kam", "dev"]
-    } else {
-        vec!["kam"]
-    };
-
-    // Initialize cache
-    // If the project has a local `.env` containing `KAM_CACHE_ROOT`, prefer
-    // that value for the cache root when operating on this project. We only
-    // read this single variable here to avoid mutating the entire process
-    // environment (and to keep the change minimal and explicit).
+    // Initialize cache, honoring project-local `.env` KAM_CACHE_ROOT.
+    // If the value in `.env` is a relative path, resolve it relative to the
+    // project directory (the location of the `.env`), using a canonicalized
+    // absolute base when possible. This allows `.env` to contain `./.kam`.
     fn read_project_env_value(project_path: &Path, key: &str) -> Option<String> {
         let env_file = project_path.join(".env");
         if !env_file.exists() {
@@ -243,12 +227,12 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
     // project directory (the location of the `.env`), using a canonicalized
     // absolute base when possible. This allows `.env` to contain `./.kam`.
     let cache = if let Some(root_val) = read_project_env_value(project_path, "KAM_CACHE_ROOT") {
-        let p = std::path::PathBuf::from(root_val);
+        let p = PathBuf::from(root_val);
         // Try to get an absolute base path for the project. If the project
         // path cannot be canonicalized (missing), fall back to current_dir().
         let base = match project_path.canonicalize() {
             Ok(abs) => abs,
-            Err(_) => std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+            Err(_) => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         };
         let abs = if p.is_absolute() { p } else { base.join(p) };
         KamCache::with_root(abs)?
@@ -265,7 +249,7 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
     // manual management.
     println!();
     println!("{} Ensuring virtual environment is present...", "→".cyan());
-    let venv_path = project_path.join(".kam-venv");
+    let venv_path = project_path.join(".kam_venv");
     let venv_type = if args.dev { VenvType::Development } else { VenvType::Runtime };
     if venv_path.exists() {
         // recreate to ensure it's the latest
@@ -275,6 +259,19 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
         .map_err(|e| KamError::VenvCreateFailed(format!("Venv error: {}", e)))?;
     println!("  {} Created/updated at: {}", "✓".green(), venv.root().display());
     let maybe_venv: Option<KamVenv> = Some(venv);
+
+    println!("{}", "Synchronizing dependencies...".bold().cyan());
+    println!();
+
+    // Resolve dependencies
+    let resolved = kam_toml.resolve_dependencies().map_err(|e| KamError::FetchFailed(format!("dependency resolution failed: {}", e)))?;
+
+    // Determine which groups to sync
+    let groups_to_sync = if args.dev {
+        vec!["kam", "dev"]
+    } else {
+        vec!["kam"]
+    };
 
     // Process each group
     let mut total_synced = 0;
@@ -319,9 +316,9 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
     // Print activation instructions for the always-managed venv
     println!();
     println!("{} To activate the virtual environment:", "•".dimmed());
-    println!("  {}: source .kam-venv/activate", "Unix".yellow());
-    println!("  {}: .kam-venv\\activate.bat", "Windows".yellow());
-    println!("  {}: .kam-venv\\activate.ps1", "PowerShell".yellow());
+    println!("  {}: source .kam_venv/activate", "Unix".yellow());
+    println!("  {}: .kam_venv\\activate.bat", "Windows".yellow());
+    println!("  {}: .kam_venv\\activate.ps1", "PowerShell".yellow());
 
     Ok(())
 }

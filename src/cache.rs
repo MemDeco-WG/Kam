@@ -29,12 +29,8 @@
 
 use std::path::{Path, PathBuf};
 use crate::errors::cache::CacheError;
-use rust_embed::RustEmbed;
-use std::io::Write;
-
-#[derive(RustEmbed)]
-#[folder = "src/assets/tmpl"]
-struct TmplAssets;
+use std::io::Cursor;
+use crate::assets::TmplAssets;
 
 // CacheError is defined in `src/errors/cache.rs` and re-exported here for
 // backwards compatibility as `crate::cache::CacheError`.
@@ -147,6 +143,12 @@ impl KamCache {
         self.root.join("profile")
     }
 
+    /// Get the tmpl directory (where built-in templates will be extracted)
+    pub fn tmpl_dir(&self) -> PathBuf {
+        self.root.join("tmpl")
+    }
+
+
     /// Ensure all cache directories exist
     ///
     /// Creates the cache root and all subdirectories if they don't exist.
@@ -173,10 +175,6 @@ impl KamCache {
         Ok(())
     }
 
-    /// Get the tmpl directory (where built-in templates will be extracted)
-    pub fn tmpl_dir(&self) -> PathBuf {
-        self.root.join("tmpl")
-    }
 
 
     /// Ensure built-in template archives from `src/assets/tmpl` are present
@@ -197,24 +195,16 @@ impl KamCache {
                 None => continue,
             };
 
-            let tar_gz_path = self.tmpl_dir().join(format!("{}.tar.gz", base));
             let extract_dir = self.tmpl_dir().join(base);
 
-            // If both archive and extracted dir exist, skip
-            if tar_gz_path.exists() && extract_dir.exists() {
+            // If extracted dir exist, skip
+            if extract_dir.exists() {
                 continue;
             }
 
             if let Some(content) = TmplAssets::get(name) {
-                // Write archive file if missing
-                if !tar_gz_path.exists() {
-                    let mut f = std::fs::File::create(&tar_gz_path)?;
-                    f.write_all(&content.data)?;
-                }
-
-                // Extract archive into extract_dir
-                let file = std::fs::File::open(&tar_gz_path)?;
-                let gz_decoder = flate2::read::GzDecoder::new(file);
+                // Extract archive into extract_dir directly from memory
+                let gz_decoder = flate2::read::GzDecoder::new(Cursor::new(&content.data));
                 let mut archive = tar::Archive::new(gz_decoder);
 
                 archive.unpack(&extract_dir).map_err(|e| {

@@ -23,14 +23,14 @@ use clap::Args;
 use colored::Colorize;
 use std::path::{Path, PathBuf};
 use std::fs::{self, File};
-use std::io::{Write, Read};
+use std::io::{Write, Read, Cursor};
 use zip::ZipWriter;
 use zip::write::FileOptions;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use tar::Builder as TarBuilder;
-use crate::types::modules::base::KamToml;
-use crate::types::modules::base::ModuleType;
+use crate::types::kam_toml::KamToml;
+use crate::types::kam_toml::enums::ModuleType;
 use crate::errors::KamError;
 
 /// Arguments for the build command
@@ -147,13 +147,8 @@ fn handle_pre_build_hook(kam_toml: &KamToml, project_path: &Path) -> Result<(), 
 
 pub fn run(args: BuildArgs) -> Result<(), KamError> {
     let project_path = Path::new(&args.path);
-    // Resolve project root to an absolute path when possible so relative
-    // `target_dir` values in kam.toml are interpreted relative to the
-    // project directory (not the current working directory).
-    let project_root = match project_path.canonicalize() {
-        Ok(p) => p,
-        Err(_) => project_path.to_path_buf(),
-    };
+    // Use project path as-is to avoid extended length paths on Windows
+    let project_root = project_path.to_path_buf();
 
     println!("{}", "Building module...".bold().cyan());
     println!();
@@ -176,7 +171,7 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
     // 2) source tar.gz: a source archive (tar.gz) containing kam.toml and full source tree (if present)
     println!("{}", "Packaging artifacts...".bold());
 
-    let (effective_project_path, is_rendered_template) = prepare_effective_project(project_path, &kam_toml, module_id)?;
+    let (effective_project_path, is_rendered_template, _temp_project) = prepare_effective_project(project_path, &kam_toml, module_id, &output_dir)?;
 
     let basename = determine_basename(&kam_toml)?;
 
@@ -189,7 +184,7 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
     Ok(())
 }
 
-fn prepare_effective_project(project_path: &Path, kam_toml: &KamToml, module_id: &str) -> Result<(PathBuf, bool), KamError> {
+fn prepare_effective_project(project_path: &Path, kam_toml: &KamToml, module_id: &str, output_dir: &Path) -> Result<(PathBuf, bool, Option<tempfile::TempDir>), KamError> {
     let src_dir = project_path.join("src").join(module_id);
 
     // If `src/<module_id>` does not exist but the template contains a
@@ -199,32 +194,36 @@ fn prepare_effective_project(project_path: &Path, kam_toml: &KamToml, module_id:
     // and expand `src/{{id}}` -> `src/<module_id>`, replacing occurrences
     // of "{{id}}" in file contents.
     let mut effective_project_path = project_path.to_path_buf();
-    let mut _temp_project: Option<tempfile::TempDir> = None;
+    let mut temp_project: Option<tempfile::TempDir> = None;
     if !src_dir.exists() {
         let placeholder_dir = project_path.join("src").join("{{id}}");
         if placeholder_dir.exists() {
             println!("  {} {}", "•".cyan(), "Found template placeholder src/{{id}} — rendering into temporary project for packaging".dimmed());
-            let td = tempfile::TempDir::new()?;
+            let td = tempfile::TempDir::new_in(output_dir)?;
+            println!("Temp dir created: {:?}", td.path());
+
             // copy kam.toml
-            let kam_content = std::fs::read_to_string(project_path.join("kam.toml"))?;
-            std::fs::write(td.path().join("kam.toml"), kam_content.as_bytes())?;
+            std::fs::copy(project_path.join("kam.toml"), td.path().join("kam.toml"))?;
+            println!("Kam.toml copied to temp: {}", td.path().join("kam.toml").exists());
 
             // ensure target src/<module_id>
             let target_src = td.path().join("src").join(module_id);
             std::fs::create_dir_all(&target_src)?;
+            println!("Target src dir created: {}", target_src.exists());
 
             copy_and_replace(&placeholder_dir, &target_src, kam_toml)?;
+            println!("Copy and replace completed");
 
             effective_project_path = td.path().to_path_buf();
-            _temp_project = Some(td);
+            temp_project = Some(td);
         }
     }
 
     // If we rendered a template placeholder into a temporary project, treat
     // this build as a template packaging: only create the source archive
     // (no module zip) and name it without the `-src` suffix.
-    let is_rendered_template = _temp_project.is_some();
-    Ok((effective_project_path, is_rendered_template))
+    let is_rendered_template = temp_project.is_some();
+    Ok((effective_project_path, is_rendered_template, temp_project))
 }
 
 fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
@@ -355,7 +354,13 @@ fn create_source_archive(
     let mut tar = TarBuilder::new(enc);
 
     // Add kam.toml to tar (preserve as top-level file) from effective project path
-    tar.append_path_with_name(effective_project_path.join("kam.toml"), "kam.toml")?;
+    let mut file = File::open(effective_project_path.join("kam.toml"))?;
+    let mut kam_content = Vec::new();
+    file.read_to_end(&mut kam_content)?;
+    let mut header = tar::Header::new_gnu();
+    header.set_size(kam_content.len() as u64);
+    header.set_mode(0o644);
+    tar.append_data(&mut header, "kam.toml", Cursor::new(&kam_content))?;
 
     // Add src/ directory (if exists) - include entire src/ tree
     let full_src = effective_project_path.join("src");

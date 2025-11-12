@@ -4,13 +4,11 @@ use std::path::Path;
 
 use crate::errors::KamError;
 
-mod common;
-mod template_vars;
 mod kam;
-mod template;
+mod tmpl_mod;
 mod repo;
 mod impl_mod;
-mod post_process;
+mod post_init;
 
 /// Arguments for the init command
 #[derive(Args, Debug)]
@@ -118,7 +116,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     };
 
     // Parse template variables
-    let mut template_vars = template_vars::parse_template_vars(&args.var)?;
+    let mut template_vars = crate::types::modules::parse_template_vars(&args.var)?;
 
     let name = args.name.as_deref().unwrap_or("My Module");
     let version = args.version.as_deref().unwrap_or("1.0.0");
@@ -136,7 +134,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     if args.repo {
         repo::init_repo(&path, &id, name_map, &version, &author, description_map, &args.var, args.force)?;
     } else if args.tmpl {
-        template::init_template(&path, &id, name_map, &version, &author, description_map, &args.var, args.r#impl.clone(), args.force)?;
+        tmpl_mod::init_template(&path, &id, name_map, &version, &author, description_map, &args.var, args.r#impl.clone(), args.force)?;
     } else if args.lib {
         kam::init_kam(&path, &id, name_map, &version, &author, description_map, &template_vars, args.force, "library")?;
     } else {
@@ -150,7 +148,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         }
     }
 
-    post_process::post_process(&path, &args, &mut template_vars, &id, &name, &version, &author, &description)?;
+    post_init::post_process(&path, &args, &mut template_vars, &id, &name, &version, &author, &description)?;
 
     Ok(())
 }

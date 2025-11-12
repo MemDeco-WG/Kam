@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::fs;
-use crate::types::modules::base::KamToml;
+use crate::types::kam_toml::KamToml;
 use crate::errors::KamError;
 use chrono;
+use crate::types::kam_toml::enums::ModuleType;
 
 /// Initialize a kam module repository project by copying `tmpl/repo_templeta` into target
 pub fn init_repo(
@@ -54,12 +55,12 @@ pub fn init_repo(
     let name_btree = name_map.into_iter().collect();
     kt.prop.name = name_btree;
     kt.prop.version = version.to_string();
-    kt.prop.versionCode = chrono::Utc::now().timestamp_millis() as u64;
+    kt.prop.versionCode = chrono::Utc::now().timestamp_millis();
     kt.prop.author = author.to_string();
     let desc_btree = description_map.into_iter().collect();
     kt.prop.description = desc_btree;
     // Mark as module repo type
-    kt.kam.module_type = crate::types::modules::base::ModuleType::Repo;
+    kt.kam.module_type = ModuleType::Repo;
     kt.write_to_dir(path)?;
 
     Ok(())

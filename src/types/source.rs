@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use anyhow::Result;
+use crate::errors::Result;
 
 /// Flexible source specification for a Kam module.
 #[derive(Debug, Clone, PartialEq, Eq)]

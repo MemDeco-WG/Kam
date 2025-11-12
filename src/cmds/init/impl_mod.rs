@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
-use crate::types::modules::base::TmplSection;
+use crate::types::kam_toml::sections::TmplSection;
+use crate::types::kam_toml::KamToml;
 use crate::errors::KamError;
 // toml_edit not needed here; use toml::Value for mutation
 
@@ -20,7 +21,7 @@ pub fn init_impl(
         .map_err(|e| KamError::FetchFailed(format!("Failed to parse template source '{}': {}", impl_source, e)))?;
 
     // Create a dummy KamToml for the module (we'll load the real one from the template)
-    let dummy_toml = crate::types::modules::base::KamToml::new_with_current_timestamp(
+    let dummy_toml = KamToml::new_with_current_timestamp(
         "template".to_string(),
         [("en".to_string(), "Template".to_string())].into(),
         "1.0.0".to_string(),
@@ -47,7 +48,7 @@ pub fn init_impl(
             kt_path: &std::path::Path,
             template_vars: &mut HashMap<String, String>,
         ) -> Result<(), KamError> {
-            let kt_template = crate::types::modules::base::KamToml::load_from_file(kt_path)?;
+            let kt_template = KamToml::load_from_file(kt_path)?;
             if let Some(tmpl) = &kt_template.kam.tmpl {
                 for (var_name, var_def) in &tmpl.variables {
                     if template_vars.contains_key(var_name.as_str()) {
@@ -81,9 +82,9 @@ pub fn init_impl(
 
     let kam_toml_path = path.join("kam.toml");
     let kam_toml_rel = "kam.toml".to_string();
-    super::common::print_status(&kam_toml_path, &kam_toml_rel, false, force);
+    crate::utils::Utils::print_status(&kam_toml_path, &kam_toml_rel, crate::utils::PrintOp::Create { is_dir: false }, force);
 
-    let mut kt = crate::types::modules::base::KamToml::new_with_current_timestamp(
+    let mut kt = KamToml::new_with_current_timestamp(
         id.to_string(),
         name_map_btree,
         version.to_string(),
@@ -135,7 +136,7 @@ pub fn init_impl(
         if src_temp.exists() {
             let src_dir = path.join("src").join(id);
             let src_rel = format!("src/{}/", id);
-            super::common::print_status(&src_dir, &src_rel, true, force);
+            crate::utils::Utils::print_status(&src_dir, &src_rel, crate::utils::PrintOp::Create { is_dir: true }, force);
             std::fs::create_dir_all(&src_dir)?;
             for entry in std::fs::read_dir(&src_temp)? {
                 let entry = entry?;
@@ -151,7 +152,7 @@ pub fn init_impl(
                 }
                 let dest_file = src_dir.join(&replaced_name);
                 let file_rel = format!("src/{}/{}", id, replaced_name);
-                super::common::print_status(&dest_file, &file_rel, false, force);
+                crate::utils::Utils::print_status(&dest_file, &file_rel, crate::utils::PrintOp::Create { is_dir: false }, force);
                 std::fs::write(&dest_file, content)?;
             }
         } else {
