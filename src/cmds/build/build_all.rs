@@ -27,9 +27,9 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) {
         println!("Failed to change to {}: {}", member_path.display(), e);
         return;
     }
-    match KamToml::load_from_dir(&member_path) {
+    match KamToml::load_from_dir(".") {
         Ok(kt) => {
-            if let Err(e) = build_project(&member_path, args, Some(kt)) {
+            if let Err(e) = build_project(std::path::Path::new("."), args, Some(kt)) {
                 println!("Failed to build {}: {}", member, e);
             }
         }

@@ -185,7 +185,8 @@ pub fn create_module_zip_if_needed(
     // must not be packaged as module zips even if `kam.build.output_file`
     // is provided.
 
-    if kam_toml.kam.module_type == ModuleType::Kam && !is_rendered_template {
+    let effective_src_dir = effective_project_path.join("src").join(module_id);
+    if kam_toml.kam.module_type == ModuleType::Kam && !is_rendered_template && effective_src_dir.exists() {
         // Create module zip archive
         let zip_file = File::create(&module_output_file)?;
         let mut zip = ZipWriter::new(zip_file);
@@ -199,19 +200,14 @@ pub fn create_module_zip_if_needed(
         zip.write_all(kam_toml_content.as_bytes())?;
         println!("  {} {}", "+".green(), "kam.toml");
 
-        // Add source files if present (module dir: src/<module_id>)
-        // Use the effective project path for src lookup (may be a temp rendered project)
-        let effective_src_dir = effective_project_path.join("src").join(module_id);
-        if effective_src_dir.exists() {
-            add_directory_to_zip(
-                &mut zip,
-                &effective_src_dir,
-                &format!("src/{}", module_id),
-                &effective_src_dir,
-            )?;
-        } else {
-            println!("  {} {}", "•".cyan(), "No src/<module_id> directory found; module zip will include kam.toml and repo files only".dimmed());
-        }
+        // Add source files (module dir: src/<module_id>)
+        // Since we checked effective_src_dir.exists(), we can add it directly
+        add_directory_to_zip(
+            &mut zip,
+            &effective_src_dir,
+            &format!("src/{}", module_id),
+            &effective_src_dir,
+        )?;
 
         // Add other files if they exist
         // Include files referenced in kam.toml (mmrl.repo): readme, license, changelog

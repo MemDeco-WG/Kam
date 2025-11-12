@@ -41,3 +41,4 @@ target
 
 # Environment variables
 .env
+/dist
