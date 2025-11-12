@@ -29,8 +29,8 @@ use zip::write::FileOptions;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use tar::Builder as TarBuilder;
-use crate::types::kam_toml::KamToml;
-use crate::types::kam_toml::sections::module::ModuleType;
+use crate::types::modules::base::KamToml;
+use crate::types::modules::base::ModuleType;
 use crate::errors::KamError;
 
 /// Arguments for the build command
@@ -54,6 +54,97 @@ pub struct BuildArgs {
 /// 3. Package source files
 /// 4. Run post-build hook (if specified)
 /// 5. Output to dist directory
+fn copy_and_replace(src: &std::path::Path, dst: &std::path::Path, kt: &KamToml) -> Result<(), KamError> {
+    let mut replacements: std::collections::HashMap<&str, String> = std::collections::HashMap::new();
+    replacements.insert("id", kt.prop.id.clone());
+    replacements.insert("version", kt.prop.version.clone());
+    replacements.insert("versionCode", kt.prop.versionCode.to_string());
+    replacements.insert("author", kt.prop.author.clone());
+
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let p = entry.path();
+
+
+        // Render filename placeholders (e.g. "{{id}}.txt")
+        let file_name_str = entry.file_name().to_string_lossy().to_string();
+        let mut rendered_name = file_name_str;
+        for (k, v) in &replacements {
+            let placeholder = format!("{{{{{}}}}}", k);
+            if rendered_name.contains(&placeholder) {
+                rendered_name = rendered_name.replace(&placeholder, v);
+            }
+        }
+
+        let dst_path = dst.join(&rendered_name);
+        if p.is_dir() {
+            std::fs::create_dir_all(&dst_path)?;
+            copy_and_replace(&p, &dst_path, kt)?;
+        } else {
+            // read file, replace occurrences of any known placeholders in contents
+            let buf = std::fs::read(&p)?;
+            // treat as text replace; if binary, replacement is harmless if not present
+            if std::str::from_utf8(&buf).is_ok() {
+                let s = String::from_utf8(buf).unwrap();
+                let mut replaced = s;
+                for (k, v) in &replacements {
+                    let placeholder = format!("{{{{{}}}}}", k);
+                    if replaced.contains(&placeholder) {
+                        replaced = replaced.replace(&placeholder, v);
+                    }
+                }
+                std::fs::write(&dst_path, replaced)?;
+            } else {
+                std::fs::write(&dst_path, &buf)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn determine_output_dir(project_root: &Path, args: &BuildArgs, kam_toml: &KamToml) -> Result<PathBuf, KamError> {
+    // Helper: if a configured path is relative, resolve it against the
+    // project's root directory. If absolute, keep as-is.
+    fn resolve_against_project(project_root: &Path, p: PathBuf) -> PathBuf {
+        if p.is_absolute() {
+            p
+        } else {
+            project_root.join(p)
+        }
+    }
+
+    let output_dir: PathBuf = if let Some(out_cli) = &args.output {
+        let pb = PathBuf::from(out_cli);
+        resolve_against_project(project_root, pb)
+    } else if let Some(build_cfg) = &kam_toml.kam.build {
+        if let Some(t) = &build_cfg.target_dir {
+            resolve_against_project(project_root, PathBuf::from(t))
+        } else {
+            project_root.join("dist")
+        }
+    } else {
+        project_root.join("dist")
+    };
+
+    fs::create_dir_all(&output_dir)?;
+    Ok(output_dir)
+}
+
+fn handle_pre_build_hook(kam_toml: &KamToml, project_path: &Path) -> Result<(), KamError> {
+    if let Some(pre_build) = kam_toml
+        .kam
+        .build
+        .as_ref()
+        .and_then(|b| b.pre_build.as_ref())
+        .filter(|s| !s.trim().is_empty())
+    {
+        println!("{}", "Running pre-build hook...".yellow());
+        run_command(pre_build, project_path)?;
+        println!();
+    }
+    Ok(())
+}
+
 pub fn run(args: BuildArgs) -> Result<(), KamError> {
     let project_path = Path::new(&args.path);
     // Resolve project root to an absolute path when possible so relative
@@ -74,52 +165,31 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
 
     println!("  {} Module: {}", "•".cyan(), format!("{} v{}", module_id, version).bold());
 
-    // Determine output directory (prefer explicit CLI, then kam.build.target_dir, else default)
-    // Helper: if a configured path is relative, resolve it against the
-    // project's root directory. If absolute, keep as-is.
-    fn resolve_against_project(project_root: &Path, p: PathBuf) -> PathBuf {
-        if p.is_absolute() {
-            p
-        } else {
-            project_root.join(p)
-        }
-    }
-
-    let output_dir: PathBuf = if let Some(out_cli) = &args.output {
-        let pb = PathBuf::from(out_cli);
-        resolve_against_project(&project_root, pb)
-    } else if let Some(build_cfg) = &kam_toml.kam.build {
-        if let Some(t) = &build_cfg.target_dir {
-            resolve_against_project(&project_root, PathBuf::from(t))
-        } else {
-            project_root.join("dist")
-        }
-    } else {
-        project_root.join("dist")
-    };
-
-    fs::create_dir_all(&output_dir)?;
+    let output_dir = determine_output_dir(&project_root, &args, &kam_toml)?;
     println!("  {} Output: {}", "•".cyan(), output_dir.display().to_string().dimmed());
     println!();
 
-    // Run pre-build hook (if provided and non-empty)
-    if let Some(pre_build) = kam_toml
-        .kam
-        .build
-        .as_ref()
-        .and_then(|b| b.pre_build.as_ref())
-        .filter(|s| !s.trim().is_empty())
-    {
-        println!("{}", "Running pre-build hook...".yellow());
-        run_command(pre_build, project_path)?;
-        println!();
-    }
+    handle_pre_build_hook(&kam_toml, project_path)?;
 
     // Package artifacts: produce two outputs
     // 1) module zip: a module archive (zip) containing kam.toml and module sources (if present) + mmrl files
     // 2) source tar.gz: a source archive (tar.gz) containing kam.toml and full source tree (if present)
     println!("{}", "Packaging artifacts...".bold());
 
+    let (effective_project_path, is_rendered_template) = prepare_effective_project(project_path, &kam_toml, module_id)?;
+
+    let basename = determine_basename(&kam_toml)?;
+
+    create_module_zip_if_needed(&kam_toml, &output_dir, &basename, &effective_project_path, project_path, module_id, is_rendered_template)?;
+
+    create_source_archive(&kam_toml, &output_dir, &basename, &effective_project_path, project_path)?;
+
+    handle_post_build_hook(&kam_toml, project_path)?;
+
+    Ok(())
+}
+
+fn prepare_effective_project(project_path: &Path, kam_toml: &KamToml, module_id: &str) -> Result<(PathBuf, bool), KamError> {
     let src_dir = project_path.join("src").join(module_id);
 
     // If `src/<module_id>` does not exist but the template contains a
@@ -143,59 +213,7 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
             let target_src = td.path().join("src").join(module_id);
             std::fs::create_dir_all(&target_src)?;
 
-            // recursively copy files from placeholder_dir into target_src
-            // Support arbitrary placeholders like {{id}}/{{version}}/{{author}} by
-            // building a replacements map from `kam.toml` and applying it to
-            // both filenames and file contents.
-            fn copy_and_replace(src: &std::path::Path, dst: &std::path::Path, kt: &KamToml) -> Result<(), KamError> {
-                let mut replacements: std::collections::HashMap<&str, String> = std::collections::HashMap::new();
-                replacements.insert("id", kt.prop.id.clone());
-                replacements.insert("version", kt.prop.version.clone());
-                replacements.insert("versionCode", kt.prop.versionCode.to_string());
-                replacements.insert("author", kt.prop.author.clone());
-
-                for entry in std::fs::read_dir(src)? {
-                    let entry = entry?;
-                    let p = entry.path();
-                    let file_name = entry.file_name();
-
-                    // Render filename placeholders (e.g. "{{id}}.txt")
-                    let file_name_str = file_name.to_string_lossy().to_string();
-                    let mut rendered_name = file_name_str.clone();
-                    for (k, v) in &replacements {
-                        let placeholder = format!("{{{{{}}}}}", k);
-                        if rendered_name.contains(&placeholder) {
-                            rendered_name = rendered_name.replace(&placeholder, v);
-                        }
-                    }
-
-                    let dst_path = dst.join(&rendered_name);
-                    if p.is_dir() {
-                        std::fs::create_dir_all(&dst_path)?;
-                        copy_and_replace(&p, &dst_path, kt)?;
-                    } else {
-                        // read file, replace occurrences of any known placeholders in contents
-                        let buf = std::fs::read(&p)?;
-                        // treat as text replace; if binary, replacement is harmless if not present
-                        if let Ok(s) = String::from_utf8(buf.clone()) {
-                            let mut replaced = s;
-                            for (k, v) in &replacements {
-                                let placeholder = format!("{{{{{}}}}}", k);
-                                if replaced.contains(&placeholder) {
-                                    replaced = replaced.replace(&placeholder, v);
-                                }
-                            }
-                            std::fs::write(&dst_path, replaced.as_bytes())?;
-                        } else {
-                            // binary file: copy as-is (filenames already rendered)
-                            std::fs::copy(&p, &dst_path)?;
-                        }
-                    }
-                }
-                Ok(())
-            }
-
-            copy_and_replace(&placeholder_dir, &target_src, &kam_toml)?;
+            copy_and_replace(&placeholder_dir, &target_src, kam_toml)?;
 
             effective_project_path = td.path().to_path_buf();
             _temp_project = Some(td);
@@ -206,47 +224,60 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
     // this build as a template packaging: only create the source archive
     // (no module zip) and name it without the `-src` suffix.
     let is_rendered_template = _temp_project.is_some();
+    Ok((effective_project_path, is_rendered_template))
+}
 
+fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
     // Determine module output basename. Default is `{{id}}-{{versionCode}}` as requested.
-    let default_basename = format!("{}-{}", module_id, kam_toml.prop.versionCode);
-
-    // Helper: render simple template placeholders
-    fn render_output_template(tpl: &str, kt: &KamToml) -> String {
-        let mut s = tpl.to_string();
-        s = s.replace("{{id}}", &kt.prop.id);
-        s = s.replace("{{version}}", &kt.prop.version);
-        s = s.replace("{{versionCode}}", &kt.prop.versionCode.to_string());
-        s = s.replace("{{author}}", &kt.prop.author);
-        s
-    }
+    let default_basename = format!("{}-{}", kam_toml.prop.id, kam_toml.prop.versionCode);
 
     // Read configured output_file (if any). The configured value must be a
     // filename WITHOUT extension. If an extension is present we warn and
     // ignore it. Placeholders like {{id}} are supported. The resolved basename
     // will be used for both module zip and source tar names.
-    let (basename, output_file_provided) = if let Some(build_cfg) = &kam_toml.kam.build {
+    let basename = if let Some(build_cfg) = &kam_toml.kam.build {
         if let Some(of) = &build_cfg.output_file {
             let trimmed = of.trim();
             if trimmed.is_empty() {
-                (default_basename.clone(), false)
+                default_basename
             } else {
-                let rendered = render_output_template(trimmed, &kam_toml);
+                let rendered = render_output_template(trimmed, kam_toml);
                 let p = std::path::Path::new(&rendered);
                 if p.extension().is_some() {
                     // Warn the user that extensions are not allowed in output_file
                     println!("{} {} {}", "Warning:".yellow().bold(), "kam.build.output_file should be a filename without extension; extension will be ignored:".yellow(), p.extension().unwrap().to_string_lossy().yellow());
                 }
                 let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(&rendered).to_string();
-                (stem, true)
+                stem
             }
         } else {
-            (default_basename.clone(), false)
+            default_basename
         }
     } else {
-        (default_basename.clone(), false)
+        default_basename
     };
+    Ok(basename)
+}
 
-    let module_output_file = output_dir.join(format!("{}.zip", &basename));
+fn render_output_template(tpl: &str, kt: &KamToml) -> String {
+    let mut s = tpl.to_string();
+    s = s.replace("{{id}}", &kt.prop.id);
+    s = s.replace("{{version}}", &kt.prop.version);
+    s = s.replace("{{versionCode}}", &kt.prop.versionCode.to_string());
+    s = s.replace("{{author}}", &kt.prop.author);
+    s
+}
+
+fn create_module_zip_if_needed(
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    basename: &str,
+    effective_project_path: &Path,
+    project_path: &Path,
+    module_id: &str,
+    is_rendered_template: bool,
+) -> Result<(), KamError> {
+    let module_output_file = output_dir.join(format!("{}.zip", basename));
 
     // Only create a module zip when module_type == Kam. Other module types
     // must not be packaged as module zips even if `kam.build.output_file`
@@ -305,9 +336,18 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
     } else {
         println!("  {} {}", "•".cyan(), "Module type is not 'kam' — skipping module zip, only creating source archive".dimmed());
     }
+    Ok(())
+}
 
+fn create_source_archive(
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    basename: &str,
+    effective_project_path: &Path,
+    project_path: &Path,
+) -> Result<(), KamError> {
     // --- Create source tar.gz archive ---
-    let source_filename = format!("{}.tar.gz", &basename);
+    let source_filename = format!("{}.tar.gz", basename);
 
     let source_output_file = output_dir.join(&source_filename);
     let tar_gz = File::create(&source_output_file)?;
@@ -351,7 +391,10 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
     tar.finish()?;
 
     println!("{} Built source archive: {}", "✓".green().bold(), source_output_file.display().to_string().green());
+    Ok(())
+}
 
+fn handle_post_build_hook(kam_toml: &KamToml, project_path: &Path) -> Result<(), KamError> {
     // Run post-build hook
     if let Some(build_config) = &kam_toml.kam.build {
         if let Some(post_build) = &build_config.post_build {
@@ -360,7 +403,6 @@ pub fn run(args: BuildArgs) -> Result<(), KamError> {
             run_command(post_build, project_path)?;
         }
     }
-
     Ok(())
 }
 
@@ -378,7 +420,7 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-    let name = path.strip_prefix(base).map_err(|e| KamError::Other(format!("failed to strip prefix {}: {}", base.display(), e)))?;
+    let name = path.strip_prefix(base).map_err(|e| KamError::StripPrefixFailed(format!("failed to strip prefix {}: {}", base.display(), e)))?;
         let zip_path = format!("{}/{}", prefix, name.display());
 
         if path.is_file() {

@@ -22,10 +22,15 @@ anyhow = "1.0.100"
 reqwest = { version = "0.12.24", features = ["blocking", "rustls-tls"] }
 flate2 = "1.1.5"
 tar = "0.4.44"
-git2 = { version = "0.20.2", features = ["vendored-libgit2", "vendored-openssl"] }
+git2 = "0.20.2"
 walkdir = "2.3.3"
 zip = "6.0.0"
+tiny_http = "0.12.0"
+
+[target.'cfg(target_os = "android")'.dependencies]
+git2 = { version = "0.20.2", features = ["vendored-libgit2", "vendored-openssl"] }
+
+
 
 [dev-dependencies]
 tiny_http = "0.12.0"
-

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::types::kam_toml::sections::dependency::{Dependency, DependencySection};
+use crate::types::modules::base::{Dependency, DependencySection, VersionSpec};
 
 /// A flattened dependency group with all includes resolved
 #[derive(Debug, Clone)]
@@ -248,14 +248,14 @@ impl DependencyResolver {
             let id = dep.id.clone();
             // compute representative version code for comparison
             let cand_vc = match &dep.versionCode {
-                Some(crate::types::kam_toml::sections::dependency::VersionSpec::Exact(v)) => *v,
-                Some(crate::types::kam_toml::sections::dependency::VersionSpec::Range(s)) => {
+                Some(VersionSpec::Exact(v)) => *v,
+                Some(VersionSpec::Range(s)) => {
                     // try to parse lower bound like "[123," or "[123,456)"
                     if let Some(pos) = s.find(',') {
                         let prefix = s[..pos].trim();
                         // strip leading bracket
                         let num = prefix.trim_start_matches(['[', '('].as_ref()).trim();
-                        num.parse::<i64>().unwrap_or(0)
+                        num.parse::<i64>().unwrap_or(0).try_into().unwrap_or(0)
                     } else {
                         // unable to parse, treat as 0
                         0
@@ -266,12 +266,12 @@ impl DependencyResolver {
 
             if let Some(existing) = best.get(&id) {
                 let exist_vc = match &existing.versionCode {
-                    Some(crate::types::kam_toml::sections::dependency::VersionSpec::Exact(v)) => *v,
-                    Some(crate::types::kam_toml::sections::dependency::VersionSpec::Range(s)) => {
+                    Some(VersionSpec::Exact(v)) => *v,
+                    Some(VersionSpec::Range(s)) => {
                         if let Some(pos) = s.find(',') {
                             let prefix = s[..pos].trim();
                             let num = prefix.trim_start_matches(['[', '('].as_ref()).trim();
-                            num.parse::<i64>().unwrap_or(0)
+                            num.parse::<i64>().unwrap_or(0).try_into().unwrap_or(0)
                         } else { 0 }
                     }
                     None => 0,

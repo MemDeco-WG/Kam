@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
-use crate::types::kam_toml::module::ModuleType;
+use crate::errors::KamError;
 
 pub fn init_kam(
     path: &Path,
@@ -12,15 +12,15 @@ pub fn init_kam(
     template_vars: &HashMap<String, String>,
     force: bool,
     module_type: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let name = name_map.get("en").unwrap_or(&"".to_string()).clone();
-    let description = description_map.get("en").unwrap_or(&"".to_string()).clone();
+) -> Result<(), KamError> {
+    let name = name_map.get("en").cloned().unwrap_or_else(|| "".to_string());
+    let description = description_map.get("en").cloned().unwrap_or_else(|| "".to_string());
 
     // Extract builtin template
-    let (_temp_dir, template_path) = super::common::extract_builtin_template(module_type)?;
+    let (template_path, _temp_dir) = super::common::extract_builtin_template(module_type)?;
 
     // Use default KamToml
-    let mut kt = crate::types::kam_toml::KamToml::default();
+    let mut kt = crate::types::modules::base::KamToml::default();
 
     // Update with user values
     kt.prop.id = id.to_string();
@@ -35,7 +35,7 @@ pub fn init_kam(
     // For library and kam, set module_type
     match module_type {
         "library" => {
-            kt.kam.module_type = ModuleType::Library;
+            kt.kam.module_type = crate::types::modules::base::ModuleType::Library;
         }
         "kam" => {
             // already the default ModuleType::Kam
@@ -67,7 +67,7 @@ pub fn init_kam(
     }
 
     // Copy src from template
-    let src_temp = template_path.join("src").join("module");
+    let src_temp = template_path.join("src").join("kam_template");
     if src_temp.exists() {
         let src_dir = path.join("src").join(id);
         let src_rel = format!("src/{}/", id);
@@ -77,11 +77,41 @@ pub fn init_kam(
             let entry = entry?;
             let filename = entry.file_name();
             let mut content = std::fs::read_to_string(entry.path())?;
+            // Apply template variables
             for (key, value) in template_vars {
                 content = content.replace(&format!("{{{{{}}}}}", key), value);
             }
+            // Apply default replacements
+            content = content.replace("{{id}}", id);
+            content = content.replace("{{name}}", &name);
+            content = content.replace("{{version}}", version);
+            content = content.replace("{{author}}", author);
+            content = content.replace("{{description}}", &description);
             let dest_file = src_dir.join(&filename);
             let file_rel = format!("src/{}/{}", id, filename.to_string_lossy());
+            super::common::print_status(&dest_file, &file_rel, false, force);
+            std::fs::write(&dest_file, content)?;
+        }
+    }
+
+    // Copy other template files (e.g., README.md) with replacements
+    let files_to_copy = ["README.md"];
+    for file_name in &files_to_copy {
+        let template_file = template_path.join(file_name);
+        if template_file.exists() {
+            let mut content = std::fs::read_to_string(&template_file)?;
+            // Apply template variables
+            for (key, value) in template_vars {
+                content = content.replace(&format!("{{{{{}}}}}", key), value);
+            }
+            // Apply default replacements
+            content = content.replace("{{id}}", id);
+            content = content.replace("{{name}}", &name);
+            content = content.replace("{{version}}", version);
+            content = content.replace("{{author}}", author);
+            content = content.replace("{{description}}", &description);
+            let dest_file = path.join(file_name);
+            let file_rel = file_name.to_string();
             super::common::print_status(&dest_file, &file_rel, false, force);
             std::fs::write(&dest_file, content)?;
         }

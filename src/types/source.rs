@@ -17,9 +17,9 @@ impl Source {
     ///
     /// Supported forms (examples):
     /// - git+https://github.com/org/repo.git@v1.2.3
-    /// - https://example.com/module.zip
+    /// - https://example.com/module.tar.gz
     /// - /path/to/local/module
-    /// - file:///C:/path/to/module.zip
+    /// - file:///C:/path/to/module.tar.gz
     pub fn parse(spec: &str) -> Result<Self> {
         let s = spec.trim();
 
@@ -64,4 +64,3 @@ impl Source {
         Ok(Source::Local { path: p })
     }
 }
-

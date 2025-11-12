@@ -1,9 +1,28 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use crate::types::kam_toml::module::{ModuleType, TmplSection};
-use crate::cache::KamCache;
+use crate::types::modules::base::TmplSection;
+
+use crate::errors::KamError;
 use tempfile::TempDir;
-use zip::ZipArchive;
+use zip;
+use tar;
+use flate2;
+
+// Helper to extract a zip or tar.gz file into a TempDir and return the template folder path
+pub fn extract_archive_to_temp(archive_path: &Path) -> Result<(TempDir, PathBuf), KamError> {
+    let temp_dir = TempDir::new()?;
+    let file = std::fs::File::open(archive_path)?;
+    if archive_path.extension().and_then(|s| s.to_str()) == Some("zip") {
+        let mut archive = zip::ZipArchive::new(file)?;
+        archive.extract(temp_dir.path())?;
+    } else {
+        let gz_decoder = flate2::read::GzDecoder::new(file);
+        let mut archive = tar::Archive::new(gz_decoder);
+        archive.unpack(temp_dir.path())?;
+    }
+    let template_path = temp_dir.path().to_path_buf();
+    Ok((temp_dir, template_path))
+}
 
 /// Initialize a template project.
 ///
@@ -21,7 +40,7 @@ pub fn init_template(
     vars: &[String],
     impl_template: Option<String>,
     force: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), KamError> {
     // Parse template variable definitions from CLI args and template kam.toml
     let mut variables = super::template_vars::parse_template_variables(vars)?;
 
@@ -46,15 +65,15 @@ pub fn init_template(
     // fail on missing required variables.
     for (k, def) in &variables {
         if let Some(d) = &def.default {
-            runtime_values.insert(k.clone(), d.clone());
+            runtime_values.insert(k.to_string(), d.clone());
         } else if def.required {
             // If non-interactive, surface an error that includes the template-provided
             // note when available to guide the user how to supply the missing value.
             if std::env::var("KAM_NONINTERACTIVE").is_ok() {
                 if let Some(n) = &def.note {
-                    return Err(format!("Required template variable '{}' not provided (non-interactive): {}", k, n).into());
+                    return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided (non-interactive): {}", k, n)));
                 }
-                return Err(format!("Required template variable '{}' not provided (non-interactive)", k).into());
+                return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided (non-interactive)", k)));
             }
 
             // Prompt user for required value. If the template provides a human-friendly
@@ -71,27 +90,27 @@ pub fn init_template(
             let val = input.trim().to_string();
             if val.is_empty() {
                 if let Some(n) = &def.note {
-                    return Err(format!("Required template variable '{}' not provided: {}", k, n).into());
+                    return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided: {}", k, n)));
                 }
-                return Err(format!("Required template variable '{}' not provided", k).into());
+                return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided", k)));
             }
-            runtime_values.insert(k.clone(), val);
+            runtime_values.insert(k.to_string(), val);
         }
     }
 
     let name_map_btree: BTreeMap<_, _> = name_map.into_iter().collect();
     let description_map_btree: BTreeMap<_, _> = description_map.into_iter().collect();
 
-    let mut kt = crate::types::kam_toml::KamToml::new_with_current_timestamp(
+    let mut kt = crate::types::modules::base::KamToml::new_with_current_timestamp(
         id.to_string(),
         name_map_btree,
         version.to_string(),
         author.to_string(),
         description_map_btree,
-        None,
+        Some(crate::types::modules::base::ModuleType::Template),
     );
-    kt.kam.module_type = ModuleType::Template;
-    let variables_btree: BTreeMap<_, _> = variables.clone().into_iter().collect();
+    kt.kam.module_type = crate::types::modules::base::ModuleType::Template;
+    let variables_btree: BTreeMap<_, _> = variables.into_iter().collect();
     kt.kam.tmpl = Some(TmplSection { used_template: impl_template.clone(), variables: variables_btree });
     let kam_toml_rel = "kam.toml".to_string();
     super::common::print_status(&path.join("kam.toml"), &kam_toml_rel, false, force);
@@ -101,24 +120,9 @@ pub fn init_template(
     let template_key = impl_template.as_deref().unwrap_or("tmpl");
 
     // Ensure cache exists and try to find template in cache/tmpl
-    let cache = KamCache::new()?;
-    cache.ensure_dirs()?;
-
-    // Candidate cache zip path
-    let _cached_zip = cache.tmpl_dir().join(format!("{}.zip", template_key));
-
-    // Helper to extract a zip file into a TempDir and return the template folder path
-    fn extract_zip_to_temp(zip_path: &Path, base: &str) -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>> {
-        let temp_dir = TempDir::new()?;
-        let file = std::fs::File::open(zip_path)?;
-        let mut archive = ZipArchive::new(file)?;
-        archive.extract(temp_dir.path())?;
-        let extracted_base = temp_dir.path().join(base);
-        Ok((temp_dir, extracted_base))
-    }
-    // Refactored: determine and prepare the template zip (cache / built-in / local / url)
-    fn prepare_template(template_key: &str, cache: &KamCache) -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>> {
-        // Normalize template_key into an asset/base name we use in cache, e.g.
+    // Refactored: determine and prepare the template zip (built-in / url only)
+    fn prepare_template(template_key: &str) -> Result<(TempDir, PathBuf), KamError> {
+        // Normalize template_key into an asset/base name we use, e.g.
         // input: "tmpl" | "template" | "tmpl_template" -> base "tmpl_template"
         let base = match template_key {
             "tmpl" | "template" | "tmpl_template" => "tmpl_template",
@@ -127,120 +131,13 @@ pub fn init_template(
             other => other,
         };
 
-        // Check cache first (use normalized base). Accept either a .zip or an
-        // unpacked directory. If it's a directory, copy it into a TempDir so
-        // callers always get a path inside a TempDir.
-        let cached_zip = cache.tmpl_dir().join(format!("{}.zip", base));
-        if cached_zip.exists() {
-            return extract_zip_to_temp(&cached_zip, base);
-        }
-        let cached_dir = cache.tmpl_dir().join(base);
-        if cached_dir.exists() && cached_dir.is_dir() {
-            let temp_dir = TempDir::new()?;
-            // copy cached_dir -> temp_dir/<base>
-            let dst = temp_dir.path().join(base);
-            std::fs::create_dir_all(&dst)?;
-            fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), Box<dyn std::error::Error>> {
-                for entry in std::fs::read_dir(src)? {
-                    let entry = entry?;
-                    let src_path = entry.path();
-                    let file_name = entry.file_name();
-                    let dst_path = dst.join(file_name);
-                    if entry.file_type()?.is_dir() {
-                        std::fs::create_dir_all(&dst_path)?;
-                        copy_dir_all(&src_path, &dst_path)?;
-                    } else {
-                        std::fs::copy(&src_path, &dst_path)?;
-                    }
-                }
-                Ok(())
-            }
-            copy_dir_all(&cached_dir, &dst)?;
-            return Ok((temp_dir, dst));
-        }
-
         // Try embedded built-in template. Try both the normalized base and
         // the original template_key to be forgiving.
-        if let Ok((td, p)) = super::common::extract_builtin_template(base) {
+        if let Ok((p, td)) = super::common::extract_builtin_template(base) {
             return Ok((td, p));
         }
-        if let Ok((td, p)) = super::common::extract_builtin_template(template_key) {
+        if let Ok((p, td)) = super::common::extract_builtin_template(template_key) {
             return Ok((td, p));
-        }
-
-        // Try local repo candidates (KAM_LOCAL_REPO and workspace tmpl/repo_templeta)
-        if let Some(p) = std::env::var_os("KAM_LOCAL_REPO") {
-            let repo_root = PathBuf::from(p);
-            let candidate = repo_root.join(format!("{}.zip", base));
-            if candidate.exists() {
-                let _ = std::fs::create_dir_all(cache.tmpl_dir());
-                let dst = cache.tmpl_dir().join(format!("{}.zip", base));
-                if !dst.exists() { std::fs::copy(&candidate, &dst)?; }
-                return extract_zip_to_temp(&dst, base);
-            }
-            // Also accept an unpacked directory in the local repo
-            let candidate_dir = repo_root.join(base);
-            if candidate_dir.exists() && candidate_dir.is_dir() {
-                // copy into tempdir and return
-                let temp_dir = TempDir::new()?;
-                let dst = temp_dir.path().join(base);
-                std::fs::create_dir_all(&dst)?;
-                fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), Box<dyn std::error::Error>> {
-                    for entry in std::fs::read_dir(src)? {
-                        let entry = entry?;
-                        let src_path = entry.path();
-                        let file_name = entry.file_name();
-                        let dst_path = dst.join(file_name);
-                        if entry.file_type()?.is_dir() {
-                            std::fs::create_dir_all(&dst_path)?;
-                            copy_dir_all(&src_path, &dst_path)?;
-                        } else {
-                            std::fs::copy(&src_path, &dst_path)?;
-                        }
-                    }
-                    Ok(())
-                }
-                copy_dir_all(&candidate_dir, &dst)?;
-                return Ok((temp_dir, dst));
-            }
-        }
-
-        if let Ok(cwd) = std::env::current_dir() {
-            let candidates = vec![cwd.join("tmpl").join(format!("{}.zip", base)), cwd.join("repo_templeta").join(format!("{}.zip", base))];
-            for cand in candidates {
-                if cand.exists() {
-                    let _ = std::fs::create_dir_all(cache.tmpl_dir());
-                    let dst = cache.tmpl_dir().join(format!("{}.zip", base));
-                    if !dst.exists() { std::fs::copy(&cand, &dst)?; }
-                    return extract_zip_to_temp(&dst, base);
-                }
-            }
-            // Also accept unpacked directories in the working copy (tmpl/<base> or repo_templeta/<base>)
-            let dir_candidates = vec![cwd.join("tmpl").join(base), cwd.join("repo_templeta").join(base)];
-            for cand in dir_candidates {
-                if cand.exists() && cand.is_dir() {
-                    let temp_dir = TempDir::new()?;
-                    let dst = temp_dir.path().join(base);
-                    std::fs::create_dir_all(&dst)?;
-                    fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), Box<dyn std::error::Error>> {
-                        for entry in std::fs::read_dir(src)? {
-                            let entry = entry?;
-                            let src_path = entry.path();
-                            let file_name = entry.file_name();
-                            let dst_path = dst.join(file_name);
-                            if entry.file_type()?.is_dir() {
-                                std::fs::create_dir_all(&dst_path)?;
-                                copy_dir_all(&src_path, &dst_path)?;
-                            } else {
-                                std::fs::copy(&src_path, &dst_path)?;
-                            }
-                        }
-                        Ok(())
-                    }
-                    copy_dir_all(&cand, &dst)?;
-                    return Ok((temp_dir, dst));
-                }
-            }
         }
 
         // If template_key is a URL, try downloading
@@ -250,20 +147,17 @@ pub fn init_template(
                 let bytes = resp.bytes()?;
                 let tmp = tempfile::NamedTempFile::new()?;
                 std::fs::write(tmp.path(), &bytes)?;
-                let base = template_key.rsplit('/').next().unwrap_or("template").trim_end_matches(".zip");
-                let _ = std::fs::create_dir_all(cache.tmpl_dir());
-                let dst = cache.tmpl_dir().join(format!("{}.zip", base));
-                if !dst.exists() { std::fs::copy(tmp.path(), &dst)?; }
-                return extract_zip_to_temp(&dst, base);
+                let (temp_dir, template_path) = extract_archive_to_temp(tmp.path())?;
+                return Ok((temp_dir, template_path));
             } else {
-                return Err("Failed to download template".into());
+                return Err(KamError::FetchFailed("Failed to download template".to_string()));
             }
         }
 
-        Err(format!("Template '{}' not found in cache, built-ins, or local repo", template_key).into())
+        Err(KamError::TemplateNotFound(format!("Template '{}' not found in built-ins or URL", template_key)))
     }
 
-    let (_temp_dir, template_path) = prepare_template(template_key, &cache)?;
+    let (_temp_dir, template_path) = prepare_template(template_key)?;
 
     // Copy template files recursively from `src/` (and support placeholders in
     // both file/directory names and file contents). Placeholders like
@@ -281,13 +175,13 @@ pub fn init_template(
             rel: &std::path::Path,
             runtime_values: &std::collections::HashMap<String, String>,
             force: bool,
-        ) -> Result<(), Box<dyn std::error::Error>> {
+        ) -> Result<(), KamError> {
             for entry in std::fs::read_dir(src)? {
                 let entry = entry?;
                 let file_name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into());
                 // Replace placeholders in file or directory name
-                let mut replaced_name = file_name.clone();
-                for (k, v) in runtime_values {
+                let mut replaced_name = file_name;
+                for (k, v) in runtime_values.iter() {
                     if !v.is_empty() {
                         replaced_name = replaced_name.replace(&format!("{{{{{}}}}}", k), v);
                     }
@@ -337,12 +231,12 @@ pub fn init_template(
             src: &std::path::Path,
             dst: &std::path::Path,
             runtime_values: &std::collections::HashMap<String, String>,
-        ) -> Result<(), Box<dyn std::error::Error>> {
+        ) -> Result<(), KamError> {
             for entry in std::fs::read_dir(src)? {
                 let entry = entry?;
                 let file_name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into());
-                let mut replaced_name = file_name.clone();
-                for (k, v) in runtime_values {
+                let mut replaced_name = file_name;
+                for (k, v) in runtime_values.iter() {
                     if !v.is_empty() {
                         replaced_name = replaced_name.replace(&format!("{{{{{}}}}}", k), v);
                     }

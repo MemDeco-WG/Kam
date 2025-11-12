@@ -1,9 +1,9 @@
 /// # Kam Cache System
-/// 
+///
 /// Global cache mechanism for Kam modules, inspired by uv-cache.
-/// 
+///
 /// ## Cache Structure
-/// 
+///
 /// ```text
 /// ~/.kam/ (or /data/adb/kam on Android)
 /// ├── bin/      # Executable binary files (provided by library modules)
@@ -12,15 +12,15 @@
 /// ├── profile/  # ksu profile archives
 /// └── tmpl/     # built-in templates extracted from assets/tmpl
 /// ```
-/// 
+///
 /// ## Example Usage
-/// 
+///
 /// ```rust,no_run
 /// use kam::cache::KamCache;
-/// 
+///
 /// let cache = KamCache::new()?;
 /// cache.ensure_dirs()?;
-/// 
+///
 /// // Get paths to cache subdirectories
 /// let lib_path = cache.lib_dir();
 /// let bin_path = cache.bin_dir();
@@ -31,7 +31,6 @@ use std::path::{Path, PathBuf};
 use crate::errors::cache::CacheError;
 use rust_embed::RustEmbed;
 use std::io::Write;
-use zip::ZipArchive;
 
 #[derive(RustEmbed)]
 #[folder = "src/assets/tmpl"]
@@ -41,9 +40,9 @@ struct TmplAssets;
 // backwards compatibility as `crate::cache::CacheError`.
 
 /// Global cache for Kam modules
-/// 
+///
 /// ## Platform-specific locations
-/// 
+///
 /// - **Non-Android (Linux, macOS, etc.)**: `~/.kam/`
 /// - **Android**: `/data/adb/kam`
 pub struct KamCache {
@@ -53,13 +52,13 @@ pub struct KamCache {
 
 impl KamCache {
     /// Create a new KamCache instance with the default cache directory
-    /// 
+    ///
     /// ## Platform Detection
-    /// 
+    ///
     /// Automatically detects Android by checking for `/data/adb/` directory.
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -69,11 +68,11 @@ impl KamCache {
         let root = Self::default_cache_dir()?;
         Ok(Self { root })
     }
-    
+
     /// Create a KamCache with a custom root directory
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::with_root(std::env::temp_dir().join("kam_cache_custom")).unwrap();
@@ -88,9 +87,9 @@ impl KamCache {
         }
         Ok(Self { root })
     }
-    
+
     /// Get the default cache directory based on platform
-    /// 
+    ///
     /// Returns:
     /// - `/data/adb/kam` on Android
     /// - `~/.kam` on other platforms
@@ -115,45 +114,45 @@ impl KamCache {
 
         Ok(PathBuf::from(home).join(".kam"))
     }
-    
+
     /// Get the cache root directory
     pub fn root(&self) -> &Path {
         &self.root
     }
-    
+
     /// Get the bin directory (executable binary files)
-    /// 
+    ///
     /// Binary files provided by library modules are stored here.
     pub fn bin_dir(&self) -> PathBuf {
         self.root.join("bin")
     }
-    
+
     /// Get the lib directory (library modules)
-    /// 
+    ///
     /// Library modules are extracted here (not compressed).
     /// Dependencies are organized by module ID and version.
     pub fn lib_dir(&self) -> PathBuf {
         self.root.join("lib")
     }
-    
+
     /// Get the log directory
     pub fn log_dir(&self) -> PathBuf {
         self.root.join("log")
     }
-    
+
     /// Get the profile directory (template module archives)
-    /// 
+    ///
     /// Template modules are stored as compressed archives.
     pub fn profile_dir(&self) -> PathBuf {
         self.root.join("profile")
     }
-    
+
     /// Ensure all cache directories exist
-    /// 
+    ///
     /// Creates the cache root and all subdirectories if they don't exist.
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -168,7 +167,7 @@ impl KamCache {
         // Ensure builtin templates are available in the cache tmpl directory.
         // This extracts embedded template archives (from src/assets/tmpl)
         // into `${cache_root}/tmpl/<template_name>/...` and writes the
-        // archive as `${cache_root}/tmpl/<template_name>.zip` so we don't
+        // archive as `${cache_root}/tmpl/<template_name>.tar.gz` so we don't
         // re-extract on subsequent runs.
         self.ensure_builtin_templates()?;
         Ok(())
@@ -188,68 +187,54 @@ impl KamCache {
 
         for entry in TmplAssets::iter() {
             let name = entry.as_ref();
-            if !name.ends_with(".zip") {
+            if !name.ends_with(".tar.gz") {
                 continue;
             }
 
-            // Use the base name without .zip as the extraction folder
-            let base = match name.strip_suffix(".zip") {
+            // Use the base name without .tar.gz as the extraction folder
+            let base = match name.strip_suffix(".tar.gz") {
                 Some(b) => b,
                 None => continue,
             };
 
-            let zip_path = self.tmpl_dir().join(format!("{}.zip", base));
+            let tar_gz_path = self.tmpl_dir().join(format!("{}.tar.gz", base));
             let extract_dir = self.tmpl_dir().join(base);
 
             // If both archive and extracted dir exist, skip
-            if zip_path.exists() && extract_dir.exists() {
+            if tar_gz_path.exists() && extract_dir.exists() {
                 continue;
             }
 
             if let Some(content) = TmplAssets::get(name) {
                 // Write archive file if missing
-                if !zip_path.exists() {
-                    let mut f = std::fs::File::create(&zip_path)?;
+                if !tar_gz_path.exists() {
+                    let mut f = std::fs::File::create(&tar_gz_path)?;
                     f.write_all(&content.data)?;
                 }
 
                 // Extract archive into extract_dir
-                let file = std::fs::File::open(&zip_path)?;
-                // ZipArchive requires Read + Seek
-                let mut archive = ZipArchive::new(file).map_err(|e| {
+                let file = std::fs::File::open(&tar_gz_path)?;
+                let gz_decoder = flate2::read::GzDecoder::new(file);
+                let mut archive = tar::Archive::new(gz_decoder);
+
+                archive.unpack(&extract_dir).map_err(|e| {
                     CacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
                 })?;
-
-                for i in 0..archive.len() {
-                    let mut file = archive.by_index(i).map_err(|e| {
-                        CacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?;
-                    let outpath = extract_dir.join(file.name());
-                    if file.name().ends_with('/') {
-                        std::fs::create_dir_all(&outpath)?;
-                    } else {
-                        if let Some(p) = outpath.parent() {
-                            std::fs::create_dir_all(p)?;
-                        }
-                        let mut outfile = std::fs::File::create(&outpath)?;
-                        std::io::copy(&mut file, &mut outfile)?;
-                    }
-                }
             }
         }
 
         Ok(())
     }
-    
+
     /// Get the path to a library module in the cache
-    /// 
+    ///
     /// ## Arguments
-    /// 
+    ///
     /// - `id`: Module ID
     /// - `version`: Module version
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -259,15 +244,15 @@ impl KamCache {
     pub fn lib_module_path(&self, id: &str, version: &str) -> PathBuf {
         self.lib_dir().join(format!("{}-{}", id, version))
     }
-    
+
     /// Get the path to a binary in the cache
-    /// 
+    ///
     /// ## Arguments
-    /// 
+    ///
     /// - `name`: Binary name
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -276,16 +261,16 @@ impl KamCache {
     pub fn bin_path(&self, name: &str) -> PathBuf {
         self.bin_dir().join(name)
     }
-    
+
     /// Get the path to a template archive in the cache
-    /// 
+    ///
     /// ## Arguments
-    /// 
+    ///
     /// - `id`: Template ID
     /// - `version`: Template version
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -294,13 +279,13 @@ impl KamCache {
     pub fn profile_path(&self, id: &str, version: &str) -> PathBuf {
         self.profile_dir().join(format!("{}-{}.zip", id, version))
     }
-    
+
     /// Clear the entire cache
-    /// 
+    ///
     /// **Warning**: This removes all cached modules, binaries, and logs.
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -312,15 +297,15 @@ impl KamCache {
         }
         Ok(())
     }
-    
+
     /// Clear a specific cache directory
-    /// 
+    ///
     /// ## Arguments
-    /// 
-    /// - `dir`: Directory type ("bin", "lib", "log", or "profile")
-    /// 
+    ///
+    /// - `dir`: Directory type ("bin", "lib", "log", "profile", or "tmpl")
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -333,25 +318,26 @@ impl KamCache {
             "lib" => self.lib_dir(),
             "log" => self.log_dir(),
             "profile" => self.profile_dir(),
+            "tmpl" => self.tmpl_dir(),
             _ => return Err(CacheError::InvalidPath(
                 format!("Unknown cache directory: {}", dir)
             )),
         };
-        
+
         if path.exists() {
             std::fs::remove_dir_all(&path)?;
             std::fs::create_dir_all(&path)?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Get cache statistics
-    /// 
+    ///
     /// Returns the total size and number of files in the cache.
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -361,24 +347,24 @@ impl KamCache {
     /// ```
     pub fn stats(&self) -> Result<CacheStats, CacheError> {
         let mut stats = CacheStats::default();
-        
+
         if self.root.exists() {
             Self::compute_dir_stats(&self.root, &mut stats)?;
         }
-        
+
         Ok(stats)
     }
-    
+
     /// Recursively compute directory statistics
     fn compute_dir_stats(path: &Path, stats: &mut CacheStats) -> Result<(), CacheError> {
         if !path.exists() {
             return Ok(());
         }
-        
+
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
             let metadata = entry.metadata()?;
-            
+
             if metadata.is_file() {
                 stats.file_count += 1;
                 stats.total_size += metadata.len();
@@ -386,7 +372,7 @@ impl KamCache {
                 Self::compute_dir_stats(&entry.path(), stats)?;
             }
         }
-        
+
         Ok(())
     }
 }
@@ -402,9 +388,9 @@ pub struct CacheStats {
 
 impl CacheStats {
     /// Format the size as a human-readable string
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use kam::cache::KamCache;
     /// let cache = KamCache::new().unwrap();
@@ -415,13 +401,12 @@ impl CacheStats {
         const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
         let mut size = self.total_size as f64;
         let mut unit_idx = 0;
-        
+
         while size >= 1024.0 && unit_idx < UNITS.len() - 1 {
             size /= 1024.0;
             unit_idx += 1;
         }
-        
+
         format!("{:.2} {}", size, UNITS[unit_idx])
     }
 }
-

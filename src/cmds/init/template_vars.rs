@@ -1,19 +1,20 @@
 use std::collections::HashMap;
-use crate::types::kam_toml::module::VariableDefinition;
+use crate::types::modules::base::VariableDefinition;
+use crate::errors::KamError;
 
-pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, KamError> {
     let mut template_vars = HashMap::new();
     for var in vars {
         if let Some((key, value)) = var.split_once('=') {
             template_vars.insert(key.to_string(), value.to_string());
         } else {
-            return Err(format!("Invalid template variable format: {}", var).into());
+            return Err(KamError::InvalidVarFormat(format!("Invalid template variable format: {}", var)));
         }
     }
     Ok(template_vars)
 }
 
-pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, VariableDefinition>, Box<dyn std::error::Error>> {
+pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, VariableDefinition>, KamError> {
     let mut variables = HashMap::new();
     for var in vars {
         if let Some((key, value)) = var.split_once('=') {
@@ -35,7 +36,7 @@ pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, Varia
                 choices: None,
             });
         } else {
-            return Err(format!("Invalid template variable format: {}. Expected key=type:required:default", var).into());
+            return Err(KamError::InvalidVarFormat(format!("Invalid template variable format: {}. Expected key=type:required:default", var)));
         }
     }
     Ok(variables)

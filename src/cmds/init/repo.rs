@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::fs;
-use crate::types::kam_toml::KamToml;
-use crate::types::kam_toml::sections::module::ModuleType;
+use crate::types::modules::base::KamToml;
+use crate::errors::KamError;
 use chrono;
 
 /// Initialize a kam module repository project by copying `tmpl/repo_templeta` into target
@@ -15,15 +15,15 @@ pub fn init_repo(
     description_map: HashMap<String, String>,
     _vars: &[String],
     force: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), KamError> {
     // Determine source template dir relative to the crate root
     let src_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tmpl").join("repo_templeta");
     if !src_dir.exists() {
-        return Err(format!("Repo template not found: {}", src_dir.display()).into());
+        return Err(KamError::RepoTemplateNotFound(format!("Repo template not found: {}", src_dir.display())));
     }
 
     // Copy files recursively from src_dir to path
-    fn copy_recursive(src: &Path, dst: &Path, force: bool) -> Result<(), Box<dyn std::error::Error>> {
+    fn copy_recursive(src: &Path, dst: &Path, force: bool) -> Result<(), KamError> {
         if src.is_dir() {
             fs::create_dir_all(dst)?;
             for entry in fs::read_dir(src)? {
@@ -59,7 +59,7 @@ pub fn init_repo(
     let desc_btree = description_map.into_iter().collect();
     kt.prop.description = desc_btree;
     // Mark as module repo type
-    kt.kam.module_type = ModuleType::Repo;
+    kt.kam.module_type = crate::types::modules::base::ModuleType::Repo;
     kt.write_to_dir(path)?;
 
     Ok(())

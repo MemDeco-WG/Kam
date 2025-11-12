@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use super::InitArgs;
+use crate::errors::KamError;
 
 pub fn post_process(
     path: &Path,
@@ -12,10 +13,10 @@ pub fn post_process(
     version: &str,
     author: &str,
     description: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), KamError> {
     // For impl, require vars if not empty
     if args.r#impl.is_some() && template_vars.is_empty() {
-        return Err("Implementation requires template variables. Use --var key=value".into());
+        return Err(KamError::ImplRequiresVars("Implementation requires template variables. Use --var key=value".to_string()));
     }
 
     // If no template vars, set defaults

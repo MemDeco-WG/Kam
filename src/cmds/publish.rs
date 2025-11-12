@@ -3,8 +3,8 @@ use colored::Colorize;
 use std::path::{Path, PathBuf};
 use std::fs;
 use crate::errors::KamError;
-use crate::types::kam_toml::KamToml;
-use crate::types::kam_toml::sections::module::ModuleType;
+use crate::types::modules::base::KamToml;
+use crate::types::modules::base::ModuleType;
 use serde_json::json;
 use chrono;
 
@@ -87,7 +87,7 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
                 }
             }
         }
-        found.ok_or_else(|| KamError::Other(format!("Package not found in {}", output_dir.display())))?
+        found.ok_or_else(|| KamError::PackageNotFound(format!("Package not found in {}", output_dir.display())))?
     };
 
     println!("  {} Package: {}", "✓".green(), package_path.display());
@@ -137,7 +137,7 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
             if kt.kam.module_type == ModuleType::Repo {
                 let packages_dir = dest.join("packages");
                 fs::create_dir_all(&packages_dir)?;
-                let dest_file = packages_dir.join(package_path.file_name().ok_or_else(|| KamError::Other("invalid package filename".to_string()))?);
+                let dest_file = packages_dir.join(package_path.file_name().ok_or_else(|| KamError::InvalidFilename("invalid package filename".to_string()))?);
                 fs::copy(&package_path, &dest_file)?;
 
                 // Update simple index.json (array of entries) under packages/index.json
@@ -159,7 +159,7 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
                     "timestamp": chrono::Utc::now().to_rfc3339(),
                 });
                 entries.push(entry);
-                let idx_s = serde_json::to_string_pretty(&entries).map_err(|e| KamError::Other(format!("json index serialize error: {}", e)))?;
+                let idx_s = toml::to_string_pretty(&entries).map_err(|e| KamError::TomlSerializeError(format!("json index serialize error: {}", e)))?;
                 std::fs::write(&index_path, idx_s)?;
 
                 println!("  {} Published to module repo: {}", "✓".green(), dest_file.display());
@@ -168,7 +168,7 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
         }
 
         // Fallback: plain directory copy
-        let dest_file = dest.join(package_path.file_name().ok_or_else(|| KamError::Other("invalid package filename".to_string()))?);
+        let dest_file = dest.join(package_path.file_name().ok_or_else(|| KamError::InvalidFilename("invalid package filename".to_string()))?);
         fs::copy(&package_path, &dest_file)?;
         println!("  {} Published to local repository: {}", "✓".green(), dest_file.display());
         return Ok(());
@@ -178,7 +178,7 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
     // If the repo is an HTTP(S) URL, append the package filename so we don't overwrite the repository root.
     let mut upload_target = repo.clone();
     if repo.starts_with("http://") || repo.starts_with("https://") {
-        let file_name = package_path.file_name().ok_or_else(|| KamError::Other("invalid package filename".to_string()))?.to_string_lossy();
+        let file_name = package_path.file_name().ok_or_else(|| KamError::InvalidFilename("invalid package filename".to_string()))?.to_string_lossy().to_string();
         if upload_target.ends_with('/') {
             upload_target.push_str(&file_name);
         } else {
@@ -200,9 +200,9 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
     if let Some(tok) = token_opt.as_ref() {
         req = req.header("Authorization", format!("Bearer {}", tok));
     }
-    let resp = req.send().map_err(|e| KamError::Other(format!("upload failed: {}", e)))?;
+    let resp = req.send().map_err(|e| KamError::UploadFailed(format!("upload failed: {}", e)))?;
     if !resp.status().is_success() {
-        return Err(KamError::Other(format!("upload failed: HTTP {}", resp.status())));
+        return Err(KamError::UploadFailed(format!("upload failed: HTTP {}", resp.status())));
     }
 
     println!("  {} Published to {}", "✓".green(), repo);

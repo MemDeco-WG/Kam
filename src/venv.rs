@@ -94,52 +94,7 @@ impl KamVenv {
             "venv" | "venv_template" => "venv_template",
             other => other,
         };
-        // Try a few forms for the template: zip, tar.gz/tgz, or an unpacked directory
-        let zip_path = tmpl_dir.join(format!("{}.zip", base));
-        if zip_path.exists() {
-            // extract zip
-            let file = std::fs::File::open(&zip_path).map_err(|e| KamError::Io(e))?;
-            let mut archive = zip::ZipArchive::new(file).map_err(|e| KamError::Other(format!("zip error: {}", e)))?;
-            for i in 0..archive.len() {
-                let mut entry = archive.by_index(i).map_err(|e| KamError::Other(format!("zip entry error: {}", e)))?;
-                let name = entry.name().to_string();
-                // small helper closure to apply replacements to a string
-                let replace_placeholders = |s: &str| -> String {
-                    let mut out = s.to_string();
-                    for (k, v) in &replacements {
-                        if !v.is_empty() {
-                            out = out.replace(&format!("{{{{{}}}}}", k), v);
-                        }
-                    }
-                    out
-                };
-
-                // apply replacements to the path
-                let replaced = replace_placeholders(&name);
-                let outpath = v.root.join(replaced);
-                if entry.is_dir() {
-                    fs::create_dir_all(&outpath).map_err(|e| KamError::Io(e))?;
-                } else {
-                    if let Some(p) = outpath.parent() {
-                        fs::create_dir_all(p).map_err(|e| KamError::Io(e))?;
-                    }
-                    let mut data: Vec<u8> = Vec::new();
-                    entry.read_to_end(&mut data).map_err(|e| KamError::Io(e))?;
-                    match String::from_utf8(data) {
-                        Ok(s) => {
-                            let s2 = replace_placeholders(&s);
-                            fs::write(&outpath, s2.as_bytes()).map_err(|e| KamError::Io(e))?;
-                        }
-                        Err(e) => {
-                            let bytes = e.into_bytes();
-                            fs::write(&outpath, &bytes).map_err(|e| KamError::Io(e))?;
-                        }
-                    }
-                }
-            }
-            return Ok(v);
-        }
-
+        // Try a few forms for the template: tar.gz/tgz, zip, or an unpacked directory
         // tar.gz / tgz support
         let tar_path = tmpl_dir.join(format!("{}.tar.gz", base));
         let tgz_path = tmpl_dir.join(format!("{}.tgz", base));
@@ -148,11 +103,11 @@ impl KamVenv {
             let f = std::fs::File::open(&tp).map_err(|e| KamError::Io(e))?;
             let decompressor = flate2::read::GzDecoder::new(f);
             let mut archive = tar::Archive::new(decompressor);
-            for entry_res in archive.entries().map_err(|e| KamError::Other(format!("tar entries: {}", e)))? {
-                let mut entry = entry_res.map_err(|e| KamError::Other(format!("tar entry read: {}", e)))?;
+            for entry_res in archive.entries().map_err(|e| KamError::FetchFailed(format!("tar entries: {}", e)))? {
+                let mut entry = entry_res.map_err(|e| KamError::FetchFailed(format!("tar entry read: {}", e)))?;
                 let path = match entry.path() {
                     Ok(p) => p.into_owned(),
-                    Err(e) => return Err(KamError::Other(format!("tar entry path: {}", e))),
+                    Err(e) => return Err(KamError::FetchFailed(format!("tar entry path: {}", e))),
                 };
                 let name = path.to_string_lossy().to_string();
 
@@ -191,14 +146,60 @@ impl KamVenv {
             return Ok(v);
         }
 
+        // zip support
+        let zip_path = tmpl_dir.join(format!("{}.zip", base));
+        if zip_path.exists() {
+            // extract zip
+            let file = std::fs::File::open(&zip_path).map_err(|e| KamError::Io(e))?;
+            let mut archive = zip::ZipArchive::new(file).map_err(|e| KamError::FetchFailed(format!("zip error: {}", e)))?;
+            for i in 0..archive.len() {
+                let mut entry = archive.by_index(i).map_err(|e| KamError::FetchFailed(format!("zip entry error: {}", e)))?;
+                let name = entry.name().to_string();
+                // small helper closure to apply replacements to a string
+                let replace_placeholders = |s: &str| -> String {
+                    let mut out = s.to_string();
+                    for (k, v) in &replacements {
+                        if !v.is_empty() {
+                            out = out.replace(&format!("{{{{{}}}}}", k), v);
+                        }
+                    }
+                    out
+                };
+
+                // apply replacements to the path
+                let replaced = replace_placeholders(&name);
+                let outpath = v.root.join(replaced);
+                if entry.is_dir() {
+                    fs::create_dir_all(&outpath).map_err(|e| KamError::Io(e))?;
+                } else {
+                    if let Some(p) = outpath.parent() {
+                        fs::create_dir_all(p).map_err(|e| KamError::Io(e))?;
+                    }
+                    let mut data: Vec<u8> = Vec::new();
+                    entry.read_to_end(&mut data).map_err(|e| KamError::Io(e))?;
+                    match String::from_utf8(data) {
+                        Ok(s) => {
+                            let s2 = replace_placeholders(&s);
+                            fs::write(&outpath, s2.as_bytes()).map_err(|e| KamError::Io(e))?;
+                        }
+                        Err(e) => {
+                            let bytes = e.into_bytes();
+                            fs::write(&outpath, &bytes).map_err(|e| KamError::Io(e))?;
+                        }
+                    }
+                }
+            }
+            return Ok(v);
+        }
+
         // finally, accept a pre-unpacked directory named by base
         let dir_path = tmpl_dir.join(base);
         if dir_path.exists() && dir_path.is_dir() {
             // copy directory contents into v.root with placeholder replacement
             // walk entries
             for entry in walkdir::WalkDir::new(&dir_path) {
-                let entry = entry.map_err(|e| KamError::Other(format!("walkdir error: {}", e)))?;
-                let rel = entry.path().strip_prefix(&dir_path).map_err(|e| KamError::Other(format!("strip_prefix: {}", e)))?;
+                let entry = entry.map_err(|e| KamError::FetchFailed(format!("walkdir error: {}", e)))?;
+                let rel = entry.path().strip_prefix(&dir_path).map_err(|e| KamError::StripPrefixFailed(format!("strip_prefix: {}", e)))?;
                 let name = rel.to_string_lossy().to_string();
 
                 let replace_placeholders = |s: &str| -> String {
@@ -234,13 +235,13 @@ impl KamVenv {
         }
 
         // Not found: fail rather than generating fallback scripts.
-        Err(KamError::Other(format!("venv template '{}' not found in cache tmpl dir: {}", base, zip_path.display())))
+        Err(KamError::TemplateNotFound(format!("venv template '{}' not found in cache tmpl dir: {}", base, zip_path.display())))
     }
 
     /// Load an existing venv (no validation beyond existence)
     pub fn load(root: &Path) -> Result<KamVenv, KamError> {
         if !root.exists() {
-            return Err(KamError::Other(format!("Virtual environment not found: {}", root.display())));
+            return Err(KamError::VenvNotFound(format!("Virtual environment not found: {}", root.display())));
         }
         // try to infer type from .dev marker
         let venv_type = if root.join(".dev").exists() { VenvType::Development } else { VenvType::Runtime };
@@ -323,5 +324,3 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     }
     Ok(())
 }
-
-

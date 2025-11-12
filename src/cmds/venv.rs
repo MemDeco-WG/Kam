@@ -72,7 +72,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
                 if force {
                     std::fs::remove_dir_all(&venv_path)?;
                 } else {
-                    return Err(KamError::Other(format!(
+                    return Err(KamError::VenvExists(format!(
                         "Virtual environment already exists at {}. Use --force to recreate.",
                         venv_path.display()
                     )));
@@ -81,7 +81,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
 
             println!("{} Creating virtual environment...", "→".cyan());
             let venv_type = if dev { VenvType::Development } else { VenvType::Runtime };
-            let venv = KamVenv::create(&venv_path, venv_type).map_err(|e| KamError::Other(format!("Venv create failed: {}", e)))?;
+            let venv = KamVenv::create(&venv_path, venv_type).map_err(|e| KamError::VenvCreateFailed(format!("Venv create failed: {}", e)))?;
             println!("  {} Created at: {}", "✓".green(), venv.root().display());
             println!();
             println!("To activate the virtual environment:");
@@ -117,7 +117,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
 
         Some(VenvCommands::Info) => {
             if !venv_path.exists() {
-                return Err(KamError::Other(format!("Virtual environment not found at {}", venv_path.display())));
+                return Err(KamError::VenvNotFound(format!("Virtual environment not found at {}", venv_path.display())));
             }
 
             let venv = KamVenv::load(&venv_path)?;
@@ -161,7 +161,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
 
         Some(VenvCommands::LinkBin { name }) => {
             if !venv_path.exists() {
-                return Err(KamError::Other(format!("Virtual environment not found at {}", venv_path.display())));
+                return Err(KamError::VenvNotFound(format!("Virtual environment not found at {}", venv_path.display())));
             }
 
             let cache = KamCache::new()?;
@@ -173,7 +173,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
 
         Some(VenvCommands::LinkLib { id, version }) => {
             if !venv_path.exists() {
-                return Err(KamError::Other(format!("Virtual environment not found at {}", venv_path.display())));
+                return Err(KamError::VenvNotFound(format!("Virtual environment not found at {}", venv_path.display())));
             }
 
             let cache = KamCache::new()?;

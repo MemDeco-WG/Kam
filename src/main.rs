@@ -45,11 +45,11 @@ fn main() -> Result<(), KamError> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init(args) => kam::cmds::init::run(args).map_err(|e| KamError::Other(format!("{}", e))),
-        Commands::Cache(args) => kam::cmds::cache::run(args).map_err(|e| KamError::Other(format!("{}", e))),
-        Commands::Sync(args) => kam::cmds::sync::run(args).map_err(|e| KamError::Other(format!("{}", e))),
-        Commands::Build(args) => kam::cmds::build::run(args).map_err(|e| KamError::Other(format!("{}", e))),
-        Commands::Publish(args) => kam::cmds::publish::run(args).map_err(|e| KamError::Other(format!("{}", e))),
-        Commands::Venv(args) => kam::cmds::venv::run(args).map_err(|e| KamError::Other(format!("{}", e))),
+        Commands::Init(args) => kam::cmds::init::run(args),
+        Commands::Cache(args) => kam::cmds::cache::run(args),
+        Commands::Sync(args) => kam::cmds::sync::run(args),
+        Commands::Build(args) => kam::cmds::build::run(args),
+        Commands::Publish(args) => kam::cmds::publish::run(args),
+        Commands::Venv(args) => kam::cmds::venv::run(args),
     }
 }

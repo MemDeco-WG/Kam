@@ -24,7 +24,7 @@ use colored::Colorize;
 use std::path::Path;
 use std::fs;
 use crate::cache::KamCache;
-use crate::types::kam_toml::KamToml;
+use crate::types::modules::base::KamToml;
 use crate::types::source::Source;
 use crate::types::modules::KamModule;
 use crate::types::modules::ModuleBackend;
@@ -47,13 +47,13 @@ pub struct SyncArgs {
 /// placeholder was created, `Ok(false)` if it already existed.
 fn ensure_module_synced(
     cache: &KamCache,
-    dep: &crate::types::kam_toml::sections::dependency::Dependency,
+    dep: &crate::types::modules::base::Dependency,
 ) -> Result<bool, KamError> {
     // Resolve a concrete version string to use for cache paths. If the
     // dependency specifies an exact versionCode, use it. If it specifies a
     // range, try to choose the highest cached version matching the range.
     // If nothing is available, fall back to the lower bound or 0.
-    use crate::types::kam_toml::sections::dependency::VersionSpec;
+    use crate::types::modules::base::VersionSpec;
 
     let version = match &dep.versionCode {
         Some(VersionSpec::Exact(v)) => v.to_string(),
@@ -132,7 +132,7 @@ fn ensure_module_synced(
     }
 
     // Try network sources using KamToml's effective source and the new Source/KamModule
-    let source_base = crate::types::kam_toml::KamToml::get_effective_source(dep);
+    let source_base = crate::types::modules::base::KamToml::get_effective_source(dep);
     let candidates = vec![
         format!("{}/{}", source_base.trim_end_matches('/'), zip_name),
         format!("{}/releases/download/{}/{}", source_base.trim_end_matches('/'), version, zip_name),
@@ -143,7 +143,7 @@ fn ensure_module_synced(
         // Parse the candidate into a Source and attempt to install into cache using KamModule
         match Source::parse(&url) {
             Ok(src) => {
-                let module = KamModule::new(KamToml::default(), Some(src));
+                let module = KamModule::new(crate::types::modules::base::KamToml::default(), Some(src));
                 match install_backend_into_cache(&module, cache) {
                     Ok(_dst) => {
                         let marker = module_path.join(".synced");
@@ -161,7 +161,7 @@ fn ensure_module_synced(
     }
 
     // If we reach here, we couldn't obtain the module
-    Err(KamError::Other(format!("Failed to fetch module '{}@{}' from local repo or source", dep.id, version)))
+    Err(KamError::FetchFailed(format!("Failed to fetch module '{}@{}' from local repo or source", dep.id, version)))
 }
 
 /// Install a ModuleBackend into the provided cache via the trait.
@@ -195,7 +195,7 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
     // Resolve dependencies
     let resolved = kam_toml
         .resolve_dependencies()
-        .map_err(|e| KamError::Other(format!("dependency resolution failed: {}", e)))?;
+        .map_err(|e| KamError::FetchFailed(format!("dependency resolution failed: {}", e)))?;
 
     // Determine which groups to sync
     let groups_to_sync = if args.dev {
@@ -272,7 +272,7 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
         fs::remove_dir_all(&venv_path)?;
     }
     let venv = KamVenv::create(&venv_path, venv_type)
-        .map_err(|e| KamError::Other(format!("Venv error: {}", e)))?;
+        .map_err(|e| KamError::VenvCreateFailed(format!("Venv error: {}", e)))?;
     println!("  {} Created/updated at: {}", "✓".green(), venv.root().display());
     let maybe_venv: Option<KamVenv> = Some(venv);
 

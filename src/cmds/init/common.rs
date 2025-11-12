@@ -1,10 +1,9 @@
 use colored::{Color, Colorize};
 use rust_embed::RustEmbed;
-use std::io::Cursor;
+
 use std::path::Path;
-use tempfile::TempDir;
-use flate2::read::GzDecoder;
-use tar::Archive as TarArchive;
+
+use crate::errors::KamError;
 
 #[derive(RustEmbed)]
 #[folder = "src/assets/"]
@@ -19,7 +18,7 @@ pub fn print_status(path: &Path, rel: &str, is_dir: bool, force: bool) {
     }
 }
 
-pub fn extract_builtin_template(template_type: &str) -> Result<(tempfile::TempDir, std::path::PathBuf), Box<dyn std::error::Error>> {
+pub fn extract_builtin_template(template_type: &str) -> Result<(std::path::PathBuf, tempfile::TempDir), KamError> {
     // Debug: list all embedded files
     println!("Available embedded files:");
     for file in Assets::iter() {
@@ -30,11 +29,11 @@ pub fn extract_builtin_template(template_type: &str) -> Result<(tempfile::TempDi
     // used in kam.toml ("template","library","kam"), and also accept
     // direct asset base names like "tmpl_template".
     // Map template type to a stable base name (no version numbers).
-    let (base_name, folder_name): (&str, &str) = match template_type {
+    let (base_name, _folder_name): (&str, &str) = match template_type {
         "tmpl" | "template" | "tmpl_template" => ("tmpl_template", "tmpl_template"),
         "lib" | "library" | "lib_template" => ("lib_template", "lib_template"),
         "kam" | "kam_template" => ("kam_template", "kam_template"),
-        _ => return Err("Unknown template type".into()),
+        _ => return Err(KamError::UnknownTemplateType("Unknown template type".to_string())),
     };
 
     println!("Extracting template: {}, base: {}", template_type, base_name);
@@ -45,7 +44,6 @@ pub fn extract_builtin_template(template_type: &str) -> Result<(tempfile::TempDi
     // locations depending on asset packaging.
     let candidates = vec![
         format!("{}.tar.gz", base_name),
-        format!("{}-src.tar.gz", base_name),
     ];
 
     let mut found: Option<rust_embed::EmbeddedFile> = None;
@@ -63,22 +61,12 @@ pub fn extract_builtin_template(template_type: &str) -> Result<(tempfile::TempDi
         }
     }
 
-    let file = found.ok_or("Template not found")?;
+    let file = found.ok_or(KamError::TemplateNotFound("Template not found".to_string()))?;
     println!("Found template data, size: {}", file.data.len());
 
-    let temp_dir = TempDir::new()?;
-
-    // Assume a gzipped tar archive and unpack it.
-    let cursor = Cursor::new(file.data.as_ref());
-    let gz = GzDecoder::new(cursor);
-    let mut archive = TarArchive::new(gz);
-    archive.unpack(temp_dir.path())?;
-
-    let template_path = temp_dir.path().join(folder_name);
-    println!("Template path exists: {}", template_path.exists());
-    println!("Contents of template_path:");
-    for entry in std::fs::read_dir(&template_path)? {
-        println!("  {}", entry?.path().display());
-    }
-    Ok((temp_dir, template_path))
+    // Write embedded data to a temp file and extract using extract_archive_to_temp
+    let temp_file = tempfile::NamedTempFile::new()?;
+    std::fs::write(temp_file.path(), &file.data)?;
+    let (temp_dir, template_path) = super::template::extract_archive_to_temp(temp_file.path())?;
+    Ok((template_path, temp_dir))
 }
