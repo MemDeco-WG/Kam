@@ -64,7 +64,7 @@ pub enum VenvCommands {
 /// Run the venv command
 pub fn run(args: VenvArgs) -> Result<(), KamError> {
     let project_path = Path::new(&args.path);
-    let venv_path = project_path.join(".kam-venv");
+    let venv_path = project_path.join(".kam_venv");
 
     match args.command {
         Some(VenvCommands::Create { dev, force }) => {
@@ -147,9 +147,9 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
 
         Some(VenvCommands::Activate) => {
             println!("To activate the virtual environment:");
-            println!("  Unix: source .kam-venv/activate");
-            println!("  Windows (cmd): .kam-venv\\activate.bat");
-            println!("  PowerShell: .kam-venv\\activate.ps1");
+            println!("  Unix: source .kam_venv/activate");
+            println!("  Windows (cmd): .kam_venv\\activate.bat");
+            println!("  PowerShell: .kam_venv\\activate.ps1");
             Ok(())
         }
 
