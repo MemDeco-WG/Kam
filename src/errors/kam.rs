@@ -1,5 +1,5 @@
-use thiserror::Error;
 use reqwest;
+use thiserror::Error;
 use toml;
 /// Kam-wide error type to avoid `Box<dyn Error>` in public APIs.
 #[derive(Error, Debug)]
@@ -57,6 +57,9 @@ pub enum KamError {
 
     #[error("Required template variable not provided: {0}")]
     TemplateVarRequired(String),
+
+    #[error("Invalid config: {0}")]
+    InvalidConfig(String),
 
     #[error("Unsupported archive format: {0}")]
     UnsupportedArchive(String),

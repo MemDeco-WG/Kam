@@ -80,25 +80,42 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             }
 
             println!("{} Creating virtual environment...", "→".cyan());
-            let venv_type = if dev { VenvType::Development } else { VenvType::Runtime };
-            let venv = KamVenv::create(&venv_path, venv_type).map_err(|e| KamError::VenvCreateFailed(format!("Venv create failed: {}", e)))?;
+            let venv_type = if dev {
+                VenvType::Development
+            } else {
+                VenvType::Runtime
+            };
+            let venv = KamVenv::create(&venv_path, venv_type)
+                .map_err(|e| KamError::VenvCreateFailed(format!("Venv create failed: {}", e)))?;
             println!("  {} Created at: {}", "✓".green(), venv.root().display());
             println!();
             println!("To activate the virtual environment:");
-            println!("  {}: source {}/activate", "Unix".yellow(), venv.root().display());
-            println!("  {}: {0}\\activate.bat", "Windows".yellow(), );
+            println!(
+                "  {}: source {}/activate",
+                "Unix".yellow(),
+                venv.root().display()
+            );
+            println!("  {}: {0}\\activate.bat", "Windows".yellow(),);
             println!("  {}: {0}\\activate.ps1", "PowerShell".yellow());
             Ok(())
         }
 
         Some(VenvCommands::Remove { yes }) => {
             if !venv_path.exists() {
-                println!("{} No virtual environment found at {}", "!".yellow(), venv_path.display());
+                println!(
+                    "{} No virtual environment found at {}",
+                    "!".yellow(),
+                    venv_path.display()
+                );
                 return Ok(());
             }
 
             if !yes {
-                println!("{} This will delete {}", "Warning:".yellow().bold(), venv_path.display());
+                println!(
+                    "{} This will delete {}",
+                    "Warning:".yellow().bold(),
+                    venv_path.display()
+                );
                 print!("Are you sure? (y/N): ");
                 use std::io::{self, Write};
                 io::stdout().flush()?;
@@ -111,17 +128,28 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             }
 
             std::fs::remove_dir_all(&venv_path)?;
-            println!("{} Removed virtual environment at {}", "✓".green(), venv_path.display());
+            println!(
+                "{} Removed virtual environment at {}",
+                "✓".green(),
+                venv_path.display()
+            );
             Ok(())
         }
 
         Some(VenvCommands::Info) => {
             if !venv_path.exists() {
-                return Err(KamError::VenvNotFound(format!("Virtual environment not found at {}", venv_path.display())));
+                return Err(KamError::VenvNotFound(format!(
+                    "Virtual environment not found at {}",
+                    venv_path.display()
+                )));
             }
 
             let venv = KamVenv::load(&venv_path)?;
-            println!("{} Virtual environment: {}", "Info:".cyan(), venv.root().display());
+            println!(
+                "{} Virtual environment: {}",
+                "Info:".cyan(),
+                venv.root().display()
+            );
             println!("  Type: {:?}", venv.venv_type());
             println!("  Bin: {}", venv.bin_dir().display());
             println!("  Lib: {}", venv.lib_dir().display());
@@ -154,14 +182,19 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
         }
 
         Some(VenvCommands::Deactivate) => {
-            println!("To deactivate, run the 'deactivate' function or script provided by the activation environment.");
+            println!(
+                "To deactivate, run the 'deactivate' function or script provided by the activation environment."
+            );
             println!("  In shells: run 'deactivate' or execute .kam-venv/deactivate");
             Ok(())
         }
 
         Some(VenvCommands::LinkBin { name }) => {
             if !venv_path.exists() {
-                return Err(KamError::VenvNotFound(format!("Virtual environment not found at {}", venv_path.display())));
+                return Err(KamError::VenvNotFound(format!(
+                    "Virtual environment not found at {}",
+                    venv_path.display()
+                )));
             }
 
             let cache = KamCache::new()?;
@@ -173,12 +206,19 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
 
         Some(VenvCommands::LinkLib { id, version }) => {
             if !venv_path.exists() {
-                return Err(KamError::VenvNotFound(format!("Virtual environment not found at {}", venv_path.display())));
+                return Err(KamError::VenvNotFound(format!(
+                    "Virtual environment not found at {}",
+                    venv_path.display()
+                )));
             }
 
             let cache = KamCache::new()?;
             let venv = KamVenv::load(&venv_path)?;
-            let ver = if version.is_empty() { "latest" } else { &version };
+            let ver = if version.is_empty() {
+                "latest"
+            } else {
+                &version
+            };
             venv.link_library(&id, ver, &cache)?;
             println!("{} Linked library '{}@{}' into venv", "✓".green(), id, ver);
             Ok(())
@@ -187,9 +227,15 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
         None => {
             // Default behaviour for `kam venv` with no subcommand:
             // Ensure virtual environment exists, sync dependencies, and print activation instructions.
-            println!("{} Ensuring virtual environment and synchronizing dependencies...", "→".cyan());
+            println!(
+                "{} Ensuring virtual environment and synchronizing dependencies...",
+                "→".cyan()
+            );
             // Reuse sync command logic: request venv creation and linking.
-            let sync_args = crate::cmds::sync::SyncArgs { path: args.path.clone(), dev: false };
+            let sync_args = crate::cmds::sync::SyncArgs {
+                path: args.path.clone(),
+                dev: false,
+            };
             crate::cmds::sync::run(sync_args)?;
             // After sync/run, activation hints are printed by sync when appropriate.
             Ok(())

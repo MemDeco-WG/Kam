@@ -15,7 +15,9 @@ pub mod tool;
 // Re-export main types
 pub use crate::types::kam_toml::enums::{ModuleType, SupportedArch};
 pub use build::BuildSection;
-pub use dependency::{Dependency, DependencySection, VersionSpec, FlatDependencyGroup, FlatDependencyGroups};
+pub use dependency::{
+    Dependency, DependencySection, FlatDependencyGroup, FlatDependencyGroups, VersionSpec,
+};
 pub use kam::KamSection;
 pub use kamlib::LibSection;
 pub use manager::ManagerSection;

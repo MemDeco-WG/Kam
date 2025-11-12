@@ -1,6 +1,4 @@
-
-
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -16,6 +14,10 @@ pub struct NoteSection {
 
 impl Default for NoteSection {
     fn default() -> Self {
-        NoteSection { title: String::new(), message: String::new(), color: None }
+        NoteSection {
+            title: String::new(),
+            message: String::new(),
+            color: None,
+        }
     }
 }

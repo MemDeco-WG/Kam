@@ -1,6 +1,5 @@
 use rust_embed::RustEmbed;
 
-
 // tmpl template
 
 // kam_template

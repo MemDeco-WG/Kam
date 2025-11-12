@@ -1,7 +1,5 @@
-
-
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
 /// 支持的 CPU 架构枚举（序列化为字符串，例如 "arm", "arm64", "x86_64"）

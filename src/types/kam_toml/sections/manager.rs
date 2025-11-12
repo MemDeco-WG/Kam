@@ -1,5 +1,4 @@
-
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -17,11 +16,14 @@ pub struct ManagerConfig {
 
 impl Default for ManagerConfig {
     fn default() -> Self {
-        ManagerConfig { min: None, devices: Some(vec![]), arch: Some(vec![]), require: Some(vec![]) }
+        ManagerConfig {
+            min: None,
+            devices: Some(vec![]),
+            arch: Some(vec![]),
+            require: Some(vec![]),
+        }
     }
 }
-
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -37,6 +39,10 @@ pub struct ManagerSection {
 
 impl Default for ManagerSection {
     fn default() -> Self {
-        ManagerSection { magisk: Some(ManagerConfig::default()), kernelsu: Some(ManagerConfig::default()), apatch: Some(ManagerConfig::default()) }
+        ManagerSection {
+            magisk: Some(ManagerConfig::default()),
+            kernelsu: Some(ManagerConfig::default()),
+            apatch: Some(ManagerConfig::default()),
+        }
     }
 }

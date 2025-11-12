@@ -1,8 +1,8 @@
+use crate::errors::KamError;
+use crate::types::kam_toml::KamToml;
+use crate::types::kam_toml::sections::TmplSection;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
-use crate::types::kam_toml::sections::TmplSection;
-use crate::types::kam_toml::KamToml;
-use crate::errors::KamError;
 // toml_edit not needed here; use toml::Value for mutation
 
 pub fn init_impl(
@@ -17,8 +17,12 @@ pub fn init_impl(
     force: bool,
 ) -> Result<(), KamError> {
     // Parse the template source specification
-    let source = crate::types::source::Source::parse(impl_source)
-        .map_err(|e| KamError::FetchFailed(format!("Failed to parse template source '{}': {}", impl_source, e)))?;
+    let source = crate::types::source::Source::parse(impl_source).map_err(|e| {
+        KamError::FetchFailed(format!(
+            "Failed to parse template source '{}': {}",
+            impl_source, e
+        ))
+    })?;
 
     // Create a dummy KamToml for the module (we'll load the real one from the template)
     let dummy_toml = KamToml::new_with_current_timestamp(
@@ -61,9 +65,15 @@ pub fn init_impl(
                             continue;
                         }
                         if let Some(note) = &var_def.note {
-                            return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided: {}", var_name, note)));
+                            return Err(KamError::TemplateVarRequired(format!(
+                                "Required template variable '{}' not provided: {}",
+                                var_name, note
+                            )));
                         }
-                        return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided", var_name)));
+                        return Err(KamError::TemplateVarRequired(format!(
+                            "Required template variable '{}' not provided",
+                            var_name
+                        )));
                     }
 
                     if let Some(default) = &var_def.default {
@@ -82,7 +92,12 @@ pub fn init_impl(
 
     let kam_toml_path = path.join("kam.toml");
     let kam_toml_rel = "kam.toml".to_string();
-    crate::utils::Utils::print_status(&kam_toml_path, &kam_toml_rel, crate::utils::PrintOp::Create { is_dir: false }, force);
+    crate::utils::Utils::print_status(
+        &kam_toml_path,
+        &kam_toml_rel,
+        crate::utils::PrintOp::Create { is_dir: false },
+        force,
+    );
 
     let mut kt = KamToml::new_with_current_timestamp(
         id.to_string(),
@@ -92,7 +107,10 @@ pub fn init_impl(
         description_map_btree,
         None,
     );
-    kt.kam.tmpl = Some(TmplSection { used_template: Some(archive_id.clone()), variables: BTreeMap::new() });
+    kt.kam.tmpl = Some(TmplSection {
+        used_template: Some(archive_id.clone()),
+        variables: BTreeMap::new(),
+    });
 
     // Apply any template variables that target kam.toml itself. Variables
     // intended to modify kam.toml must start with a leading '#', e.g.
@@ -136,7 +154,12 @@ pub fn init_impl(
         if src_temp.exists() {
             let src_dir = path.join("src").join(id);
             let src_rel = format!("src/{}/", id);
-            crate::utils::Utils::print_status(&src_dir, &src_rel, crate::utils::PrintOp::Create { is_dir: true }, force);
+            crate::utils::Utils::print_status(
+                &src_dir,
+                &src_rel,
+                crate::utils::PrintOp::Create { is_dir: true },
+                force,
+            );
             std::fs::create_dir_all(&src_dir)?;
             for entry in std::fs::read_dir(&src_temp)? {
                 let entry = entry?;
@@ -152,11 +175,18 @@ pub fn init_impl(
                 }
                 let dest_file = src_dir.join(&replaced_name);
                 let file_rel = format!("src/{}/{}", id, replaced_name);
-                crate::utils::Utils::print_status(&dest_file, &file_rel, crate::utils::PrintOp::Create { is_dir: false }, force);
+                crate::utils::Utils::print_status(
+                    &dest_file,
+                    &file_rel,
+                    crate::utils::PrintOp::Create { is_dir: false },
+                    force,
+                );
                 std::fs::write(&dest_file, content)?;
             }
         } else {
-            return Err(KamError::TemplateNotFound("Template source directory not found".to_string()));
+            return Err(KamError::TemplateNotFound(
+                "Template source directory not found".to_string(),
+            ));
         }
     } else {
         return Err(KamError::TemplateNotFound("Template not found".to_string()));

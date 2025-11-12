@@ -1,3 +1,9 @@
+use crate::cache::KamCache;
+use crate::errors::KamError;
+use crate::types::modules::KamModule;
+use crate::types::modules::ModuleBackend;
+use crate::types::source::Source;
+use crate::venv::{KamVenv, VenvType};
 /// # Kam Sync Command
 ///
 /// Synchronize dependencies similar to `uv sync`, creating symbolic links.
@@ -18,17 +24,10 @@
 /// # Sync including dev dependencies
 /// kam sync --dev
 /// ```
-
 use clap::Args;
 use colored::Colorize;
-use std::path::{Path, PathBuf};
 use std::fs;
-use crate::cache::KamCache;
-use crate::types::source::Source;
-use crate::types::modules::KamModule;
-use crate::types::modules::ModuleBackend;
-use crate::venv::{KamVenv, VenvType};
-use crate::errors::KamError;
+use std::path::{Path, PathBuf};
 
 /// Arguments for the sync command
 #[derive(Args, Debug)]
@@ -62,12 +61,22 @@ fn ensure_module_synced(
             let s = s.trim();
             let min_incl = s.starts_with('[');
             let max_incl = s.ends_with(']');
-            let inner = s.trim_start_matches('[').trim_start_matches('(').trim_end_matches(']').trim_end_matches(')');
+            let inner = s
+                .trim_start_matches('[')
+                .trim_start_matches('(')
+                .trim_end_matches(']')
+                .trim_end_matches(')');
             let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
             let min_opt = if parts.get(0).map(|p| !p.is_empty()).unwrap_or(false) {
                 parts[0].parse::<i64>().ok()
-            } else { None };
-            let max_opt = if parts.len() > 1 && parts[1].len() > 0 { parts[1].parse::<i64>().ok() } else { None };
+            } else {
+                None
+            };
+            let max_opt = if parts.len() > 1 && parts[1].len() > 0 {
+                parts[1].parse::<i64>().ok()
+            } else {
+                None
+            };
 
             // list cached versions for id
             let mut candidates: Vec<i64> = Vec::new();
@@ -78,9 +87,15 @@ fn ensure_module_synced(
                             if let Ok(n) = rest.parse::<i64>() {
                                 // test against range
                                 let mut ok = true;
-                                if let Some(minv) = min_opt { ok = ok && (if min_incl { n >= minv } else { n > minv }); }
-                                if let Some(maxv) = max_opt { ok = ok && (if max_incl { n <= maxv } else { n < maxv }); }
-                                if ok { candidates.push(n); }
+                                if let Some(minv) = min_opt {
+                                    ok = ok && (if min_incl { n >= minv } else { n > minv });
+                                }
+                                if let Some(maxv) = max_opt {
+                                    ok = ok && (if max_incl { n <= maxv } else { n < maxv });
+                                }
+                                if ok {
+                                    candidates.push(n);
+                                }
                             }
                         }
                     }
@@ -89,7 +104,11 @@ fn ensure_module_synced(
 
             if let Some(max_match) = candidates.into_iter().max() {
                 max_match.to_string()
-            } else if let Some(minv) = min_opt { minv.to_string() } else { "0".to_string() }
+            } else if let Some(minv) = min_opt {
+                minv.to_string()
+            } else {
+                "0".to_string()
+            }
         }
         None => "0".to_string(),
     };
@@ -119,13 +138,13 @@ fn ensure_module_synced(
     // Try local candidates first
     for repo_root in local_candidates {
         let candidate = repo_root.join(&zip_name);
-            if candidate.exists() {
+        if candidate.exists() {
             // Extract zip into module_path
             let file = std::fs::File::open(&candidate)?;
             let mut archive = zip::ZipArchive::new(file)?;
             archive.extract(&module_path).map_err(KamError::from)?;
             let marker = module_path.join(".synced");
-                fs::write(marker, format!("Synced: {} @ {} (local)", dep.id, version))?;
+            fs::write(marker, format!("Synced: {} @ {} (local)", dep.id, version))?;
             return Ok(true);
         }
     }
@@ -134,8 +153,17 @@ fn ensure_module_synced(
     let source_base = crate::types::kam_toml::KamToml::get_effective_source(dep);
     let candidates = vec![
         format!("{}/{}", source_base.trim_end_matches('/'), zip_name),
-        format!("{}/releases/download/{}/{}", source_base.trim_end_matches('/'), version, zip_name),
-        format!("{}/raw/main/{}", source_base.trim_end_matches('/'), zip_name),
+        format!(
+            "{}/releases/download/{}/{}",
+            source_base.trim_end_matches('/'),
+            version,
+            zip_name
+        ),
+        format!(
+            "{}/raw/main/{}",
+            source_base.trim_end_matches('/'),
+            zip_name
+        ),
     ];
 
     for url in candidates {
@@ -146,7 +174,10 @@ fn ensure_module_synced(
                 match install_backend_into_cache(&module, cache) {
                     Ok(_dst) => {
                         let marker = module_path.join(".synced");
-                        fs::write(marker, format!("Synced: {} @ {} ({})", dep.id, version, url))?;
+                        fs::write(
+                            marker,
+                            format!("Synced: {} @ {} ({})", dep.id, version, url),
+                        )?;
                         return Ok(true);
                     }
                     Err(_e) => {
@@ -160,7 +191,10 @@ fn ensure_module_synced(
     }
 
     // If we reach here, we couldn't obtain the module
-    Err(KamError::FetchFailed(format!("Failed to fetch module '{}@{}' from local repo or source", dep.id, version)))
+    Err(KamError::FetchFailed(format!(
+        "Failed to fetch module '{}@{}' from local repo or source",
+        dep.id, version
+    )))
 }
 
 /// Install a ModuleBackend into the provided cache via the trait.
@@ -169,7 +203,10 @@ fn ensure_module_synced(
 /// trait rather than the concrete `KamModule` type. It simply delegates to
 /// the backend's `install_into_cache` and exists to make call-sites accept
 /// `impl ModuleBackend` / `&dyn ModuleBackend` more explicitly.
-fn install_backend_into_cache(backend: &impl ModuleBackend, cache: &KamCache) -> Result<std::path::PathBuf, KamError> {
+fn install_backend_into_cache(
+    backend: &impl ModuleBackend,
+    cache: &KamCache,
+) -> Result<std::path::PathBuf, KamError> {
     backend.install_into_cache(cache)
 }
 
@@ -187,7 +224,11 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
 
     // Load kam.toml
     let kam_toml = crate::types::kam_toml::KamToml::load_from_dir(project_path)?;
-    println!("  {} {}", "✓".green(), format!("Loaded kam.toml for '{}'", kam_toml.prop.id).dimmed());
+    println!(
+        "  {} {}",
+        "✓".green(),
+        format!("Loaded kam.toml for '{}'", kam_toml.prop.id).dimmed()
+    );
 
     // Initialize cache, honoring project-local `.env` KAM_CACHE_ROOT.
     // If the value in `.env` is a relative path, resolve it relative to the
@@ -212,7 +253,9 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
                     }
                     let mut val = line[pos + 1..].trim().to_string();
                     // strip optional surrounding quotes
-                    if (val.starts_with('"') && val.ends_with('"')) || (val.starts_with('\'') && val.ends_with('\'')) {
+                    if (val.starts_with('"') && val.ends_with('"'))
+                        || (val.starts_with('\'') && val.ends_with('\''))
+                    {
                         if val.len() >= 2 {
                             val = val[1..val.len() - 1].to_string();
                         }
@@ -240,7 +283,11 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
         KamCache::new()?
     };
     cache.ensure_dirs()?;
-    println!("  {} {}", "✓".green(), format!("Cache: {}", cache.root().display()).dimmed());
+    println!(
+        "  {} {}",
+        "✓".green(),
+        format!("Cache: {}", cache.root().display()).dimmed()
+    );
     println!();
 
     // Ensure virtual environment exists and is up-to-date.
@@ -250,21 +297,31 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
     println!();
     println!("{} Ensuring virtual environment is present...", "→".cyan());
     let venv_path = project_path.join(".kam_venv");
-    let venv_type = if args.dev { VenvType::Development } else { VenvType::Runtime };
+    let venv_type = if args.dev {
+        VenvType::Development
+    } else {
+        VenvType::Runtime
+    };
     if venv_path.exists() {
         // recreate to ensure it's the latest
         fs::remove_dir_all(&venv_path)?;
     }
     let venv = KamVenv::create(&venv_path, venv_type)
         .map_err(|e| KamError::VenvCreateFailed(format!("Venv error: {}", e)))?;
-    println!("  {} Created/updated at: {}", "✓".green(), venv.root().display());
+    println!(
+        "  {} Created/updated at: {}",
+        "✓".green(),
+        venv.root().display()
+    );
     let maybe_venv: Option<KamVenv> = Some(venv);
 
     println!("{}", "Synchronizing dependencies...".bold().cyan());
     println!();
 
     // Resolve dependencies
-    let resolved = kam_toml.resolve_dependencies().map_err(|e| KamError::FetchFailed(format!("dependency resolution failed: {}", e)))?;
+    let resolved = kam_toml
+        .resolve_dependencies()
+        .map_err(|e| KamError::FetchFailed(format!("dependency resolution failed: {}", e)))?;
 
     // Determine which groups to sync
     let groups_to_sync = if args.dev {
@@ -285,8 +342,13 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
 
         for dep in &group.dependencies {
             // Use versionCode for dependency selection (fall back to 0 when absent)
-            let version_code = dep.versionCode.as_ref().map(|v| v.as_display()).unwrap_or_else(|| "0".to_string());
-            println!("  {} {}@{}",
+            let version_code = dep
+                .versionCode
+                .as_ref()
+                .map(|v| v.as_display())
+                .unwrap_or_else(|| "0".to_string());
+            println!(
+                "  {} {}@{}",
                 "→".cyan(),
                 dep.id.bold(),
                 version_code.dimmed()
@@ -300,10 +362,20 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
 
             // If a venv was requested, link the library into it
             if let Some(venv) = &maybe_venv {
-                let ver = dep.versionCode.as_ref().map(|v| v.as_display()).unwrap_or_else(|| "0".to_string());
+                let ver = dep
+                    .versionCode
+                    .as_ref()
+                    .map(|v| v.as_display())
+                    .unwrap_or_else(|| "0".to_string());
                 match venv.link_library(&dep.id, &ver, &cache) {
                     Ok(_) => println!("  {} Linked {}@{} into venv", "✓".green(), dep.id, ver),
-                    Err(e) => println!("  {} Failed to link {}@{}: {}", "!".yellow(), dep.id, ver, e),
+                    Err(e) => println!(
+                        "  {} Failed to link {}@{}: {}",
+                        "!".yellow(),
+                        dep.id,
+                        ver,
+                        e
+                    ),
                 }
             }
         }
@@ -311,7 +383,11 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
         println!();
     }
 
-    println!("{} Synced {} dependencies", "✓".green().bold(), total_synced.to_string().green().bold());
+    println!(
+        "{} Synced {} dependencies",
+        "✓".green().bold(),
+        total_synced.to_string().green().bold()
+    );
 
     // Print activation instructions for the always-managed venv
     println!();

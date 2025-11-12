@@ -1,6 +1,6 @@
-
-use serde::{Serialize, Deserialize};
-use super::{SupportedArch, ModuleType, DependencySection, BuildSection, TmplSection, LibSection};
+use super::{BuildSection, DependencySection, LibSection, ModuleType, SupportedArch, TmplSection};
+use crate::types::kam_toml::WorkspaceSection;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -27,6 +27,8 @@ pub struct KamSection {
     pub tmpl: Option<TmplSection>,
     /// 库相关子配置
     pub lib: Option<LibSection>,
+    /// 工作区配置
+    pub workspace: Option<WorkspaceSection>,
 }
 
 impl Default for KamSection {
@@ -41,6 +43,7 @@ impl Default for KamSection {
             module_type: ModuleType::Kam,
             tmpl: Some(TmplSection::default()),
             lib: Some(LibSection::default()),
+            workspace: None,
         }
     }
 }

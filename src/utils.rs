@@ -1,5 +1,5 @@
-use std::path::Path;
 use colored::{Color, Colorize};
+use std::path::Path;
 
 pub struct Utils;
 
@@ -31,14 +31,20 @@ impl Utils {
                     println!("{}", format!("- {}", rel).color(Color::Red));
                 }
                 PrintOp::Copy { from, to } => {
-                    println!("{}", format!("{} -> {} (copy)", from, to).color(Color::Cyan));
+                    println!(
+                        "{}",
+                        format!("{} -> {} (copy)", from, to).color(Color::Cyan)
+                    );
                 }
                 PrintOp::Symlink { target, link_type } => {
                     let symbol = match link_type {
                         LinkType::Soft => "-->",
                         LinkType::Hard => "==>",
                     };
-                    println!("{}", format!("{} {} {} (symlink)", rel, symbol, target).color(Color::Magenta));
+                    println!(
+                        "{}",
+                        format!("{} {} {} (symlink)", rel, symbol, target).color(Color::Magenta)
+                    );
                 }
             }
         } else {

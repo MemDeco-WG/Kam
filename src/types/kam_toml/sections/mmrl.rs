@@ -1,6 +1,5 @@
-
-use serde::{Serialize, Deserialize};
 use super::repo::RepoSection;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -12,6 +11,8 @@ pub struct MmrlSection {
 
 impl Default for MmrlSection {
     fn default() -> Self {
-        MmrlSection { repo: Some(RepoSection::default()) }
+        MmrlSection {
+            repo: Some(RepoSection::default()),
+        }
     }
 }

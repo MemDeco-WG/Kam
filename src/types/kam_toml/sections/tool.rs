@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -10,8 +10,6 @@ pub struct ToolSection {
 
 impl Default for ToolSection {
     fn default() -> Self {
-        ToolSection {
-            data: None,
-        }
+        ToolSection { data: None }
     }
 }

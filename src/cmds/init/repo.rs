@@ -1,10 +1,10 @@
-use std::collections::HashMap;
-use std::path::Path;
-use std::fs;
-use crate::types::kam_toml::KamToml;
 use crate::errors::KamError;
-use chrono;
+use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
+use chrono;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 /// Initialize a kam module repository project by copying `tmpl/repo_templeta` into target
 pub fn init_repo(
@@ -18,9 +18,14 @@ pub fn init_repo(
     force: bool,
 ) -> Result<(), KamError> {
     // Determine source template dir relative to the crate root
-    let src_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tmpl").join("repo_templeta");
+    let src_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tmpl")
+        .join("repo_templeta");
     if !src_dir.exists() {
-        return Err(KamError::RepoTemplateNotFound(format!("Repo template not found: {}", src_dir.display())));
+        return Err(KamError::RepoTemplateNotFound(format!(
+            "Repo template not found: {}",
+            src_dir.display()
+        )));
     }
 
     // Copy files recursively from src_dir to path

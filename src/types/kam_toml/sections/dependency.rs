@@ -1,8 +1,6 @@
-
-
-use serde::{Serialize, Deserialize};
-use std::collections::{BTreeMap, HashSet};
 use crate::errors::KamError;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashSet};
 
 /// Version specification for dependencies
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -23,7 +21,6 @@ impl VersionSpec {
     }
 }
 
-
 /// A dependency entry
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -35,8 +32,6 @@ pub struct Dependency {
     /// Optional source URL
     pub source: Option<String>,
 }
-
-
 
 /// Dependency section with kam and dev groups
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -98,17 +93,29 @@ impl DependencySection {
     }
 
     /// Recursively resolve a dependency group, handling includes
-    fn resolve_group(&self, group_name: &str, resolved_groups: &mut BTreeMap<String, FlatDependencyGroup>, visited: &mut HashSet<String>) -> crate::errors::Result<()> {
-
+    fn resolve_group(
+        &self,
+        group_name: &str,
+        resolved_groups: &mut BTreeMap<String, FlatDependencyGroup>,
+        visited: &mut HashSet<String>,
+    ) -> crate::errors::Result<()> {
         if !visited.insert(group_name.to_string()) {
-            return Err(KamError::DependencyResolutionFailed(format!("Circular dependency detected involving group '{}'", group_name)));
+            return Err(KamError::DependencyResolutionFailed(format!(
+                "Circular dependency detected involving group '{}'",
+                group_name
+            )));
         }
 
         let empty = Vec::new();
         let deps = match group_name {
             "kam" => self.kam.as_ref().unwrap_or(&empty),
             "dev" => self.dev.as_ref().unwrap_or(&empty),
-            _ => return Err(KamError::DependencyResolutionFailed(format!("Unknown dependency group '{}'", group_name))),
+            _ => {
+                return Err(KamError::DependencyResolutionFailed(format!(
+                    "Unknown dependency group '{}'",
+                    group_name
+                )));
+            }
         };
 
         let mut flattened = Vec::new();
@@ -126,7 +133,12 @@ impl DependencySection {
             }
         }
 
-        resolved_groups.insert(group_name.to_string(), FlatDependencyGroup { dependencies: flattened });
+        resolved_groups.insert(
+            group_name.to_string(),
+            FlatDependencyGroup {
+                dependencies: flattened,
+            },
+        );
 
         visited.remove(group_name);
 
@@ -141,20 +153,16 @@ mod tests {
     #[test]
     fn test_resolve_simple() {
         let dep_section = DependencySection {
-            kam: Some(vec![
-                Dependency {
-                    id: "lib1".to_string(),
-                    versionCode: Some(VersionSpec::Exact(100i64)),
-                    source: None,
-                },
-            ]),
-            dev: Some(vec![
-                Dependency {
-                    id: "lib2".to_string(),
-                    versionCode: Some(VersionSpec::Exact(200i64)),
-                    source: None,
-                },
-            ]),
+            kam: Some(vec![Dependency {
+                id: "lib1".to_string(),
+                versionCode: Some(VersionSpec::Exact(100i64)),
+                source: None,
+            }]),
+            dev: Some(vec![Dependency {
+                id: "lib2".to_string(),
+                versionCode: Some(VersionSpec::Exact(200i64)),
+                source: None,
+            }]),
         };
 
         let result = dep_section.resolve().unwrap();
@@ -179,13 +187,11 @@ mod tests {
                     source: None,
                 },
             ]),
-            dev: Some(vec![
-                Dependency {
-                    id: "lib2".to_string(),
-                    versionCode: Some(VersionSpec::Exact(200)),
-                    source: None,
-                },
-            ]),
+            dev: Some(vec![Dependency {
+                id: "lib2".to_string(),
+                versionCode: Some(VersionSpec::Exact(200)),
+                source: None,
+            }]),
         };
 
         let result = dep_section.resolve().unwrap();
@@ -199,42 +205,46 @@ mod tests {
     #[test]
     fn test_resolve_circular_dependency() {
         let dep_section = DependencySection {
-            kam: Some(vec![
-                Dependency {
-                    id: "include:dev".to_string(),
-                    versionCode: None,
-                    source: None,
-                },
-            ]),
-            dev: Some(vec![
-                Dependency {
-                    id: "include:kam".to_string(),
-                    versionCode: None,
-                    source: None,
-                },
-            ]),
+            kam: Some(vec![Dependency {
+                id: "include:dev".to_string(),
+                versionCode: None,
+                source: None,
+            }]),
+            dev: Some(vec![Dependency {
+                id: "include:kam".to_string(),
+                versionCode: None,
+                source: None,
+            }]),
         };
 
         let result = dep_section.resolve();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Circular dependency"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Circular dependency")
+        );
     }
 
     #[test]
     fn test_resolve_unknown_group() {
         let dep_section = DependencySection {
-            kam: Some(vec![
-                Dependency {
-                    id: "include:unknown".to_string(),
-                    versionCode: None,
-                    source: None,
-                },
-            ]),
+            kam: Some(vec![Dependency {
+                id: "include:unknown".to_string(),
+                versionCode: None,
+                source: None,
+            }]),
             dev: None,
         };
 
         let result = dep_section.resolve();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown dependency group"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unknown dependency group")
+        );
     }
 }

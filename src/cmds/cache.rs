@@ -1,3 +1,5 @@
+use crate::cache::KamCache;
+use crate::errors::KamError;
 /// # Kam Cache Command
 ///
 /// Manage the global Kam cache.
@@ -8,11 +10,8 @@
 /// - `clear` - Clear all cache
 /// - `clear-dir <dir>` - Clear specific directory (bin, lib, log, profile)
 /// - `path` - Show cache root path
-
 use clap::{Args, Subcommand};
 use colored::Colorize;
-use crate::cache::KamCache;
-use crate::errors::KamError;
 
 /// Arguments for the cache command
 #[derive(Args, Debug)]
@@ -81,7 +80,11 @@ fn show_info() -> Result<(), KamError> {
     println!("  {}: {}", "bin".yellow(), cache.bin_dir().display());
     println!("  {}: {}", "lib".yellow(), cache.lib_dir().display());
     println!("  {}: {}", "log".yellow(), cache.log_dir().display());
-    println!("  {}: {}", "profile".yellow(), cache.profile_dir().display());
+    println!(
+        "  {}: {}",
+        "profile".yellow(),
+        cache.profile_dir().display()
+    );
     println!("  {}: {}", "tmpl".yellow(), cache.tmpl_dir().display());
     println!();
 
@@ -89,7 +92,11 @@ fn show_info() -> Result<(), KamError> {
     let stats = cache.stats()?;
     println!("{}", "Statistics:".bold());
     println!("  {}: {}", "Total Size".bold(), stats.format_size().green());
-    println!("  {}: {}", "File Count".bold(), format!("{}", stats.file_count).green());
+    println!(
+        "  {}: {}",
+        "File Count".bold(),
+        format!("{}", stats.file_count).green()
+    );
 
     Ok(())
 }
@@ -99,7 +106,10 @@ fn clear_cache(skip_confirm: bool) -> Result<(), KamError> {
     let cache = KamCache::new()?;
 
     if !skip_confirm {
-        println!("{}", "Warning: This will delete all cached data!".yellow().bold());
+        println!(
+            "{}",
+            "Warning: This will delete all cached data!".yellow().bold()
+        );
         println!("Cache location: {}", cache.root().display());
         print!("Are you sure? (y/N): ");
 
@@ -136,7 +146,15 @@ fn clear_dir(dir: &str, skip_confirm: bool) -> Result<(), KamError> {
     let cache = KamCache::new()?;
 
     if !skip_confirm {
-        println!("{}", format!("Warning: This will delete all data in the '{}' directory!", dir).yellow().bold());
+        println!(
+            "{}",
+            format!(
+                "Warning: This will delete all data in the '{}' directory!",
+                dir
+            )
+            .yellow()
+            .bold()
+        );
         print!("Are you sure? (y/N): ");
 
         use std::io::{self, Write};
@@ -152,7 +170,12 @@ fn clear_dir(dir: &str, skip_confirm: bool) -> Result<(), KamError> {
     }
 
     cache.clear_dir(dir)?;
-    println!("{}", format!("✓ Directory '{}' cleared successfully", dir).green().bold());
+    println!(
+        "{}",
+        format!("✓ Directory '{}' cleared successfully", dir)
+            .green()
+            .bold()
+    );
 
     Ok(())
 }

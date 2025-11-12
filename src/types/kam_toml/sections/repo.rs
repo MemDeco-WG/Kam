@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use super::{NoteSection, ManagerSection, OptionsSection};
+use super::{ManagerSection, NoteSection, OptionsSection};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]

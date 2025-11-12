@@ -5,5 +5,7 @@ pub struct RepoModule {
 }
 
 impl RepoModule {
-    pub fn from_module(m: KamModule) -> Self { Self { inner: m } }
+    pub fn from_module(m: KamModule) -> Self {
+        Self { inner: m }
+    }
 }

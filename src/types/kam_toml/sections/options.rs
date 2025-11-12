@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -10,11 +10,11 @@ pub struct ArchiveOptions {
 
 impl Default for ArchiveOptions {
     fn default() -> Self {
-        ArchiveOptions { compression: Some(String::new()) }
+        ArchiveOptions {
+            compression: Some(String::new()),
+        }
     }
 }
-
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
@@ -26,6 +26,8 @@ pub struct OptionsSection {
 
 impl Default for OptionsSection {
     fn default() -> Self {
-        OptionsSection { archive: Some(ArchiveOptions::default()) }
+        OptionsSection {
+            archive: Some(ArchiveOptions::default()),
+        }
     }
 }

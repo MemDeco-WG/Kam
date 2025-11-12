@@ -5,5 +5,7 @@ pub struct LibraryModule {
 }
 
 impl LibraryModule {
-    pub fn from_module(m: KamModule) -> Self { Self { inner: m } }
+    pub fn from_module(m: KamModule) -> Self {
+        Self { inner: m }
+    }
 }

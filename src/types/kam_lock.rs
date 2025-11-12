@@ -43,7 +43,10 @@ pub struct KamLock {
 
 impl KamLock {
     pub fn new(version: u32) -> Self {
-        KamLock { version, packages: Vec::new() }
+        KamLock {
+            version,
+            packages: Vec::new(),
+        }
     }
 
     /// Load a `KamLock` from a path containing TOML content.

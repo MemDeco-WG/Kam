@@ -1,17 +1,16 @@
 use std::path::{Path, PathBuf};
 // use git2 for repository operations instead of shelling out to `git`
-use git2::{Cred, RemoteCallbacks, FetchOptions, build::RepoBuilder, CredentialType};
-use tempfile::tempdir;
+use git2::{Cred, CredentialType, FetchOptions, RemoteCallbacks, build::RepoBuilder};
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self};
-use std::collections::HashMap;
+use tempfile::tempdir;
 
-use crate::errors::{KamError, Result};
 use crate::cache::KamCache;
-use crate::types::source::Source;
+use crate::errors::{KamError, Result};
 pub use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::sections::VariableDefinition;
-
+use crate::types::source::Source;
 
 pub const DEFAULT_DEPENDENCY_SOURCE: &str = "https://github.com/MemDeco-WG/Kam-Index";
 
@@ -62,7 +61,8 @@ impl KamModule {
 
     /// Parse a source spec string and attach it to the KamModule constructed from KamToml.
     pub fn from_spec_and_toml(spec: &str, toml: KamToml) -> Result<Self> {
-        let src = Source::parse(spec).map_err(|e| KamError::ParseSourceFailed(format!("parse source spec: {}", e)))?;
+        let src = Source::parse(spec)
+            .map_err(|e| KamError::ParseSourceFailed(format!("parse source spec: {}", e)))?;
         Ok(Self::new(toml, Some(src)))
     }
 
@@ -83,7 +83,11 @@ impl KamModule {
     pub fn fetch_to_temp(&self) -> Result<PathBuf> {
         let src = match &self.source {
             Some(s) => s.clone(),
-            None => return Err(KamError::ParseSourceFailed("no source specified for module".to_string())),
+            None => {
+                return Err(KamError::ParseSourceFailed(
+                    "no source specified for module".to_string(),
+                ));
+            }
         };
 
         match src {
@@ -105,33 +109,41 @@ impl KamModule {
             }
             Source::Url { url } => {
                 let tmp = tempdir()?;
-                let resp = reqwest::blocking::get(&url).map_err(|e| KamError::FetchFailed(format!("failed to download {}: {}", url, e)))?;
+                let resp = reqwest::blocking::get(&url).map_err(|e| {
+                    KamError::FetchFailed(format!("failed to download {}: {}", url, e))
+                })?;
                 if !resp.status().is_success() {
-                    return Err(KamError::FetchFailed(format!("download failed: {} -> {}", url, resp.status())));
+                    return Err(KamError::FetchFailed(format!(
+                        "download failed: {} -> {}",
+                        url,
+                        resp.status()
+                    )));
                 }
 
                 let mut data = Vec::new();
                 let mut reader = resp;
-                reader.copy_to(&mut data).map_err(|e| KamError::FetchFailed(format!("read download body: {}", e)))?;
+                reader
+                    .copy_to(&mut data)
+                    .map_err(|e| KamError::FetchFailed(format!("read download body: {}", e)))?;
 
-                    if url.ends_with(".tar.gz") || url.ends_with(".tgz") {
-                        let file = tmp.path().join("download.tar.gz");
-                        fs::write(&file, &data)?;
-                        extract_tar_gz(&file, tmp.path())?;
-                        let kept = tmp.keep();
-                        return Ok(kept);
-                    } else if url.ends_with(".zip") {
-                        let file = tmp.path().join("download.zip");
-                        fs::write(&file, &data)?;
-                        extract_zip(&file, tmp.path())?;
-                        let kept = tmp.keep();
-                        return Ok(kept);
-                    } else {
-                        let file = tmp.path().join("download.bin");
-                        fs::write(&file, &data)?;
-                        let kept = tmp.keep();
-                        return Ok(kept);
-                    }
+                if url.ends_with(".tar.gz") || url.ends_with(".tgz") {
+                    let file = tmp.path().join("download.tar.gz");
+                    fs::write(&file, &data)?;
+                    extract_tar_gz(&file, tmp.path())?;
+                    let kept = tmp.keep();
+                    return Ok(kept);
+                } else if url.ends_with(".zip") {
+                    let file = tmp.path().join("download.zip");
+                    fs::write(&file, &data)?;
+                    extract_zip(&file, tmp.path())?;
+                    let kept = tmp.keep();
+                    return Ok(kept);
+                } else {
+                    let file = tmp.path().join("download.bin");
+                    fs::write(&file, &data)?;
+                    let kept = tmp.keep();
+                    return Ok(kept);
+                }
             }
             Source::Git { url, rev } => {
                 let tmp = tempdir()?;
@@ -177,7 +189,10 @@ impl KamModule {
                             // Some providers accept username 'x-access-token' or 'git'
                             return Cred::userpass_plaintext("x-access-token", &token);
                         }
-                        if let (Ok(user), Ok(pass)) = (std::env::var("KAM_GIT_USERNAME"), std::env::var("KAM_GIT_PASSWORD")) {
+                        if let (Ok(user), Ok(pass)) = (
+                            std::env::var("KAM_GIT_USERNAME"),
+                            std::env::var("KAM_GIT_PASSWORD"),
+                        ) {
                             return Cred::userpass_plaintext(&user, &pass);
                         }
                     }
@@ -198,12 +213,18 @@ impl KamModule {
                 let mut builder = RepoBuilder::new();
                 builder.fetch_options(fo);
 
-                let repo = builder.clone(&url, tmp.path()).map_err(|e| KamError::FetchFailed(format!("git clone {}: {}", url, e)))?;
+                let repo = builder
+                    .clone(&url, tmp.path())
+                    .map_err(|e| KamError::FetchFailed(format!("git clone {}: {}", url, e)))?;
 
                 if let Some(r) = rev {
-                    let obj = repo.revparse_single(&r).map_err(|e| KamError::FetchFailed(format!("resolve rev {}: {}", r, e)))?;
-                    repo.checkout_tree(&obj, None).map_err(|e| KamError::FetchFailed(format!("checkout tree: {}", e)))?;
-                    repo.set_head_detached(obj.id()).map_err(|e| KamError::FetchFailed(format!("set HEAD: {}", e)))?;
+                    let obj = repo
+                        .revparse_single(&r)
+                        .map_err(|e| KamError::FetchFailed(format!("resolve rev {}: {}", r, e)))?;
+                    repo.checkout_tree(&obj, None)
+                        .map_err(|e| KamError::FetchFailed(format!("checkout tree: {}", e)))?;
+                    repo.set_head_detached(obj.id())
+                        .map_err(|e| KamError::FetchFailed(format!("set HEAD: {}", e)))?;
                 }
 
                 let kept = tmp.keep();
@@ -225,7 +246,11 @@ impl KamModule {
                 Some(Source::Git { url, .. }) => sanitize_name(url),
                 Some(Source::Url { url }) => sanitize_name(url),
                 Some(Source::Local { path }) => sanitize_name(&path.to_string_lossy()),
-                    None => return Err(KamError::ParseSourceFailed("no source available to derive name".to_string())),
+                None => {
+                    return Err(KamError::ParseSourceFailed(
+                        "no source available to derive name".to_string(),
+                    ));
+                }
             }
         };
 
@@ -275,9 +300,15 @@ impl KamModule {
 // Implement the ModuleBackend trait for KamModule so callers can use the
 // abstraction explicitly.
 impl ModuleBackend for KamModule {
-    fn canonical_cache_name(&self) -> Option<String> { self.canonical_cache_name() }
-    fn fetch_to_temp(&self) -> Result<PathBuf> { self.fetch_to_temp() }
-    fn install_into_cache(&self, cache: &KamCache) -> Result<PathBuf> { self.install_into_cache(cache) }
+    fn canonical_cache_name(&self) -> Option<String> {
+        self.canonical_cache_name()
+    }
+    fn fetch_to_temp(&self) -> Result<PathBuf> {
+        self.fetch_to_temp()
+    }
+    fn install_into_cache(&self, cache: &KamCache) -> Result<PathBuf> {
+        self.install_into_cache(cache)
+    }
 }
 
 fn sanitize_name(s: &str) -> String {
@@ -349,7 +380,10 @@ fn extract_archive(path: &Path, dst: &Path) -> Result<()> {
     } else if s.ends_with(".tar.gz") || s.ends_with(".tgz") {
         extract_tar_gz(path, dst)?;
     } else {
-        return Err(KamError::UnsupportedArchive(format!("unsupported archive format: {}", path.display())));
+        return Err(KamError::UnsupportedArchive(format!(
+            "unsupported archive format: {}",
+            path.display()
+        )));
     }
     Ok(())
 }
@@ -361,7 +395,10 @@ pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>> {
         if let Some((key, value)) = var.split_once('=') {
             template_vars.insert(key.to_string(), value.to_string());
         } else {
-            return Err(KamError::InvalidVarFormat(format!("Invalid template variable format: {}", var)));
+            return Err(KamError::InvalidVarFormat(format!(
+                "Invalid template variable format: {}",
+                var
+            )));
         }
     }
     Ok(template_vars)
@@ -378,19 +415,29 @@ pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, Varia
             let var_type = parts_iter.next().unwrap_or("").to_string();
             let required = parts_iter.next().unwrap_or("") == "true";
             let default_part = parts_iter.next().unwrap_or("");
-            let default = if default_part.is_empty() { None } else { Some(default_part.to_string()) };
+            let default = if default_part.is_empty() {
+                None
+            } else {
+                Some(default_part.to_string())
+            };
             let note = parts_iter.next().map(|s| s.to_string());
-            variables.insert(key.to_string(), VariableDefinition {
-                var_type,
-                required,
-                default,
-                note,
-                help: None,
-                example: None,
-                choices: None,
-            });
+            variables.insert(
+                key.to_string(),
+                VariableDefinition {
+                    var_type,
+                    required,
+                    default,
+                    note,
+                    help: None,
+                    example: None,
+                    choices: None,
+                },
+            );
         } else {
-            return Err(KamError::InvalidVarFormat(format!("Invalid template variable format: {}. Expected key=type:required:default", var)));
+            return Err(KamError::InvalidVarFormat(format!(
+                "Invalid template variable format: {}. Expected key=type:required:default",
+                var
+            )));
         }
     }
     Ok(variables)

@@ -1,14 +1,14 @@
-use std::collections::{BTreeMap, HashMap};
-use std::path::{Path, PathBuf};
-use crate::types::kam_toml::sections::TmplSection;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
+use crate::types::kam_toml::sections::TmplSection;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 
 use crate::errors::KamError;
+use flate2;
+use tar;
 use tempfile::TempDir;
 use zip;
-use tar;
-use flate2;
 
 // Helper to extract a zip or tar.gz file into a TempDir and return the template folder path
 pub fn extract_archive_to_temp(archive_path: &Path) -> Result<(TempDir, PathBuf), KamError> {
@@ -55,10 +55,14 @@ pub fn init_template(
     }
 
     // Build runtime values map and seed it with core project parameters first.
-    let mut runtime_values: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut runtime_values: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     runtime_values.insert("id".to_string(), id.to_string());
     // name in name_map may be localized; prefer provided name arg if present
-    runtime_values.insert("name".to_string(), name_map.get("en").cloned().unwrap_or_default());
+    runtime_values.insert(
+        "name".to_string(),
+        name_map.get("en").cloned().unwrap_or_default(),
+    );
     runtime_values.insert("version".to_string(), version.to_string());
     runtime_values.insert("author".to_string(), author.to_string());
 
@@ -73,28 +77,43 @@ pub fn init_template(
             // note when available to guide the user how to supply the missing value.
             if std::env::var("KAM_NONINTERACTIVE").is_ok() {
                 if let Some(n) = &def.note {
-                    return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided (non-interactive): {}", k, n)));
+                    return Err(KamError::TemplateVarRequired(format!(
+                        "Required template variable '{}' not provided (non-interactive): {}",
+                        k, n
+                    )));
                 }
-                return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided (non-interactive)", k)));
+                return Err(KamError::TemplateVarRequired(format!(
+                    "Required template variable '{}' not provided (non-interactive)",
+                    k
+                )));
             }
 
             // Prompt user for required value. If the template provides a human-friendly
             // note, show it as the prompt; otherwise fall back to a generic prompt.
-            use std::io::{stdin, stdout, Write};
+            use std::io::{Write, stdin, stdout};
             let mut input = String::new();
             if let Some(n) = &def.note {
                 print!("{} ", n);
             } else {
-                print!("Enter value for required template variable '{}' (type: {}): ", k, def.var_type);
+                print!(
+                    "Enter value for required template variable '{}' (type: {}): ",
+                    k, def.var_type
+                );
             }
             let _ = stdout().flush();
             stdin().read_line(&mut input)?;
             let val = input.trim().to_string();
             if val.is_empty() {
                 if let Some(n) = &def.note {
-                    return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided: {}", k, n)));
+                    return Err(KamError::TemplateVarRequired(format!(
+                        "Required template variable '{}' not provided: {}",
+                        k, n
+                    )));
                 }
-                return Err(KamError::TemplateVarRequired(format!("Required template variable '{}' not provided", k)));
+                return Err(KamError::TemplateVarRequired(format!(
+                    "Required template variable '{}' not provided",
+                    k
+                )));
             }
             runtime_values.insert(k.to_string(), val);
         }
@@ -113,9 +132,17 @@ pub fn init_template(
     );
     kt.kam.module_type = ModuleType::Template;
     let variables_btree: BTreeMap<_, _> = variables.into_iter().collect();
-    kt.kam.tmpl = Some(TmplSection { used_template: impl_template.clone(), variables: variables_btree });
+    kt.kam.tmpl = Some(TmplSection {
+        used_template: impl_template.clone(),
+        variables: variables_btree,
+    });
     let kam_toml_rel = "kam.toml".to_string();
-    crate::utils::Utils::print_status(&path.join("kam.toml"), &kam_toml_rel, crate::utils::PrintOp::Create { is_dir: false }, force);
+    crate::utils::Utils::print_status(
+        &path.join("kam.toml"),
+        &kam_toml_rel,
+        crate::utils::PrintOp::Create { is_dir: false },
+        force,
+    );
     kt.write_to_dir(path)?;
 
     // Determine which template to use
@@ -127,9 +154,6 @@ pub fn init_template(
         // Normalize template_key into an asset/base name we use, e.g.
         // input: "tmpl" | "template" | "tmpl_template" -> base "tmpl_template"
 
-
-
-
         // If template_key is a URL, try downloading
         if template_key.starts_with("http://") || template_key.starts_with("https://") {
             let resp = reqwest::blocking::get(template_key)?;
@@ -140,11 +164,16 @@ pub fn init_template(
                 let (temp_dir, template_path) = extract_archive_to_temp(tmp.path())?;
                 return Ok((temp_dir, template_path));
             } else {
-                return Err(KamError::FetchFailed("Failed to download template".to_string()));
+                return Err(KamError::FetchFailed(
+                    "Failed to download template".to_string(),
+                ));
             }
         }
 
-        Err(KamError::TemplateNotFound(format!("Template '{}' not found in built-ins or URL", template_key)))
+        Err(KamError::TemplateNotFound(format!(
+            "Template '{}' not found in built-ins or URL",
+            template_key
+        )))
     }
 
     let (_temp_dir, template_path) = prepare_template(template_key)?;
@@ -155,7 +184,12 @@ pub fn init_template(
     let src_temp = template_path.join("src");
     if src_temp.exists() {
         let dst_root = path.join("src").join(id);
-        crate::utils::Utils::print_status(&dst_root, &format!("src/{}/", id), crate::utils::PrintOp::Create { is_dir: true }, force);
+        crate::utils::Utils::print_status(
+            &dst_root,
+            &format!("src/{}/", id),
+            crate::utils::PrintOp::Create { is_dir: true },
+            force,
+        );
         std::fs::create_dir_all(&dst_root)?;
 
         // Recursive copy that replaces variables in path segments and file contents.
@@ -168,7 +202,10 @@ pub fn init_template(
         ) -> Result<(), KamError> {
             for entry in std::fs::read_dir(src)? {
                 let entry = entry?;
-                let file_name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into());
+                let file_name = entry
+                    .file_name()
+                    .into_string()
+                    .unwrap_or_else(|s| s.to_string_lossy().into());
                 // Replace placeholders in file or directory name
                 let mut replaced_name = file_name;
                 for (k, v) in runtime_values.iter() {
@@ -181,9 +218,20 @@ pub fn init_template(
                 let dst_path = dst_base.join(&rel_path);
 
                 if entry.file_type()?.is_dir() {
-                    crate::utils::Utils::print_status(&dst_path, &rel_path.to_string_lossy(), crate::utils::PrintOp::Create { is_dir: true }, force);
+                    crate::utils::Utils::print_status(
+                        &dst_path,
+                        &rel_path.to_string_lossy(),
+                        crate::utils::PrintOp::Create { is_dir: true },
+                        force,
+                    );
                     std::fs::create_dir_all(&dst_path)?;
-                    copy_replace_recursive(&entry.path(), dst_base, &rel_path, runtime_values, force)?;
+                    copy_replace_recursive(
+                        &entry.path(),
+                        dst_base,
+                        &rel_path,
+                        runtime_values,
+                        force,
+                    )?;
                 } else {
                     // File: read, replace content, write
                     let content = std::fs::read_to_string(entry.path())?;
@@ -193,7 +241,12 @@ pub fn init_template(
                             new_content = new_content.replace(&format!("{{{{{}}}}}", k), v);
                         }
                     }
-                    crate::utils::Utils::print_status(&dst_path, &rel_path.to_string_lossy(), crate::utils::PrintOp::Create { is_dir: false }, force);
+                    crate::utils::Utils::print_status(
+                        &dst_path,
+                        &rel_path.to_string_lossy(),
+                        crate::utils::PrintOp::Create { is_dir: false },
+                        force,
+                    );
                     // Ensure parent dir exists
                     if let Some(p) = dst_path.parent() {
                         std::fs::create_dir_all(p)?;
@@ -204,7 +257,13 @@ pub fn init_template(
             Ok(())
         }
 
-        copy_replace_recursive(&src_temp, &path.join("src"), std::path::Path::new(id), &runtime_values, force)?;
+        copy_replace_recursive(
+            &src_temp,
+            &path.join("src"),
+            std::path::Path::new(id),
+            &runtime_values,
+            force,
+        )?;
     }
 
     // Special-case: if the template contains a top-level `.kam_venv` folder,
@@ -213,7 +272,12 @@ pub fn init_template(
     let venv_temp = template_path.join(".kam_venv");
     if venv_temp.exists() {
         let dst = path.join(".kam_venv");
-        crate::utils::Utils::print_status(&dst, &".kam_venv/".to_string(), crate::utils::PrintOp::Create { is_dir: true }, force);
+        crate::utils::Utils::print_status(
+            &dst,
+            &".kam_venv/".to_string(),
+            crate::utils::PrintOp::Create { is_dir: true },
+            force,
+        );
         std::fs::create_dir_all(&dst)?;
         // Reuse copy_replace_recursive to copy with replacements inside .kam-venv too
         // Build a small runtime map for names relative to project root: use same runtime_values
@@ -224,7 +288,10 @@ pub fn init_template(
         ) -> Result<(), KamError> {
             for entry in std::fs::read_dir(src)? {
                 let entry = entry?;
-                let file_name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into());
+                let file_name = entry
+                    .file_name()
+                    .into_string()
+                    .unwrap_or_else(|s| s.to_string_lossy().into());
                 let mut replaced_name = file_name;
                 for (k, v) in runtime_values.iter() {
                     if !v.is_empty() {

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use crate::errors::Result;
+use std::path::PathBuf;
 
 /// Flexible source specification for a Kam module.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,14 +29,22 @@ impl Source {
             if let Some(idx) = rest.rfind('@') {
                 let (url_part, rev_part) = rest.split_at(idx);
                 let rev = rev_part.trim_start_matches('@').to_string();
-                return Ok(Source::Git { url: url_part.to_string(), rev: Some(rev) });
+                return Ok(Source::Git {
+                    url: url_part.to_string(),
+                    rev: Some(rev),
+                });
             }
-            return Ok(Source::Git { url: rest.to_string(), rev: None });
+            return Ok(Source::Git {
+                url: rest.to_string(),
+                rev: None,
+            });
         }
 
         // file:// local path
         if let Some(rest) = s.strip_prefix("file://") {
-            return Ok(Source::Local { path: PathBuf::from(rest) });
+            return Ok(Source::Local {
+                path: PathBuf::from(rest),
+            });
         }
 
         // http(s) URL
@@ -57,7 +65,10 @@ impl Source {
 
         // Fallback: treat as a Git URL if it ends with .git or contains ':' (scp-like)
         if s.ends_with(".git") || s.contains(':') {
-            return Ok(Source::Git { url: s.to_string(), rev: None });
+            return Ok(Source::Git {
+                url: s.to_string(),
+                rev: None,
+            });
         }
 
         // As last resort, treat as local path (may not exist yet)

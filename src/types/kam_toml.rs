@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
-use serde::{Serialize, Deserialize};
-use toml;
 use chrono;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use toml;
 
 pub mod sections;
 use sections::*;
@@ -9,6 +9,15 @@ use sections::*;
 use crate::types::modules::DEFAULT_DEPENDENCY_SOURCE;
 
 pub mod enums;
+
+/// Workspace section for Kam workspace management, similar to Cargo workspaces
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct WorkspaceSection {
+    /// List of workspace members (paths relative to the workspace root)
+    pub members: Option<Vec<String>>,
+    /// List of paths to exclude from the workspace
+    pub exclude: Option<Vec<String>>,
+}
 
 /// KamToml: A superset of module.prop, update.json, and other metadata,
 /// inspired by pyproject.toml format with hierarchical sections.
@@ -18,6 +27,7 @@ pub struct KamToml {
     pub prop: PropSection,
     pub mmrl: Option<MmrlSection>,
     pub kam: KamSection,
+
     pub tool: Option<ToolSection>,
     pub tmpl: Option<TmplSection>,
     pub lib: Option<LibSection>,
@@ -34,7 +44,6 @@ impl Default for KamToml {
         default
     }
 }
-
 
 impl KamToml {
     /// Construct a KamToml starting from a PropSection (useful for default
@@ -131,13 +140,17 @@ impl KamToml {
 
     /// Get effective source URL for dependencies
     pub fn get_effective_source(dep: &Dependency) -> String {
-        dep.source.clone().unwrap_or_else(|| DEFAULT_DEPENDENCY_SOURCE.to_string())
+        dep.source
+            .clone()
+            .unwrap_or_else(|| DEFAULT_DEPENDENCY_SOURCE.to_string())
     }
 
     /// Resolve dependencies into flattened groups
     pub fn resolve_dependencies(&self) -> crate::errors::Result<sections::FlatDependencyGroups> {
-        self.kam.dependency.as_ref().unwrap_or(&DependencySection::default()).resolve()
+        self.kam
+            .dependency
+            .as_ref()
+            .unwrap_or(&DependencySection::default())
+            .resolve()
     }
-
-
 }

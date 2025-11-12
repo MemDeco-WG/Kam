@@ -1,74 +1,15 @@
-use clap::Args;
 use std::collections::HashMap;
 use std::path::Path;
 
 use crate::errors::KamError;
 
-mod kam;
-mod tmpl_mod;
-mod repo;
-mod impl_mod;
-mod post_init;
-
-/// Arguments for the init command
-#[derive(Args, Debug)]
-pub struct InitArgs {
-    /// Path to initialize the project (default: current directory)
-    #[arg(default_value = ".")]
-    pub path: String,
-
-    /// Project ID (default: folder name)
-    #[arg(long)]
-    pub id: Option<String>,
-
-    /// Project name (default: "My Module")
-    #[arg(long)]
-    pub name: Option<String>,
-
-    /// Project version (default: "1.0.0")
-    #[arg(long)]
-    pub version: Option<String>,
-
-    /// Author name (default: "Author")
-    #[arg(long)]
-    pub author: Option<String>,
-
-    /// Description (default: "A module description")
-    #[arg(long)]
-    pub description: Option<String>,
-
-    /// Force overwrite existing files
-    #[arg(short, long)]
-    pub force: bool,
-
-    /// Template source to implement (local path, URL, or git repo)
-    #[arg(long)]
-    pub r#impl: Option<String>,
-
-    /// Create META-INF folder for traditional Magisk modules
-    #[arg(long)]
-    pub meta_inf: bool,
-
-    /// Create WEB-ROOT folder for web interface
-    #[arg(long)]
-    pub web_root: bool,
-
-    /// Template variables in key=value format
-    #[arg(long)]
-    pub var: Vec<String>,
-
-    /// Create a library module (provides dependencies)
-    #[arg(long)]
-    pub lib: bool,
-
-    /// Create a template project
-    #[arg(long)]
-    pub tmpl: bool,
-
-    /// Create a repo module repository project
-    #[arg(long)]
-    pub repo: bool,
-}
+pub mod args;
+pub mod impl_mod;
+pub mod kam;
+pub mod post_init;
+pub mod repo;
+pub mod tmpl_mod;
+pub use args::InitArgs;
 
 /// Run the init command
 pub fn run(args: InitArgs) -> Result<(), KamError> {
@@ -76,21 +17,23 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
 
     // Ensure cache is initialized early so templates and builtins are available.
     // Try automatic initialization; if it fails, print a helpful hint and continue.
-    match crate::cache::KamCache::new().and_then(|c| c.ensure_dirs()) {
-        Ok(_) => {
-            // Cache ready
-        }
-        Err(e) => {
-            println!("Note: failed to initialize Kam cache: {}", e);
-            println!("You can initialize the cache by running: 'kam cache info' or 'kam sync'.");
-            println!("Continuing init without a cache - some templates or modules may not be available.");
-        }
+    if let Err(e) = crate::cache::KamCache::new().and_then(|c| c.ensure_dirs()) {
+        println!("Note: failed to initialize Kam cache: {}", e);
+        println!("You can initialize the cache by running: 'kam cache info' or 'kam sync'.");
+        println!(
+            "Continuing init without a cache - some templates or modules may not be available."
+        );
     }
 
     // Validate conflicting flags
-    let type_flags = [args.lib, args.tmpl, args.repo].iter().filter(|&&x| x).count();
+    let type_flags = [args.lib, args.tmpl, args.repo]
+        .iter()
+        .filter(|&&x| x)
+        .count();
     if type_flags > 1 {
-        return Err(KamError::InvalidModuleType("Cannot specify multiple module types: --lib, --tmpl, --repo".to_string()));
+        return Err(KamError::InvalidModuleType(
+            "Cannot specify multiple module types: --lib, --tmpl, --repo".to_string(),
+        ));
     }
 
     // Module type determination will be handled in the main logic below
@@ -108,9 +51,14 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     let id = if let Some(id) = args.id.as_deref() {
         id.to_string()
     } else {
-        let name_from_path = path.file_name().and_then(|n| n.to_str().map(|s| s.to_string()));
+        let name_from_path = path
+            .file_name()
+            .and_then(|n| n.to_str().map(|s| s.to_string()));
         let name = name_from_path.or_else(|| {
-            std::env::current_dir().ok().and_then(|p| p.file_name().and_then(|n| n.to_str().map(|s| s.to_string())))
+            std::env::current_dir().ok().and_then(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str().map(|s| s.to_string()))
+            })
         });
         name.unwrap_or_else(|| "my_module".to_string())
     };
@@ -121,7 +69,10 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     let name = args.name.as_deref().unwrap_or("My Module");
     let version = args.version.as_deref().unwrap_or("1.0.0");
     let author = args.author.as_deref().unwrap_or("Author");
-    let description = args.description.as_deref().unwrap_or("A module description");
+    let description = args
+        .description
+        .as_deref()
+        .unwrap_or("A module description");
 
     // Create name and description maps (English only for simplicity)
     let mut name_map = HashMap::new();
@@ -132,23 +83,78 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
 
     // Handle different initialization types based on flags
     if args.repo {
-        repo::init_repo(&path, &id, name_map, &version, &author, description_map, &args.var, args.force)?;
+        repo::init_repo(
+            &path,
+            &id,
+            name_map,
+            &version,
+            &author,
+            description_map,
+            &args.var,
+            args.force,
+        )?;
     } else if args.tmpl {
-        tmpl_mod::init_template(&path, &id, name_map, &version, &author, description_map, &args.var, args.r#impl.clone(), args.force)?;
+        tmpl_mod::init_template(
+            &path,
+            &id,
+            name_map,
+            &version,
+            &author,
+            description_map,
+            &args.var,
+            args.r#impl.clone(),
+            args.force,
+        )?;
     } else if args.lib {
-        kam::init_kam(&path, &id, name_map, &version, &author, description_map, &template_vars, args.force, "library")?;
+        kam::init_kam(
+            &path,
+            &id,
+            name_map,
+            &version,
+            &author,
+            description_map,
+            &template_vars,
+            args.force,
+            "library",
+        )?;
+    } else if let Some(impl_zip) = &args.r#impl {
+        // Implement from template zip
+        impl_mod::init_impl(
+            &path,
+            &id,
+            name_map,
+            &version,
+            &author,
+            description_map,
+            impl_zip,
+            &mut template_vars,
+            args.force,
+        )?;
     } else {
-        // Default kam module or implement from template zip
-        if let Some(impl_zip) = &args.r#impl {
-            // Implement from template zip
-            impl_mod::init_impl(&path, &id, name_map, &version, &author, description_map, impl_zip, &mut template_vars, args.force)?;
-        } else {
-            // Initialize kam module (default)
-            kam::init_kam(&path, &id, name_map, &version, &author, description_map, &template_vars, args.force, "kam")?;
-        }
+        // Initialize kam module (default)
+        kam::init_kam(
+            &path,
+            &id,
+            name_map,
+            &version,
+            &author,
+            description_map,
+            &template_vars,
+            args.force,
+            "kam",
+        )?;
     }
 
-    post_init::post_process(&path, &args, &mut template_vars, &id, &name, &version, &author, &description)?;
+    post_init::post_process(
+        &path,
+        &args,
+        &mut template_vars,
+        &id,
+        &name,
+        &version,
+        &author,
+        &description,
+    )?;
 
     Ok(())
 }

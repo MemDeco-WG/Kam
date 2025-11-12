@@ -1,3 +1,6 @@
+use crate::assets::TmplAssets;
+use crate::errors::cache::CacheError;
+use std::io::Cursor;
 /// # Kam Cache System
 ///
 /// Global cache mechanism for Kam modules, inspired by uv-cache.
@@ -26,11 +29,7 @@
 /// let bin_path = cache.bin_dir();
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-
 use std::path::{Path, PathBuf};
-use crate::errors::cache::CacheError;
-use std::io::Cursor;
-use crate::assets::TmplAssets;
 
 // CacheError is defined in `src/errors/cache.rs` and re-exported here for
 // backwards compatibility as `crate::cache::CacheError`.
@@ -77,9 +76,10 @@ impl KamCache {
     pub fn with_root<P: AsRef<Path>>(root: P) -> Result<Self, CacheError> {
         let root = root.as_ref().to_path_buf();
         if !root.is_absolute() {
-            return Err(CacheError::InvalidPath(
-                format!("Cache root must be absolute: {}", root.display())
-            ));
+            return Err(CacheError::InvalidPath(format!(
+                "Cache root must be absolute: {}",
+                root.display()
+            )));
         }
         Ok(Self { root })
     }
@@ -94,7 +94,13 @@ impl KamCache {
         // If provided, use it (relative paths are resolved against CWD).
         if let Some(v) = std::env::var_os("KAM_CACHE_ROOT") {
             let p = PathBuf::from(v);
-            let abs = if p.is_absolute() { p } else { std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(p) };
+            let abs = if p.is_absolute() {
+                p
+            } else {
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(p)
+            };
             return Ok(abs);
         }
 
@@ -148,7 +154,6 @@ impl KamCache {
         self.root.join("tmpl")
     }
 
-
     /// Ensure all cache directories exist
     ///
     /// Creates the cache root and all subdirectories if they don't exist.
@@ -174,8 +179,6 @@ impl KamCache {
         self.ensure_builtin_templates()?;
         Ok(())
     }
-
-
 
     /// Ensure built-in template archives from `src/assets/tmpl` are present
     /// in the cache and extracted. Idempotent: skips archives already
@@ -309,9 +312,12 @@ impl KamCache {
             "log" => self.log_dir(),
             "profile" => self.profile_dir(),
             "tmpl" => self.tmpl_dir(),
-            _ => return Err(CacheError::InvalidPath(
-                format!("Unknown cache directory: {}", dir)
-            )),
+            _ => {
+                return Err(CacheError::InvalidPath(format!(
+                    "Unknown cache directory: {}",
+                    dir
+                )));
+            }
         };
 
         if path.exists() {
