@@ -53,7 +53,6 @@ impl KamToml {
             prop,
             mmrl: Some(MmrlSection::default()),
             kam: KamSection::default(),
-            tool: Some(ToolSection::default()),
             tmpl: Some(TmplSection::default()),
             lib: Some(LibSection::default()),
             raw: String::new(),
