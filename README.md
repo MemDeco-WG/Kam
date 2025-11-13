@@ -1,10 +1,3 @@
-\<file\_path\>
-Kam\\tmpl\\kam\_template\\README.md
-\</file\_path\>
-
-\<edit\_description\>
-更新 kam\_template 的 README.md，使其更详细和专业
-\</edit\_description\>
 
 # Kam Module Template
 
