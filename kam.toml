@@ -1,7 +1,7 @@
 [prop]
 id = "Kam"
 version = "1.0.0"
-versionCode = 1762963930730
+versionCode = 1763014706937
 author = "Author"
 updateJson = "https://example.com/update.json"
 
@@ -12,22 +12,21 @@ en = "My Module"
 en = "A module description"
 
 [mmrl.repo]
-license = "LICENSE"
+license = "MIT"
+license_file = "LICENSE"
 homepage = ""
-readme = "README.md"
-changelog = "CHANGELOG.md"
-screenshots = []
-categories = []
-keywords = []
-maintainers = []
-repository = ""
-documentation = ""
-issues = ""
-funding = ""
 support = ""
 donate = ""
 cover = ""
 icon = ""
+readme = ""
+readme_file = "README.md"
+changelog = ""
+changelog_file = "CHANGELOG.md"
+screenshots = []
+categories = []
+keywords = []
+maintainers = []
 devices = []
 arch = []
 require = []
@@ -73,7 +72,7 @@ dev = []
 
 [kam.build]
 target_dir = "dist"
-output_file = ""
+# output_file = "{{id}}-{{name}}-{{version}}-{{versionCode}}-{{author}}"
 pre_build = 'echo "pre build..."'
 post_build = 'echo "post build..."'
 
@@ -82,19 +81,22 @@ post_build = 'echo "post build..."'
 [kam.lib]
 provides = []
 
+
+[kam.workspace]
+members = [
+".",
+"tmpl/tmpl_template",
+"tmpl/repo_template",
+"tmpl/kam_template",
+"tmpl/lib_template",
+"tmpl/venv_template",
+]
+
+
+
 [tool]
 
 [tmpl.variables]
 
 [lib]
 provides = []
-
-[kam.workspace]
-members = [
-".",
-"tmpl/tmpl_template/",
-"tmpl/kam_template/",
-"tmpl/venv_template/",
-"tmpl/repo_template/"
-]
-exclude = []

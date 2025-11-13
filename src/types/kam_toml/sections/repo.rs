@@ -3,19 +3,25 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 仓库/发布信息节，包含展示与分发相关的元数据
+/// 仓库/发布信息节，包含展示与分发相关的元数据（匹配 repo.json 规范）
 pub struct RepoSection {
-    /// 许可证文件名或 SPDX 标识符（常用默认为 `LICENSE`）
+    /// SPDX 许可证标识符（例如 "MIT"），见 https://spdx.org/licenses/
     pub license: Option<String>,
+    /// 许可证文件名（相对路径），例如 `LICENSE`
+    pub license_file: Option<String>,
     /// 项目主页 URL
     pub homepage: Option<String>,
-    /// README 文件名（相对路径），例如 `README.md`
+    /// README URL（例如 GitHub README 链接）
     pub readme: Option<String>,
-    /// Changelog 文件名（相对路径），例如 `CHANGELOG.md`
+    /// README 文件名（相对路径），例如 `README.md`
+    pub readme_file: Option<String>,
+    /// Changelog URL
     pub changelog: Option<String>,
+    /// Changelog 文件名（相对路径），例如 `CHANGELOG.md`
+    pub changelog_file: Option<String>,
     /// 屏幕截图 URL 列表
     pub screenshots: Option<Vec<String>>,
-    /// 类别标签列表（可用于分类展示）
+    /// 类别标签列表
     pub categories: Option<Vec<String>>,
     /// 关键字标签列表，便于搜索或索引
     pub keywords: Option<Vec<String>>,
@@ -43,7 +49,7 @@ pub struct RepoSection {
     pub arch: Option<Vec<String>>,
     /// 运行或安装所需的其它模块/组件标识列表
     pub require: Option<Vec<String>>,
-    /// 可显示的提示/通知块（标题、消息和颜色）
+    /// 可显示的提示/通知块（标题、消息）
     pub note: Option<NoteSection>,
     /// 各种包管理器/平台的最小版本或需求配置
     pub manager: Option<ManagerSection>,
@@ -66,10 +72,13 @@ pub struct RepoSection {
 impl Default for RepoSection {
     fn default() -> Self {
         RepoSection {
-            license: Some("LICENSE".to_string()),
+            license: Some("MIT".to_string()),
+            license_file: Some("LICENSE".to_string()),
             homepage: Some(String::new()),
-            readme: Some("README.md".to_string()),
-            changelog: Some("CHANGELOG.md".to_string()),
+            readme: Some(String::new()),
+            readme_file: Some("README.md".to_string()),
+            changelog: Some(String::new()),
+            changelog_file: Some("CHANGELOG.md".to_string()),
             screenshots: Some(vec![]),
             categories: Some(vec![]),
             keywords: Some(vec![]),

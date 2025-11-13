@@ -11,21 +11,21 @@ en = "kam_template"
 en = "kam_template: the kam module template."
 
 [mmrl.repo]
-license = "LICENSE"
+license = "MIT"
+license_file = "LICENSE"
 homepage = ""
-readme = "README.md"
-screenshots = []
-categories = []
-keywords = []
-maintainers = []
-repository = ""
-documentation = ""
-issues = ""
-funding = ""
 support = ""
 donate = ""
 cover = ""
 icon = ""
+readme = ""
+readme_file = "README.md"
+changelog = ""
+changelog_file = "CHANGELOG.md"
+screenshots = []
+categories = []
+keywords = []
+maintainers = []
 devices = []
 arch = []
 require = []
@@ -63,7 +63,7 @@ min_api = 0
 max_api = 0
 supported_arch = []
 conflicts = []
-module_type = "kam"
+module_type = "template"
 
 
 [kam.dependency]
@@ -76,5 +76,11 @@ output_file = "kam_template"
 pre_build = 'echo "pre build..."'
 post_build = 'echo "post build..."'
 
-[kam.lib]
+[kam.tmpl.variables]
+
+[tool]
+
+[tmpl.variables]
+
+[lib]
 provides = []

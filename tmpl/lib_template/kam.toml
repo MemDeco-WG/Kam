@@ -1,0 +1,93 @@
+[prop]
+id = "lib_template"
+version = "1.0.0"
+versionCode = 1763018024903
+author = "Author"
+updateJson = "https://example.com/update.json"
+
+[prop.name]
+en = "My Module"
+
+[prop.description]
+en = "A module description"
+
+[mmrl.repo]
+license = "MIT"
+license_file = "LICENSE"
+homepage = ""
+support = ""
+donate = ""
+cover = ""
+icon = ""
+readme = ""
+readme_file = "README.md"
+changelog = ""
+changelog_file = "CHANGELOG.md"
+screenshots = []
+categories = []
+keywords = []
+maintainers = []
+devices = []
+arch = []
+require = []
+antifeatures = []
+max_num = 0
+min_api = 0
+max_api = 0
+verified = false
+features = []
+
+[mmrl.repo.note]
+title = ""
+message = ""
+
+[mmrl.repo.manager.magisk]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.kernelsu]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.apatch]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.options.archive]
+compression = ""
+
+[kam]
+min_api = 0
+max_api = 0
+supported_arch = []
+conflicts = []
+module_type = "template"
+
+[kam.dependency]
+kam = []
+dev = []
+
+[kam.build]
+target_dir = "../../src/assets/tmpl"
+output_file = "lib_template"
+pre_build = 'echo "pre build..."'
+post_build = 'echo "post build..."'
+extra_includes = []
+
+[kam.tmpl.variables]
+
+[kam.lib]
+provides = [
+
+
+]
+
+[tool]
+
+[tmpl.variables]
+
+[lib]
+provides = []

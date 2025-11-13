@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 #[allow(non_snake_case)]
 /// 管理器平台的配置（例如 magisk、kernelsu、apatch）
 pub struct ManagerConfig {
-    /// 最低兼容版本或约束（按字符串表达）
-    pub min: Option<String>,
+    /// 最低兼容版本（数字）
+        pub min: Option<i64>,
     /// 支持的设备列表（可用于过滤）
     pub devices: Option<Vec<String>>,
     /// 支持的架构列表

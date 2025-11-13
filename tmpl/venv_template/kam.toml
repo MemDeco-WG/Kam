@@ -11,21 +11,21 @@ en = "kam_venv"
 en = "kam_module virtual environment"
 
 [mmrl.repo]
-license = "LICENSE"
+license = "MIT"
+license_file = "LICENSE"
 homepage = ""
-readme = "README.md"
-screenshots = []
-categories = []
-keywords = []
-maintainers = []
-repository = ""
-documentation = ""
-issues = ""
-funding = ""
 support = ""
 donate = ""
 cover = ""
 icon = ""
+readme = ""
+readme_file = "README.md"
+changelog = ""
+changelog_file = "CHANGELOG.md"
+screenshots = []
+categories = []
+keywords = []
+maintainers = []
 devices = []
 arch = []
 require = []
@@ -74,6 +74,7 @@ target_dir = "../../src/assets/tmpl"
 output_file = "venv_template"
 pre_build = 'echo "venv pre build..."'
 post_build = 'echo "venv post build..."'
+extra_includes = []
 
 
 [kam.tmpl.variables]

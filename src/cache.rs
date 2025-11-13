@@ -1,6 +1,5 @@
-use crate::assets::TmplAssets;
 use crate::errors::cache::CacheError;
-use std::io::Cursor;
+
 /// # Kam Cache System
 ///
 /// Global cache mechanism for Kam modules, inspired by uv-cache.
@@ -12,7 +11,8 @@ use std::io::Cursor;
 /// ├── bin/      # Executable binary files (provided by library modules)
 /// ├── lib/      # Library modules (extracted dependencies, not compressed)
 /// ├── log/      # Log files
-/// ├── profile/  # ksu profile archives
+/// ├── profile/  # template module archives
+/// ├── repo/     # Repository index cache (synced from kam_repo_index)
 /// └── tmpl/     # built-in templates extracted from assets/tmpl
 /// ```
 ///
@@ -154,6 +154,13 @@ impl KamCache {
         self.root.join("tmpl")
     }
 
+    /// Get the repo directory (repository index cache)
+    ///
+    /// Repository index files are cached here for offline access.
+    pub fn repo_dir(&self) -> PathBuf {
+        self.root.join("repo")
+    }
+
     /// Ensure all cache directories exist
     ///
     /// Creates the cache root and all subdirectories if they don't exist.
@@ -171,53 +178,12 @@ impl KamCache {
         std::fs::create_dir_all(self.lib_dir())?;
         std::fs::create_dir_all(self.log_dir())?;
         std::fs::create_dir_all(self.profile_dir())?;
-        // Ensure builtin templates are available in the cache tmpl directory.
-        // This extracts embedded template archives (from src/assets/tmpl)
-        // into `${cache_root}/tmpl/<template_name>/...` and writes the
-        // archive as `${cache_root}/tmpl/<template_name>.tar.gz` so we don't
-        // re-extract on subsequent runs.
-        self.ensure_builtin_templates()?;
-        Ok(())
-    }
-
-    /// Ensure built-in template archives from `src/assets/tmpl` are present
-    /// in the cache and extracted. Idempotent: skips archives already
-    /// written and directories already extracted.
-    fn ensure_builtin_templates(&self) -> Result<(), CacheError> {
+        std::fs::create_dir_all(self.repo_dir())?;
         std::fs::create_dir_all(self.tmpl_dir())?;
-
-        for entry in TmplAssets::iter() {
-            let name = entry.as_ref();
-            if !name.ends_with(".tar.gz") {
-                continue;
-            }
-
-            // Use the base name without .tar.gz as the extraction folder
-            let base = match name.strip_suffix(".tar.gz") {
-                Some(b) => b,
-                None => continue,
-            };
-
-            let extract_dir = self.tmpl_dir().join(base);
-
-            // If extracted dir exist, skip
-            if extract_dir.exists() {
-                continue;
-            }
-
-            if let Some(content) = TmplAssets::get(name) {
-                // Extract archive into extract_dir directly from memory
-                let gz_decoder = flate2::read::GzDecoder::new(Cursor::new(&content.data));
-                let mut archive = tar::Archive::new(gz_decoder);
-
-                archive.unpack(&extract_dir).map_err(|e| {
-                    CacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
-            }
-        }
-
         Ok(())
     }
+
+
 
     /// Get the path to a library module in the cache
     ///
@@ -311,6 +277,7 @@ impl KamCache {
             "lib" => self.lib_dir(),
             "log" => self.log_dir(),
             "profile" => self.profile_dir(),
+            "repo" => self.repo_dir(),
             "tmpl" => self.tmpl_dir(),
             _ => {
                 return Err(CacheError::InvalidPath(format!(

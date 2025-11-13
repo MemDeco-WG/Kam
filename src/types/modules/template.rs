@@ -5,8 +5,4 @@ pub struct TemplateModule {
     pub inner: KamModule,
 }
 
-impl TemplateModule {
-    pub fn from_module(m: KamModule) -> Self {
-        Self { inner: m }
-    }
-}
+impl_from_module!(TemplateModule);

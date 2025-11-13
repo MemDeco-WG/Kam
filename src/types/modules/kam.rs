@@ -8,8 +8,4 @@ pub struct KamSpecific {
     pub inner: KamModule,
 }
 
-impl KamSpecific {
-    pub fn from_module(m: KamModule) -> Self {
-        Self { inner: m }
-    }
-}
+impl_from_module!(KamSpecific);

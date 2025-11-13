@@ -1,7 +1,6 @@
 pub mod tmpl;
 
 use rust_embed::RustEmbed;
-
 pub use tmpl::TmplAssets;
 
 #[derive(RustEmbed)]

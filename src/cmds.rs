@@ -1,5 +1,7 @@
 pub mod build;
 pub mod cache;
+pub mod check;
+pub mod dev;
 pub mod init;
 pub mod publish;
 pub mod sync;

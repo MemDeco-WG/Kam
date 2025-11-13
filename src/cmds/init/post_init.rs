@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use super::InitArgs;
+use crate::cmds::init::status::{StatusType, print_status};
 use crate::errors::KamError;
 
 pub fn post_process(
@@ -37,11 +38,10 @@ pub fn post_process(
         if !meta_inf_dir.exists() {
             std::fs::create_dir_all(&meta_inf_dir)?;
         }
-        crate::utils::Utils::print_status(
-            &meta_inf_dir,
+        print_status(
+            StatusType::Add,
             &meta_inf_rel,
-            crate::utils::PrintOp::Create { is_dir: true },
-            args.force,
+            true,
         );
     }
 
@@ -51,11 +51,10 @@ pub fn post_process(
         if !web_root_dir.exists() {
             std::fs::create_dir_all(&web_root_dir)?;
         }
-        crate::utils::Utils::print_status(
-            &web_root_dir,
+        print_status(
+            StatusType::Add,
             &web_root_rel,
-            crate::utils::PrintOp::Create { is_dir: true },
-            args.force,
+            true,
         );
     }
 

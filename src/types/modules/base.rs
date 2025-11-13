@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 // use git2 for repository operations instead of shelling out to `git`
 use git2::{Cred, CredentialType, FetchOptions, RemoteCallbacks, build::RepoBuilder};
-use std::collections::HashMap;
+
 use std::fs;
 use std::io::{self};
 use tempfile::tempdir;
@@ -9,8 +9,10 @@ use tempfile::tempdir;
 use crate::cache::KamCache;
 use crate::errors::{KamError, Result};
 pub use crate::types::kam_toml::KamToml;
-use crate::types::kam_toml::sections::VariableDefinition;
+
 use crate::types::source::Source;
+
+
 
 pub const DEFAULT_DEPENDENCY_SOURCE: &str = "https://github.com/MemDeco-WG/Kam-Index";
 
@@ -386,59 +388,4 @@ fn extract_archive(path: &Path, dst: &Path) -> Result<()> {
         )));
     }
     Ok(())
-}
-
-/// Parse template variables from CLI arguments
-pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>> {
-    let mut template_vars = HashMap::new();
-    for var in vars {
-        if let Some((key, value)) = var.split_once('=') {
-            template_vars.insert(key.to_string(), value.to_string());
-        } else {
-            return Err(KamError::InvalidVarFormat(format!(
-                "Invalid template variable format: {}",
-                var
-            )));
-        }
-    }
-    Ok(template_vars)
-}
-
-/// Parse template variable definitions from CLI arguments
-pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, VariableDefinition>> {
-    let mut variables = HashMap::new();
-    for var in vars {
-        if let Some((key, value)) = var.split_once('=') {
-            // Accept an optional fourth field as a human-friendly note/message.
-            // Format: type:required:default[:note]
-            let mut parts_iter = value.splitn(4, ':');
-            let var_type = parts_iter.next().unwrap_or("").to_string();
-            let required = parts_iter.next().unwrap_or("") == "true";
-            let default_part = parts_iter.next().unwrap_or("");
-            let default = if default_part.is_empty() {
-                None
-            } else {
-                Some(default_part.to_string())
-            };
-            let note = parts_iter.next().map(|s| s.to_string());
-            variables.insert(
-                key.to_string(),
-                VariableDefinition {
-                    var_type,
-                    required,
-                    default,
-                    note,
-                    help: None,
-                    example: None,
-                    choices: None,
-                },
-            );
-        } else {
-            return Err(KamError::InvalidVarFormat(format!(
-                "Invalid template variable format: {}. Expected key=type:required:default",
-                var
-            )));
-        }
-    }
-    Ok(variables)
 }

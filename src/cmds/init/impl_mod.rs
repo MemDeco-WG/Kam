@@ -1,3 +1,4 @@
+use crate::cmds::init::status::{StatusType, print_status};
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::sections::TmplSection;
@@ -14,7 +15,6 @@ pub fn init_impl(
     description_map: HashMap<String, String>,
     impl_source: &str,
     template_vars: &mut HashMap<String, String>,
-    force: bool,
 ) -> Result<(), KamError> {
     // Parse the template source specification
     let source = crate::types::source::Source::parse(impl_source).map_err(|e| {
@@ -90,13 +90,11 @@ pub fn init_impl(
     let name_map_btree: BTreeMap<_, _> = name_map.into_iter().collect();
     let description_map_btree: BTreeMap<_, _> = description_map.into_iter().collect();
 
-    let kam_toml_path = path.join("kam.toml");
     let kam_toml_rel = "kam.toml".to_string();
-    crate::utils::Utils::print_status(
-        &kam_toml_path,
+    print_status(
+        StatusType::Add,
         &kam_toml_rel,
-        crate::utils::PrintOp::Create { is_dir: false },
-        force,
+        false,
     );
 
     let mut kt = KamToml::new_with_current_timestamp(
@@ -154,11 +152,10 @@ pub fn init_impl(
         if src_temp.exists() {
             let src_dir = path.join("src").join(id);
             let src_rel = format!("src/{}/", id);
-            crate::utils::Utils::print_status(
-                &src_dir,
+            print_status(
+                StatusType::Add,
                 &src_rel,
-                crate::utils::PrintOp::Create { is_dir: true },
-                force,
+                true,
             );
             std::fs::create_dir_all(&src_dir)?;
             for entry in std::fs::read_dir(&src_temp)? {
@@ -175,11 +172,10 @@ pub fn init_impl(
                 }
                 let dest_file = src_dir.join(&replaced_name);
                 let file_rel = format!("src/{}/{}", id, replaced_name);
-                crate::utils::Utils::print_status(
-                    &dest_file,
+                print_status(
+                    StatusType::Add,
                     &file_rel,
-                    crate::utils::PrintOp::Create { is_dir: false },
-                    force,
+                    false,
                 );
                 std::fs::write(&dest_file, content)?;
             }

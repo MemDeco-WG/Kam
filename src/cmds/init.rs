@@ -1,19 +1,31 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::PathBuf;
 
 use crate::errors::KamError;
+use crate::types::kam_toml::enums::ModuleType;
 
 pub mod args;
 pub mod impl_mod;
 pub mod kam;
 pub mod post_init;
 pub mod repo;
+pub mod status;
 pub mod tmpl_mod;
 pub use args::InitArgs;
 
 /// Run the init command
 pub fn run(args: InitArgs) -> Result<(), KamError> {
-    let path = Path::new(&args.path);
+    let current_dir = std::env::current_dir()?;
+    let project_path: PathBuf = if current_dir.join("src").exists() && !args.path.contains('/') && !args.path.contains('\\') && !args.path.contains(':') {
+        current_dir.join("src").join(&args.path)
+    } else {
+        if args.path.starts_with('/') || args.path.starts_with('\\') || args.path.contains(':') {
+            PathBuf::from(&args.path)
+        } else {
+            current_dir.join(&args.path)
+        }
+    };
+    let path = project_path.as_path();
 
     // Ensure cache is initialized early so templates and builtins are available.
     // Try automatic initialization; if it fails, print a helpful hint and continue.
@@ -26,13 +38,13 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     }
 
     // Validate conflicting flags
-    let type_flags = [args.lib, args.tmpl, args.repo]
+    let type_flags = [args.kam, args.lib, args.tmpl, args.repo, args.venv]
         .iter()
         .filter(|&&x| x)
         .count();
     if type_flags > 1 {
         return Err(KamError::InvalidModuleType(
-            "Cannot specify multiple module types: --lib, --tmpl, --repo".to_string(),
+            "Cannot specify multiple module types: --kam, --lib, --tmpl, --repo, --venv".to_string(),
         ));
     }
 
@@ -64,7 +76,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     };
 
     // Parse template variables
-    let mut template_vars = crate::types::modules::parse_template_vars(&args.var)?;
+    let mut template_vars = crate::template::TemplateManager::parse_template_vars(&args.var)?;
 
     let name = args.name.as_deref().unwrap_or("My Module");
     let version = args.version.as_deref().unwrap_or("1.0.0");
@@ -81,69 +93,40 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     let mut description_map = HashMap::new();
     description_map.insert("en".to_string(), description.to_string());
 
-    // Handle different initialization types based on flags
-    if args.repo {
-        repo::init_repo(
-            &path,
-            &id,
-            name_map,
-            &version,
-            &author,
-            description_map,
-            &args.var,
-            args.force,
-        )?;
+    // Determine module type and template
+    let (module_type, impl_template) = if args.kam {
+        (ModuleType::Kam, "kam_template".to_string())
     } else if args.tmpl {
-        tmpl_mod::init_template(
-            &path,
-            &id,
-            name_map,
-            &version,
-            &author,
-            description_map,
-            &args.var,
-            args.r#impl.clone(),
-            args.force,
-        )?;
+        (ModuleType::Template, "tmpl_template".to_string())
     } else if args.lib {
-        kam::init_kam(
-            &path,
-            &id,
-            name_map,
-            &version,
-            &author,
-            description_map,
-            &template_vars,
-            args.force,
-            "library",
-        )?;
-    } else if let Some(impl_zip) = &args.r#impl {
-        // Implement from template zip
-        impl_mod::init_impl(
-            &path,
-            &id,
-            name_map,
-            &version,
-            &author,
-            description_map,
-            impl_zip,
-            &mut template_vars,
-            args.force,
-        )?;
+        (ModuleType::Library, "lib_template".to_string())
+    } else if args.repo {
+        (ModuleType::Repo, "repo_template".to_string())
+    } else if args.venv {
+        (ModuleType::Template, "venv_template".to_string())
+    } else if let Some(impl_name) = &args.r#impl {
+        (ModuleType::Kam, impl_name.clone())
     } else {
-        // Initialize kam module (default)
-        kam::init_kam(
-            &path,
-            &id,
-            name_map,
-            &version,
-            &author,
-            description_map,
-            &template_vars,
-            args.force,
-            "kam",
-        )?;
-    }
+        (ModuleType::Kam, "kam_template".to_string())
+    };
+
+    // Determine if we need to copy all template files (for repo templates)
+    let copy_all_files = args.repo;
+
+    // Initialize using template
+    tmpl_mod::init_template(
+        &path,
+        &id,
+        name_map,
+        &version,
+        &author,
+        description_map,
+        &args.var,
+        Some(impl_template),
+        args.force,
+        module_type,
+        copy_all_files,
+    )?;
 
     post_init::post_process(
         &path,

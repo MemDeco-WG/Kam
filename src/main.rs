@@ -27,6 +27,12 @@ enum Commands {
     /// Manage the global cache
     Cache(kam::cmds::cache::CacheArgs),
 
+    /// Check project files for syntax and formatting issues
+    Check(kam::cmds::check::CheckArgs),
+
+    /// Development tools
+    Dev(kam::cmds::dev::DevArgs),
+
     /// Synchronize dependencies
     Sync(kam::cmds::sync::SyncArgs),
 
@@ -47,6 +53,8 @@ fn main() -> Result<(), KamError> {
     match cli.command {
         Commands::Init(args) => kam::cmds::init::run(args),
         Commands::Cache(args) => kam::cmds::cache::run(args),
+        Commands::Check(args) => kam::cmds::check::run(args),
+        Commands::Dev(args) => kam::cmds::dev::run(args),
         Commands::Sync(args) => kam::cmds::sync::run(args),
         Commands::Build(args) => kam::cmds::build::run(args),
         Commands::Publish(args) => kam::cmds::publish::run(args),

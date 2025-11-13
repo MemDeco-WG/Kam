@@ -1,18 +1,17 @@
 use colored::*;
-use flate2::Compression;
-use flate2::write::GzEncoder;
 use std::fs::{self, File};
-use std::io::{Cursor, Read, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tar::Builder as TarBuilder;
 use zip::{ZipWriter, write::FileOptions};
+use crate::types::kam_toml::enums::ModuleType;
 
 use super::args::BuildArgs;
 use super::post_build::handle_post_build_hook;
 use super::pre_build::handle_pre_build_hook;
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
-use crate::types::kam_toml::sections::ModuleType;
+
 
 fn resolve_against_project(project_root: &Path, p: PathBuf) -> PathBuf {
     if p.is_absolute() {
@@ -102,7 +101,7 @@ pub fn build_project(
         &output_dir,
         &basename,
         &effective_project_path,
-        project_path,
+        &project_path,
     )?;
 
     handle_post_build_hook(&kam_toml, project_path)?;
@@ -263,60 +262,51 @@ pub fn create_module_zip_if_needed(
 }
 
 pub fn create_source_archive(
-    kam_toml: &KamToml,
+    _kam_toml: &KamToml,
     output_dir: &Path,
     basename: &str,
     effective_project_path: &Path,
-    project_path: &Path,
+    _project_path: &Path,
 ) -> Result<(), KamError> {
     // --- Create source tar.gz archive ---
     let source_filename = format!("{}.tar.gz", basename);
 
     let source_output_file = output_dir.join(&source_filename);
     let tar_gz = File::create(&source_output_file)?;
-    let enc = GzEncoder::new(tar_gz, Compression::default());
+    let enc = flate2::write::GzEncoder::new(tar_gz, flate2::Compression::default());
     let mut tar = TarBuilder::new(enc);
 
-    // Add kam.toml to tar (preserve as top-level file) from effective project path
-    let mut file = File::open(effective_project_path.join("kam.toml"))?;
-    let mut kam_content = Vec::new();
-    file.read_to_end(&mut kam_content)?;
-    let mut header = tar::Header::new_gnu();
-    header.set_size(kam_content.len() as u64);
-    header.set_mode(0o644);
-    tar.append_data(&mut header, "kam.toml", Cursor::new(&kam_content))?;
+    // Use ignore::WalkBuilder to traverse all files, respecting .gitignore
+    let walker = ignore::WalkBuilder::new(effective_project_path)
+        .git_ignore(true)
+        .hidden(true) // skip hidden files by default
+        .build();
 
-    // Add src/ directory (if exists) - include entire src/ tree
-    let full_src = effective_project_path.join("src");
-    if full_src.exists() {
-        tar.append_dir_all("src", &full_src)?;
+    for result in walker {
+        let entry = result.map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        let path = entry.path();
+        if path.is_file() {
+            let rel_path = path.strip_prefix(effective_project_path)
+                .map_err(|e| KamError::StripPrefixFailed(format!("strip_prefix: {}", e)))?;
+            // Skip .git directory and other unwanted
+            if rel_path.starts_with(".git") || rel_path.starts_with(".kam") {
+                continue;
+            }
+            tar.append_path_with_name(path, rel_path)?;
+            println!("  {} {}", "+".green(), rel_path.display().to_string().dimmed());
+        }
     }
 
-    // Include tmpl/ if exists
-    let tmpl_dir = effective_project_path.join("tmpl");
-    if tmpl_dir.exists() {
-        tar.append_dir_all("tmpl", &tmpl_dir)?;
-    }
-
-    // Include mmrl repo referenced files (readme/license/changelog)
-    if let Some(mmrl) = &kam_toml.mmrl {
-        if let Some(repo) = &mmrl.repo {
-            if let Some(r) = &repo.readme {
-                let p = project_path.join(r);
-                if p.exists() {
-                    tar.append_path_with_name(p, r)?;
-                }
-            }
-            if let Some(l) = &repo.license {
-                let p = project_path.join(l);
-                if p.exists() {
-                    tar.append_path_with_name(p, l)?;
-                }
-            }
-            if let Some(c) = &repo.changelog {
-                let p = project_path.join(c);
-                if p.exists() {
-                    tar.append_path_with_name(p, c)?;
+    // Add extra includes if specified
+    if let Some(build) = _kam_toml.kam.build.as_ref() {
+        if let Some(extra_includes) = build.extra_includes.as_ref() {
+            for include in extra_includes {
+                let source_path = effective_project_path.join(&include.source);
+                if source_path.exists() && source_path.is_file() {
+                    tar.append_path_with_name(&source_path, &include.dest)?;
+                    println!("  {} {}", "+".green(), include.dest.dimmed());
+                } else {
+                    println!("  {} Extra include not found: {}", "!".yellow(), include.source);
                 }
             }
         }

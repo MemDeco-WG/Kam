@@ -47,6 +47,10 @@ pub struct InitArgs {
     #[arg(long)]
     pub var: Vec<String>,
 
+    /// Create a kam module
+    #[arg(long)]
+    pub kam: bool,
+
     /// Create a library module (provides dependencies)
     #[arg(long)]
     pub lib: bool,
@@ -58,4 +62,8 @@ pub struct InitArgs {
     /// Create a repo module repository project
     #[arg(long)]
     pub repo: bool,
+
+    /// Create a venv template
+    #[arg(long)]
+    pub venv: bool,
 }

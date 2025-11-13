@@ -2,14 +2,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 提示/通知结构
+/// 提示/通知结构（MMRL V4+ 不支持 color 字段）
 pub struct NoteSection {
     /// 通知标题
     pub title: String,
     /// 通知正文/消息
     pub message: String,
-    /// 颜色代码（可选，用于 UI 显示）
-    pub color: Option<String>,
 }
 
 impl Default for NoteSection {
@@ -17,7 +15,6 @@ impl Default for NoteSection {
         NoteSection {
             title: String::new(),
             message: String::new(),
-            color: None,
         }
     }
 }

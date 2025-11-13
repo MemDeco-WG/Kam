@@ -1,7 +1,7 @@
 use crate::cache::KamCache;
 use crate::errors::KamError;
 use std::fs;
-use std::io::Read;
+use std::io::{BufReader, Read};
 /// # Kam Virtual Environment System
 ///
 /// Virtual environment support for Kam modules, similar to Python's virtualenv.
@@ -95,9 +95,7 @@ impl KamVenv {
             }
         }
 
-        // Require the venv template to exist in the cache tmpl dir. If the
-        // cache can't be opened or the archive is missing, fail early instead
-        // of generating a fallback script (caller requested strict behavior).
+        // Use the global cache for templates
         let cache = KamCache::new()?;
         let tmpl_dir = cache.tmpl_dir();
         let template_key =
@@ -106,30 +104,31 @@ impl KamVenv {
             "venv" | "venv_template" => "venv_template",
             other => other,
         };
-        // Try a few forms for the template: tar.gz/tgz, zip, or an unpacked directory
-        // tar.gz / tgz support
-        let tar_path = tmpl_dir.join(format!("{}.tar.gz", base));
-        if !tar_path.exists() {
-            let source = Path::new("src")
-                .join("assets")
-                .join("tmpl")
-                .join(format!("{}.tar.gz", base));
-            if source.exists() {
-                std::fs::copy(&source, &tar_path).map_err(|e| KamError::Io(e))?;
-            }
-        }
+
+        // Ensure the template is available in cache
+        crate::template::TemplateManager::ensure_template(&base)?;
+        // Try a few forms for the template: tar.gz/tgz/tar, zip, or an unpacked directory
+        // tar.gz / tgz / tar support
+        let tar_gz_path = tmpl_dir.join(format!("{}.tar.gz", base));
         let tgz_path = tmpl_dir.join(format!("{}.tgz", base));
-        let chosen_tar = if tar_path.exists() {
-            Some(tar_path)
+        let tar_path = tmpl_dir.join(format!("{}.tar", base));
+        let chosen_tar = if tar_gz_path.exists() {
+            Some((tar_gz_path, true)) // true for gzipped
         } else if tgz_path.exists() {
-            Some(tgz_path)
+            Some((tgz_path, true))
+        } else if tar_path.exists() {
+            Some((tar_path, false)) // false for plain tar
         } else {
             None
         };
-        if let Some(tp) = chosen_tar {
+        if let Some((tp, is_gzipped)) = chosen_tar {
             let f = std::fs::File::open(&tp).map_err(|e| KamError::Io(e))?;
-            let decompressor = flate2::read::GzDecoder::new(f);
-            let mut archive = tar::Archive::new(decompressor);
+            let reader: Box<dyn std::io::Read> = if is_gzipped {
+                Box::new(flate2::read::GzDecoder::new(BufReader::new(f)))
+            } else {
+                Box::new(BufReader::new(f))
+            };
+            let mut archive = tar::Archive::new(reader);
             for entry_res in archive
                 .entries()
                 .map_err(|e| KamError::FetchFailed(format!("tar entries: {}", e)))?
@@ -276,9 +275,9 @@ impl KamVenv {
 
         // Not found: fail rather than generating fallback scripts.
         Err(KamError::TemplateNotFound(format!(
-            "venv template '{}' not found in cache tmpl dir: {}",
+            "venv template '{}' not found in global cache tmpl dir: {}",
             base,
-            zip_path.display()
+            tmpl_dir.display()
         )))
     }
 

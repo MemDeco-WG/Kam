@@ -42,13 +42,11 @@ pub fn init_kam(
         _ => {}
     }
 
-    let kam_toml_path = path.join("kam.toml");
     let kam_toml_rel = "kam.toml".to_string();
-    crate::utils::Utils::print_status(
-        &kam_toml_path,
+    crate::cmds::init::status::print_status(
+        crate::cmds::init::status::StatusType::Add,
         &kam_toml_rel,
-        crate::utils::PrintOp::Create { is_dir: false },
-        force,
+        false,
     );
 
     kt.write_to_dir(path)?;
@@ -86,64 +84,7 @@ pub fn init_kam(
         );
         vars.insert("versionCode".to_string(), kt.prop.versionCode.to_string());
 
-        fn copy_and_replace(
-            src: &Path,
-            dst: &Path,
-            vars: &HashMap<String, String>,
-            force: bool,
-        ) -> Result<(), KamError> {
-            for entry in std::fs::read_dir(src)? {
-                let entry = entry?;
-                let file_name = entry.file_name().into_string().map_err(|_| {
-                    KamError::Io(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "Invalid filename",
-                    ))
-                })?;
-                if file_name == "kam.toml" {
-                    continue;
-                }
-                let replaced_name = replace_placeholders(&file_name, vars);
-                let dst_path = dst.join(&replaced_name);
-                let rel_path = dst_path
-                    .strip_prefix(dst)
-                    .unwrap_or(&dst_path)
-                    .to_string_lossy()
-                    .to_string();
-
-                if entry.file_type()?.is_dir() {
-                    crate::utils::Utils::print_status(
-                        &dst_path,
-                        &rel_path,
-                        crate::utils::PrintOp::Create { is_dir: true },
-                        force,
-                    );
-                    std::fs::create_dir_all(&dst_path)?;
-                    copy_and_replace(&entry.path(), &dst_path, vars, force)?;
-                } else {
-                    let content = std::fs::read_to_string(entry.path())?;
-                    let replaced_content = replace_placeholders(&content, vars);
-                    crate::utils::Utils::print_status(
-                        &dst_path,
-                        &rel_path,
-                        crate::utils::PrintOp::Create { is_dir: false },
-                        force,
-                    );
-                    std::fs::write(&dst_path, replaced_content)?;
-                }
-            }
-            Ok(())
-        }
-
-        fn replace_placeholders(text: &str, vars: &HashMap<String, String>) -> String {
-            let mut result = text.to_string();
-            for (k, v) in vars {
-                result = result.replace(&format!("{{{{{}}}}}", k), v);
-            }
-            result
-        }
-
-        copy_and_replace(&template_dir, path, &vars, force)?;
+        crate::template::TemplateManager::copy_template_to(&template_dir, path, &vars, force, &id)?;
     }
 
     Ok(())

@@ -74,6 +74,7 @@ target_dir = "../../src/assets/tmpl"
 output_file = "venv_template"
 pre_build = 'echo "venv pre build..."'
 post_build = 'echo "venv post build..."'
+extra_includes = []
 
 
 [kam.tmpl.variables]

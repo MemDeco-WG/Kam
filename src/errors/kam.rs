@@ -22,6 +22,15 @@ pub enum KamError {
     #[error("TOML serialization error: {0}")]
     TomlSer(#[from] toml::ser::Error),
 
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("Walkdir error: {0}")]
+    Walkdir(#[from] walkdir::Error),
+
+    #[error("Strip prefix error: {0}")]
+    StripPrefix(#[from] std::path::StripPrefixError),
+
     #[error("Reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
 
