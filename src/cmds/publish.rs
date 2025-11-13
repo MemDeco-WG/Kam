@@ -4,15 +4,18 @@ use crate::types::kam_toml::enums::ModuleType;
 use chrono;
 use clap::Args;
 use colored::Colorize;
+use git2::Repository;
+use regex::Regex;
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
+use flate2::read::GzDecoder;
 
 /// Arguments for the publish command
 #[derive(Args, Debug)]
 pub struct PublishArgs {
     /// Path to the project (default: current directory)
-    #[arg(default_value = ".")]
+    #[arg(short, long, default_value = ".")]
     pub path: String,
 
     /// Repository URL or local path to publish to
@@ -44,10 +47,11 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
     println!("{} Publishing module...", "→".cyan());
 
     // Load kam.toml to determine module id/version
-    let kam_toml = KamToml::load_from_dir(project_path)?;
+    let kam_toml = KamToml::load_from_dir(&project_path)?;
     let module_id = kam_toml.prop.id.clone();
     let version = kam_toml.prop.version.clone();
     let version_code = kam_toml.prop.versionCode;
+    let module_type = &kam_toml.kam.module_type;
 
     // Determine output directory to build into
     let output_dir: PathBuf = args
@@ -81,7 +85,7 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
             let p = entry?.path();
             if p.is_file() {
                 if let Some(ext) = p.extension() {
-                    if ext == "zip" {
+                    if ext == "zip" || p.file_name().unwrap().to_str().unwrap().ends_with(".tar.gz") {
                         found = Some(p);
                         break;
                     }
@@ -98,6 +102,57 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
     if args.dry_run {
         println!("  {} Dry-run: skipping upload", "•".yellow());
         return Ok(());
+    }
+
+    // Special handling for library modules - publish to local repo or cache by default
+    if module_type == &ModuleType::Library && args.repo.is_none() {
+        // Check for KAM_LOCAL_REPO environment variable
+        if let Ok(local_repo) = std::env::var("KAM_LOCAL_REPO") {
+            println!("  {} Publishing library metadata to local repo: {}", "→".cyan(), local_repo);
+            // Update repo index with metadata only
+            let repo_path = PathBuf::from(local_repo);
+            update_repo_index(&repo_path, &module_id, &version, &kam_toml)?;
+            println!("  {} Published metadata to local repo index", "✓".green());
+
+            // Create GitHub release
+            let (owner, repo_name) = get_github_repo_info()?;
+            create_github_release(&owner, &repo_name, &module_id, &version, &package_path, args.token.as_deref())?;
+            println!("  {} Created GitHub release for {}", "✓".green(), module_id);
+            return Ok(());
+        } else {
+            println!("  {} Publishing library to local cache", "→".cyan());
+
+            let cache = crate::cache::KamCache::new()?;
+            cache.ensure_dirs()?;
+
+            // Copy package to cache/lib directory
+            let lib_dir = cache.lib_module_path(&module_id, &version);
+            fs::create_dir_all(&lib_dir)?;
+
+            // Extract the package to cache
+            if package_path.to_str().unwrap().ends_with(".tar.gz") {
+                let tar_gz = fs::File::open(&package_path)?;
+                let dec = GzDecoder::new(tar_gz);
+                let mut archive = tar::Archive::new(dec);
+                archive.unpack(&lib_dir)
+                    .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
+            } else if package_path.extension().and_then(|e| e.to_str()) == Some("zip") {
+                let file = fs::File::open(&package_path)?;
+                let mut archive = zip::ZipArchive::new(file)
+                    .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
+                archive.extract(&lib_dir)
+                    .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
+            } else {
+                return Err(KamError::UnsupportedFormat("Library packages must be .zip or .tar.gz format".to_string()));
+            }
+
+            // Update local index
+            update_local_cache_index(&cache, &module_id, &version, &kam_toml)?;
+
+            println!("  {} Published to local cache: {}", "✓".green(), lib_dir.display());
+            println!("  {} Library can now be added with: kam add {}@{}", "i".cyan(), module_id, version);
+            return Ok(());
+        }
     }
 
     // Determine repository target:
@@ -132,56 +187,24 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
         let dest = if repo.starts_with("file://") {
             PathBuf::from(repo.trim_start_matches("file://"))
         } else {
-            PathBuf::from(repo)
-        };
+            PathBuf::from(repo.clone())
+        }.canonicalize().unwrap_or_else(|_| PathBuf::from(repo));
 
         fs::create_dir_all(&dest)?;
 
         // If the destination is itself a Kam module repo (module_type = repo),
-        // treat it as a module repository: copy package into `packages/` and update an index.
+        // treat it as a module repository: update index with metadata only.
         let maybe_toml = KamToml::load_from_dir(&dest).ok();
         if let Some(kt) = maybe_toml {
             if kt.kam.module_type == ModuleType::Repo {
-                let packages_dir = dest.join("packages");
-                fs::create_dir_all(&packages_dir)?;
-                let dest_file = packages_dir.join(package_path.file_name().ok_or_else(|| {
-                    KamError::InvalidFilename("invalid package filename".to_string())
-                })?);
-                fs::copy(&package_path, &dest_file)?;
+                // Update repo index with metadata
+                update_repo_index(&dest, &module_id, &version, &kam_toml)?;
+                println!("  {} Published metadata to module repo index", "✓".green());
 
-                // Update simple index.json (array of entries) under packages/index.json
-                let index_path = packages_dir.join("index.json");
-                let mut entries: Vec<serde_json::Value> = if index_path.exists() {
-                    let s = std::fs::read_to_string(&index_path)?;
-                    serde_json::from_str(&s).unwrap_or_else(|_| Vec::new())
-                } else {
-                    Vec::new()
-                };
-
-                let file_name = dest_file
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or_default()
-                    .to_string();
-                // Include both version (string) and versionCode (numeric) for compatibility.
-                let entry = json!({
-                    "id": module_id,
-                    "version": version,
-                    "versionCode": version_code,
-                    "file": file_name,
-                    "timestamp": chrono::Utc::now().to_rfc3339(),
-                });
-                entries.push(entry);
-                let idx_s = toml::to_string_pretty(&entries).map_err(|e| {
-                    KamError::TomlSerializeError(format!("json index serialize error: {}", e))
-                })?;
-                std::fs::write(&index_path, idx_s)?;
-
-                println!(
-                    "  {} Published to module repo: {}",
-                    "✓".green(),
-                    dest_file.display()
-                );
+                // Create GitHub release
+                let (owner, repo_name) = get_github_repo_info()?;
+                create_github_release(&owner, &repo_name, &module_id, &version, &package_path, args.token.as_deref())?;
+                println!("  {} Created GitHub release for {}", "✓".green(), module_id);
                 return Ok(());
             }
         }
@@ -242,4 +265,148 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
 
     println!("  {} Published to {}", "✓".green(), repo);
     Ok(())
+}
+
+/// Update repo index for a published library
+fn update_repo_index(
+    repo_path: &Path,
+    module_id: &str,
+    version: &str,
+    kam_toml: &KamToml,
+) -> Result<(), KamError> {
+    // Create index directory structure based on module name
+    let index_dir = repo_path.join("index");
+    let module_index_path = compute_index_path(&index_dir, module_id);
+    fs::create_dir_all(&module_index_path)?;
+
+    // Create metadata JSON for this version
+    let metadata = serde_json::json!({
+        "id": module_id,
+        "version": version,
+        "versionCode": kam_toml.prop.versionCode,
+        "author": kam_toml.prop.author,
+        "description": kam_toml.prop.description.get("en").unwrap_or(&String::new()),
+        "provides": kam_toml.kam.lib.as_ref()
+            .and_then(|l| l.provides.as_ref())
+            .unwrap_or(&Vec::new()),
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+
+    let metadata_file = module_index_path.join(format!("{}.json", version));
+    let metadata_str = serde_json::to_string_pretty(&metadata)
+        .map_err(|e| KamError::JsonError(e.to_string()))?;
+    fs::write(&metadata_file, &metadata_str)?;
+
+    // Update latest.json to point to this version if it's newer
+    let latest_file = module_index_path.join("latest.json");
+    let should_update_latest = if latest_file.exists() {
+        let latest_content = fs::read_to_string(&latest_file)?;
+        let latest: serde_json::Value = serde_json::from_str(&latest_content)
+            .map_err(|e| KamError::JsonError(e.to_string()))?;
+
+        // Simple version comparison (could be improved)
+        latest.get("version")
+            .and_then(|v| v.as_str())
+            .map(|v| version > v)
+            .unwrap_or(true)
+    } else {
+        true
+    };
+
+    if should_update_latest {
+        fs::write(&latest_file, &metadata_str)?;
+    }
+
+    Ok(())
+}
+
+/// Update local cache index for a published library
+fn update_local_cache_index(
+    cache: &crate::cache::KamCache,
+    module_id: &str,
+    version: &str,
+    kam_toml: &KamToml,
+) -> Result<(), KamError> {
+    update_repo_index(cache.root(), module_id, version, kam_toml)
+}
+
+/// Get GitHub repo owner and name from git remote
+fn get_github_repo_info() -> Result<(String, String), KamError> {
+    let repo = Repository::open(".").map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+    let remote = repo.find_remote("origin").map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+    let url = remote.url().ok_or(KamError::InvalidConfig("No remote url".to_string()))?;
+    let url_str = url.to_string();
+    let re = Regex::new(r"github\.com[\/:]([^\/]+)\/([^\/]+?)(\.git)?$").map_err(|e| KamError::InvalidConfig(format!("Regex error: {}", e)))?;
+    if let Some(captures) = re.captures(&url_str) {
+        let owner = captures.get(1).unwrap().as_str().to_string();
+        let repo = captures.get(2).unwrap().as_str().to_string();
+        Ok((owner, repo))
+    } else {
+        Err(KamError::InvalidConfig("Not a GitHub repo".to_string()))
+    }
+}
+
+/// Create GitHub release and upload asset
+fn create_github_release(owner: &str, repo: &str, module_id: &str, version: &str, package_path: &Path, token: Option<&str>) -> Result<(), KamError> {
+    let github_token = std::env::var("GITHUB_TOKEN").ok();
+    let kam_token = std::env::var("KAM_PUBLISH_TOKEN").ok();
+    let token = token.or_else(|| github_token.as_deref()).or_else(|| kam_token.as_deref())
+        .ok_or(KamError::InvalidConfig("GitHub token required".to_string()))?;
+
+    let client = reqwest::blocking::Client::new();
+    let create_release_url = format!("https://api.github.com/repos/{}/{}/releases", owner, repo);
+    let tag_name = format!("{}-{}", module_id, version);
+    let body = json!({
+        "tag_name": tag_name,
+        "name": format!("Release {} {}", module_id, version),
+        "body": format!("Auto release for {} {}", module_id, version),
+        "draft": false,
+        "prerelease": false
+    });
+
+    let resp = client.post(&create_release_url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("User-Agent", "kam-cli")
+        .json(&body)
+        .send()
+        .map_err(|e| KamError::UploadFailed(format!("create release failed: {}", e)))?;
+
+    if !resp.status().is_success() {
+        return Err(KamError::UploadFailed(format!("create release failed: HTTP {}", resp.status())));
+    }
+
+    let release: serde_json::Value = resp.json().map_err(|e| KamError::JsonError(e.to_string()))?;
+    let upload_url = release["upload_url"].as_str().unwrap().replace("{?name,label}", "");
+    let file_name = package_path.file_name().unwrap().to_str().unwrap();
+
+    let upload_resp = client.post(&format!("{}?name={}", upload_url, file_name))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/octet-stream")
+        .body(fs::read(package_path)?)
+        .send()
+        .map_err(|e| KamError::UploadFailed(format!("upload failed: {}", e)))?;
+
+    if !upload_resp.status().is_success() {
+        return Err(KamError::UploadFailed(format!("upload failed: HTTP {}", upload_resp.status())));
+    }
+
+    Ok(())
+}
+
+/// Compute index path based on module name (similar to cargo's index structure)
+fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
+    let name_lower = module_name.to_lowercase();
+    let chars: Vec<char> = name_lower.chars().collect();
+
+    match chars.len() {
+        0 => index_base.to_path_buf(),
+        1 => index_base.join("1").join(&name_lower),
+        2 => index_base.join("2").join(&name_lower),
+        3 => index_base.join("3").join(&chars[0].to_string()).join(&name_lower),
+        _ => {
+            let prefix1 = chars[0..2].iter().collect::<String>();
+            let prefix2 = chars[2..4].iter().collect::<String>();
+            index_base.join(&prefix1).join(&prefix2).join(&name_lower)
+        }
+    }
 }

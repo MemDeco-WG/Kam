@@ -314,15 +314,15 @@ impl KamVenv {
         self.root.join("lib")
     }
 
-    /// Link a binary from the cache to the venv
-    pub fn link_binary(&self, name: &str, cache: &KamCache) -> Result<(), KamError> {
-        let cache_bin = cache.bin_path(name);
+    /// Link a binary from the source path to the venv
+    pub fn link_binary(&self, source_path: &Path) -> Result<(), KamError> {
+        let name = source_path.file_name().and_then(|n| n.to_str()).ok_or_else(|| KamError::InvalidFilename("invalid binary name".to_string()))?;
         let venv_bin = self.bin_dir().join(name);
 
-        if !cache_bin.exists() {
+        if !source_path.exists() {
             return Err(KamError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Binary not found in cache: {}", name),
+                format!("Binary not found: {}", source_path.display()),
             )));
         }
 
@@ -332,12 +332,18 @@ impl KamVenv {
             if venv_bin.exists() {
                 fs::remove_file(&venv_bin).map_err(|e| KamError::Io(e))?;
             }
-            std::os::unix::fs::symlink(&cache_bin, &venv_bin).map_err(|e| KamError::Io(e))?;
+            std::os::unix::fs::symlink(source_path, &venv_bin).map_err(|e| KamError::Io(e))?;
         }
         #[cfg(not(unix))]
         {
             fs::create_dir_all(self.bin_dir()).map_err(|e| KamError::Io(e))?;
-            fs::copy(&cache_bin, &venv_bin).map_err(|e| KamError::Io(e))?;
+            if venv_bin.exists() {
+                fs::remove_file(&venv_bin).map_err(|e| KamError::Io(e))?;
+            }
+            // Try symlink first, fallback to copy
+            if std::os::windows::fs::symlink_file(source_path, &venv_bin).is_err() {
+                fs::copy(source_path, &venv_bin).map_err(|e| KamError::Io(e))?;
+            }
         }
 
         Ok(())
@@ -345,20 +351,20 @@ impl KamVenv {
 
     /// Link a library (module id and version) from cache into the venv
     pub fn link_library(&self, id: &str, version: &str, cache: &KamCache) -> Result<(), KamError> {
-        let cache_lib = cache.lib_module_path(id, version);
-        let venv_lib = self.lib_dir().join(format!("{}-{}", id, version));
+        let cache_lib = cache.lib_module_path(id, version).join("lib");
+        let venv_lib = self.lib_dir();
 
         if !cache_lib.exists() {
             return Err(KamError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Library not found in cache: {} v{}", id, version),
+                format!("Library lib/ not found in cache: {} v{}", id, version),
             )));
         }
 
         #[cfg(unix)]
         {
             if venv_lib.exists() {
-                fs::remove_file(&venv_lib).map_err(|e| KamError::Io(e))?;
+                fs::remove_dir_all(&venv_lib).map_err(|e| KamError::Io(e))?;
             }
             std::os::unix::fs::symlink(&cache_lib, &venv_lib).map_err(|e| KamError::Io(e))?;
         }
@@ -367,7 +373,10 @@ impl KamVenv {
             if venv_lib.exists() {
                 fs::remove_dir_all(&venv_lib).map_err(|e| KamError::Io(e))?;
             }
-            copy_dir_all(&cache_lib, &venv_lib).map_err(|e| KamError::Io(e))?;
+            // Try symlink recursively, fallback to copy
+            if symlink_dir_all(&cache_lib, &venv_lib).is_err() {
+                copy_dir_all(&cache_lib, &venv_lib).map_err(|e| KamError::Io(e))?;
+            }
         }
 
         Ok(())
@@ -380,6 +389,28 @@ impl KamVenv {
         }
         Ok(())
     }
+}
+
+/// Symlink a directory recursively (for Windows)
+#[cfg(not(unix))]
+fn symlink_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            if std::os::windows::fs::symlink_dir(&src_path, &dst_path).is_err() {
+                symlink_dir_all(&src_path, &dst_path)?;
+            }
+        } else {
+            if std::os::windows::fs::symlink_file(&src_path, &dst_path).is_err() {
+                fs::copy(&src_path, &dst_path)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Copy a directory recursively (for Windows)

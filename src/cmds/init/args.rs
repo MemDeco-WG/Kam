@@ -3,9 +3,9 @@ use clap::Args;
 /// Arguments for the init command
 #[derive(Args, Debug)]
 pub struct InitArgs {
-    /// Path to initialize the project (default: current directory)
-    #[arg(default_value = ".")]
-    pub path: String,
+    /// Path to initialize the project
+    #[arg(value_name = "PATH")]
+    pub name: String,
 
     /// Project ID (default: folder name)
     #[arg(long)]
@@ -13,7 +13,7 @@ pub struct InitArgs {
 
     /// Project name (default: "My Module")
     #[arg(long)]
-    pub name: Option<String>,
+    pub project_name: Option<String>,
 
     /// Project version (default: "1.0.0")
     #[arg(long)]
@@ -22,6 +22,10 @@ pub struct InitArgs {
     /// Author name (default: "Author")
     #[arg(long)]
     pub author: Option<String>,
+
+    /// Update JSON URL (default: auto-generated from git)
+    #[arg(long)]
+    pub update_json: Option<String>,
 
     /// Description (default: "A module description")
     #[arg(long)]

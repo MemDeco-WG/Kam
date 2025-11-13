@@ -2,8 +2,9 @@
 id = "lib_template"
 version = "1.0.0"
 versionCode = 1763018024903
-author = "Author"
+author = "Author (author@example.com)"
 updateJson = "https://example.com/update.json"
+
 
 [prop.name]
 en = "My Module"
@@ -64,7 +65,7 @@ min_api = 0
 max_api = 0
 supported_arch = []
 conflicts = []
-module_type = "template"
+module_type = "library"
 
 [kam.dependency]
 kam = []
@@ -81,13 +82,10 @@ extra_includes = []
 
 [kam.lib]
 provides = [
-
-
+  { name = "example_bin", path = "bin/example_bin" },
+  { name = "example_lib", path = "lib/x86_64-linux-gnu/example_lib.so" },
 ]
 
 [tool]
 
 [tmpl.variables]
-
-[lib]
-provides = []

@@ -2,7 +2,7 @@
 id = "kam_template"
 version = "0.1.0"
 versionCode = 1762850845388
-author = "Author"
+author = "Author (author@example.com)"
 
 [prop.name]
 en = "kam_template"
@@ -81,6 +81,3 @@ post_build = 'echo "post build..."'
 [tool]
 
 [tmpl.variables]
-
-[lib]
-provides = []

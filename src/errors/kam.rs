@@ -34,6 +34,9 @@ pub enum KamError {
     #[error("Reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
 
+    #[error("Git error: {0}")]
+    Git(#[from] git2::Error),
+
     #[error("KamToml error: {0}")]
     KamToml(#[from] crate::errors::KamTomlError),
 
@@ -76,6 +79,21 @@ pub enum KamError {
     #[error("Template not found: {0}")]
     TemplateNotFound(String),
 
+    #[error("Library not found: {0}")]
+    LibraryNotFound(String),
+
+    #[error("Extract failed: {0}")]
+    ExtractFailed(String),
+
+    #[error("Unsupported format: {0}")]
+    UnsupportedFormat(String),
+
+    #[error("Invalid URL: {0}")]
+    InvalidUrl(String),
+
+    #[error("JSON error: {0}")]
+    JsonError(String),
+
     #[error("Implementation requires template variables: {0}")]
     ImplRequiresVars(String),
 
@@ -111,4 +129,7 @@ pub enum KamError {
 
     #[error("Dependency resolution failed: {0}")]
     DependencyResolutionFailed(String),
+
+    #[error("Invalid module structure: {0}")]
+    InvalidModuleStructure(String),
 }

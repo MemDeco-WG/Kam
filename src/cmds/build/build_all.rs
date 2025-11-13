@@ -7,6 +7,7 @@ use crate::types::kam_toml::KamToml;
 
 fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) {
     let member_path = project_path.join(member);
+    println!("DEBUG: member_path {} exists: {}", member_path.display(), member_path.exists());
     if !member_path.exists() {
         println!("Warning: workspace member {} not found", member);
         return;
@@ -44,6 +45,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) {
 
 pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamError> {
     let root_kam_toml = KamToml::load_from_dir(project_path)?;
+    println!("DEBUG: root_kam_toml.kam.workspace: {:?}", root_kam_toml.kam.workspace);
     let workspace = root_kam_toml
         .kam
         .workspace

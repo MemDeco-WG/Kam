@@ -32,6 +32,7 @@ pub fn init_impl(
         "Template Author".to_string(),
         [("en".to_string(), "Template description".to_string())].into(),
         None,
+        None,
     );
 
     // Create KamModule and fetch the template
@@ -103,6 +104,7 @@ pub fn init_impl(
         version.to_string(),
         author.to_string(),
         description_map_btree,
+        None,
         None,
     );
     kt.kam.tmpl = Some(TmplSection {

@@ -18,12 +18,16 @@ pub struct ExtraInclude {
 /// - `output_file`：可选的输出文件名（为空时使用 `<id>-<version>.zip`）
 /// - `pre_build` / `post_build`：可选的 shell/PowerShell 钩子命令字符串
 /// - `extra_includes`：额外包含的文件列表
+/// - `exclude`：额外的排除路径列表（支持 glob 模式）
+/// - `include`：强制包含的路径列表（覆盖 exclude，支持 glob 模式）
 pub struct BuildSection {
     pub target_dir: Option<String>,
     pub output_file: Option<String>,
     pub pre_build: Option<String>,
     pub post_build: Option<String>,
     pub extra_includes: Option<Vec<ExtraInclude>>,
+    pub exclude: Option<Vec<String>>,
+    pub include: Option<Vec<String>>,
 }
 
 impl Default for BuildSection {
@@ -45,10 +49,12 @@ impl Default for BuildSection {
 
         BuildSection {
             target_dir: Some("dist".to_string()),
-            output_file: Some(String::new()),
+            output_file: Some("{{id}}-{{versionCode}}".to_string()),
             pre_build: pre,
             post_build: post,
-            extra_includes: Some(Vec::new()),
+            extra_includes: None,
+            exclude: None,
+            include: None,
         }
     }
 }

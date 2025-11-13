@@ -13,18 +13,85 @@ pub mod status;
 pub mod tmpl_mod;
 pub use args::InitArgs;
 
+/// Get git repository information
+fn get_git_info() -> Result<(String, String, String, String), KamError> {
+    let repo = git2::Repository::discover(".")?;
+
+    // Get author name, handle non-UTF-8
+    let author = std::process::Command::new("git")
+        .args(&["config", "--get", "user.name"])
+        .output()
+        .ok()
+        .and_then(|output| if output.status.success() {
+            String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
+        } else { None })
+        .unwrap_or("Author".to_string());
+
+    // Get author email using git command
+    let email = std::process::Command::new("git")
+        .args(&["config", "--get", "user.email"])
+        .output()
+        .ok()
+        .and_then(|output| if output.status.success() {
+            String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
+        } else { None })
+        .unwrap_or("author@example.com".to_string());
+
+    // Get remote URL
+    let remote_url = if let Ok(remote) = repo.find_remote("origin") {
+        remote.url().map(|s| s.to_string()).unwrap_or("".to_string())
+    } else {
+        "".to_string()
+    };
+
+    // Get default branch
+    let default_branch = if let Ok(reference) = repo.find_reference("refs/remotes/origin/HEAD") {
+        if let Some(target) = reference.symbolic_target() {
+            target.strip_prefix("refs/remotes/origin/").unwrap_or("master").to_string()
+        } else {
+            "master".to_string()
+        }
+    } else {
+        "master".to_string()
+    };
+
+    Ok((author, email, remote_url, default_branch))
+}
+
+/// Generate updateJson URL from repository remote URL, project ID, and default branch
+fn generate_update_json_url(remote_url: &str, id: &str, default_branch: &str) -> String {
+    if remote_url.contains("github.com") {
+        // Parse GitHub URL: https://github.com/owner/repo.git -> https://raw.githubusercontent.com/owner/repo/{branch}/update.json
+        let parts: Vec<&str> = remote_url.trim_end_matches(".git").split('/').collect();
+        if parts.len() >= 5 {
+            let owner = parts[3];
+            return format!("https://raw.githubusercontent.com/{}/{}/{}/update.json", owner, id, default_branch);
+        }
+    } else if remote_url.contains("gitlab.com") {
+        // GitLab: https://gitlab.com/owner/repo.git -> https://gitlab.com/owner/repo/-/raw/{branch}/update.json
+        let parts: Vec<&str> = remote_url.trim_end_matches(".git").split('/').collect();
+        if parts.len() >= 5 {
+            let owner = parts[3];
+            return format!("https://gitlab.com/{}/{}/-/raw/{}/update.json", owner, id, default_branch);
+        }
+    }
+    // Default or unknown
+    format!("https://raw.githubusercontent.com/user/{}/{}/update.json", id, default_branch)
+}
+
+
+
+
 /// Run the init command
 pub fn run(args: InitArgs) -> Result<(), KamError> {
     let current_dir = std::env::current_dir()?;
-    let project_path: PathBuf = if current_dir.join("src").exists() && !args.path.contains('/') && !args.path.contains('\\') && !args.path.contains(':') {
-        current_dir.join("src").join(&args.path)
+    let project_name = &args.name;
+    let project_path: PathBuf = if project_name.starts_with('/') || project_name.starts_with('\\') || project_name.contains(':') {
+        PathBuf::from(project_name)
     } else {
-        if args.path.starts_with('/') || args.path.starts_with('\\') || args.path.contains(':') {
-            PathBuf::from(&args.path)
-        } else {
-            current_dir.join(&args.path)
-        }
+        current_dir.join(project_name)
     };
+    let name = args.project_name.as_deref().unwrap_or("My Module");
     let path = project_path.as_path();
 
     // Ensure cache is initialized early so templates and builtins are available.
@@ -56,50 +123,44 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // - KAM_LOCAL_REPO     : used by `sync` as a candidate local repository path
     // - HOME / USERPROFILE : used by cache code to locate the user's home directory
     //
-    // Determine ID from folder name if not provided. If the provided `path` is a
-    // relative marker like `.` then `path.file_name()` may be None. In that case
-    // fall back to the current working directory's name. If that also fails,
-    // fall back to the literal "my_module" to preserve previous behaviour.
-    let id = if let Some(id) = args.id.as_deref() {
-        id.to_string()
-    } else {
-        let name_from_path = path
-            .file_name()
-            .and_then(|n| n.to_str().map(|s| s.to_string()));
-        let name = name_from_path.or_else(|| {
-            std::env::current_dir().ok().and_then(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str().map(|s| s.to_string()))
-            })
-        });
-        name.unwrap_or_else(|| "my_module".to_string())
-    };
+
 
     // Parse template variables
     let mut template_vars = crate::template::TemplateManager::parse_template_vars(&args.var)?;
 
-    let name = args.name.as_deref().unwrap_or("My Module");
     let version = args.version.as_deref().unwrap_or("1.0.0");
-    let author = args.author.as_deref().unwrap_or("Author");
-    let description = args
-        .description
-        .as_deref()
-        .unwrap_or("A module description");
 
-    // Create name and description maps (English only for simplicity)
-    let mut name_map = HashMap::new();
-    name_map.insert("en".to_string(), name.to_string());
+    // Get git info for smart defaults
+    let (git_author, git_email, git_remote, git_default_branch) = get_git_info().unwrap_or(("Author".to_string(), "author@example.com".to_string(), "".to_string(), "master".to_string()));
+    let default_author = format!("{} ({})", git_author, git_email);
+    let author = args.author.as_deref().unwrap_or(&default_author);
 
-    let mut description_map = HashMap::new();
-    description_map.insert("en".to_string(), description.to_string());
+    // Determine ID from the project path's basename
+    let id = if args.name == "." {
+        std::env::current_dir()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
+    } else {
+        args.name.clone()
+    };
+
+    let update_json = if args.update_json.is_some() {
+        Some(args.update_json.as_deref().unwrap().to_string())
+    } else {
+        Some(generate_update_json_url(&git_remote, &id, &git_default_branch))
+    };
 
     // Determine module type and template
     let (module_type, impl_template) = if args.kam {
         (ModuleType::Kam, "kam_template".to_string())
-    } else if args.tmpl {
-        (ModuleType::Template, "tmpl_template".to_string())
     } else if args.lib {
         (ModuleType::Library, "lib_template".to_string())
+    } else if args.tmpl {
+        (ModuleType::Template, "tmpl_template".to_string())
     } else if args.repo {
         (ModuleType::Repo, "repo_template".to_string())
     } else if args.venv {
@@ -110,8 +171,50 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         (ModuleType::Kam, "kam_template".to_string())
     };
 
-    // Determine if we need to copy all template files (for repo templates)
-    let copy_all_files = args.repo;
+    let description = args
+        .description
+        .as_deref()
+        .unwrap_or(&match module_type {
+            ModuleType::Kam => "A kam module",
+            ModuleType::Library => "A library module",
+            ModuleType::Template => "A template module",
+            ModuleType::Repo => "A repository module",
+        });
+
+    // Create name and description maps with multiple languages
+    let mut name_map = HashMap::new();
+    name_map.insert("en".to_string(), id.clone()); // Use ID for all languages
+    name_map.insert("zh-CN".to_string(), id.clone());
+    name_map.insert("zh-TW".to_string(), id.clone());
+    name_map.insert("ja".to_string(), id.clone());
+    name_map.insert("ko".to_string(), id.clone());
+
+    let mut description_map = HashMap::new();
+    description_map.insert("en".to_string(), description.to_string());
+    description_map.insert("zh-CN".to_string(), format!("一个{}模块", match module_type {
+        ModuleType::Kam => "kam",
+        ModuleType::Library => "库",
+        ModuleType::Template => "模板",
+        ModuleType::Repo => "仓库",
+    }));
+    description_map.insert("zh-TW".to_string(), format!("一個{}模組", match module_type {
+        ModuleType::Kam => "kam",
+        ModuleType::Library => "庫",
+        ModuleType::Template => "模板",
+        ModuleType::Repo => "倉庫",
+    }));
+    description_map.insert("ja".to_string(), format!("{}モジュール", match module_type {
+        ModuleType::Kam => "kam",
+        ModuleType::Library => "ライブラリ",
+        ModuleType::Template => "テンプレート",
+        ModuleType::Repo => "リポジトリ",
+    }));
+    description_map.insert("ko".to_string(), format!("{} 모듈", match module_type {
+        ModuleType::Kam => "kam",
+        ModuleType::Library => "라이브러리",
+        ModuleType::Template => "템플릿",
+        ModuleType::Repo => "저장소",
+    }));
 
     // Initialize using template
     tmpl_mod::init_template(
@@ -125,7 +228,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         Some(impl_template),
         args.force,
         module_type,
-        copy_all_files,
+        update_json,
     )?;
 
     post_init::post_process(

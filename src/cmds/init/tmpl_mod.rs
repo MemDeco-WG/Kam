@@ -36,7 +36,7 @@ pub fn extract_archive_to_temp(archive_path: &Path) -> Result<(TempDir, PathBuf)
 /// `impl_template` is an optional template selector. If provided, we will
 /// search `cache/tmpl/<impl_template>.zip` first, then try embedded built-in
 /// templates, then local repo (KAM_LOCAL_REPO), and finally try a direct URL
-/// if `impl_template` looks like one.
+/// `impl_template` looks like one.
 pub fn init_template(
     path: &Path,
     id: &str,
@@ -48,7 +48,7 @@ pub fn init_template(
     impl_template: Option<String>,
     force: bool,
     module_type: ModuleType,
-    copy_all_files: bool,
+    update_json: Option<String>,
 ) -> Result<(), KamError> {
     // Parse template variable definitions from CLI args and template kam.toml
     let mut variables = crate::template::TemplateManager::parse_template_variables(vars)?;
@@ -135,6 +135,7 @@ pub fn init_template(
         version.to_string(),
         author.to_string(),
         description_map_btree,
+        update_json,
         Some(ModuleType::Template),
     );
     kt.kam.module_type = module_type;
@@ -143,6 +144,9 @@ pub fn init_template(
         used_template: impl_template.clone(),
         variables: variables_btree,
     });
+    // Ensure the target directory exists before writing kam.toml
+    std::fs::create_dir_all(path)?;
+
     let kam_toml_rel = "kam.toml".to_string();
     print_status(
         StatusType::Add,
@@ -199,10 +203,10 @@ pub fn init_template(
     // `{{id}}` will be replaced by the confirmed project `id` from above.
     let src_temp = template_path.join("src");
     if src_temp.exists() {
-        let dst_root = path.join("src").join(id);
+        let dst_root = path.join("src");
         print_status(
             StatusType::Add,
-            &format!("src/{}/", id),
+            "src/",
             true,
         );
         std::fs::create_dir_all(&dst_root)?;
@@ -248,23 +252,40 @@ pub fn init_template(
                     )?;
                 } else {
                     // File: read, replace content, write
-                    let content = std::fs::read_to_string(entry.path())?;
-                    let mut new_content = content;
-                    for (k, v) in runtime_values {
-                        if !v.is_empty() {
-                            new_content = new_content.replace(&format!("{{{{{}}}}}", k), v);
+                    // Try to read as text first for variable replacement
+                    match std::fs::read_to_string(entry.path()) {
+                        Ok(content) => {
+                            let mut new_content = content;
+                            for (k, v) in runtime_values {
+                                if !v.is_empty() {
+                                    new_content = new_content.replace(&format!("{{{{{}}}}}", k), v);
+                                }
+                            }
+                            print_status(
+                                StatusType::Add,
+                                &rel_path.to_string_lossy(),
+                                false,
+                            );
+                            // Ensure parent dir exists
+                            if let Some(p) = dst_path.parent() {
+                                std::fs::create_dir_all(p)?;
+                            }
+                            std::fs::write(&dst_path, new_content)?;
+                        }
+                        Err(_) => {
+                            // Binary file - copy as-is
+                            let content = std::fs::read(entry.path())?;
+                            print_status(
+                                StatusType::Add,
+                                &rel_path.to_string_lossy(),
+                                false,
+                            );
+                            if let Some(p) = dst_path.parent() {
+                                std::fs::create_dir_all(p)?;
+                            }
+                            std::fs::write(&dst_path, content)?;
                         }
                     }
-                    print_status(
-                        StatusType::Add,
-                        &rel_path.to_string_lossy(),
-                        false,
-                    );
-                    // Ensure parent dir exists
-                    if let Some(p) = dst_path.parent() {
-                        std::fs::create_dir_all(p)?;
-                    }
-                    std::fs::write(&dst_path, new_content)?;
                 }
             }
             Ok(())
@@ -273,7 +294,7 @@ pub fn init_template(
         copy_replace_recursive(
             &src_temp,
             &path.join("src"),
-            std::path::Path::new(id),
+            std::path::Path::new(""),
             &runtime_values,
             force,
         )?;
@@ -325,45 +346,72 @@ pub fn init_template(
         copy_replace_recursive_top(&venv_temp, &dst, &runtime_values)?;
     }
 
-    // If copy_all_files or no src/ directory, copy all template files except kam.toml
-    if copy_all_files || !src_temp.exists() {
-        for entry in walkdir::WalkDir::new(&template_path) {
-            let entry = entry?;
-            let rel_path = entry.path().strip_prefix(&template_path)?;
-            if rel_path == Path::new("kam.toml") {
-                continue;
+    // Copy ALL template files except kam.toml (which is generated separately)
+    // Handle both text and binary files properly
+    for entry in walkdir::WalkDir::new(&template_path) {
+        let entry = entry?;
+        let rel_path = entry.path().strip_prefix(&template_path)?;
+
+        // Skip kam.toml and src directory (already processed above)
+        if rel_path == Path::new("kam.toml") || rel_path == Path::new("src") || rel_path.starts_with("src/") {
+            continue;
+        }
+
+        // Skip .kam_venv directory (already processed above)
+        if rel_path == Path::new(".kam_venv") || rel_path.starts_with(".kam_venv/") {
+            continue;
+        }
+
+        let mut rel_str = rel_path.to_string_lossy().to_string();
+        for (k, v) in &runtime_values {
+            if !v.is_empty() {
+                rel_str = rel_str.replace(&format!("{{{{{}}}}}", k), &v);
             }
-            let mut rel_str = rel_path.to_string_lossy().to_string();
-            for (k, v) in &runtime_values {
-                if !v.is_empty() {
-                    rel_str = rel_str.replace(&format!("{{{{{}}}}}", k), &v);
-                }
-            }
-            let dst_path = path.join(&rel_str);
-            if entry.file_type().is_dir() {
-                print_status(
-                    StatusType::Add,
-                    &rel_str,
-                    true,
-                );
-                std::fs::create_dir_all(&dst_path)?;
-            } else {
-                let content = std::fs::read_to_string(entry.path())?;
-                let mut new_content = content;
-                for (k, v) in &runtime_values {
-                    if !v.is_empty() {
-                        new_content = new_content.replace(&format!("{{{{{}}}}}", k), &v);
+        }
+
+        let dst_path = path.join(&rel_str);
+
+        if entry.file_type().is_dir() {
+            print_status(
+                StatusType::Add,
+                &rel_str,
+                true,
+            );
+            std::fs::create_dir_all(&dst_path)?;
+        } else {
+            // Try to read as text first for variable replacement
+            match std::fs::read_to_string(entry.path()) {
+                Ok(content) => {
+                    // Text file - apply variable replacements
+                    let mut new_content = content;
+                    for (k, v) in &runtime_values {
+                        if !v.is_empty() {
+                            new_content = new_content.replace(&format!("{{{{{}}}}}", k), &v);
+                        }
                     }
+                    print_status(
+                        StatusType::Add,
+                        &rel_str,
+                        false,
+                    );
+                    if let Some(p) = dst_path.parent() {
+                        std::fs::create_dir_all(p)?;
+                    }
+                    std::fs::write(&dst_path, new_content)?;
                 }
-                print_status(
-                    StatusType::Add,
-                    &rel_str,
-                    false,
-                );
-                if let Some(p) = dst_path.parent() {
-                    std::fs::create_dir_all(p)?;
+                Err(_) => {
+                    // Binary file - copy as-is
+                    let content = std::fs::read(entry.path())?;
+                    print_status(
+                        StatusType::Add,
+                        &rel_str,
+                        false,
+                    );
+                    if let Some(p) = dst_path.parent() {
+                        std::fs::create_dir_all(p)?;
+                    }
+                    std::fs::write(&dst_path, content)?;
                 }
-                std::fs::write(&dst_path, new_content)?;
             }
         }
     }

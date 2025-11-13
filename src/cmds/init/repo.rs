@@ -20,7 +20,7 @@ pub fn init_repo(
     // Determine source template dir relative to the crate root
     let src_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tmpl")
-        .join("repo_templeta");
+        .join("repo_template");
     if !src_dir.exists() {
         return Err(KamError::RepoTemplateNotFound(format!(
             "Repo template not found: {}",

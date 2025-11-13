@@ -1,0 +1,3 @@
+Kam\tmpl\lib_template\bin\.metadata
+# This is a metadata file for the bin directory
+# It ensures the directory is included in builds even if empty

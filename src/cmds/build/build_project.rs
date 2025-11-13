@@ -2,6 +2,7 @@ use colored::*;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use glob::Pattern;
 use tar::Builder as TarBuilder;
 use zip::{ZipWriter, write::FileOptions};
 use crate::types::kam_toml::enums::ModuleType;
@@ -12,31 +13,59 @@ use super::pre_build::handle_pre_build_hook;
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
 
-
-fn resolve_against_project(project_root: &Path, p: PathBuf) -> PathBuf {
-    if p.is_absolute() {
-        p
-    } else {
-        project_root.join(p)
+/// Check that library modules have proper architecture subdirectories in lib/
+fn check_library_structure(project_path: &Path) -> Result<(), KamError> {
+    let lib_dir = project_path.join("lib");
+    if !lib_dir.exists() || !lib_dir.is_dir() {
+        return Ok(()); // No lib/ directory, nothing to check
     }
+
+    let entries = fs::read_dir(&lib_dir)?;
+    let mut has_subdirs = false;
+    let mut has_direct_libs = false;
+
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            has_subdirs = true;
+        } else if path.is_file() {
+            if let Some(ext) = path.extension() {
+                if ext == "so" || ext == "a" || ext == "dylib" {
+                    has_direct_libs = true;
+                }
+            }
+        }
+    }
+
+    if has_direct_libs && !has_subdirs {
+        return Err(KamError::InvalidModuleStructure(
+            "Library module lib/ directory must contain architecture-specific subdirectories (e.g., lib/x86_64-linux-gnu/). \
+             Direct library files (.so, .a, .dylib) are not allowed in lib/ root. \
+             Please move them to appropriate subdirectories like lib/x86_64-linux-gnu/.".to_string(),
+        ));
+    }
+
+    Ok(())
 }
+
+
+
 
 pub fn determine_output_dir(
     project_root: &Path,
-    args: &BuildArgs,
-    kam_toml: &KamToml,
+    _args: &BuildArgs,
+    _kam_toml: &KamToml,
 ) -> Result<PathBuf, KamError> {
-    let output_dir: PathBuf = if let Some(out_cli) = &args.output {
-        let pb = PathBuf::from(out_cli);
-        resolve_against_project(project_root, pb)
-    } else if let Some(build_cfg) = &kam_toml.kam.build {
-        if let Some(t) = &build_cfg.target_dir {
-            resolve_against_project(project_root, PathBuf::from(t))
-        } else {
-            project_root.join("dist")
-        }
+    let target_dir = _kam_toml.kam.build.as_ref()
+        .and_then(|b| b.target_dir.as_ref())
+        .map(|s| s.as_str())
+        .unwrap_or("dist");
+
+    let output_dir = if target_dir.starts_with('/') || target_dir.contains(':') {
+        PathBuf::from(target_dir)
     } else {
-        project_root.join("dist")
+        project_root.join(target_dir)
     };
 
     fs::create_dir_all(&output_dir)?;
@@ -49,7 +78,7 @@ pub fn build_project(
     args: &BuildArgs,
     preloaded_kam_toml: Option<KamToml>,
 ) -> Result<(), KamError> {
-    // Use project path as-is to avoid extended length paths on Windows
+    // Use project path as-is
     let project_root = project_path.to_path_buf();
 
     println!("{}", "Building module...".bold().cyan());
@@ -65,6 +94,11 @@ pub fn build_project(
     let version = &kam_toml.prop.version;
 
     println!("  {} Module: {} v{}", "•".cyan(), module_id, version);
+
+    // Check library structure for Library modules
+    if kam_toml.kam.module_type == ModuleType::Library {
+        check_library_structure(project_path)?;
+    }
 
     let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
     println!(
@@ -276,22 +310,80 @@ pub fn create_source_archive(
     let enc = flate2::write::GzEncoder::new(tar_gz, flate2::Compression::default());
     let mut tar = TarBuilder::new(enc);
 
+    // Compile exclude and include patterns
+    let exclude_patterns: Vec<Pattern> = if let Some(build) = _kam_toml.kam.build.as_ref() {
+        if let Some(excludes) = &build.exclude {
+            excludes.iter().filter_map(|p| Pattern::new(p).ok()).collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    let include_patterns: Vec<Pattern> = if let Some(build) = _kam_toml.kam.build.as_ref() {
+        if let Some(includes) = &build.include {
+            includes.iter().filter_map(|p| Pattern::new(p).ok()).collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
     // Use ignore::WalkBuilder to traverse all files, respecting .gitignore
     let walker = ignore::WalkBuilder::new(effective_project_path)
         .git_ignore(true)
-        .hidden(true) // skip hidden files by default
+        .hidden(match _kam_toml.kam.module_type {
+            ModuleType::Template => false, // include hidden files for templates
+            _ => true, // ignore hidden files for other module types
+        })
         .build();
 
     for result in walker {
         let entry = result.map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
         let path = entry.path();
-        if path.is_file() {
-            let rel_path = path.strip_prefix(effective_project_path)
-                .map_err(|e| KamError::StripPrefixFailed(format!("strip_prefix: {}", e)))?;
-            // Skip .git directory and other unwanted
-            if rel_path.starts_with(".git") || rel_path.starts_with(".kam") {
+
+        // Skip the root directory itself
+        if path == effective_project_path {
+            continue;
+        }
+
+        let rel_path = path.strip_prefix(effective_project_path)
+            .map_err(|e| KamError::StripPrefixFailed(format!("strip_prefix: {}", e)))?;
+
+        // Skip .git directory and other unwanted paths
+        if rel_path.starts_with(".git") || rel_path.starts_with(".kam") {
+            continue;
+        }
+
+        // Check custom exclude/include
+        let rel_str = rel_path.to_string_lossy();
+        let mut should_exclude = false;
+        for pat in &exclude_patterns {
+            if pat.matches(&rel_str) {
+                should_exclude = true;
+                break;
+            }
+        }
+        if should_exclude {
+            let mut should_include = false;
+            for pat in &include_patterns {
+                if pat.matches(&rel_str) {
+                    should_include = true;
+                    break;
+                }
+            }
+            if !should_include {
                 continue;
             }
+        }
+
+        if path.is_dir() {
+            // Add directory to tar archive
+            tar.append_dir(rel_path, path)?;
+            println!("  {} {}/", "+".green(), rel_path.display().to_string().dimmed());
+        } else if path.is_file() {
             tar.append_path_with_name(path, rel_path)?;
             println!("  {} {}", "+".green(), rel_path.display().to_string().dimmed());
         }

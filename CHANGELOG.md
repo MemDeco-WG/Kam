@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial My Module-Kam-1.0.0
-  - Author: Author
-  - Version Code: 1763014706937
-  - Description: A module description
+- Initial Kam-Kam-1.0.0
+  - Author: LIghtJUNction (LIghtJUNction.me@gmail.com)
+  - Version Code: {{versionCode}}
+  - Description: {{description}}

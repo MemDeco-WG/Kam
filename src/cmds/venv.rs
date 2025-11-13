@@ -199,7 +199,7 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
 
             let cache = KamCache::new()?;
             let venv = KamVenv::load(&venv_path)?;
-            venv.link_binary(&name, &cache)?;
+            venv.link_binary(cache.bin_path(&name).as_path())?;
             println!("{} Linked binary '{}' into venv", "✓".green(), name);
             Ok(())
         }

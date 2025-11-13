@@ -24,6 +24,9 @@ enum Commands {
     /// Initialize a new Kam project
     Init(kam::cmds::init::InitArgs),
 
+    /// Add a library dependency to the project
+    Add(kam::cmds::add::AddArgs),
+
     /// Manage the global cache
     Cache(kam::cmds::cache::CacheArgs),
 
@@ -52,6 +55,7 @@ fn main() -> Result<(), KamError> {
 
     match cli.command {
         Commands::Init(args) => kam::cmds::init::run(args),
+        Commands::Add(args) => kam::cmds::add::run(args),
         Commands::Cache(args) => kam::cmds::cache::run(args),
         Commands::Check(args) => kam::cmds::check::run(args),
         Commands::Dev(args) => kam::cmds::dev::run(args),

@@ -11,7 +11,7 @@ use crate::types::modules::DEFAULT_DEPENDENCY_SOURCE;
 pub mod enums;
 
 /// Workspace section for Kam workspace management, similar to Cargo workspaces
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct WorkspaceSection {
     /// List of workspace members (paths relative to the workspace root)
     pub members: Option<Vec<String>>,
@@ -68,6 +68,7 @@ impl KamToml {
         version: String,
         author: String,
         description: BTreeMap<String, String>,
+        update_json: Option<String>,
         module_type: Option<ModuleType>,
     ) -> Self {
         let mut kt = KamToml::from_prop(PropSection {
@@ -77,7 +78,7 @@ impl KamToml {
             versionCode: chrono::Utc::now().timestamp_millis(),
             author,
             description,
-            updateJson: Some("https://example.com/update.json".to_string()),
+            updateJson: update_json,
         });
         if let Some(mt) = module_type {
             kt.kam.module_type = mt;
@@ -93,6 +94,7 @@ impl KamToml {
 
     /// Load KamToml from a file
     pub fn load_from_file<P: AsRef<std::path::Path>>(path: P) -> crate::errors::Result<Self> {
+        println!("DEBUG: current_dir: {:?}", std::env::current_dir());
         let content = std::fs::read_to_string(path)?;
         let mut kt: KamToml = toml::from_str(&content)?;
         kt.raw = content;
