@@ -30,8 +30,7 @@ pub struct KamToml {
 
     pub tool: Option<ToolSection>,
     pub tmpl: Option<TmplSection>,
-    pub lib: Option<LibSection>,
-    #[serde(skip)]
+    // lib字段在kam.lib!
     pub raw: String,
 }
 impl Default for KamToml {
