@@ -5,10 +5,10 @@ versionCode = 1762850845388
 author = "Author (author@example.com)"
 
 [prop.name]
-en = "kam_template"
+en = "{{project_name}}"
 
 [prop.description]
-en = "kam_template: the kam module template."
+en = "{{description}}"
 
 [mmrl.repo]
 license = "MIT"
@@ -37,7 +37,7 @@ verified = false
 features = []
 
 [mmrl.repo.note]
-title = "{{mmrl.repo.note.title}}"
+title = ""
 message = ""
 
 [mmrl.repo.manager.magisk]

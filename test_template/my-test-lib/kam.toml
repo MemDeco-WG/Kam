@@ -1,0 +1,107 @@
+[prop]
+id = "test_template/my-test-lib"
+version = "1.0.0"
+versionCode = 1763132782081
+author = "LIghtJUNction (LIghtJUNction.me@gmail.com)"
+updateJson = "https://raw.githubusercontent.com/MemDeco-WG/test_template/my-test-lib/main/update.json"
+
+[prop.name]
+en = "test_template/my-test-lib"
+ja = "test_template/my-test-lib"
+ko = "test_template/my-test-lib"
+zh-CN = "test_template/my-test-lib"
+zh-TW = "test_template/my-test-lib"
+
+[prop.description]
+en = "A library module"
+ja = "ライブラリモジュール"
+ko = "라이브러리 모듈"
+zh-CN = "一个库模块"
+zh-TW = "一個庫模組"
+
+[mmrl.repo]
+license = "MIT"
+license_file = "LICENSE"
+homepage = ""
+readme = ""
+readme_file = "README.md"
+changelog = ""
+changelog_file = "CHANGELOG.md"
+screenshots = []
+categories = []
+keywords = []
+maintainers = []
+repository = ""
+documentation = ""
+issues = ""
+funding = ""
+support = ""
+donate = ""
+cover = ""
+icon = ""
+devices = []
+arch = []
+require = []
+antifeatures = []
+max_num = 0
+min_api = 0
+max_api = 0
+verified = false
+features = []
+
+[mmrl.repo.note]
+title = ""
+message = ""
+
+[mmrl.repo.manager.magisk]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.kernelsu]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.apatch]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.options.archive]
+compression = ""
+
+[kam]
+min_api = 0
+max_api = 0
+supported_arch = []
+conflicts = []
+module_type = "library"
+
+[kam.dependency]
+kam = []
+dev = []
+
+[kam.build]
+target_dir = "dist"
+output_file = "{{id}}-{{versionCode}}"
+pre_build = 'echo "pre build..."'
+post_build = 'echo "post build..."'
+
+[kam.tmpl]
+used_template = "lib_template"
+
+[kam.tmpl.variables.repo_name]
+var_type = "my-repo"
+required = false
+
+[kam.tmpl.variables.repo_owner]
+var_type = "testuser"
+required = false
+
+[kam.lib]
+provides = []
+
+[kam.tool]
+
+[tmpl.variables]

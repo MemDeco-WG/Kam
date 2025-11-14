@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;
+use chrono::Utc;
 
 /// Arguments for the dev command
 #[derive(Args, Debug)]
@@ -26,10 +27,10 @@ enum DevCommands {
 
 #[derive(Args, Debug)]
 pub struct CollectArgs {
-    /// Path to the index directory
-    index_path: String,
+    /// Path to the repo directory (containing index/ and json/)
+    repo_path: String,
     /// Output file
-    #[arg(short, long, default_value = "modules.json")]
+    #[arg(short, long, default_value = "json/modules_index.json")]
     output: String,
 }
 
@@ -61,14 +62,34 @@ pub fn run(args: DevArgs) -> Result<(), KamError> {
 }
 
 fn collect(args: CollectArgs) -> Result<(), KamError> {
-    let index_path = Path::new(&args.index_path);
+    let repo_path = Path::new(&args.repo_path);
+    let index_path = repo_path.join("index");
+    let config_path = repo_path.join("json").join("config.json");
+
+    // Read repo metadata from config.json
+    let metadata: RepoMetadata = if config_path.exists() {
+        let content = fs::read_to_string(&config_path)?;
+        serde_json::from_str(&content).map_err(|e| KamError::JsonError(format!("Failed to parse config.json: {}", e)))?
+    } else {
+        // Default metadata if config.json doesn't exist
+        RepoMetadata {
+            name: "Kam Repo".to_string(),
+            website: "".to_string(),
+            support: "".to_string(),
+            donate: "".to_string(),
+            submission: "".to_string(),
+            cover: "".to_string(),
+            description: "A Kam module repository".to_string(),
+        }
+    };
+
     let mut modules_map: HashMap<String, Vec<IndexEntry>> = HashMap::new();
 
-    for entry in WalkDir::new(index_path).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(&index_path).into_iter().filter_map(|e| e.ok()) {
         if entry.file_type().is_file() {
             let path = entry.path();
             if let Some(parent) = path.parent() {
-                if parent.starts_with(index_path) {
+                if parent.starts_with(&index_path) {
                     let content = fs::read_to_string(path)?;
                     for line in content.lines() {
                         if let Ok(entry) = serde_json::from_str::<IndexEntry>(line) {
@@ -123,7 +144,21 @@ fn collect(args: CollectArgs) -> Result<(), KamError> {
     }
 
     let len = modules.len();
-    let modules_json = ModulesJson { modules };
+    let metadata_struct = Metadata {
+        version: 1,
+        timestamp: Utc::now().timestamp() as f64,
+    };
+    let modules_json = FullModulesJson {
+        name: metadata.name,
+        website: metadata.website,
+        support: metadata.support,
+        donate: metadata.donate,
+        submission: metadata.submission,
+        cover: metadata.cover,
+        description: metadata.description,
+        metadata: metadata_struct,
+        modules,
+    };
     let json = serde_json::to_string_pretty(&modules_json)?;
     fs::write(&args.output, json)?;
     println!("Collected {} modules to {}", len, args.output);
@@ -157,10 +192,10 @@ fn mkindex(args: MkindexArgs) -> Result<(), KamError> {
 
 fn sync(args: SyncArgs) -> Result<(), KamError> {
     let content = fs::read_to_string(&args.input)?;
-    let modules_json: ModulesJson = serde_json::from_str(&content)?;
+    let full_modules_json: FullModulesJson = serde_json::from_str(&content)?;
     let index_path = Path::new(&args.output);
 
-    for module in modules_json.modules {
+    for module in full_modules_json.modules {
         let prefix = get_prefix(&module.id);
         let file_path = index_path.join(prefix).join(&module.id);
         fs::create_dir_all(file_path.parent().unwrap())?;
@@ -212,7 +247,32 @@ fn get_prefix(id: &str) -> String {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ModulesJson {
+struct RepoMetadata {
+    name: String,
+    website: String,
+    support: String,
+    donate: String,
+    submission: String,
+    cover: String,
+    description: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Metadata {
+    version: u32,
+    timestamp: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FullModulesJson {
+    name: String,
+    website: String,
+    support: String,
+    donate: String,
+    submission: String,
+    cover: String,
+    description: String,
+    metadata: Metadata,
     modules: Vec<Module>,
 }
 

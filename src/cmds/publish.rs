@@ -277,35 +277,44 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
             // println!("  {} Created GitHub release for {}", "✓".green(), module_id);
             return Ok(());
         } else {
+            // For libraries, create GitHub issue for submission
+            if let Some(source) = kam_toml
+                .mmrl
+                .as_ref()
+                .and_then(|m| m.repo.as_ref())
+                .and_then(|r| r.repository.as_ref())
+            {
+                if source.starts_with("https://github.com/") {
+                    let parts: Vec<&str> = source.trim_end_matches('/').split('/').collect();
+                    if parts.len() >= 5 {
+                        let owner = parts[3];
+                        let repo = parts[4];
+
+                        let package_filename = package_path.file_name().ok_or_else(|| {
+                            KamError::InvalidFilename("invalid package filename".to_string())
+                        })?.to_string_lossy().to_string();
+
+                        create_github_issue(owner, repo, &module_id, &version, &kam_toml, &package_filename, args.token.as_deref())?;
+
+                        println!(
+                            "  {} Created module submission issue in {}/{}",
+                            "✓".green(),
+                            owner,
+                            repo
+                        );
+                        return Ok(());
+                    }
+                }
+            }
+
+            // Fallback: publish to local cache
             println!("  {} Publishing library to local cache", "→".cyan());
 
             let cache = crate::cache::KamCache::new()?;
             cache.ensure_dirs()?;
 
-            // Copy package to cache/lib directory
-            let lib_dir = cache.lib_module_path(&module_id, &version);
-            fs::create_dir_all(&lib_dir)?;
-
-            // Extract the package to cache
-            if package_path.to_str().unwrap().ends_with(".tar.gz") {
-                let tar_gz = fs::File::open(&package_path)?;
-                let dec = GzDecoder::new(tar_gz);
-                let mut archive = tar::Archive::new(dec);
-                archive
-                    .unpack(&lib_dir)
-                    .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
-            } else if package_path.extension().and_then(|e| e.to_str()) == Some("zip") {
-                let file = fs::File::open(&package_path)?;
-                let mut archive = zip::ZipArchive::new(file)
-                    .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
-                archive
-                    .extract(&lib_dir)
-                    .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
-            } else {
-                return Err(KamError::UnsupportedFormat(
-                    "Library packages must be .zip or .tar.gz format".to_string(),
-                ));
-            }
+            // Install library artifacts to cache
+            install_library_to_cache(&package_path, &cache)?;
 
             // Update local index
             let package_filename = package_path.file_name().ok_or_else(|| {
@@ -314,9 +323,8 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
             update_local_cache_index(&cache, &module_id, &version, &kam_toml, &package_filename)?;
 
             println!(
-                "  {} Published to local cache: {}",
-                "✓".green(),
-                lib_dir.display()
+                "  {} Published library artifacts to cache",
+                "✓".green()
             );
             println!(
                 "  {} Library can now be added with: kam add {}@{}",
@@ -396,6 +404,74 @@ fn update_local_cache_index(
     update_repo_index(cache.root(), module_id, version, kam_toml, package_filename)
 }
 
+/// Install library artifacts to cache (lib, lib64, bin)
+fn install_library_to_cache(
+    package_path: &Path,
+    cache: &crate::cache::KamCache,
+) -> Result<(), KamError> {
+    // Extract to temp directory
+    let temp_dir = tempfile::tempdir()?;
+    let temp_path = temp_dir.path();
+
+    if package_path.to_str().unwrap().ends_with(".tar.gz") {
+        let tar_gz = fs::File::open(package_path)?;
+        let dec = GzDecoder::new(tar_gz);
+        let mut archive = tar::Archive::new(dec);
+        archive
+            .unpack(temp_path)
+            .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
+    } else if package_path.extension().and_then(|e| e.to_str()) == Some("zip") {
+        let file = fs::File::open(package_path)?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
+        archive
+            .extract(temp_path)
+            .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
+    } else {
+        return Err(KamError::UnsupportedFormat(
+            "Library packages must be .zip or .tar.gz format".to_string(),
+        ));
+    }
+
+    // Copy lib to cache/lib
+    let src_lib = temp_path.join("lib");
+    if src_lib.exists() {
+        copy_dir_all(&src_lib, &cache.lib_dir())?;
+    }
+
+    // Copy lib64 to cache/lib64
+    let src_lib64 = temp_path.join("lib64");
+    if src_lib64.exists() {
+        copy_dir_all(&src_lib64, &cache.lib64_dir())?;
+    }
+
+    // Copy bin to cache/bin
+    let src_bin = temp_path.join("bin");
+    if src_bin.exists() {
+        copy_dir_all(&src_bin, &cache.bin_dir())?;
+    }
+
+    Ok(())
+}
+
+/// Copy directory recursively
+fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), KamError> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
 /// Get GitHub repo owner and name from git remote
 fn get_github_repo_info() -> Result<(String, String), KamError> {
     let repo = Repository::open(".")
@@ -416,6 +492,85 @@ fn get_github_repo_info() -> Result<(String, String), KamError> {
     } else {
         Err(KamError::InvalidConfig("Not a GitHub repo".to_string()))
     }
+}
+
+/// Create GitHub issue for module submission
+fn create_github_issue(
+    owner: &str,
+    repo: &str,
+    module_id: &str,
+    version: &str,
+    kam_toml: &KamToml,
+    package_filename: &str,
+    token: Option<&str>,
+) -> Result<(), KamError> {
+    let github_token = std::env::var("GITHUB_TOKEN").ok();
+    let kam_token = std::env::var("KAM_PUBLISH_TOKEN").ok();
+    let token = token
+        .or_else(|| github_token.as_deref())
+        .or_else(|| kam_token.as_deref())
+        .ok_or(KamError::InvalidConfig("GitHub token required".to_string()))?;
+
+    let client = reqwest::blocking::Client::new();
+
+    // Create module metadata JSON
+    let metadata = serde_json::json!({
+        "id": module_id,
+        "name": kam_toml.prop.name.get("en").unwrap_or(&module_id.to_string()),
+        "version": version,
+        "versionCode": kam_toml.prop.versionCode,
+        "author": kam_toml.prop.author,
+        "description": kam_toml.prop.description.get("en").unwrap_or(&String::new()),
+        "license": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.license.as_ref()).unwrap_or(&"MIT".to_string()),
+        "homepage": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.homepage.as_ref()).unwrap_or(&String::new()),
+        "support": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.support.as_ref()).unwrap_or(&String::new()),
+        "donate": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.donate.as_ref()).unwrap_or(&String::new()),
+        "cover": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.cover.as_ref()).unwrap_or(&String::new()),
+        "icon": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.icon.as_ref()).unwrap_or(&String::new()),
+        "readme": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.readme.as_ref()).unwrap_or(&String::new()),
+        "changelog": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.changelog.as_ref()).unwrap_or(&String::new()),
+        "categories": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.categories.as_ref()).unwrap_or(&Vec::new()),
+        "keywords": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.keywords.as_ref()).unwrap_or(&Vec::new()),
+        "require": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.require.as_ref()).unwrap_or(&Vec::new()),
+        "antifeatures": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.antifeatures.as_ref()).unwrap_or(&Vec::new()),
+        "provides": kam_toml.kam.lib.as_ref().and_then(|l| l.provides.as_ref()).unwrap_or(&Vec::new()),
+        "versions": [{
+            "version": version,
+            "versionCode": kam_toml.prop.versionCode,
+            "zipUrl": format!("https://github.com/{}/{}/releases/download/{}-{}/{}", owner, repo, module_id, version, package_filename),
+            "changelog": kam_toml.mmrl.as_ref().and_then(|m| m.repo.as_ref()).and_then(|r| r.changelog.as_ref()).unwrap_or(&String::new()),
+            "size": 0, // TODO: get actual size
+            "timestamp": chrono::Utc::now().timestamp() as f64
+        }],
+        "timestamp": chrono::Utc::now().timestamp() as f64
+    });
+
+    let create_issue_url = format!("https://api.github.com/repos/{}/{}/issues", owner, repo);
+    let title = format!("Module Submission: {} v{}", module_id, version);
+    let body = format!("```json\n{}\n```", serde_json::to_string_pretty(&metadata).unwrap());
+
+    let issue_body = json!({
+        "title": title,
+        "body": body,
+        "labels": ["module-submission"]
+    });
+
+    let resp = client
+        .post(&create_issue_url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("User-Agent", "kam-cli")
+        .json(&issue_body)
+        .send()
+        .map_err(|e| KamError::UploadFailed(format!("create issue failed: {}", e)))?;
+
+    if !resp.status().is_success() {
+        return Err(KamError::UploadFailed(format!(
+            "create issue failed: HTTP {}",
+            resp.status()
+        )));
+    }
+
+    Ok(())
 }
 
 /// Create GitHub release and upload asset

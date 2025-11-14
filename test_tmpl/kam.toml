@@ -1,0 +1,101 @@
+[prop]
+id = "test_tmpl"
+version = "1.0.0"
+versionCode = 1763133150141
+author = "LIghtJUNction (LIghtJUNction.me@gmail.com)"
+updateJson = "https://raw.githubusercontent.com/MemDeco-WG/test_tmpl/main/update.json"
+
+[prop.name]
+en = "test_tmpl"
+ja = "test_tmpl"
+ko = "test_tmpl"
+zh-CN = "test_tmpl"
+zh-TW = "test_tmpl"
+
+[prop.description]
+en = "A template module"
+ja = "テンプレートモジュール"
+ko = "템플릿 모듈"
+zh-CN = "一个模板模块"
+zh-TW = "一個模板模組"
+
+[mmrl.repo]
+license = "MIT"
+license_file = "LICENSE"
+homepage = ""
+readme = ""
+readme_file = "README.md"
+changelog = ""
+changelog_file = "CHANGELOG.md"
+screenshots = []
+categories = []
+keywords = []
+maintainers = []
+repository = ""
+documentation = ""
+issues = ""
+funding = ""
+support = ""
+donate = ""
+cover = ""
+icon = ""
+devices = []
+arch = []
+require = []
+antifeatures = []
+max_num = 0
+min_api = 0
+max_api = 0
+verified = false
+features = []
+
+[mmrl.repo.note]
+title = ""
+message = ""
+
+[mmrl.repo.manager.magisk]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.kernelsu]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.apatch]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.options.archive]
+compression = ""
+
+[kam]
+min_api = 0
+max_api = 0
+supported_arch = []
+conflicts = []
+module_type = "template"
+
+[kam.dependency]
+kam = []
+dev = []
+
+[kam.build]
+target_dir = "dist"
+output_file = "{{id}}-{{versionCode}}"
+pre_build = 'echo "pre build..."'
+post_build = 'echo "post build..."'
+
+[kam.tmpl]
+used_template = "tmpl_template"
+
+[kam.tmpl.variables]
+
+[kam.lib]
+provides = []
+
+[kam.tool]
+
+[tmpl.variables]

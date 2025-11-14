@@ -354,13 +354,18 @@ impl KamVenv {
 
     /// Link a library (module id and version) from cache into the venv
     pub fn link_library(&self, id: &str, version: &str, cache: &KamCache) -> Result<(), KamError> {
-        let cache_lib = cache.lib_module_path(id, version).join("lib");
+        // For libraries, link from global cache lib or lib64 based on arch
+        let cache_lib = if std::env::consts::ARCH == "x86_64" {
+            cache.lib64_dir()
+        } else {
+            cache.lib_dir()
+        };
         let venv_lib = self.lib_dir();
 
         if !cache_lib.exists() {
             return Err(KamError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Library lib/ not found in cache: {} v{}", id, version),
+                format!("Library lib/ not found in cache for arch {}", std::env::consts::ARCH),
             )));
         }
 

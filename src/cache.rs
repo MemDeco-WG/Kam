@@ -161,6 +161,11 @@ impl KamCache {
         self.root.join("repo")
     }
 
+    /// Get the lib64 directory (64-bit libraries)
+    pub fn lib64_dir(&self) -> PathBuf {
+        self.root.join("lib64")
+    }
+
     /// Ensure all cache directories exist
     ///
     /// Creates the cache root and all subdirectories if they don't exist.
@@ -176,6 +181,7 @@ impl KamCache {
         std::fs::create_dir_all(&self.root)?;
         std::fs::create_dir_all(self.bin_dir())?;
         std::fs::create_dir_all(self.lib_dir())?;
+        std::fs::create_dir_all(self.lib64_dir())?;
         std::fs::create_dir_all(self.log_dir())?;
         std::fs::create_dir_all(self.profile_dir())?;
         std::fs::create_dir_all(self.repo_dir())?;
@@ -273,6 +279,7 @@ impl KamCache {
         let path = match dir {
             "bin" => self.bin_dir(),
             "lib" => self.lib_dir(),
+            "lib64" => self.lib64_dir(),
             "log" => self.log_dir(),
             "profile" => self.profile_dir(),
             "repo" => self.repo_dir(),

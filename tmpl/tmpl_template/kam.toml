@@ -5,10 +5,10 @@ versionCode = 1762850845388
 author = "Author"
 
 [prop.name]
-en = "My Module"
+en = "{{project_name}}"
 
 [prop.description]
-en = "A module description"
+en = "{{description}}"
 
 [mmrl.repo]
 license = "MIT"

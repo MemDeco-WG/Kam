@@ -5,10 +5,10 @@ versionCode = 1762852219062
 author = "Author"
 
 [prop.name]
-en = "kam_venv"
+en = "{{project_name}}"
 
 [prop.description]
-en = "kam_module virtual environment"
+en = "{{description}}"
 
 [mmrl.repo]
 license = "MIT"

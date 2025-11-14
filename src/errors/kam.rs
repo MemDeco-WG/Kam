@@ -132,4 +132,7 @@ pub enum KamError {
 
     #[error("Invalid module structure: {0}")]
     InvalidModuleStructure(String),
+
+    #[error("Template render error: {0}")]
+    TemplateRenderError(String),
 }

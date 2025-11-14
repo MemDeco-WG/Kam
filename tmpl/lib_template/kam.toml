@@ -3,14 +3,14 @@ id = "lib_template"
 version = "1.0.0"
 versionCode = 1763018024903
 author = "Author (author@example.com)"
-updateJson = "https://example.com/update.json"
+updateJson = "https://raw.githubusercontent.com/{{repo_owner}}/{{repo_name}}/main/update.json"
 
 
 [prop.name]
-en = "My Module"
+en = "{{project_name}}"
 
 [prop.description]
-en = "A module description"
+en = "{{description}}"
 
 [mmrl.repo]
 license = "MIT"
@@ -79,6 +79,21 @@ post_build = 'echo "post build..."'
 extra_includes = []
 
 [kam.tmpl.variables]
+[kam.tmpl.variables.repo_owner]
+var_type = "string"
+required = true
+default = ""
+note = "GitHub repository owner (e.g., yourusername)"
+help = "The GitHub username or organization that owns the repository"
+example = "yourusername"
+
+[kam.tmpl.variables.repo_name]
+var_type = "string"
+required = true
+default = ""
+note = "GitHub repository name (e.g., my-kam-repo)"
+help = "The name of the GitHub repository"
+example = "my-kam-repo"
 
 [kam.lib]
 provides = [

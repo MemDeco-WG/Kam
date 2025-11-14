@@ -2,7 +2,7 @@ use crate::cmds::init::status::{StatusType, print_status};
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
 use crate::types::kam_toml::sections::TmplSection;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::cache::KamCache;
@@ -38,10 +38,10 @@ pub fn extract_archive_to_temp(archive_path: &Path) -> Result<(TempDir, PathBuf)
 pub fn init_template(
     path: &Path,
     id: &str,
-    name_map: HashMap<String, String>,
+    name_map: BTreeMap<String, String>,
     version: &str,
     author: &str,
-    description_map: HashMap<String, String>,
+    description_map: BTreeMap<String, String>,
     vars: &[String],
     impl_template: Option<String>,
     force: bool,
@@ -124,15 +124,12 @@ pub fn init_template(
         }
     }
 
-    let name_map_btree: BTreeMap<_, _> = name_map.into_iter().collect();
-    let description_map_btree: BTreeMap<_, _> = description_map.into_iter().collect();
-
     let mut kt = KamToml::new_with_current_timestamp(
         id.to_string(),
-        name_map_btree,
+        name_map,
         version.to_string(),
         author.to_string(),
-        description_map_btree,
+        description_map,
         update_json,
         Some(ModuleType::Template),
     );

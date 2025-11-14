@@ -4,6 +4,7 @@ use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::sections::TmplSection;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
+use tera::{Context, Tera};
 // toml_edit not needed here; use toml::Value for mutation
 
 pub fn init_impl(
@@ -131,20 +132,28 @@ pub fn init_impl(
     }
     kt.write_to_dir(path)?;
 
-    // NOTE: For `impl` initialization, `kam.toml` is created from the
-    // generated KamToml (`kt.write_to_dir`) and must NOT be modified by
-    // template variables. Template variables are intended to affect files
-    // other than `kam.toml` (for example source files under `src/`).
-    // Therefore we intentionally do not perform any replacements inside
-    // `kam.toml` here.
+    // Apply template variables to kam.toml as well
+    let kam_toml_path = path.join("kam.toml");
+    if kam_toml_path.exists() {
+        let mut content = std::fs::read_to_string(&kam_toml_path)?;
+        let mut context = Context::new();
+        for (k, v) in template_vars.iter() {
+            context.insert(k, v);
+        }
+        let mut tera = Tera::default();
+        content = tera.render_str(&content, &context).map_err(|e| KamError::TemplateRenderError(e.to_string()))?;
+        std::fs::write(&kam_toml_path, content)?;
+    }
 
-    // Copy src from template with replace.
+    // Copy src from template with tera templating.
     if template_path.exists() {
         let src_dir_placeholder = "{{id}}";
-        let mut src_dir_replaced = src_dir_placeholder.to_string();
+        let mut context = Context::new();
         for (k, v) in template_vars.iter() {
-            src_dir_replaced = src_dir_replaced.replace(&format!("{{{{{}}}}}", k), v);
+            context.insert(k, v);
         }
+        let mut tera = Tera::default();
+        let src_dir_replaced = tera.render_str(src_dir_placeholder, &context).map_err(|e| KamError::TemplateRenderError(e.to_string()))?;
         let src_temp = template_path.join("src").join(&src_dir_replaced);
 
         if src_temp.exists() {
@@ -156,14 +165,9 @@ pub fn init_impl(
                 let entry = entry?;
                 let filename = entry.file_name();
                 let file_name_str = filename.to_string_lossy().to_string();
-                let mut replaced_name = file_name_str;
-                for (k, v) in template_vars.iter() {
-                    replaced_name = replaced_name.replace(&format!("{{{{{}}}}}", k), v);
-                }
+                let replaced_name = tera.render_str(&file_name_str, &context).map_err(|e| KamError::TemplateRenderError(e.to_string()))?;
                 let mut content = std::fs::read_to_string(entry.path())?;
-                for (key, value) in template_vars.iter() {
-                    content = content.replace(&format!("{{{{{}}}}}", key), value);
-                }
+                content = tera.render_str(&content, &context).map_err(|e| KamError::TemplateRenderError(e.to_string()))?;
                 let dest_file = src_dir.join(&replaced_name);
                 let file_rel = format!("src/{}/{}", id, replaced_name);
                 print_status(StatusType::Add, &file_rel, false);

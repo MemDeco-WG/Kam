@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::errors::KamError;
 use crate::types::kam_toml::enums::ModuleType;
+use crate::types::modules::KamToml;
 
 pub mod args;
 pub mod impl_mod;
@@ -152,10 +153,38 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // - HOME / USERPROFILE : used by cache code to locate the user's home directory
     //
 
+    // Determine module type and template first
+    let (module_type, impl_template) = if args.kam {
+        (ModuleType::Kam, "kam_template".to_string())
+    } else if args.lib {
+        (ModuleType::Library, "lib_template".to_string())
+    } else if args.tmpl {
+        (ModuleType::Template, "tmpl_template".to_string())
+    } else if args.repo {
+        (ModuleType::Repo, "repo_template".to_string())
+    } else if args.venv {
+        (ModuleType::Template, "venv_template".to_string())
+    } else if let Some(impl_name) = &args.r#impl {
+        (ModuleType::Kam, impl_name.clone())
+    } else {
+        (ModuleType::Kam, "kam_template".to_string())
+    };
+
     // Parse template variables
     let mut template_vars = crate::template::TemplateManager::parse_template_vars(&args.var)?;
 
     let version = args.version.as_deref().unwrap_or("1.0.0");
+
+    // Add project_name and description to template_vars
+    let project_name = args.project_name.as_deref().unwrap_or("My Module");
+    let description = args.description.as_deref().unwrap_or(&match module_type {
+        ModuleType::Kam => "A kam module",
+        ModuleType::Library => "A library module",
+        ModuleType::Template => "A template module",
+        ModuleType::Repo => "A repository module",
+    });
+    template_vars.insert("project_name".to_string(), project_name.to_string());
+    template_vars.insert("description".to_string(), description.to_string());
 
     // Get git info for smart defaults
     let (git_author, git_email, git_remote, git_default_branch) = get_git_info().unwrap_or((
@@ -190,88 +219,82 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         ))
     };
 
-    // Determine module type and template
-    let (module_type, impl_template) = if args.kam {
-        (ModuleType::Kam, "kam_template".to_string())
-    } else if args.lib {
-        (ModuleType::Library, "lib_template".to_string())
-    } else if args.tmpl {
-        (ModuleType::Template, "tmpl_template".to_string())
-    } else if args.repo {
-        (ModuleType::Repo, "repo_template".to_string())
-    } else if args.venv {
-        (ModuleType::Template, "venv_template".to_string())
-    } else if let Some(impl_name) = &args.r#impl {
-        (ModuleType::Kam, impl_name.clone())
-    } else {
-        (ModuleType::Kam, "kam_template".to_string())
-    };
+// Create name and description maps with multiple languages
+let mut name_map = BTreeMap::new();
+name_map.insert("en".to_string(), id.clone()); // Use ID for all languages
+name_map.insert("zh-CN".to_string(), id.clone());
+name_map.insert("zh-TW".to_string(), id.clone());
+name_map.insert("ja".to_string(), id.clone());
+name_map.insert("ko".to_string(), id.clone());
 
-    let description = args.description.as_deref().unwrap_or(&match module_type {
-        ModuleType::Kam => "A kam module",
-        ModuleType::Library => "A library module",
-        ModuleType::Template => "A template module",
-        ModuleType::Repo => "A repository module",
-    });
+let mut description_map = BTreeMap::new();
+description_map.insert("en".to_string(), description.to_string());
+description_map.insert(
+    "zh-CN".to_string(),
+    format!(
+        "一个{}模块",
+        match module_type {
+            ModuleType::Kam => "kam",
+            ModuleType::Library => "库",
+            ModuleType::Template => "模板",
+            ModuleType::Repo => "仓库",
+        }
+    ),
+);
+description_map.insert(
+    "zh-TW".to_string(),
+    format!(
+        "一個{}模組",
+        match module_type {
+            ModuleType::Kam => "kam",
+            ModuleType::Library => "庫",
+            ModuleType::Template => "模板",
+            ModuleType::Repo => "倉庫",
+        }
+    ),
+);
+description_map.insert(
+    "ja".to_string(),
+    format!(
+        "{}モジュール",
+        match module_type {
+            ModuleType::Kam => "kam",
+            ModuleType::Library => "ライブラリ",
+            ModuleType::Template => "テンプレート",
+            ModuleType::Repo => "リポジトリ",
+        }
+    ),
+);
+description_map.insert(
+    "ko".to_string(),
+    format!(
+        "{} 모듈",
+        match module_type {
+            ModuleType::Kam => "kam",
+            ModuleType::Library => "라이브러리",
+            ModuleType::Template => "템플릿",
+            ModuleType::Repo => "저장소",
+        }
+    ),
+);
 
-    // Create name and description maps with multiple languages
-    let mut name_map = HashMap::new();
-    name_map.insert("en".to_string(), id.clone()); // Use ID for all languages
-    name_map.insert("zh-CN".to_string(), id.clone());
-    name_map.insert("zh-TW".to_string(), id.clone());
-    name_map.insert("ja".to_string(), id.clone());
-    name_map.insert("ko".to_string(), id.clone());
+// Create KamToml
+let mut kt = KamToml::new_with_current_timestamp(
+    id.clone(),
+    name_map.clone(),
+    version.to_string(),
+    author.to_string(),
+    description_map.clone(),
+    update_json.clone(),
+    None,
+);
 
-    let mut description_map = HashMap::new();
-    description_map.insert("en".to_string(), description.to_string());
-    description_map.insert(
-        "zh-CN".to_string(),
-        format!(
-            "一个{}模块",
-            match module_type {
-                ModuleType::Kam => "kam",
-                ModuleType::Library => "库",
-                ModuleType::Template => "模板",
-                ModuleType::Repo => "仓库",
-            }
-        ),
-    );
-    description_map.insert(
-        "zh-TW".to_string(),
-        format!(
-            "一個{}模組",
-            match module_type {
-                ModuleType::Kam => "kam",
-                ModuleType::Library => "庫",
-                ModuleType::Template => "模板",
-                ModuleType::Repo => "倉庫",
-            }
-        ),
-    );
-    description_map.insert(
-        "ja".to_string(),
-        format!(
-            "{}モジュール",
-            match module_type {
-                ModuleType::Kam => "kam",
-                ModuleType::Library => "ライブラリ",
-                ModuleType::Template => "テンプレート",
-                ModuleType::Repo => "リポジトリ",
-            }
-        ),
-    );
-    description_map.insert(
-        "ko".to_string(),
-        format!(
-            "{} 모듈",
-            match module_type {
-                ModuleType::Kam => "kam",
-                ModuleType::Library => "라이브러리",
-                ModuleType::Template => "템플릿",
-                ModuleType::Repo => "저장소",
-            }
-        ),
-    );
+// For repo modules, initialize mmrl.repo with repository template variable
+if module_type == ModuleType::Repo {
+    let mmrl = kt.mmrl.get_or_insert_with(Default::default);
+    let repo = mmrl.repo.get_or_insert_with(Default::default);
+    repo.repository = Some("{{repository}}".to_string());
+}
 
     // Initialize using template
     tmpl_mod::init_template(

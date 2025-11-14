@@ -3,12 +3,13 @@ id = "repo_template"
 version = "1.0.0"
 versionCode = 1762850845388
 author = "Author"
+updateJson = "https://raw.githubusercontent.com/{{repo_owner}}/{{repo_name}}/main/update.json"
 
 [prop.name]
-en = "My Module"
+en = "{{project_name}}"
 
 [prop.description]
-en = "A module description"
+en = "{{description}}"
 
 [mmrl.repo]
 license = "MIT"
@@ -26,6 +27,7 @@ screenshots = []
 categories = []
 keywords = []
 maintainers = []
+repository = "{{repository}}"
 devices = []
 arch = []
 require = []
@@ -76,6 +78,30 @@ pre_build = 'echo "pre build..."'
 post_build = 'echo "post build..."'
 
 [kam.tmpl.variables]
+[kam.tmpl.variables.repo_owner]
+var_type = "string"
+required = true
+default = ""
+note = "GitHub repository owner (e.g., yourusername)"
+help = "The GitHub username or organization that owns the repository"
+example = "yourusername"
+
+[kam.tmpl.variables.repo_name]
+var_type = "string"
+required = true
+default = ""
+note = "GitHub repository name (e.g., my-kam-repo)"
+help = "The name of the GitHub repository"
+example = "my-kam-repo"
+
+[kam.tmpl.variables.repository]
+var_type = "string"
+required = true
+default = ""
+note = "GitHub repository URL (e.g., https://github.com/yourusername/my-kam-repo)"
+help = "The full URL of the GitHub repository for module submissions"
+example = "https://github.com/yourusername/my-kam-repo"
+
 [kam.tmpl.variables.example]
 var_type = "string"
 required = true
