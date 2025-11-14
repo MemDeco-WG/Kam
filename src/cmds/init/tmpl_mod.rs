@@ -5,15 +5,13 @@ use crate::types::kam_toml::sections::TmplSection;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-use crate::errors::KamError;
 use crate::cache::KamCache;
+use crate::errors::KamError;
 use flate2;
 use tar;
 use tempfile::TempDir;
 use walkdir;
 use zip;
-
-
 
 // Helper to extract a zip or tar.gz file into a TempDir and return the template folder path
 pub fn extract_archive_to_temp(archive_path: &Path) -> Result<(TempDir, PathBuf), KamError> {
@@ -148,11 +146,7 @@ pub fn init_template(
     std::fs::create_dir_all(path)?;
 
     let kam_toml_rel = "kam.toml".to_string();
-    print_status(
-        StatusType::Add,
-        &kam_toml_rel,
-        false,
-    );
+    print_status(StatusType::Add, &kam_toml_rel, false);
     kt.write_to_dir(path)?;
 
     // Determine which template to use
@@ -204,11 +198,7 @@ pub fn init_template(
     let src_temp = template_path.join("src");
     if src_temp.exists() {
         let dst_root = path.join("src");
-        print_status(
-            StatusType::Add,
-            "src/",
-            true,
-        );
+        print_status(StatusType::Add, "src/", true);
         std::fs::create_dir_all(&dst_root)?;
 
         // Recursive copy that replaces variables in path segments and file contents.
@@ -237,11 +227,7 @@ pub fn init_template(
                 let dst_path = dst_base.join(&rel_path);
 
                 if entry.file_type()?.is_dir() {
-                    print_status(
-                        StatusType::Add,
-                        &rel_path.to_string_lossy(),
-                        true,
-                    );
+                    print_status(StatusType::Add, &rel_path.to_string_lossy(), true);
                     std::fs::create_dir_all(&dst_path)?;
                     copy_replace_recursive(
                         &entry.path(),
@@ -261,11 +247,7 @@ pub fn init_template(
                                     new_content = new_content.replace(&format!("{{{{{}}}}}", k), v);
                                 }
                             }
-                            print_status(
-                                StatusType::Add,
-                                &rel_path.to_string_lossy(),
-                                false,
-                            );
+                            print_status(StatusType::Add, &rel_path.to_string_lossy(), false);
                             // Ensure parent dir exists
                             if let Some(p) = dst_path.parent() {
                                 std::fs::create_dir_all(p)?;
@@ -275,11 +257,7 @@ pub fn init_template(
                         Err(_) => {
                             // Binary file - copy as-is
                             let content = std::fs::read(entry.path())?;
-                            print_status(
-                                StatusType::Add,
-                                &rel_path.to_string_lossy(),
-                                false,
-                            );
+                            print_status(StatusType::Add, &rel_path.to_string_lossy(), false);
                             if let Some(p) = dst_path.parent() {
                                 std::fs::create_dir_all(p)?;
                             }
@@ -306,11 +284,7 @@ pub fn init_template(
     let venv_temp = template_path.join(".kam_venv");
     if venv_temp.exists() {
         let dst = path.join(".kam_venv");
-        print_status(
-            StatusType::Add,
-            &".kam_venv/".to_string(),
-            true,
-        );
+        print_status(StatusType::Add, &".kam_venv/".to_string(), true);
         std::fs::create_dir_all(&dst)?;
         // Reuse copy_replace_recursive to copy with replacements inside .kam-venv too
         // Build a small runtime map for names relative to project root: use same runtime_values
@@ -353,7 +327,10 @@ pub fn init_template(
         let rel_path = entry.path().strip_prefix(&template_path)?;
 
         // Skip kam.toml and src directory (already processed above)
-        if rel_path == Path::new("kam.toml") || rel_path == Path::new("src") || rel_path.starts_with("src/") {
+        if rel_path == Path::new("kam.toml")
+            || rel_path == Path::new("src")
+            || rel_path.starts_with("src/")
+        {
             continue;
         }
 
@@ -372,11 +349,7 @@ pub fn init_template(
         let dst_path = path.join(&rel_str);
 
         if entry.file_type().is_dir() {
-            print_status(
-                StatusType::Add,
-                &rel_str,
-                true,
-            );
+            print_status(StatusType::Add, &rel_str, true);
             std::fs::create_dir_all(&dst_path)?;
         } else {
             // Try to read as text first for variable replacement
@@ -389,11 +362,7 @@ pub fn init_template(
                             new_content = new_content.replace(&format!("{{{{{}}}}}", k), &v);
                         }
                     }
-                    print_status(
-                        StatusType::Add,
-                        &rel_str,
-                        false,
-                    );
+                    print_status(StatusType::Add, &rel_str, false);
                     if let Some(p) = dst_path.parent() {
                         std::fs::create_dir_all(p)?;
                     }
@@ -402,11 +371,7 @@ pub fn init_template(
                 Err(_) => {
                     // Binary file - copy as-is
                     let content = std::fs::read(entry.path())?;
-                    print_status(
-                        StatusType::Add,
-                        &rel_str,
-                        false,
-                    );
+                    print_status(StatusType::Add, &rel_str, false);
                     if let Some(p) = dst_path.parent() {
                         std::fs::create_dir_all(p)?;
                     }

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// 管理器平台的配置（例如 magisk、kernelsu、apatch）
 pub struct ManagerConfig {
     /// 最低兼容版本（数字）
-        pub min: Option<i64>,
+    pub min: Option<i64>,
     /// 支持的设备列表（可用于过滤）
     pub devices: Option<Vec<String>>,
     /// 支持的架构列表

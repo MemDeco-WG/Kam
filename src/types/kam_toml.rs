@@ -28,9 +28,10 @@ pub struct KamToml {
     pub mmrl: Option<MmrlSection>,
     pub kam: KamSection,
 
-    pub tool: Option<ToolSection>,
     pub tmpl: Option<TmplSection>,
     // lib字段在kam.lib!
+    // tool字段在kam.tool!
+    #[serde(skip)]
     pub raw: String,
 }
 impl Default for KamToml {
@@ -54,7 +55,6 @@ impl KamToml {
             mmrl: Some(MmrlSection::default()),
             kam: KamSection::default(),
             tmpl: Some(TmplSection::default()),
-            lib: Some(LibSection::default()),
             raw: String::new(),
         }
     }

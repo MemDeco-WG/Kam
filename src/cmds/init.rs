@@ -22,9 +22,15 @@ fn get_git_info() -> Result<(String, String, String, String), KamError> {
         .args(&["config", "--get", "user.name"])
         .output()
         .ok()
-        .and_then(|output| if output.status.success() {
-            String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
-        } else { None })
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+            } else {
+                None
+            }
+        })
         .unwrap_or("Author".to_string());
 
     // Get author email using git command
@@ -32,14 +38,23 @@ fn get_git_info() -> Result<(String, String, String, String), KamError> {
         .args(&["config", "--get", "user.email"])
         .output()
         .ok()
-        .and_then(|output| if output.status.success() {
-            String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string())
-        } else { None })
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+            } else {
+                None
+            }
+        })
         .unwrap_or("author@example.com".to_string());
 
     // Get remote URL
     let remote_url = if let Ok(remote) = repo.find_remote("origin") {
-        remote.url().map(|s| s.to_string()).unwrap_or("".to_string())
+        remote
+            .url()
+            .map(|s| s.to_string())
+            .unwrap_or("".to_string())
     } else {
         "".to_string()
     };
@@ -47,7 +62,10 @@ fn get_git_info() -> Result<(String, String, String, String), KamError> {
     // Get default branch
     let default_branch = if let Ok(reference) = repo.find_reference("refs/remotes/origin/HEAD") {
         if let Some(target) = reference.symbolic_target() {
-            target.strip_prefix("refs/remotes/origin/").unwrap_or("master").to_string()
+            target
+                .strip_prefix("refs/remotes/origin/")
+                .unwrap_or("master")
+                .to_string()
         } else {
             "master".to_string()
         }
@@ -65,28 +83,37 @@ fn generate_update_json_url(remote_url: &str, id: &str, default_branch: &str) ->
         let parts: Vec<&str> = remote_url.trim_end_matches(".git").split('/').collect();
         if parts.len() >= 5 {
             let owner = parts[3];
-            return format!("https://raw.githubusercontent.com/{}/{}/{}/update.json", owner, id, default_branch);
+            return format!(
+                "https://raw.githubusercontent.com/{}/{}/{}/update.json",
+                owner, id, default_branch
+            );
         }
     } else if remote_url.contains("gitlab.com") {
         // GitLab: https://gitlab.com/owner/repo.git -> https://gitlab.com/owner/repo/-/raw/{branch}/update.json
         let parts: Vec<&str> = remote_url.trim_end_matches(".git").split('/').collect();
         if parts.len() >= 5 {
             let owner = parts[3];
-            return format!("https://gitlab.com/{}/{}/-/raw/{}/update.json", owner, id, default_branch);
+            return format!(
+                "https://gitlab.com/{}/{}/-/raw/{}/update.json",
+                owner, id, default_branch
+            );
         }
     }
     // Default or unknown
-    format!("https://raw.githubusercontent.com/user/{}/{}/update.json", id, default_branch)
+    format!(
+        "https://raw.githubusercontent.com/user/{}/{}/update.json",
+        id, default_branch
+    )
 }
-
-
-
 
 /// Run the init command
 pub fn run(args: InitArgs) -> Result<(), KamError> {
     let current_dir = std::env::current_dir()?;
     let project_name = &args.name;
-    let project_path: PathBuf = if project_name.starts_with('/') || project_name.starts_with('\\') || project_name.contains(':') {
+    let project_path: PathBuf = if project_name.starts_with('/')
+        || project_name.starts_with('\\')
+        || project_name.contains(':')
+    {
         PathBuf::from(project_name)
     } else {
         current_dir.join(project_name)
@@ -111,7 +138,8 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .count();
     if type_flags > 1 {
         return Err(KamError::InvalidModuleType(
-            "Cannot specify multiple module types: --kam, --lib, --tmpl, --repo, --venv".to_string(),
+            "Cannot specify multiple module types: --kam, --lib, --tmpl, --repo, --venv"
+                .to_string(),
         ));
     }
 
@@ -124,14 +152,18 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // - HOME / USERPROFILE : used by cache code to locate the user's home directory
     //
 
-
     // Parse template variables
     let mut template_vars = crate::template::TemplateManager::parse_template_vars(&args.var)?;
 
     let version = args.version.as_deref().unwrap_or("1.0.0");
 
     // Get git info for smart defaults
-    let (git_author, git_email, git_remote, git_default_branch) = get_git_info().unwrap_or(("Author".to_string(), "author@example.com".to_string(), "".to_string(), "master".to_string()));
+    let (git_author, git_email, git_remote, git_default_branch) = get_git_info().unwrap_or((
+        "Author".to_string(),
+        "author@example.com".to_string(),
+        "".to_string(),
+        "master".to_string(),
+    ));
     let default_author = format!("{} ({})", git_author, git_email);
     let author = args.author.as_deref().unwrap_or(&default_author);
 
@@ -151,7 +183,11 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     let update_json = if args.update_json.is_some() {
         Some(args.update_json.as_deref().unwrap().to_string())
     } else {
-        Some(generate_update_json_url(&git_remote, &id, &git_default_branch))
+        Some(generate_update_json_url(
+            &git_remote,
+            &id,
+            &git_default_branch,
+        ))
     };
 
     // Determine module type and template
@@ -171,15 +207,12 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         (ModuleType::Kam, "kam_template".to_string())
     };
 
-    let description = args
-        .description
-        .as_deref()
-        .unwrap_or(&match module_type {
-            ModuleType::Kam => "A kam module",
-            ModuleType::Library => "A library module",
-            ModuleType::Template => "A template module",
-            ModuleType::Repo => "A repository module",
-        });
+    let description = args.description.as_deref().unwrap_or(&match module_type {
+        ModuleType::Kam => "A kam module",
+        ModuleType::Library => "A library module",
+        ModuleType::Template => "A template module",
+        ModuleType::Repo => "A repository module",
+    });
 
     // Create name and description maps with multiple languages
     let mut name_map = HashMap::new();
@@ -191,30 +224,54 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
 
     let mut description_map = HashMap::new();
     description_map.insert("en".to_string(), description.to_string());
-    description_map.insert("zh-CN".to_string(), format!("一个{}模块", match module_type {
-        ModuleType::Kam => "kam",
-        ModuleType::Library => "库",
-        ModuleType::Template => "模板",
-        ModuleType::Repo => "仓库",
-    }));
-    description_map.insert("zh-TW".to_string(), format!("一個{}模組", match module_type {
-        ModuleType::Kam => "kam",
-        ModuleType::Library => "庫",
-        ModuleType::Template => "模板",
-        ModuleType::Repo => "倉庫",
-    }));
-    description_map.insert("ja".to_string(), format!("{}モジュール", match module_type {
-        ModuleType::Kam => "kam",
-        ModuleType::Library => "ライブラリ",
-        ModuleType::Template => "テンプレート",
-        ModuleType::Repo => "リポジトリ",
-    }));
-    description_map.insert("ko".to_string(), format!("{} 모듈", match module_type {
-        ModuleType::Kam => "kam",
-        ModuleType::Library => "라이브러리",
-        ModuleType::Template => "템플릿",
-        ModuleType::Repo => "저장소",
-    }));
+    description_map.insert(
+        "zh-CN".to_string(),
+        format!(
+            "一个{}模块",
+            match module_type {
+                ModuleType::Kam => "kam",
+                ModuleType::Library => "库",
+                ModuleType::Template => "模板",
+                ModuleType::Repo => "仓库",
+            }
+        ),
+    );
+    description_map.insert(
+        "zh-TW".to_string(),
+        format!(
+            "一個{}模組",
+            match module_type {
+                ModuleType::Kam => "kam",
+                ModuleType::Library => "庫",
+                ModuleType::Template => "模板",
+                ModuleType::Repo => "倉庫",
+            }
+        ),
+    );
+    description_map.insert(
+        "ja".to_string(),
+        format!(
+            "{}モジュール",
+            match module_type {
+                ModuleType::Kam => "kam",
+                ModuleType::Library => "ライブラリ",
+                ModuleType::Template => "テンプレート",
+                ModuleType::Repo => "リポジトリ",
+            }
+        ),
+    );
+    description_map.insert(
+        "ko".to_string(),
+        format!(
+            "{} 모듈",
+            match module_type {
+                ModuleType::Kam => "kam",
+                ModuleType::Library => "라이브러리",
+                ModuleType::Template => "템플릿",
+                ModuleType::Repo => "저장소",
+            }
+        ),
+    );
 
     // Initialize using template
     tmpl_mod::init_template(

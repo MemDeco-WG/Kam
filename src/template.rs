@@ -45,9 +45,7 @@ impl TemplateManager {
     /// List all available built-in templates
     pub fn list_builtin_templates() -> Vec<String> {
         TmplAssets::iter()
-            .filter_map(|name| {
-                name.strip_suffix(".tar.gz").map(|s| s.to_string())
-            })
+            .filter_map(|name| name.strip_suffix(".tar.gz").map(|s| s.to_string()))
             .collect()
     }
 
@@ -68,7 +66,9 @@ impl TemplateManager {
     }
 
     /// Parse template variable definitions from CLI arguments
-    pub fn parse_template_variables(vars: &[String]) -> Result<HashMap<String, VariableDefinition>, KamError> {
+    pub fn parse_template_variables(
+        vars: &[String],
+    ) -> Result<HashMap<String, VariableDefinition>, KamError> {
         let mut variables = HashMap::new();
         for var in vars {
             if let Some((key, value)) = var.split_once('=') {

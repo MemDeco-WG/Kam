@@ -56,7 +56,12 @@ pub fn run(args: AddArgs) -> Result<(), KamError> {
         std::process::exit(1);
     });
 
-    println!("{} Adding library: {}@{}", "→".cyan(), library.bold(), args.version);
+    println!(
+        "{} Adding library: {}@{}",
+        "→".cyan(),
+        library.bold(),
+        args.version
+    );
 
     // Load project kam.toml
     let mut kam_toml = KamToml::load_from_dir(project_path)?;
@@ -90,7 +95,9 @@ pub fn run(args: AddArgs) -> Result<(), KamError> {
 
     if args.dev {
         println!("  {} Adding to dev dependencies", "•".dimmed());
-        let devs = kam_toml.kam.dependency
+        let devs = kam_toml
+            .kam
+            .dependency
             .get_or_insert_with(Default::default)
             .dev
             .get_or_insert_with(Vec::new);
@@ -101,7 +108,9 @@ pub fn run(args: AddArgs) -> Result<(), KamError> {
         }
     } else {
         println!("  {} Adding to runtime dependencies", "•".dimmed());
-        let deps = kam_toml.kam.dependency
+        let deps = kam_toml
+            .kam
+            .dependency
             .get_or_insert_with(Default::default)
             .kam
             .get_or_insert_with(Vec::new);
@@ -136,11 +145,19 @@ pub fn run(args: AddArgs) -> Result<(), KamError> {
             venv.link_library(library, &actual_version, &cache)?;
             println!("  {} Linked library to venv", "✓".green());
         } else {
-            println!("  {} No virtual environment found, skipping linking", "!".yellow());
+            println!(
+                "  {} No virtual environment found, skipping linking",
+                "!".yellow()
+            );
         }
     }
 
-    println!("{} Added {}@{}", "✓".green().bold(), library, lib_info.version);
+    println!(
+        "{} Added {}@{}",
+        "✓".green().bold(),
+        library,
+        lib_info.version
+    );
     Ok(())
 }
 
@@ -148,7 +165,11 @@ pub fn run(args: AddArgs) -> Result<(), KamError> {
 fn add_workspace_member(args: &AddArgs, project_path: &Path) -> Result<(), KamError> {
     let member_path = args.library.as_deref().unwrap_or(".");
 
-    println!("{} Adding workspace member: {}", "→".cyan(), member_path.bold());
+    println!(
+        "{} Adding workspace member: {}",
+        "→".cyan(),
+        member_path.bold()
+    );
 
     // Load project kam.toml
     let mut kam_toml = KamToml::load_from_dir(project_path)?;
@@ -159,7 +180,11 @@ fn add_workspace_member(args: &AddArgs, project_path: &Path) -> Result<(), KamEr
 
     // Check if already exists
     if members.contains(&member_path.to_string()) {
-        println!("  {} Member '{}' already exists in workspace", "!".yellow(), member_path);
+        println!(
+            "  {} Member '{}' already exists in workspace",
+            "!".yellow(),
+            member_path
+        );
         return Ok(());
     }
 
@@ -169,7 +194,11 @@ fn add_workspace_member(args: &AddArgs, project_path: &Path) -> Result<(), KamEr
     // Save updated kam.toml
     kam_toml.write_to_dir(project_path)?;
     println!("  {} Updated kam.toml", "✓".green());
-    println!("{} Added workspace member: {}", "✓".green().bold(), member_path);
+    println!(
+        "{} Added workspace member: {}",
+        "✓".green().bold(),
+        member_path
+    );
     Ok(())
 }
 
@@ -214,7 +243,12 @@ fn find_latest_version(cache: &KamCache, library: &str) -> Result<PathBuf, KamEr
 }
 
 /// Fetch library from repository
-fn fetch_library(cache: &KamCache, library: &str, version: &str, repo: Option<&str>) -> Result<String, KamError> {
+fn fetch_library(
+    cache: &KamCache,
+    library: &str,
+    version: &str,
+    repo: Option<&str>,
+) -> Result<String, KamError> {
     println!("  {} Fetching {}@{}", "→".cyan(), library, version);
 
     // Check local repo first (KAM_LOCAL_REPO or specified repo)
@@ -238,7 +272,9 @@ fn fetch_library(cache: &KamCache, library: &str, version: &str, repo: Option<&s
 
                     // Get actual version
                     let actual_version = if version == "latest" {
-                        meta.get("version").and_then(|v| v.as_str()).unwrap_or("latest")
+                        meta.get("version")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("latest")
                     } else {
                         version
                     };
@@ -284,7 +320,10 @@ fn compute_index_path(index_base: &Path, library: &str) -> PathBuf {
         0 => index_base.to_path_buf(),
         1 => index_base.join("1").join(&name_lower),
         2 => index_base.join("2").join(&name_lower),
-        3 => index_base.join("3").join(&chars[0].to_string()).join(&name_lower),
+        3 => index_base
+            .join("3")
+            .join(&chars[0].to_string())
+            .join(&name_lower),
         _ => {
             let prefix1 = chars[0..2].iter().collect::<String>();
             let prefix2 = chars[2..4].iter().collect::<String>();
@@ -295,22 +334,23 @@ fn compute_index_path(index_base: &Path, library: &str) -> PathBuf {
 
 /// Extract package archive (zip or tar.gz)
 fn extract_package(source: &Path, dest: &Path) -> Result<(), KamError> {
-    println!("DEBUG: Extracting {} to {}", source.display(), dest.display());
     let ext = source.extension().and_then(|e| e.to_str());
 
     match ext {
         Some("zip") => {
             let file = fs::File::open(source)?;
-            let mut archive = zip::ZipArchive::new(file)
-                .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
-            archive.extract(dest)
+            let mut archive =
+                zip::ZipArchive::new(file).map_err(|e| KamError::ExtractFailed(e.to_string()))?;
+            archive
+                .extract(dest)
                 .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
         }
         Some("gz") => {
             let file = fs::File::open(source)?;
             let gz = flate2::read::GzDecoder::new(file);
             let mut archive = tar::Archive::new(gz);
-            archive.unpack(dest)
+            archive
+                .unpack(dest)
                 .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
         }
         _ => {
@@ -325,11 +365,19 @@ fn extract_package(source: &Path, dest: &Path) -> Result<(), KamError> {
 }
 
 /// Fetch from GitHub releases
-fn fetch_from_github(cache: &KamCache, library: &str, version: &str, repo_url: &str) -> Result<String, KamError> {
+fn fetch_from_github(
+    cache: &KamCache,
+    library: &str,
+    version: &str,
+    repo_url: &str,
+) -> Result<String, KamError> {
     // Parse GitHub repo from URL
     let parts: Vec<&str> = repo_url.trim_end_matches('/').split('/').collect();
     if parts.len() < 5 {
-        return Err(KamError::InvalidUrl(format!("Invalid GitHub URL: {}", repo_url)));
+        return Err(KamError::InvalidUrl(format!(
+            "Invalid GitHub URL: {}",
+            repo_url
+        )));
     }
 
     let owner = parts[3];
@@ -337,16 +385,23 @@ fn fetch_from_github(cache: &KamCache, library: &str, version: &str, repo_url: &
 
     // Construct release API URL
     let api_url = if version == "latest" {
-        format!("https://api.github.com/repos/{}/{}/releases/latest", owner, repo)
+        format!(
+            "https://api.github.com/repos/{}/{}/releases/latest",
+            owner, repo
+        )
     } else {
-        format!("https://api.github.com/repos/{}/{}/releases/tags/{}", owner, repo, version)
+        format!(
+            "https://api.github.com/repos/{}/{}/releases/tags/{}",
+            owner, repo, version
+        )
     };
 
     println!("  {} Fetching from GitHub: {}/{}", "→".cyan(), owner, repo);
 
     // Make request
     let client = reqwest::blocking::Client::new();
-    let mut req = client.get(&api_url)
+    let mut req = client
+        .get(&api_url)
         .header("User-Agent", "kam-package-manager");
 
     // Add auth token if available
@@ -354,7 +409,8 @@ fn fetch_from_github(cache: &KamCache, library: &str, version: &str, repo_url: &
         req = req.header("Authorization", format!("token {}", token));
     }
 
-    let response = req.send()
+    let response = req
+        .send()
         .map_err(|e| KamError::FetchFailed(e.to_string()))?;
 
     if !response.status().is_success() {
@@ -364,7 +420,8 @@ fn fetch_from_github(cache: &KamCache, library: &str, version: &str, repo_url: &
         )));
     }
 
-    let release: serde_json::Value = response.json()
+    let release: serde_json::Value = response
+        .json()
         .map_err(|e| KamError::JsonError(e.to_string()))?;
 
     // Find asset matching library name
@@ -372,17 +429,21 @@ fn fetch_from_github(cache: &KamCache, library: &str, version: &str, repo_url: &
         for asset in assets {
             if let Some(name) = asset.get("name").and_then(|n| n.as_str()) {
                 if name.contains(library) && (name.ends_with(".zip") || name.ends_with(".tar.gz")) {
-                    if let Some(download_url) = asset.get("browser_download_url").and_then(|u| u.as_str()) {
+                    if let Some(download_url) =
+                        asset.get("browser_download_url").and_then(|u| u.as_str())
+                    {
                         // Download asset
                         println!("  {} Downloading: {}", "→".cyan(), name);
 
-                        let response = client.get(download_url)
+                        let response = client
+                            .get(download_url)
                             .header("User-Agent", "kam-package-manager")
                             .send()
                             .map_err(|e| KamError::FetchFailed(e.to_string()))?;
 
                         if response.status().is_success() {
-                            let bytes = response.bytes()
+                            let bytes = response
+                                .bytes()
                                 .map_err(|e| KamError::FetchFailed(e.to_string()))?;
 
                             // Save to temp and extract
@@ -424,7 +485,8 @@ fn extract_library_info(lib_path: &Path) -> Result<LibraryInfo, KamError> {
         })
     } else {
         // Fallback: extract version from directory name
-        let version = lib_path.file_name()
+        let version = lib_path
+            .file_name()
             .and_then(|n| n.to_str())
             .and_then(|n| n.split('-').last())
             .unwrap_or("unknown")

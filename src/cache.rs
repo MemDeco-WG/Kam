@@ -183,8 +183,6 @@ impl KamCache {
         Ok(())
     }
 
-
-
     /// Get the path to a library module in the cache
     ///
     /// ## Arguments

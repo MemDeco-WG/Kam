@@ -1,11 +1,11 @@
+use crate::types::kam_toml::enums::ModuleType;
 use colored::*;
+use glob::Pattern;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use glob::Pattern;
 use tar::Builder as TarBuilder;
 use zip::{ZipWriter, write::FileOptions};
-use crate::types::kam_toml::enums::ModuleType;
 
 use super::args::BuildArgs;
 use super::post_build::handle_post_build_hook;
@@ -49,15 +49,15 @@ fn check_library_structure(project_path: &Path) -> Result<(), KamError> {
     Ok(())
 }
 
-
-
-
 pub fn determine_output_dir(
     project_root: &Path,
     _args: &BuildArgs,
     _kam_toml: &KamToml,
 ) -> Result<PathBuf, KamError> {
-    let target_dir = _kam_toml.kam.build.as_ref()
+    let target_dir = _kam_toml
+        .kam
+        .build
+        .as_ref()
         .and_then(|b| b.target_dir.as_ref())
         .map(|s| s.as_str())
         .unwrap_or("dist");
@@ -219,7 +219,10 @@ pub fn create_module_zip_if_needed(
     // is provided.
 
     let effective_src_dir = effective_project_path.join("src").join(module_id);
-    if kam_toml.kam.module_type == ModuleType::Kam && !is_rendered_template && effective_src_dir.exists() {
+    if kam_toml.kam.module_type == ModuleType::Kam
+        && !is_rendered_template
+        && effective_src_dir.exists()
+    {
         // Create module zip archive
         let zip_file = File::create(&module_output_file)?;
         let mut zip = ZipWriter::new(zip_file);
@@ -313,7 +316,10 @@ pub fn create_source_archive(
     // Compile exclude and include patterns
     let exclude_patterns: Vec<Pattern> = if let Some(build) = _kam_toml.kam.build.as_ref() {
         if let Some(excludes) = &build.exclude {
-            excludes.iter().filter_map(|p| Pattern::new(p).ok()).collect()
+            excludes
+                .iter()
+                .filter_map(|p| Pattern::new(p).ok())
+                .collect()
         } else {
             Vec::new()
         }
@@ -323,7 +329,10 @@ pub fn create_source_archive(
 
     let include_patterns: Vec<Pattern> = if let Some(build) = _kam_toml.kam.build.as_ref() {
         if let Some(includes) = &build.include {
-            includes.iter().filter_map(|p| Pattern::new(p).ok()).collect()
+            includes
+                .iter()
+                .filter_map(|p| Pattern::new(p).ok())
+                .collect()
         } else {
             Vec::new()
         }
@@ -336,12 +345,13 @@ pub fn create_source_archive(
         .git_ignore(true)
         .hidden(match _kam_toml.kam.module_type {
             ModuleType::Template => false, // include hidden files for templates
-            _ => true, // ignore hidden files for other module types
+            _ => true,                     // ignore hidden files for other module types
         })
         .build();
 
     for result in walker {
-        let entry = result.map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        let entry =
+            result.map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
         let path = entry.path();
 
         // Skip the root directory itself
@@ -349,7 +359,8 @@ pub fn create_source_archive(
             continue;
         }
 
-        let rel_path = path.strip_prefix(effective_project_path)
+        let rel_path = path
+            .strip_prefix(effective_project_path)
             .map_err(|e| KamError::StripPrefixFailed(format!("strip_prefix: {}", e)))?;
 
         // Skip .git directory and other unwanted paths
@@ -382,10 +393,18 @@ pub fn create_source_archive(
         if path.is_dir() {
             // Add directory to tar archive
             tar.append_dir(rel_path, path)?;
-            println!("  {} {}/", "+".green(), rel_path.display().to_string().dimmed());
+            println!(
+                "  {} {}/",
+                "+".green(),
+                rel_path.display().to_string().dimmed()
+            );
         } else if path.is_file() {
             tar.append_path_with_name(path, rel_path)?;
-            println!("  {} {}", "+".green(), rel_path.display().to_string().dimmed());
+            println!(
+                "  {} {}",
+                "+".green(),
+                rel_path.display().to_string().dimmed()
+            );
         }
     }
 
@@ -398,7 +417,11 @@ pub fn create_source_archive(
                     tar.append_path_with_name(&source_path, &include.dest)?;
                     println!("  {} {}", "+".green(), include.dest.dimmed());
                 } else {
-                    println!("  {} Extra include not found: {}", "!".yellow(), include.source);
+                    println!(
+                        "  {} Extra include not found: {}",
+                        "!".yellow(),
+                        include.source
+                    );
                 }
             }
         }

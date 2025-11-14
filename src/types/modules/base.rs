@@ -12,8 +12,6 @@ pub use crate::types::kam_toml::KamToml;
 
 use crate::types::source::Source;
 
-
-
 pub const DEFAULT_DEPENDENCY_SOURCE: &str = "https://github.com/MemDeco-WG/Kam-Index";
 
 /// A lightweight abstraction of a Kam module. Owns a KamToml and an optional Source.

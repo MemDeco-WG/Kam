@@ -316,7 +316,10 @@ impl KamVenv {
 
     /// Link a binary from the source path to the venv
     pub fn link_binary(&self, source_path: &Path) -> Result<(), KamError> {
-        let name = source_path.file_name().and_then(|n| n.to_str()).ok_or_else(|| KamError::InvalidFilename("invalid binary name".to_string()))?;
+        let name = source_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| KamError::InvalidFilename("invalid binary name".to_string()))?;
         let venv_bin = self.bin_dir().join(name);
 
         if !source_path.exists() {

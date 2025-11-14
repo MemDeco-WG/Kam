@@ -1,7 +1,7 @@
 use clap::Args;
 use colored::Colorize;
 
-use comrak::{Arena, format_commonmark, markdown_to_html, parse_document, Options};
+use comrak::{Arena, Options, format_commonmark, markdown_to_html, parse_document};
 use ignore::WalkBuilder;
 use serde_json;
 use serde_yaml;
@@ -44,7 +44,8 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             .build();
 
         for entry in walker {
-            let entry = entry.map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+            let entry = entry
+                .map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
             let path = entry.path();
             if path.is_file() {
                 // Skip files in .git directory
@@ -79,9 +80,19 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     if results.is_empty() {
         println!("{} No issues found.", "✓".green());
     } else {
-        println!("{} Found {} issues in {} files.", "Summary:".yellow(), total_issues, results.len());
+        println!(
+            "{} Found {} issues in {} files.",
+            "Summary:".yellow(),
+            total_issues,
+            results.len()
+        );
         if args.fix {
-            println!("{} Fixed {} issues, {} remaining.", "✓".green(), total_fixed, remaining_issues);
+            println!(
+                "{} Fixed {} issues, {} remaining.",
+                "✓".green(),
+                total_fixed,
+                remaining_issues
+            );
         }
 
         for res in &results {
@@ -92,7 +103,10 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         }
 
         if !args.fix {
-            println!("\n{} Run with --fix to automatically fix issues.", "Hint:".dimmed());
+            println!(
+                "\n{} Run with --fix to automatically fix issues.",
+                "Hint:".dimmed()
+            );
         }
     }
 

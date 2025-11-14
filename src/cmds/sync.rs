@@ -377,6 +377,24 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
                         e
                     ),
                 }
+
+                // Link binaries
+                let lib_path = cache.lib_module_path(&dep.id, &ver);
+                if let Ok(entries) = std::fs::read_dir(lib_path.join("bin")) {
+                    for entry in entries.flatten() {
+                        if let Some(name_str) = entry.file_name().to_str() {
+                            match venv.link_binary(&entry.path()) {
+                                Ok(_) => println!("  {} Linked binary: {}", "✓".green(), name_str),
+                                Err(e) => println!(
+                                    "  {} Failed to link binary {}: {}",
+                                    "!".yellow(),
+                                    name_str,
+                                    e
+                                ),
+                            }
+                        }
+                    }
+                }
             }
         }
 

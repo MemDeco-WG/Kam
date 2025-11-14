@@ -1,4 +1,7 @@
-use super::{BuildSection, DependencySection, LibSection, ModuleType, SupportedArch, TmplSection};
+use super::{
+    BuildSection, DependencySection, LibSection, ModuleType, SupportedArch, TmplSection,
+    ToolSection,
+};
 use crate::types::kam_toml::WorkspaceSection;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +30,8 @@ pub struct KamSection {
     pub tmpl: Option<TmplSection>,
     /// 库相关子配置
     pub lib: Option<LibSection>,
+    /// 工具相关子配置
+    pub tool: Option<ToolSection>,
     /// 工作区配置
     pub workspace: Option<WorkspaceSection>,
 }
@@ -43,6 +48,7 @@ impl Default for KamSection {
             module_type: ModuleType::Kam,
             tmpl: Some(TmplSection::default()),
             lib: Some(LibSection::default()),
+            tool: Some(ToolSection::default()),
             workspace: None,
         }
     }

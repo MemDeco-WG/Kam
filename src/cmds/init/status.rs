@@ -33,7 +33,10 @@ pub fn print_status(status: StatusType, rel: &str, is_dir: bool) {
             println!("{}", format!("{} -> {}", from, to).color(Color::Cyan));
         }
         StatusType::Symlink(target, link) => {
-            println!("{}", format!("{} --> {}", link, target).color(Color::Magenta));
+            println!(
+                "{}",
+                format!("{} --> {}", link, target).color(Color::Magenta)
+            );
         }
         StatusType::Delete => {
             println!("{}", format!("- {}", rel).color(Color::Red));

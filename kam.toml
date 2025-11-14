@@ -79,8 +79,11 @@ conflicts = []
 module_type = "kam"
 
 [kam.dependency]
-kam = []
 dev = []
+
+[[kam.dependency.kam]]
+id = "test_lib"
+versionCode = 1763123753863
 
 [kam.build]
 target_dir = "dist"
@@ -102,9 +105,7 @@ members = [
     "tmpl/kam_template",
     "tmpl/tmpl_template",
     "tmpl/repo_template",
-    "tmpl/venv_template"
+    "tmpl/venv_template",
 ]
-
-[tool]
 
 [tmpl.variables]

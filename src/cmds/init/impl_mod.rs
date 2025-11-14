@@ -92,11 +92,7 @@ pub fn init_impl(
     let description_map_btree: BTreeMap<_, _> = description_map.into_iter().collect();
 
     let kam_toml_rel = "kam.toml".to_string();
-    print_status(
-        StatusType::Add,
-        &kam_toml_rel,
-        false,
-    );
+    print_status(StatusType::Add, &kam_toml_rel, false);
 
     let mut kt = KamToml::new_with_current_timestamp(
         id.to_string(),
@@ -154,11 +150,7 @@ pub fn init_impl(
         if src_temp.exists() {
             let src_dir = path.join("src").join(id);
             let src_rel = format!("src/{}/", id);
-            print_status(
-                StatusType::Add,
-                &src_rel,
-                true,
-            );
+            print_status(StatusType::Add, &src_rel, true);
             std::fs::create_dir_all(&src_dir)?;
             for entry in std::fs::read_dir(&src_temp)? {
                 let entry = entry?;
@@ -174,11 +166,7 @@ pub fn init_impl(
                 }
                 let dest_file = src_dir.join(&replaced_name);
                 let file_rel = format!("src/{}/{}", id, replaced_name);
-                print_status(
-                    StatusType::Add,
-                    &file_rel,
-                    false,
-                );
+                print_status(StatusType::Add, &file_rel, false);
                 std::fs::write(&dest_file, content)?;
             }
         } else {

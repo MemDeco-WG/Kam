@@ -38,11 +38,7 @@ pub fn post_process(
         if !meta_inf_dir.exists() {
             std::fs::create_dir_all(&meta_inf_dir)?;
         }
-        print_status(
-            StatusType::Add,
-            &meta_inf_rel,
-            true,
-        );
+        print_status(StatusType::Add, &meta_inf_rel, true);
     }
 
     if args.web_root {
@@ -51,11 +47,7 @@ pub fn post_process(
         if !web_root_dir.exists() {
             std::fs::create_dir_all(&web_root_dir)?;
         }
-        print_status(
-            StatusType::Add,
-            &web_root_rel,
-            true,
-        );
+        print_status(StatusType::Add, &web_root_rel, true);
     }
 
     println!("Initialized Kam project in {}", path.display());

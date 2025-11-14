@@ -72,7 +72,10 @@ fn collect(args: CollectArgs) -> Result<(), KamError> {
                     let content = fs::read_to_string(path)?;
                     for line in content.lines() {
                         if let Ok(entry) = serde_json::from_str::<IndexEntry>(line) {
-                            modules_map.entry(entry.name.clone()).or_insert_with(Vec::new).push(entry);
+                            modules_map
+                                .entry(entry.name.clone())
+                                .or_insert_with(Vec::new)
+                                .push(entry);
                         }
                     }
                 }
@@ -83,14 +86,17 @@ fn collect(args: CollectArgs) -> Result<(), KamError> {
     let mut modules = Vec::new();
     for (id, mut entries) in modules_map {
         entries.sort_by_key(|e| e.versionCode.unwrap_or(0));
-        let versions: Vec<Version> = entries.iter().map(|e| Version {
-            timestamp: e.timestamp,
-            version: e.vers.clone(),
-            versionCode: e.versionCode,
-            zipUrl: e.zipUrl.clone(),
-            changelog: e.changelog.clone(),
-            size: e.size,
-        }).collect();
+        let versions: Vec<Version> = entries
+            .iter()
+            .map(|e| Version {
+                timestamp: e.timestamp,
+                version: e.vers.clone(),
+                versionCode: e.versionCode,
+                zipUrl: e.zipUrl.clone(),
+                changelog: e.changelog.clone(),
+                size: e.size,
+            })
+            .collect();
         if let Some(latest) = entries.last() {
             let module = Module {
                 id: id.clone(),
