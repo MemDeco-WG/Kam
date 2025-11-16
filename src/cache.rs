@@ -1,34 +1,34 @@
+//! # Kam Cache System
+//!
+//! Global cache mechanism for Kam modules, inspired by uv-cache.
+//!
+//! ## Cache Structure
+//!
+//! ```text
+//! ~/.kam/ (or /data/adb/kam on Android)
+//! ├── bin/      # Executable binary files (provided by library modules)
+//! ├── lib/      # Library modules (extracted dependencies, not compressed)
+//! ├── log/      # Log files
+//! ├── profile/  # template module archives
+//! ├── repo/     # Repository index cache (synced from kam_repo_index)
+//! └── tmpl/     # built-in templates extracted from assets/tmpl
+//! ```
+//!
+//! ## Example Usage
+//!
+//! ```rust,no_run
+//! use kam::cache::KamCache;
+//!
+//! let cache = KamCache::new()?;
+//! cache.ensure_dirs()?;
+//!
+//! // Get paths to cache subdirectories
+//! let lib_path = cache.lib_dir();
+//! let bin_path = cache.bin_dir();
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 use crate::errors::cache::CacheError;
 use std::path::{Path, PathBuf};
-/// # Kam Cache System
-///
-/// Global cache mechanism for Kam modules, inspired by uv-cache.
-///
-/// ## Cache Structure
-///
-/// ```text
-/// ~/.kam/ (or /data/adb/kam on Android)
-/// ├── bin/      # Executable binary files (provided by library modules)
-/// ├── lib/      # Library modules (extracted dependencies, not compressed)
-/// ├── log/      # Log files
-/// ├── profile/  # template module archives
-/// ├── repo/     # Repository index cache (synced from kam_repo_index)
-/// └── tmpl/     # built-in templates extracted from assets/tmpl
-/// ```
-///
-/// ## Example Usage
-///
-/// ```rust,no_run
-/// use kam::cache::KamCache;
-///
-/// let cache = KamCache::new()?;
-/// cache.ensure_dirs()?;
-///
-/// // Get paths to cache subdirectories
-/// let lib_path = cache.lib_dir();
-/// let bin_path = cache.bin_dir();
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
 
 
 /// Normalize a path without requiring the path to exist:

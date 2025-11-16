@@ -95,7 +95,7 @@ pub fn run(args: AddArgs) -> Result<(), KamError> {
             .dependency
             .get_or_insert_with(Default::default)
             .dev
-            .get_or_insert_with(Vec::new);
+            .get_or_insert(Default::default());
 
         // Check if already exists
         if !devs.iter().any(|d| d.id == dependency_entry.id) {
@@ -108,7 +108,7 @@ pub fn run(args: AddArgs) -> Result<(), KamError> {
             .dependency
             .get_or_insert_with(Default::default)
             .kam
-            .get_or_insert_with(Vec::new);
+            .get_or_insert(Default::default());
 
         // Check if already exists
         if !deps.iter().any(|d| d.id == dependency_entry.id) {
@@ -171,7 +171,7 @@ fn add_workspace_member(args: &AddArgs, project_path: &Path) -> Result<(), KamEr
 
     // Ensure workspace section exists
     let workspace = kam_toml.kam.workspace.get_or_insert_with(Default::default);
-    let members = workspace.members.get_or_insert_with(Vec::new);
+    let members = workspace.members.get_or_insert(Default::default());
 
     // Check if already exists
     if members.contains(&member_path.to_string()) {
@@ -415,49 +415,47 @@ fn fetch_from_github(
     // Find asset matching library name
     if let Some(assets) = release.get("assets").and_then(|a| a.as_array()) {
         for asset in assets {
-            if let Some(name) = asset.get("name").and_then(|n| n.as_str()) {
-                if name.contains(library) && (name.ends_with(".zip") || name.ends_with(".tar.gz")) {
-                    if let Some(download_url) =
-                        asset.get("browser_download_url").and_then(|u| u.as_str())
-                    {
-                        // Download asset
-                        println!("  {} Downloading: {}", "→".cyan(), name);
+            if let Some(name) = asset.get("name").and_then(|n| n.as_str())
+                && name.contains(library)
+                && (name.ends_with(".zip") || name.ends_with(".tar.gz"))
+                && let Some(download_url) = asset.get("browser_download_url").and_then(|u| u.as_str())
+            {
+                // Download asset
+                println!("  {} Downloading: {}", "→".cyan(), name);
 
-                        let response = client
-                            .get(download_url)
-                            .header("User-Agent", "kam-package-manager")
-                            .send()
-                            .map_err(|e| KamError::FetchFailed(e.to_string()))?;
+                let response = client
+                    .get(download_url)
+                    .header("User-Agent", "kam-package-manager")
+                    .send()
+                    .map_err(|e| KamError::FetchFailed(e.to_string()))?;
 
-                        if response.status().is_success() {
-                            let bytes = response
-                                .bytes()
-                                .map_err(|e| KamError::FetchFailed(e.to_string()))?;
+                if response.status().is_success() {
+                    let bytes = response
+                        .bytes()
+                        .map_err(|e| KamError::FetchFailed(e.to_string()))?;
 
-                            // Save to temp and extract
-                            let temp_path = cache.root().join(name);
-                            fs::write(&temp_path, bytes)?;
+                    // Save to temp and extract
+                    let temp_path = cache.root().join(name);
+                    fs::write(&temp_path, bytes)?;
 
-                            let temp_dir = tempfile::tempdir()?;
-                            let temp_extract_path = temp_dir.path();
-                            crate::utils::extract_package(&temp_path, temp_extract_path)?;
+                    let temp_dir = tempfile::tempdir()?;
+                    let temp_extract_path = temp_dir.path();
+                    crate::utils::extract_package(&temp_path, temp_extract_path)?;
 
-                            // Load kam.toml
-                            let kam_toml = KamToml::load_from_dir(temp_extract_path)?;
+                    // Load kam.toml
+                    let kam_toml = KamToml::load_from_dir(temp_extract_path)?;
 
-                            // Install artifacts to cache
-                            install_library_to_cache(temp_extract_path, cache)?;
+                    // Install artifacts to cache
+                    install_library_to_cache(temp_extract_path, cache)?;
 
-                            // Update local index
-                            update_local_cache_index(cache, library, version, &kam_toml, name)?;
+                    // Update local index
+                    update_local_cache_index(cache, library, version, &kam_toml, name)?;
 
-                            // Clean up temp file
-                            let _ = fs::remove_file(&temp_path);
+                    // Clean up temp file
+                    let _ = fs::remove_file(&temp_path);
 
-                            println!("  {} Downloaded and extracted", "✓".green());
-                            return Ok((version.to_string(), kam_toml));
-                        }
-                    }
+                    println!("  {} Downloaded and extracted", "✓".green());
+                    return Ok((version.to_string(), kam_toml));
                 }
             }
         }

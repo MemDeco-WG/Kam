@@ -502,10 +502,10 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), KamError> {
 /// Returns (owner, repo_name) if available.
 fn get_github_repo_info() -> Result<(String, String), KamError> {
     let git_repo = Repository::open(".")
-        .map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        .map_err(|e| KamError::Io(std::io::Error::other(e)))?;
     let origin_remote = git_repo
         .find_remote("origin")
-        .map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        .map_err(|e| KamError::Io(std::io::Error::other(e)))?;
     let url = origin_remote
         .url()
         .ok_or(KamError::InvalidConfig("No remote url".to_string()))?;

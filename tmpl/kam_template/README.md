@@ -23,8 +23,8 @@ To create a new Kam module using this template:
 2. Customize the module:
    
    - Edit `kam.toml` for module metadata
-   - Modify `src/{{id}}/customize.sh` for installation logic
-   - Add module files to `src/{{id}}/`
+   - Modify `src/{{prop.id}}/customize.sh` for installation logic
+   - Add module files to `src/{{prop.id}}/`
 
 3. Build the module:
    
@@ -34,8 +34,8 @@ To create a new Kam module using this template:
 
 ## Module Information
 
-- **ID**: {{id}}
-- **Name**: {{name}}
+- **ID**: {{prop.id}}
+- **Name**: {{prop.name}}
 - **Version**: 0.1.0
 - **Author**: Author
 

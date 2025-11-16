@@ -6,7 +6,7 @@ VENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export KAM_OLD_PATH="$PATH"
 export PATH="$VENV_DIR/bin:$PATH"
 export KAM_VENV_ACTIVE=1
-printf "Kam virtual environment activated ({{id}})\n"
+printf "Kam virtual environment activated ({{prop.id}})\n"
 printf "Run 'deactivate' to exit\n"
 
 deactivate() {

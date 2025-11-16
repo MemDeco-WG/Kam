@@ -51,7 +51,24 @@ impl KamVenv {
     /// present in the global cache tmpl dir, it will be extracted and template
     /// placeholders replaced using env vars `KAM_VAR_*` and common keys (id,name,version,author).
     /// Otherwise a small fallback set of activation scripts is generated.
+    ///
+    /// NOTE: This method is the classic API that uses environment variables to
+    /// build replacements. Use `create_with_replacements` if you want to explicitly
+    /// provide replacements rather than relying on environment variables.
     pub fn create(root: &Path, venv_type: VenvType) -> Result<KamVenv, KamError> {
+        Self::create_with_replacements(root, venv_type, None)
+    }
+
+    /// Create a new virtual environment at `root`, using an explicit replacements map.
+    ///
+    /// If `replacements_opt` is `Some(map)`, the map will be used as the source of
+    /// template replacements. When `None` the environment variables will be used as
+    /// before.
+    pub fn create_with_replacements(
+        root: &Path,
+        venv_type: VenvType,
+        replacements_opt: Option<std::collections::HashMap<String, String>>,
+    ) -> Result<KamVenv, KamError> {
         if !root.exists() {
             fs::create_dir_all(root).map_err(|e| KamError::Io(e))?;
         }
@@ -69,21 +86,29 @@ impl KamVenv {
         // prepare replacements map
         let mut replacements: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
-        if let Ok(vv) = std::env::var("KAM_ID") {
-            replacements.insert("id".to_string(), vv);
-        }
-        if let Ok(vv) = std::env::var("KAM_NAME") {
-            replacements.insert("name".to_string(), vv);
-        }
-        if let Ok(vv) = std::env::var("KAM_VERSION") {
-            replacements.insert("version".to_string(), vv);
-        }
-        if let Ok(vv) = std::env::var("KAM_AUTHOR") {
-            replacements.insert("author".to_string(), vv);
-        }
-        for (k, v) in std::env::vars() {
-            if let Some(rest) = k.strip_prefix("KAM_VAR_") {
-                replacements.insert(rest.to_lowercase(), v);
+
+        // Prefer the provided replacements map, if present; otherwise fall back to environment variables.
+        if let Some(map) = replacements_opt {
+            for (k, val) in map.into_iter() {
+                replacements.insert(k, val);
+            }
+        } else {
+            if let Ok(vv) = std::env::var("KAM_ID") {
+                replacements.insert("id".to_string(), vv);
+            }
+            if let Ok(vv) = std::env::var("KAM_NAME") {
+                replacements.insert("name".to_string(), vv);
+            }
+            if let Ok(vv) = std::env::var("KAM_VERSION") {
+                replacements.insert("version".to_string(), vv);
+            }
+            if let Ok(vv) = std::env::var("KAM_AUTHOR") {
+                replacements.insert("author".to_string(), vv);
+            }
+            for (k, v) in std::env::vars() {
+                if let Some(rest) = k.strip_prefix("KAM_VAR_") {
+                    replacements.insert(rest.to_lowercase(), v);
+                }
             }
         }
 

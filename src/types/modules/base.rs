@@ -53,7 +53,6 @@ pub trait ModuleBackend {
 ///
 /// Note: the trait is intentionally small so callers can mock or provide
 /// alternate backends (HTTP, Git, local archives, etc.).
-
 impl KamModule {
     /// Create from an owned KamToml and optional Source.
     pub fn new(toml: KamToml, source: Option<Source>) -> Self {

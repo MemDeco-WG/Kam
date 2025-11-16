@@ -96,7 +96,7 @@ fn collect(args: CollectArgs) -> Result<(), KamError> {
                         if let Ok(entry) = serde_json::from_str::<IndexEntry>(line) {
                             modules_map
                                 .entry(entry.name.clone())
-                                .or_insert_with(Vec::new)
+                                .or_default()
                                 .push(entry);
                         }
                     }

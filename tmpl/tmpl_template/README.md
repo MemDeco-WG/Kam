@@ -1,11 +1,3 @@
-\<file\_path\>
-Kam\\tmpl\\tmpl\_template\\README.md
-\</file\_path\>
-
-\<edit\_description\>
-更新 tmpl\_template 的 README.md，使其更详细和专业
-\</edit\_description\>
-
 # Template Module Template
 
 ## Description
@@ -24,25 +16,25 @@ This template provides:
 To create a new template module using this template:
 
 1. Initialize a new project:
-   
+
    ``` bash
    kam init my_template --tmpl
    ```
 
 2. Customize the template:
-   
+
    - Edit `kam.toml` for template metadata and variables
-   - Modify `src/{{id}}/customize.sh` for template-specific logic
+   - Modify `src/{{prop.id}}/customize.sh` for template-specific logic
    - Add template files and placeholders
 
 3. Build the template:
-   
+
    ``` bash
    kam build
    ```
 
 4. Use the template to create new projects:
-   
+
    ``` bash
    kam init new_project --impl my_template
    ```
@@ -55,10 +47,10 @@ This template supports the following variables (defined in `kam.toml`):
 
 ## Module Information
 
-- **ID**: {{id}}
-- **Name**: {{name}}
+- **ID**: {{prop.id}}
+- **Name**: {{prop.name}}
 - **Version**: 1.0.0
-- **Author**: Author
+- **Author**: {{prop.author}}
 - **Type**: Template
 
 ## License

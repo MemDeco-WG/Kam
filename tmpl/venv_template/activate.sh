@@ -12,9 +12,9 @@ export KAM_OLD_PATH="$PATH"
 export PATH="$VENV_DIR/bin:$PATH"
 export KAM_VENV_ACTIVE=1
 export KAM_OLD_PS1="${PS1:-}"
-export PS1="(kam-{{id}}) $PS1"
+export PS1="(kam-{{prop.id}}) $PS1"
 
-echo "Kam virtual environment activated ({{id}})"
+echo "Kam virtual environment activated ({{prop.id}})"
 echo "Run 'deactivate' to exit"
 
 deactivate() {

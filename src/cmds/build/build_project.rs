@@ -168,26 +168,21 @@ pub fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
     // filename WITHOUT extension. If an extension is present we warn and
     // ignore it. Placeholders like {{id}} are supported. The resolved basename
     // will be used for both module zip and source tar names.
-    let basename = if let Some(build_cfg) = &kam_toml.kam.build {
-        if let Some(of) = &build_cfg.output_file {
-            let trimmed = of.trim();
-            if trimmed.is_empty() {
-                default_basename
-            } else {
-                let rendered = render_output_template(trimmed, kam_toml);
-                let p = std::path::Path::new(&rendered);
-                if p.extension().is_some() {
-                    // Warn the user that extensions are not allowed in output_file
-                    println!("{} {} {}", "Warning:".yellow().bold(), "kam.build.output_file should be a filename without extension; extension will be ignored:".yellow(), p.extension().unwrap().to_string_lossy().yellow());
-                }
-                let stem = p
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(&rendered)
-                    .to_string();
-            }
-        } else {
+    let basename = if let Some(build_cfg) = &kam_toml.kam.build && let Some(of) = &build_cfg.output_file {
+        let trimmed = of.trim();
+        if trimmed.is_empty() {
             default_basename
+        } else {
+            let rendered = render_output_template(trimmed, kam_toml);
+            let p = std::path::Path::new(&rendered);
+            if p.extension().is_some() {
+                // Warn the user that extensions are not allowed in output_file
+                println!("{} {} {}", "Warning:".yellow().bold(), "kam.build.output_file should be a filename without extension; extension will be ignored:".yellow(), p.extension().unwrap().to_string_lossy().yellow());
+            }
+            p.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(&rendered)
+                .to_string()
         }
     } else {
         default_basename
@@ -235,7 +230,7 @@ pub fn create_module_zip_if_needed(
         zip.start_file("kam.toml", options)?;
         let kam_toml_content = fs::read_to_string(effective_project_path.join("kam.toml"))?;
         zip.write_all(kam_toml_content.as_bytes())?;
-        println!("  {} {}", "+".green(), "kam.toml");
+        println!("  {} kam.toml", "+".green());
 
         // Add source files (module dir: src/<module_id>)
         // Since we checked effective_src_dir.exists(), we can add it directly
@@ -248,35 +243,27 @@ pub fn create_module_zip_if_needed(
 
         // Add other files if they exist
         // Include files referenced in kam.toml (mmrl.repo): readme, license, changelog
-        if let Some(mmrl) = &kam_toml.mmrl {
-            if let Some(repo) = &mmrl.repo {
-                let mut candidates: Vec<String> = vec![];
-                if let Some(r) = &repo.readme {
-                    if !r.trim().is_empty() {
-                        candidates.push(r.clone())
-                    }
-                }
-                if let Some(l) = &repo.license {
-                    if !l.trim().is_empty() {
-                        candidates.push(l.clone())
-                    }
-                }
-                if let Some(c) = &repo.changelog {
-                    if !c.trim().is_empty() {
-                        candidates.push(c.clone())
-                    }
-                }
+        if let Some(mmrl) = &kam_toml.mmrl && let Some(repo) = &mmrl.repo {
+            let mut candidates: Vec<String> = Vec::new();
+            if let Some(r) = &repo.readme && !r.trim().is_empty() {
+                candidates.push(r.clone());
+            }
+            if let Some(l) = &repo.license && !l.trim().is_empty() {
+                candidates.push(l.clone());
+            }
+            if let Some(c) = &repo.changelog && !c.trim().is_empty() {
+                candidates.push(c.clone());
+            }
 
-                for file_name in candidates {
-                    let file_path = project_path.join(&file_name);
-                    if file_path.exists() {
-                        zip.start_file(&file_name, options)?;
-                        let mut file = File::open(&file_path)?;
-                        let mut buffer = Vec::new();
-                        file.read_to_end(&mut buffer)?;
-                        zip.write_all(&buffer)?;
-                        println!("  {} {}", "+".green(), file_name);
-                    }
+            for file_name in candidates {
+                let file_path = project_path.join(&file_name);
+                if file_path.exists() {
+                    zip.start_file(&file_name, options)?;
+                    let mut file = File::open(&file_path)?;
+                    let mut buffer = Vec::new();
+                    file.read_to_end(&mut buffer)?;
+                    zip.write_all(&buffer)?;
+                    println!("  {} {}", "+".green(), file_name);
                 }
             }
         }
@@ -351,8 +338,7 @@ pub fn create_source_archive(
         .build();
 
     for result in walker {
-        let entry =
-            result.map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        let entry = result.map_err(|e| KamError::Io(std::io::Error::other(e)))?;
         let path = entry.path();
 
         // Skip the root directory itself
@@ -410,20 +396,18 @@ pub fn create_source_archive(
     }
 
     // Add extra includes if specified
-    if let Some(build) = _kam_toml.kam.build.as_ref() {
-        if let Some(extra_includes) = build.extra_includes.as_ref() {
-            for include in extra_includes {
-                let source_path = effective_project_path.join(&include.source);
-                if source_path.exists() && source_path.is_file() {
-                    tar.append_path_with_name(&source_path, &include.dest)?;
-                    println!("  {} {}", "+".green(), include.dest.dimmed());
-                } else {
-                    println!(
-                        "  {} Extra include not found: {}",
-                        "!".yellow(),
-                        include.source
-                    );
-                }
+    if let Some(build) = _kam_toml.kam.build.as_ref() && let Some(extra_includes) = build.extra_includes.as_ref() {
+        for include in extra_includes {
+            let source_path = effective_project_path.join(&include.source);
+            if source_path.exists() && source_path.is_file() {
+                tar.append_path_with_name(&source_path, &include.dest)?;
+                println!("  {} {}", "+".green(), include.dest.dimmed());
+            } else {
+                println!(
+                    "  {} Extra include not found: {}",
+                    "!".yellow(),
+                    include.source
+                );
             }
         }
     }
@@ -479,13 +463,13 @@ pub fn run_command(cmd: &str, working_dir: &Path) -> Result<(), KamError> {
 
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd")
-            .args(&["/C", cmd])
+            .args(["/C", cmd])
             .current_dir(working_dir)
             .output()
             .map_err(KamError::from)?
     } else {
         Command::new("sh")
-            .args(&["-c", cmd])
+            .args(["-c", cmd])
             .current_dir(working_dir)
             .output()
             .map_err(KamError::from)?

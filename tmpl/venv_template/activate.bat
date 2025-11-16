@@ -20,9 +20,9 @@ if defined KAM_OLD_PROMPT (
 )
 set "VENV_DIR=%~dp0"
 set "PATH=%VENV_DIR%bin;%PATH%"
-set "PROMPT=(kam-{{id}}) %PROMPT%"
+set "PROMPT=(kam-{{prop.id}}) %PROMPT%"
 set "KAM_VENV_ACTIVE=1"
-echo Kam virtual environment activated ({{id}})
+echo Kam virtual environment activated ({{prop.id}})
 echo Run 'deactivate' to exit
 
 :deactivate

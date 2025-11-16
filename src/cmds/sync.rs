@@ -4,6 +4,7 @@ use crate::types::modules::KamModule;
 use crate::types::modules::ModuleBackend;
 use crate::types::source::Source;
 use crate::venv::{KamVenv, VenvType};
+use crate::template::TemplateVariableProcessor;
 /// # Kam Sync Command
 ///
 /// Synchronize dependencies similar to `uv sync`, creating symbolic links.
@@ -67,36 +68,38 @@ fn ensure_module_synced(
                 .trim_end_matches(']')
                 .trim_end_matches(')');
             let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-            let min_opt = if parts.get(0).map(|p| !p.is_empty()).unwrap_or(false) {
-                parts[0].parse::<i64>().ok()
-            } else {
-                None
-            };
-            let max_opt = if parts.len() > 1 && parts[1].len() > 0 {
-                parts[1].parse::<i64>().ok()
-            } else {
-                None
-            };
+            let min_opt = parts.first().and_then(|p| {
+                if !p.is_empty() {
+                    p.parse::<i64>().ok()
+                } else {
+                    None
+                }
+            });
+            let max_opt = parts.get(1).and_then(|p| {
+                if !p.is_empty() {
+                    p.parse::<i64>().ok()
+                } else {
+                    None
+                }
+            });
 
             // list cached versions for id
             let mut candidates: Vec<i64> = Vec::new();
             if let Ok(entries) = std::fs::read_dir(cache.lib_dir()) {
                 for e in entries.flatten() {
-                    if let Some(name) = e.file_name().to_str() {
-                        if let Some(rest) = name.strip_prefix(&format!("{}-", dep.id)) {
-                            if let Ok(n) = rest.parse::<i64>() {
-                                // test against range
-                                let mut ok = true;
-                                if let Some(minv) = min_opt {
-                                    ok = ok && (if min_incl { n >= minv } else { n > minv });
-                                }
-                                if let Some(maxv) = max_opt {
-                                    ok = ok && (if max_incl { n <= maxv } else { n < maxv });
-                                }
-                                if ok {
-                                    candidates.push(n);
-                                }
-                            }
+                    if let Some(name) = e.file_name().to_str()
+                        && let Some(rest) = name.strip_prefix(&format!("{}-", dep.id))
+                        && let Ok(n) = rest.parse::<i64>() {
+                        // test against range
+                        let mut ok = true;
+                        if let Some(minv) = min_opt {
+                            ok = ok && (if min_incl { n >= minv } else { n > minv });
+                        }
+                        if let Some(maxv) = max_opt {
+                            ok = ok && (if max_incl { n <= maxv } else { n < maxv });
+                        }
+                        if ok {
+                            candidates.push(n);
                         }
                     }
                 }
@@ -306,7 +309,10 @@ pub fn run(args: SyncArgs) -> Result<(), KamError> {
         // recreate to ensure it's the latest
         fs::remove_dir_all(&venv_path)?;
     }
-    let venv = KamVenv::create(&venv_path, venv_type)
+    // Build replacements from the loaded `kam.toml` so the venv template can
+    // render placeholders such as `{{prop.id}}` correctly.
+    let replacements = TemplateVariableProcessor::flatten_kam_toml(&kam_toml);
+    let venv = KamVenv::create_with_replacements(&venv_path, venv_type, Some(replacements))
         .map_err(|e| KamError::VenvCreateFailed(format!("Venv error: {}", e)))?;
     println!(
         "  {} Created/updated at: {}",
