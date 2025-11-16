@@ -5,10 +5,51 @@ use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
 use crate::types::kam_toml::sections::TmplSection;
 use serde_json;
+use crate::types::source::Source;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
 
+fn merge_template_defaults(
+    kt_path: &Path,
+    template_vars: &mut HashMap<String, String>,
+) -> Result<(), KamError> {
+    let kt_template = KamToml::load_from_file(kt_path)?;
+    if let Some(tmpl) = &kt_template.kam.tmpl {
+        for (var_name, var_def) in &tmpl.variables {
+            if template_vars.contains_key(var_name.as_str()) {
+                continue;
+            }
+
+            if var_def.required {
+                if let Some(default) = &var_def.default {
+                    template_vars.insert(var_name.to_string(), default.clone());
+                    continue;
+                }
+                if let Some(note) = &var_def.note {
+                    return Err(KamError::TemplateVarRequired(format!(
+                        "Required template variable '{}' not provided: {}",
+                        var_name, note
+                    )));
+                }
+                return Err(KamError::TemplateVarRequired(format!(
+                    "Required template variable '{}' not provided",
+                    var_name
+                )));
+            }
+
+            if let Some(default) = &var_def.default {
+                template_vars.insert(var_name.to_string(), default.clone());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Initialize a project from a template source.
+///
+/// extra parameter `explicit_template_id` is preferred (when available) to set
+/// `[kam.tmpl].used_template` rather than deriving an id from a temporary path.
 pub fn init_impl(
     path: &Path,
     id: &str,
@@ -19,9 +60,10 @@ pub fn init_impl(
     impl_source: &str,
     template_vars: &mut HashMap<String, String>,
     force: bool,
+    explicit_template_id: Option<&str>,
 ) -> Result<(), KamError> {
     // Parse the template source specification
-    let source = crate::types::source::Source::parse(impl_source).map_err(|e| {
+    let source = Source::parse(impl_source).map_err(|e| {
         KamError::FetchFailed(format!(
             "Failed to parse template source '{}': {}",
             impl_source, e
@@ -48,16 +90,9 @@ pub fn init_impl(
     let module = crate::types::modules::base::KamModule::new(dummy_toml, Some(source.clone()));
     let template_path = module.fetch_to_temp()?;
 
-    // Determine archive_id from the source (prefer a human friendly/sanitized name)
-    //
-    // Previously we used the temp directory name (created by `tempfile::tempdir`) to
-    // compute the archive id; that produced `.tmp...` names like `.tmpkLbqXJ`. This
-    // caused `used_template` to store an unhelpful temp-dir name in `kam.toml`.
-    //
-    // Instead derive the archive id from the original source. For local paths use the
-    // file/directory name. For URLs and Git repositories use the last path segment
-    // (e.g. repo name or file name). Sanitize the resulting string to contain only
-    // lower-case alphanumeric, `-`, `_`, or `.` characters, replacing others with `-`.
+    // Determine archive_id from the source (prefer a human friendly/sanitized name).
+    // If an explicit template id is provided we prefer it over deriving from `source`
+    // (this avoids using a tempdir name).
     let archive_id = {
         // Sanitize an arbitrary string into a compact archive id
         fn sanitize_name(s: &str) -> String {
@@ -78,72 +113,46 @@ pub fn init_impl(
             }
         }
 
-        // Candidate extraction logic:
-        // - Local: last path component
-        // - Url: last path component (strip query/fragment), drop extension if present
-        // - Git: last path component (strip `.git`); if ambiguous fallback to impl_source
-        let candidate = match &source {
-            crate::types::source::Source::Local { path } => path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| path.to_string_lossy().to_string()),
-            crate::types::source::Source::Url { url } => {
-                // Remove query and fragment; take last path segment; remove extension
-                let segment = url.split('?').next().unwrap_or(&url).split('#').next().unwrap_or(&url);
-                let last = segment.rsplit('/').next().unwrap_or(segment);
-                last.split('.').next().unwrap_or(last).to_string()
-            }
-            crate::types::source::Source::Git { url, .. } => {
-                let mut s = url.as_str();
-                if s.ends_with(".git") {
-                    s = &s[..s.len() - 4];
+        // Prefer explicit id when present to avoid `.tmp*` fallback
+        if let Some(explicit_id) = explicit_template_id {
+            sanitize_name(explicit_id)
+        } else {
+            // Candidate extraction logic:
+            // - Local: last path component
+            // - Url: last path component (strip query/fragment), drop extension if present
+            // - Git: last path component (strip `.git`)
+            let candidate = match &source {
+                Source::Local { path } => path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| path.to_string_lossy().to_string()),
+                Source::Url { url } => {
+                    let s = url.as_str();
+                    // Remove query and fragment; take last path segment; remove extension
+                    let segment = s.split('?').next().unwrap_or(s).split('#').next().unwrap_or(s);
+                    let last = segment.rsplit('/').next().unwrap_or(segment);
+                    last.split('.').next().unwrap_or(last).to_string()
                 }
-                s.rsplit('/').next().unwrap_or(s).to_string()
-            }
-        };
+                Source::Git { url, .. } => {
+                    let s = url.as_str();
+                    let s = if s.ends_with(".git") {
+                        &s[..s.len() - 4]
+                    } else {
+                        s
+                    };
+                    s.rsplit('/').next().unwrap_or(s).to_string()
+                }
+            };
 
-        sanitize_name(&candidate)
+            sanitize_name(&candidate)
+        }
     };
 
     // Load template variables and insert defaults (refactored to helper to avoid deep nesting)
     let template_kam_path = template_path.join("kam.toml");
     if template_kam_path.exists() {
-        fn merge_template_defaults(
-            kt_path: &std::path::Path,
-            template_vars: &mut HashMap<String, String>,
-        ) -> Result<(), KamError> {
-            let kt_template = KamToml::load_from_file(kt_path)?;
-            if let Some(tmpl) = &kt_template.kam.tmpl {
-                for (var_name, var_def) in &tmpl.variables {
-                    if template_vars.contains_key(var_name.as_str()) {
-                        continue;
-                    }
-
-                    if var_def.required {
-                        if let Some(default) = &var_def.default {
-                            template_vars.insert(var_name.to_string(), default.clone());
-                            continue;
-                        }
-                        if let Some(note) = &var_def.note {
-                            return Err(KamError::TemplateVarRequired(format!(
-                                "Required template variable '{}' not provided: {}",
-                                var_name, note
-                            )));
-                        }
-                        return Err(KamError::TemplateVarRequired(format!(
-                            "Required template variable '{}' not provided",
-                            var_name
-                        )));
-                    }
-
-                    if let Some(default) = &var_def.default {
-                        template_vars.insert(var_name.to_string(), default.clone());
-                    }
-                }
-            }
-            Ok(())
-        }
+        // helper hoisted to top-level: see `merge_template_defaults` above
 
         merge_template_defaults(&template_kam_path, template_vars)?;
     }
@@ -399,6 +408,8 @@ pub fn init_template(
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             // Delegate to the "fetch-then-initialize" implementation
+            // Pass `template_spec` as explicit template id so `used_template` in
+            // generated kam.toml references the friendly id rather than `.tmp*`.
             return init_impl(
                 path,
                 id,
@@ -409,6 +420,7 @@ pub fn init_template(
                 &src_spec,
                 &mut template_vars,
                 force,
+                Some(template_spec.as_str()),
             );
         } else {
             return Err(KamError::TemplateNotFound(format!(
@@ -428,16 +440,17 @@ pub fn init_template(
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        return init_impl(
-            path,
-            id,
-            name_hash,
-            version,
-            author,
-            description_hash,
-            &template_spec,
-            &mut template_vars,
-            force,
-        );
-    }
+    return init_impl(
+        path,
+        id,
+        name_hash,
+        version,
+        author,
+        description_hash,
+        &template_spec,
+        &mut template_vars,
+        force,
+        Some(template_spec.as_str()),
+    );
+}
 }

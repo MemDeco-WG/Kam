@@ -29,12 +29,14 @@ fn check_library_structure(project_path: &Path) -> Result<(), KamError> {
         let path = entry.path();
         if path.is_dir() {
             has_subdirs = true;
-        } else if path.is_file() {
-            if let Some(ext) = path.extension() {
-                if ext == "so" || ext == "a" || ext == "dylib" {
-                    has_direct_libs = true;
-                }
-            }
+        } else if path.is_file()
+            && path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|ext| ext == "so" || ext == "a" || ext == "dylib")
+                .unwrap_or(false)
+        {
+            has_direct_libs = true;
         }
     }
 
@@ -135,7 +137,7 @@ pub fn build_project(
         &output_dir,
         &basename,
         &effective_project_path,
-        &project_path,
+        project_path,
     )?;
 
     handle_post_build_hook(&kam_toml, project_path)?;
@@ -183,7 +185,6 @@ pub fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
                     .and_then(|s| s.to_str())
                     .unwrap_or(&rendered)
                     .to_string();
-                stem
             }
         } else {
             default_basename

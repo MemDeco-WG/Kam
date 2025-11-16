@@ -354,7 +354,7 @@ impl KamVenv {
     }
 
     /// Link a library (module id and version) from cache into the venv
-    pub fn link_library(&self, id: &str, version: &str, cache: &KamCache) -> Result<(), KamError> {
+    pub fn link_library(&self, _id: &str, _version: &str, cache: &KamCache) -> Result<(), KamError> {
         // For libraries, link from global cache lib or lib64 based on arch
         let cache_lib = if std::env::consts::ARCH == "x86_64" {
             cache.lib64_dir()

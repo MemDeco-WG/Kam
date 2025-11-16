@@ -2,10 +2,10 @@ use crate::cache::KamCache;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::sections::dependency::{Dependency, VersionSpec};
-use crate::types::modules::ModuleBackend;
+
 use crate::types::source::Source;
 
-use crate::utils::{compute_index_path, copy_dir_all, extract_package};
+use crate::utils::{compute_index_path, copy_dir_all};
 use crate::venv::KamVenv;
 use clap::Args;
 use colored::Colorize;
@@ -223,8 +223,7 @@ fn fetch_library(
         .map(PathBuf::from)
         .or_else(|| std::env::var("KAM_LOCAL_REPO").ok().map(PathBuf::from));
 
-    if let Some(repo_path) = local_repo {
-        if repo_path.exists() {
+    if let Some(repo_path) = local_repo.filter(|p| p.exists()) {
             // Try to find in local repo's index
             let index_path = repo_path.join("index");
             let lib_index = compute_index_path(&index_path, library);
@@ -261,11 +260,11 @@ fn fetch_library(
                             let kam_toml = KamToml::load_from_dir(temp_path)?;
 
                             // Install artifacts to cache
-                            install_library_to_cache(temp_path, &cache)?;
+                            install_library_to_cache(temp_path, cache)?;
 
                             // Update local index
                             update_local_cache_index(
-                                &cache,
+                                cache,
                                 library,
                                 &actual_version,
                                 &kam_toml,
@@ -278,14 +277,11 @@ fn fetch_library(
                     }
                 }
             }
-        }
     }
 
     // Try GitHub releases if repo URL is provided
-    if let Some(repo_url) = repo {
-        if repo_url.starts_with("https://github.com/") {
-            return fetch_from_github(cache, library, version, repo_url);
-        }
+    if let Some(repo_url) = repo.filter(|u| u.starts_with("https://github.com/")) {
+        return fetch_from_github(cache, library, version, repo_url);
     }
 
     // Try network sources
@@ -336,10 +332,10 @@ fn fetch_library(
                 let kam_toml = KamToml::load_from_dir(temp_path)?;
 
                 // Install artifacts
-                install_library_to_cache(temp_path, &cache)?;
+                install_library_to_cache(temp_path, cache)?;
 
                 // Update index
-                update_local_cache_index(&cache, library, &actual_version, &kam_toml, &zip_name)?;
+                update_local_cache_index(cache, library, &actual_version, &kam_toml, &zip_name)?;
 
                 println!("  {} Fetched from network", "✓".green());
                 return Ok((actual_version.clone(), kam_toml));
@@ -450,10 +446,10 @@ fn fetch_from_github(
                             let kam_toml = KamToml::load_from_dir(temp_extract_path)?;
 
                             // Install artifacts to cache
-                            install_library_to_cache(temp_extract_path, &cache)?;
+                            install_library_to_cache(temp_extract_path, cache)?;
 
                             // Update local index
-                            update_local_cache_index(&cache, library, &version, &kam_toml, name)?;
+                            update_local_cache_index(cache, library, version, &kam_toml, name)?;
 
                             // Clean up temp file
                             let _ = fs::remove_file(&temp_path);
@@ -473,13 +469,8 @@ fn fetch_from_github(
     )))
 }
 
-/// Install backend into cache
-fn install_backend_into_cache(
-    backend: &impl ModuleBackend,
-    cache: &KamCache,
-) -> Result<PathBuf, KamError> {
-    backend.install_into_cache(cache)
-}
+// Install backend into cache helper moved to sync.rs (duplicate removed from this module)
+// Duplicate function removed — use the implementation defined in `src/cmds/sync.rs`
 
 /// Install library artifacts to cache (lib, lib64, bin)
 fn install_library_to_cache(temp_path: &Path, cache: &KamCache) -> Result<(), KamError> {

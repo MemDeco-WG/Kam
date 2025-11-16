@@ -1,0 +1,133 @@
+[prop]
+id = "test"
+version = "1.0.0"
+versionCode = 1763291709201
+author = "LIghtJUNction (LIghtJUNction.me@gmail.com)"
+
+[prop.name]
+en = "test"
+ja = "test"
+ko = "test"
+zh-CN = "test"
+zh-TW = "test"
+
+[prop.description]
+en = "A kam module"
+ja = "kamモジュール"
+ko = "kam 모듈"
+zh-CN = "一个kam模块"
+zh-TW = "一個kam模組"
+
+[mmrl.repo]
+license = "MIT"
+license_file = "LICENSE"
+homepage = ""
+readme = ""
+readme_file = "README.md"
+changelog = ""
+changelog_file = "CHANGELOG.md"
+screenshots = []
+categories = ["tools"]
+keywords = [
+    "kam",
+    "module",
+    "android",
+]
+maintainers = []
+repository = ""
+documentation = ""
+issues = ""
+funding = ""
+support = ""
+donate = ""
+cover = ""
+icon = ""
+devices = []
+arch = []
+require = []
+antifeatures = []
+max_num = 0
+min_api = 0
+max_api = 0
+verified = false
+features = [
+    "module-template",
+    "customization",
+]
+
+[mmrl.repo.note]
+title = ""
+message = ""
+
+[mmrl.repo.manager.magisk]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.kernelsu]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.apatch]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.options.archive]
+compression = ""
+
+[kam]
+min_api = 0
+max_api = 0
+supported_arch = []
+conflicts = []
+module_type = "kam"
+
+[kam.dependency]
+kam = []
+dev = []
+
+[kam.build]
+target_dir = "dist"
+output_file = "test-1763291709201"
+pre_build = 'echo "pre build..."'
+post_build = 'echo "post build..."'
+exclude = [
+    ".git/",
+    "target/",
+    "node_modules/",
+    ".DS_Store",
+    "Thumbs.db",
+    "*.tmp",
+    "*.log",
+    "*.bak",
+    ".kam/",
+]
+include = [
+    "META-INF/",
+    "system/",
+    "customize.sh",
+    "module.prop",
+    "service.sh",
+    "post-fs-data.sh",
+    "uninstall.sh",
+]
+
+[kam.tmpl]
+used_template = ".tmpxfEi1J"
+
+[kam.tmpl.variables]
+
+[kam.lib]
+provides = []
+
+[kam.workspace]
+members = ["."]
+
+[tmpl]
+used_template = "kam_template"
+
+[tmpl.variables]
+
+[tool]

@@ -97,6 +97,21 @@ impl KamModule {
                 if p.is_file() {
                     let tmp = tempdir()?;
                     extract_archive(&p, tmp.path())?;
+
+                    // If archive extraction produced a single top-level entry, return
+                    // that entry's path instead of the surrounding temp root. This
+                    // flattens common tar/zip layouts where the contents are inside a
+                    // wrapper folder (e.g. `my-module/`).
+                    let mut iter = std::fs::read_dir(tmp.path())?;
+                    let first = iter.next();
+                    if first.is_some() && iter.next().is_none() {
+                        // Exactly one entry -> keep the temp dir and return the child.
+                        let first_entry = first.unwrap()?;
+                        let kept_root = tmp.keep();
+                        let child_name = first_entry.file_name();
+                        return Ok(kept_root.join(child_name));
+                    }
+
                     let kept = tmp.keep();
                     Ok(kept)
                 } else {
@@ -131,19 +146,40 @@ impl KamModule {
                     let file = tmp.path().join("download.tar.gz");
                     fs::write(&file, &data)?;
                     extract_tar_gz(&file, tmp.path())?;
-                    let kept = tmp.keep();
-                    return Ok(kept);
+
+                    // Flatten single-child result directories (same rationale as above).
+                    let mut iter = std::fs::read_dir(tmp.path())?;
+                    let first = iter.next();
+                    if first.is_some() && iter.next().is_none() {
+                        let first_entry = first.unwrap()?;
+                        let kept_root = tmp.keep();
+                        let child_name = first_entry.file_name();
+                        return Ok(kept_root.join(child_name));
+                    }
+
+                    let kept_root = tmp.keep();
+                    return Ok(kept_root);
                 } else if url.ends_with(".zip") {
                     let file = tmp.path().join("download.zip");
                     fs::write(&file, &data)?;
                     extract_zip(&file, tmp.path())?;
-                    let kept = tmp.keep();
-                    return Ok(kept);
+
+                    let mut iter = std::fs::read_dir(tmp.path())?;
+                    let first = iter.next();
+                    if first.is_some() && iter.next().is_none() {
+                        let first_entry = first.unwrap()?;
+                        let kept_root = tmp.keep();
+                        let child_name = first_entry.file_name();
+                        return Ok(kept_root.join(child_name));
+                    }
+
+                    let kept_root = tmp.keep();
+                    return Ok(kept_root);
                 } else {
                     let file = tmp.path().join("download.bin");
                     fs::write(&file, &data)?;
-                    let kept = tmp.keep();
-                    return Ok(kept);
+                    let kept_root = tmp.keep();
+                    return Ok(kept_root);
                 }
             }
             Source::Git { url, rev } => {

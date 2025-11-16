@@ -1,5 +1,5 @@
 use crate::errors::cache::CacheError;
-use std::path::{Path, PathBuf, Component};
+use std::path::{Path, PathBuf};
 /// # Kam Cache System
 ///
 /// Global cache mechanism for Kam modules, inspired by uv-cache.

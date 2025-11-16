@@ -497,22 +497,26 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), KamError> {
 }
 
 /// Get GitHub repo owner and name from git remote
+#[allow(dead_code)]
+/// Get GitHub repo owner and name from the `origin` remote.
+/// Returns (owner, repo_name) if available.
 fn get_github_repo_info() -> Result<(String, String), KamError> {
-    let repo = Repository::open(".")
+    let git_repo = Repository::open(".")
         .map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
-    let remote = repo
+    let origin_remote = git_repo
         .find_remote("origin")
         .map_err(|e| KamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
-    let url = remote
+    let url = origin_remote
         .url()
         .ok_or(KamError::InvalidConfig("No remote url".to_string()))?;
     let url_str = url.to_string();
+
     let re = Regex::new(r"github\.com[\/:]([^\/]+)\/([^\/]+?)(\.git)?$")
         .map_err(|e| KamError::InvalidConfig(format!("Regex error: {}", e)))?;
     if let Some(captures) = re.captures(&url_str) {
         let owner = captures.get(1).unwrap().as_str().to_string();
-        let repo = captures.get(2).unwrap().as_str().to_string();
-        Ok((owner, repo))
+        let repo_name = captures.get(2).unwrap().as_str().to_string();
+        Ok((owner, repo_name))
     } else {
         Err(KamError::InvalidConfig("Not a GitHub repo".to_string()))
     }
@@ -601,9 +605,12 @@ fn create_github_issue(
 }
 
 /// Create GitHub release and upload asset
+#[allow(dead_code)]
+/// Create a GitHub release and upload an asset to it. This helper is optional and
+/// primarily used by automation or CI; it's kept in the codebase for convenience.
 fn create_github_release(
     owner: &str,
-    repo: &str,
+    repo_name: &str,
     module_id: &str,
     version: &str,
     package_path: &Path,
@@ -617,7 +624,8 @@ fn create_github_release(
         .ok_or(KamError::InvalidConfig("GitHub token required".to_string()))?;
 
     let client = reqwest::blocking::Client::new();
-    let create_release_url = format!("https://api.github.com/repos/{}/{}/releases", owner, repo);
+    let create_release_url =
+        format!("https://api.github.com/repos/{}/{}/releases", owner, repo_name);
     let tag_name = format!("{}-{}", module_id, version);
     let body = json!({
         "tag_name": tag_name,
