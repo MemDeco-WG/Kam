@@ -120,6 +120,33 @@ fn check_file(path: &Path, fix: bool) -> Result<CheckResult, KamError> {
     let content = fs::read(path).map_err(KamError::Io)?;
     let content_str = String::from_utf8_lossy(&content);
 
+    // Check line endings first (for all UTF-8 files)
+    let is_utf8 = std::str::from_utf8(&content).is_ok();
+    if is_utf8 {
+        if content_str.contains("\r\n") {
+            issues.push("Line endings are CRLF instead of LF".to_string());
+            if fix {
+                let fixed = content_str.replace("\r\n", "\n");
+                fs::write(path, fixed.as_bytes()).map_err(KamError::Io)?;
+                fixed_count += 1;
+                // Re-read content after fixing line endings
+                let _new_content = fs::read(path).map_err(KamError::Io)?;
+                // Note: Re-reading to ensure subsequent checks use updated content
+            }
+        } else if content_str.contains('\r') {
+            issues.push("Line endings contain CR".to_string());
+            if fix {
+                let fixed = content_str.replace('\r', "");
+                fs::write(path, fixed.as_bytes()).map_err(KamError::Io)?;
+                fixed_count += 1;
+            }
+        }
+    }
+
+    // Re-read content if line endings were fixed, to ensure syntax checks use correct content
+    let content = if fixed_count > 0 { fs::read(path).map_err(KamError::Io)? } else { content };
+    let content_str = String::from_utf8_lossy(&content);
+
     // Check syntax based on extension
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         match ext {
@@ -170,26 +197,6 @@ fn check_file(path: &Path, fix: bool) -> Result<CheckResult, KamError> {
                 }
             }
             _ => {} // Skip other files
-        }
-    }
-
-    // Check line endings only for files that are likely text files (have text extensions or are UTF-8)
-    let is_utf8 = std::str::from_utf8(&content).is_ok();
-    if is_utf8 {
-        if content_str.contains("\r\n") {
-            issues.push("Line endings are CRLF instead of LF".to_string());
-            if fix {
-                let fixed = content_str.replace("\r\n", "\n");
-                fs::write(path, fixed.as_bytes()).map_err(KamError::Io)?;
-                fixed_count += 1;
-            }
-        } else if content_str.contains('\r') {
-            issues.push("Line endings contain CR".to_string());
-            if fix {
-                let fixed = content_str.replace('\r', "");
-                fs::write(path, fixed.as_bytes()).map_err(KamError::Io)?;
-                fixed_count += 1;
-            }
         }
     }
 
