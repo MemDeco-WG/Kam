@@ -1,7 +1,7 @@
 use clap::Args;
 use colored::Colorize;
 
-use comrak::{Arena, Options, format_commonmark, markdown_to_html, parse_document};
+use comrak::{Arena, Options, format_commonmark, parse_document};
 use ignore::WalkBuilder;
 use serde_json;
 use serde_yaml;
@@ -118,74 +118,78 @@ fn check_file(path: &Path, fix: bool) -> Result<CheckResult, KamError> {
     let mut issues = Vec::new();
     let mut fixed_count = 0;
     let content = fs::read(path).map_err(KamError::Io)?;
-
-    // Check encoding (assume UTF-8, check if valid)
-    if std::str::from_utf8(&content).is_err() {
-        issues.push("File is not valid UTF-8".to_string());
-        // Cannot fix automatically
-    }
-
-    // Check line endings
     let content_str = String::from_utf8_lossy(&content);
-    if content_str.contains("\r\n") {
-        issues.push("Line endings are CRLF instead of LF".to_string());
-        if fix {
-            let fixed = content_str.replace("\r\n", "\n");
-            fs::write(path, fixed.as_bytes()).map_err(KamError::Io)?;
-            fixed_count += 1;
-        }
-    } else if content_str.contains('\r') {
-        issues.push("Line endings contain CR".to_string());
-        if fix {
-            let fixed = content_str.replace('\r', "");
-            fs::write(path, fixed.as_bytes()).map_err(KamError::Io)?;
-            fixed_count += 1;
-        }
-    }
 
     // Check syntax based on extension
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         match ext {
             "toml" => {
-                if toml::from_str::<toml::Value>(&content_str).is_err() {
+                if std::str::from_utf8(&content).is_err() {
+                    issues.push("File is not valid UTF-8".to_string());
+                } else if toml::from_str::<toml::Value>(&content_str).is_err() {
                     issues.push("Invalid TOML syntax".to_string());
                 }
             }
             "json" => {
-                if serde_json::from_str::<serde_json::Value>(&content_str).is_err() {
+                if std::str::from_utf8(&content).is_err() {
+                    issues.push("File is not valid UTF-8".to_string());
+                } else if serde_json::from_str::<serde_json::Value>(&content_str).is_err() {
                     issues.push("Invalid JSON syntax".to_string());
                 }
             }
             "yaml" | "yml" => {
-                if serde_yaml::from_str::<serde_yaml::Value>(&content_str).is_err() {
+                if std::str::from_utf8(&content).is_err() {
+                    issues.push("File is not valid UTF-8".to_string());
+                } else if serde_yaml::from_str::<serde_yaml::Value>(&content_str).is_err() {
                     issues.push("Invalid YAML syntax".to_string());
                 }
             }
             "md" => {
-                // Check Markdown syntax using comrak
-                let mut options = Options::default();
-                options.extension.table = true;
-                options.extension.footnotes = true;
-                options.extension.strikethrough = true;
-                options.extension.tasklist = true;
-                // comrak parses and renders to HTML; if parsing succeeds, assume syntax is valid
-                // comrak doesn't report syntax errors explicitly, but ensures valid CommonMark parsing
-                let _html = markdown_to_html(&content_str, &options);
+                if std::str::from_utf8(&content).is_err() {
+                    issues.push("File is not valid UTF-8".to_string());
+                } else {
+                    // Check Markdown syntax and formatting using comrak
+                    let mut options = Options::default();
+                    options.extension.table = true;
+                    options.extension.footnotes = true;
+                    options.extension.strikethrough = true;
+                    options.extension.tasklist = true;
 
-                // Check if Markdown needs reformatting
-                let arena = Arena::new();
-                let root = parse_document(&arena, &content_str, &options);
-                let mut output = String::new();
-                format_commonmark(root, &options, &mut output).unwrap();
-                if output != content_str {
-                    issues.push("Markdown file needs reformatting".to_string());
-                    if fix {
-                        fs::write(path, output.as_bytes()).map_err(KamError::Io)?;
-                        fixed_count += 1;
+                    // Check if Markdown needs reformatting
+                    let arena = Arena::new();
+                    let root = parse_document(&arena, &content_str, &options);
+                    let mut output = String::new();
+                    format_commonmark(root, &options, &mut output).unwrap();
+                    if output != content_str {
+                        issues.push("Markdown file needs reformatting".to_string());
+                        if fix {
+                            fs::write(path, output.as_bytes()).map_err(KamError::Io)?;
+                            fixed_count += 1;
+                        }
                     }
                 }
             }
             _ => {} // Skip other files
+        }
+    }
+
+    // Check line endings only for files that are likely text files (have text extensions or are UTF-8)
+    let is_utf8 = std::str::from_utf8(&content).is_ok();
+    if is_utf8 {
+        if content_str.contains("\r\n") {
+            issues.push("Line endings are CRLF instead of LF".to_string());
+            if fix {
+                let fixed = content_str.replace("\r\n", "\n");
+                fs::write(path, fixed.as_bytes()).map_err(KamError::Io)?;
+                fixed_count += 1;
+            }
+        } else if content_str.contains('\r') {
+            issues.push("Line endings contain CR".to_string());
+            if fix {
+                let fixed = content_str.replace('\r', "");
+                fs::write(path, fixed.as_bytes()).map_err(KamError::Io)?;
+                fixed_count += 1;
+            }
         }
     }
 
