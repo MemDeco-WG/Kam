@@ -81,7 +81,7 @@ To create a new virtual environment module using this template:
 ## Module Information
 
 - **ID**: Kam
-- **Name**: {{name}}
+- **Name**: Kam
 - **Version**: 1.0.0
 - **Author**: Author
 - **Type**: Template (Virtual Environment)

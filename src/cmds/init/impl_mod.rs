@@ -88,7 +88,23 @@ pub fn init_impl(
     // Create KamModule and fetch the template (unpacked into a tempdir)
     // Clone `source` so we can continue to use it later without moving
     let module = crate::types::modules::base::KamModule::new(dummy_toml, Some(source.clone()));
-    let template_path = module.fetch_to_temp()?;
+    let mut template_path = module.fetch_to_temp()?;
+
+    // If the template path is a directory that contains exactly one child directory,
+    // treat the child directory as the real template root. This normalizes behavior
+    // for archives that unpack into a single top-level folder (common tar/zip layout).
+    if template_path.exists() && template_path.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&template_path) {
+            let child_dirs: Vec<std::path::PathBuf> = entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.is_dir())
+                .collect();
+            if child_dirs.len() == 1 {
+                template_path = child_dirs.into_iter().next().unwrap();
+            }
+        }
+    }
 
     // Determine archive_id from the source (prefer a human friendly/sanitized name).
     // If an explicit template id is provided we prefer it over deriving from `source`

@@ -44,8 +44,8 @@ To create a new library module using this template:
 
 ## Module Information
 
-- **ID**: {{id}}
-- **Name**: {{name}}
+- **ID**: {{prop.id}}
+- **Name**: {{prop.name}}
 - **Version**: 1.0.0
 - **Author**: Author
 - **Type**: Library

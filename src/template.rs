@@ -113,10 +113,9 @@ impl TemplateCopier {
         dst: &Path,
         kt: &KamToml,
         force: bool,
-        id: &str,
     ) -> Result<(), KamError> {
         let vars = TemplateVariableProcessor::flatten_kam_toml(kt);
-        Self::copy_and_replace(src, dst, &vars, force, id)
+        Self::copy_and_replace(src, dst, &vars, force)
     }
 
     /// Copy template files from src directory to dst directory, replacing placeholders
@@ -135,7 +134,6 @@ impl TemplateCopier {
         dst: &Path,
         vars: &HashMap<String, String>,
         force: bool,
-        id: &str,
     ) -> Result<(), KamError> {
         // Resolve a stable absolute root for the template source: prefer a canonicalized
         // path and fall back to normalizing against the current working directory.
@@ -148,7 +146,7 @@ impl TemplateCopier {
             }
         });
 
-        Self::copy_and_replace_internal(src, dst, vars, force, id, &root_src)
+        Self::copy_and_replace_internal(src, dst, vars, force, &root_src)
     }
 
     fn copy_and_replace_internal(
@@ -156,7 +154,6 @@ impl TemplateCopier {
         dst: &Path,
         vars: &HashMap<String, String>,
         force: bool,
-        id: &str,
         root_src: &Path,
     ) -> Result<(), KamError> {
         // Build Tera instance and convert flattened vars into a nested context.
@@ -254,7 +251,7 @@ impl TemplateCopier {
         }
 
         let root_value = serde_json::Value::Object(root_obj);
-        let mut context = Context::from_serialize(&root_value)
+        let context = Context::from_serialize(&root_value)
             .map_err(|e| KamError::CommandFailed(format!("Failed to build template context: {}", e)))?;
 
         // Safety check: prevent copying into a destination that is inside the initial template root
@@ -407,7 +404,7 @@ impl TemplateManager {
         force: bool,
         id: &str,
     ) -> Result<(), KamError> {
-        TemplateCopier::copy_template_to(src, dst, kt, force, id)
+        TemplateCopier::copy_template_to(src, dst, kt, force)
     }
 
     pub fn copy_and_replace(
@@ -417,6 +414,6 @@ impl TemplateManager {
         force: bool,
         id: &str,
     ) -> Result<(), KamError> {
-        TemplateCopier::copy_and_replace(src, dst, vars, force, id)
+        TemplateCopier::copy_and_replace(src, dst, vars, force)
     }
 }

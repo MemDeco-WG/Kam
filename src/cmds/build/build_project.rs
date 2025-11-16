@@ -457,32 +457,121 @@ pub fn add_directory_to_zip<W: Write + std::io::Seek>(
     Ok(())
 }
 
-/// Run a shell command
+/// Run a shell command and stream stdout/stderr as it arrives.
+///
+/// This implementation:
+/// - Streams stdout and stderr concurrently using threads and an interleaving channel,
+/// - Reads raw bytes using `BufRead::read_until(b'\n')` so we can cope with non-UTF8 outputs,
+/// - Colorizes stderr lines to help spot issues in logs,
+/// - Collects stderr bytes so we can present a meaningful error message when the command fails,
+/// - Prints output as it arrives, ensuring timely log streaming for long-running commands.
 pub fn run_command(cmd: &str, working_dir: &Path) -> Result<(), KamError> {
-    use std::process::Command;
+    use std::process::{Command, Stdio};
+    use std::io::{BufRead, BufReader, Write};
+    use std::sync::mpsc;
+    use std::thread;
+    use colored::Colorize;
 
-    let output = if cfg!(target_os = "windows") {
+    // Spawn the child process and capture stdout/stderr
+    let mut child = if cfg!(target_os = "windows") {
         Command::new("cmd")
             .args(["/C", cmd])
             .current_dir(working_dir)
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(KamError::from)?
     } else {
         Command::new("sh")
             .args(["-c", cmd])
             .current_dir(working_dir)
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(KamError::from)?
     };
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(KamError::CommandFailed(stderr));
+    let stdout_pipe = child
+        .stdout
+        .take()
+        .ok_or_else(|| KamError::CommandFailed("Failed to capture stdout".to_string()))?;
+    let stderr_pipe = child
+        .stderr
+        .take()
+        .ok_or_else(|| KamError::CommandFailed("Failed to capture stderr".to_string()))?;
+
+    // Channel carries (is_stdout, bytes) where bytes contains the raw chunk (usually a line)
+    let (tx, rx) = mpsc::channel::<(bool, Vec<u8>)>();
+
+    // Spawn a thread to stream stdout bytes using read_until
+    {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            let mut reader = BufReader::new(stdout_pipe);
+            let mut buf = Vec::with_capacity(1024);
+            loop {
+                buf.clear();
+                match reader.read_until(b'\n', &mut buf) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        let _ = tx.send((true, buf.clone()));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if !stdout.trim().is_empty() {
-        println!("{}", stdout);
+    // Spawn a thread to stream stderr bytes using read_until
+    {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            let mut reader = BufReader::new(stderr_pipe);
+            let mut buf = Vec::with_capacity(1024);
+            loop {
+                buf.clear();
+                match reader.read_until(b'\n', &mut buf) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        let _ = tx.send((false, buf.clone()));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+
+    // Drop the sender on the main thread so rx.iter() completes once both reader threads end.
+    drop(tx);
+
+    // Keep an accumulator of stderr bytes for potential failure diagnostics.
+    let mut stderr_acc: Vec<u8> = Vec::new();
+
+    // Interleave and print outputs as they arrive
+    for (is_stdout, bytes) in rx.iter() {
+        if is_stdout {
+            // Print stdout bytes lossy (handles non-UTF8 safely).
+            let s = String::from_utf8_lossy(&bytes);
+            print!("{}", s);
+            let _ = std::io::stdout().flush();
+        } else {
+            // Colorize stderr text for clarity and accumulate bytes for diagnostics.
+            stderr_acc.extend_from_slice(&bytes);
+            let s = String::from_utf8_lossy(&bytes);
+            eprintln!("{}", s.red());
+            let _ = std::io::stderr().flush();
+        }
+    }
+
+    // Reap the child process and return appropriate error if it failed.
+    let status = child.wait().map_err(KamError::from)?;
+    if !status.success() {
+        let err_msg = if !stderr_acc.is_empty() {
+            String::from_utf8_lossy(&stderr_acc).to_string()
+        } else {
+            format!("Command failed with status: {}", status)
+        };
+        return Err(KamError::CommandFailed(err_msg));
     }
 
     Ok(())

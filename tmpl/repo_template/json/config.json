@@ -1,5 +1,5 @@
 {
-  "name": "{{id}}",
+  "name": "{{prop.id}}",
   "website": null,
   "support": null,
   "donate": null,
