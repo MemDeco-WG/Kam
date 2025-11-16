@@ -1,5 +1,6 @@
 use crate::cache::KamCache;
 use crate::errors::KamError;
+use crate::utils::{copy_dir_all, symlink_dir_all};
 use std::fs;
 use std::io::{BufReader, Read};
 /// # Kam Virtual Environment System
@@ -365,7 +366,10 @@ impl KamVenv {
         if !cache_lib.exists() {
             return Err(KamError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Library lib/ not found in cache for arch {}", std::env::consts::ARCH),
+                format!(
+                    "Library lib/ not found in cache for arch {}",
+                    std::env::consts::ARCH
+                ),
             )));
         }
 
@@ -399,40 +403,6 @@ impl KamVenv {
     }
 }
 
-/// Symlink a directory recursively (for Windows)
-#[cfg(not(unix))]
-fn symlink_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            if std::os::windows::fs::symlink_dir(&src_path, &dst_path).is_err() {
-                symlink_dir_all(&src_path, &dst_path)?;
-            }
-        } else {
-            if std::os::windows::fs::symlink_file(&src_path, &dst_path).is_err() {
-                fs::copy(&src_path, &dst_path)?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Copy a directory recursively (for Windows)
-#[cfg(not(unix))]
-fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
-        } else {
-            fs::copy(entry.path(), dst.join(entry.file_name()))?;
-        }
-    }
-    Ok(())
-}
+// Cross-platform symlink and copy utilities are implemented centrally in `crate::utils`.
+// This module relies on `use crate::utils::{symlink_dir_all, copy_dir_all}` and no longer
+// provides local Windows-only implementations for those helpers.

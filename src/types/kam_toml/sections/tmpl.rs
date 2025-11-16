@@ -55,7 +55,7 @@ pub struct TmplSection {
 impl Default for TmplSection {
     fn default() -> Self {
         TmplSection {
-            used_template: None,
+            used_template: Some("kam_template".to_string()),
             variables: BTreeMap::new(),
         }
     }

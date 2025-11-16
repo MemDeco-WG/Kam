@@ -11,6 +11,7 @@ use crate::errors::{KamError, Result};
 pub use crate::types::kam_toml::KamToml;
 
 use crate::types::source::Source;
+use crate::utils::copy_dir_all;
 
 pub const DEFAULT_DEPENDENCY_SOURCE: &str = "https://github.com/MemDeco-WG/Kam-Index";
 
@@ -321,30 +322,15 @@ fn sanitize_name(s: &str) -> String {
 }
 
 // Small helpers (no external utils module required)
-fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
-    if !dst.exists() {
-        fs::create_dir_all(dst)?;
-    }
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
-        let dest_path = dst.join(entry.file_name());
-        if file_type.is_dir() {
-            copy_dir_all(&entry.path(), &dest_path)?;
-        } else if file_type.is_file() {
-            fs::copy(&entry.path(), &dest_path)?;
-        } else if file_type.is_symlink() {
-            // attempt to copy symlink target as file/dir depending on target
-            let target = fs::read_link(entry.path())?;
-            if target.is_dir() {
-                copy_dir_all(&target, &dest_path)?;
-            } else {
-                fs::copy(&target, &dest_path)?;
-            }
-        }
-    }
-    Ok(())
-}
+// copy_dir_all has been removed from this module. Use the centralized
+// implementation provided by `crate::utils::copy_dir_all` instead to avoid
+// duplicated and inconsistent implementations across the project:
+//
+//   use crate::utils::copy_dir_all;
+//
+// Call site examples in this module already reference `copy_dir_all(...)`.
+// With the `use crate::utils::copy_dir_all;` import (added at the top of this file),
+// those calls will resolve to the centralized utility function.
 
 fn extract_zip(zip_path: &Path, dst: &Path) -> Result<()> {
     let file = fs::File::open(zip_path)?;

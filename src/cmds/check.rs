@@ -144,7 +144,11 @@ fn check_file(path: &Path, fix: bool) -> Result<CheckResult, KamError> {
     }
 
     // Re-read content if line endings were fixed, to ensure syntax checks use correct content
-    let content = if fixed_count > 0 { fs::read(path).map_err(KamError::Io)? } else { content };
+    let content = if fixed_count > 0 {
+        fs::read(path).map_err(KamError::Io)?
+    } else {
+        content
+    };
     let content_str = String::from_utf8_lossy(&content);
 
     // Check syntax based on extension

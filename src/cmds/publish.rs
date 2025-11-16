@@ -1,6 +1,7 @@
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
+use crate::utils::compute_index_path;
 use chrono;
 use clap::Args;
 use colored::Colorize;
@@ -157,9 +158,13 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
             if let Some(kt) = maybe_toml {
                 if kt.kam.module_type == ModuleType::Repo {
                     // Update repo index with metadata
-                    let package_filename = package_path.file_name().ok_or_else(|| {
-                        KamError::InvalidFilename("invalid package filename".to_string())
-                    })?.to_string_lossy().to_string();
+                    let package_filename = package_path
+                        .file_name()
+                        .ok_or_else(|| {
+                            KamError::InvalidFilename("invalid package filename".to_string())
+                        })?
+                        .to_string_lossy()
+                        .to_string();
                     update_repo_index(&dest, &module_id, &version, &kam_toml, &package_filename)?;
 
                     // Copy package to repo/packages directory
@@ -251,10 +256,18 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
             );
             // Update repo index with metadata only
             let repo_path = PathBuf::from(local_repo);
-            let package_filename = package_path.file_name().ok_or_else(|| {
-                KamError::InvalidFilename("invalid package filename".to_string())
-            })?.to_string_lossy().to_string();
-            update_repo_index(&repo_path, &module_id, &version, &kam_toml, &package_filename)?;
+            let package_filename = package_path
+                .file_name()
+                .ok_or_else(|| KamError::InvalidFilename("invalid package filename".to_string()))?
+                .to_string_lossy()
+                .to_string();
+            update_repo_index(
+                &repo_path,
+                &module_id,
+                &version,
+                &kam_toml,
+                &package_filename,
+            )?;
 
             // Copy package to repo/packages directory
             let packages_dir = repo_path.join("packages");
@@ -290,11 +303,23 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
                         let owner = parts[3];
                         let repo = parts[4];
 
-                        let package_filename = package_path.file_name().ok_or_else(|| {
-                            KamError::InvalidFilename("invalid package filename".to_string())
-                        })?.to_string_lossy().to_string();
+                        let package_filename = package_path
+                            .file_name()
+                            .ok_or_else(|| {
+                                KamError::InvalidFilename("invalid package filename".to_string())
+                            })?
+                            .to_string_lossy()
+                            .to_string();
 
-                        create_github_issue(owner, repo, &module_id, &version, &kam_toml, &package_filename, args.token.as_deref())?;
+                        create_github_issue(
+                            owner,
+                            repo,
+                            &module_id,
+                            &version,
+                            &kam_toml,
+                            &package_filename,
+                            args.token.as_deref(),
+                        )?;
 
                         println!(
                             "  {} Created module submission issue in {}/{}",
@@ -317,15 +342,14 @@ pub fn run(args: PublishArgs) -> Result<(), KamError> {
             install_library_to_cache(&package_path, &cache)?;
 
             // Update local index
-            let package_filename = package_path.file_name().ok_or_else(|| {
-                KamError::InvalidFilename("invalid package filename".to_string())
-            })?.to_string_lossy().to_string();
+            let package_filename = package_path
+                .file_name()
+                .ok_or_else(|| KamError::InvalidFilename("invalid package filename".to_string()))?
+                .to_string_lossy()
+                .to_string();
             update_local_cache_index(&cache, &module_id, &version, &kam_toml, &package_filename)?;
 
-            println!(
-                "  {} Published library artifacts to cache",
-                "✓".green()
-            );
+            println!("  {} Published library artifacts to cache", "✓".green());
             println!(
                 "  {} Library can now be added with: kam add {}@{}",
                 "i".cyan(),
@@ -422,8 +446,8 @@ fn install_library_to_cache(
             .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
     } else if package_path.extension().and_then(|e| e.to_str()) == Some("zip") {
         let file = fs::File::open(package_path)?;
-        let mut archive = zip::ZipArchive::new(file)
-            .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
+        let mut archive =
+            zip::ZipArchive::new(file).map_err(|e| KamError::ExtractFailed(e.to_string()))?;
         archive
             .extract(temp_path)
             .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
@@ -547,7 +571,10 @@ fn create_github_issue(
 
     let create_issue_url = format!("https://api.github.com/repos/{}/{}/issues", owner, repo);
     let title = format!("Module Submission: {} v{}", module_id, version);
-    let body = format!("```json\n{}\n```", serde_json::to_string_pretty(&metadata).unwrap());
+    let body = format!(
+        "```json\n{}\n```",
+        serde_json::to_string_pretty(&metadata).unwrap()
+    );
 
     let issue_body = json!({
         "title": title,
@@ -642,23 +669,4 @@ fn create_github_release(
     Ok(())
 }
 
-/// Compute index path based on module name (similar to cargo's index structure)
-fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
-    let name_lower = module_name.to_lowercase();
-    let chars: Vec<char> = name_lower.chars().collect();
-
-    match chars.len() {
-        0 => index_base.to_path_buf(),
-        1 => index_base.join("1").join(&name_lower),
-        2 => index_base.join("2").join(&name_lower),
-        3 => index_base
-            .join("3")
-            .join(&chars[0].to_string())
-            .join(&name_lower),
-        _ => {
-            let prefix1 = chars[0..2].iter().collect::<String>();
-            let prefix2 = chars[2..4].iter().collect::<String>();
-            index_base.join(&prefix1).join(&prefix2).join(&name_lower)
-        }
-    }
-}
+// compute_index_path moved to crate::utils::compute_index_path()

@@ -1,10 +1,9 @@
 use chrono;
+use git2::Repository;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::process::Command;
 use toml;
-use git2::Repository;
 
 pub mod sections;
 use sections::*;
@@ -40,12 +39,80 @@ impl Default for KamToml {
 }
 
 impl KamToml {
+    /// Generate description map for a given module type
+    pub fn generate_description_map(module_type: &enums::ModuleType) -> BTreeMap<String, String> {
+        let mut description_map = BTreeMap::new();
+        let desc = match module_type {
+            enums::ModuleType::Kam => "A kam module",
+            enums::ModuleType::Library => "A library module",
+            enums::ModuleType::Template => "A template module",
+            enums::ModuleType::Repo => "A repository module",
+        };
+        description_map.insert("en".to_string(), desc.to_string());
+        description_map.insert(
+            "zh-CN".to_string(),
+            format!(
+                "一个{}模块",
+                match module_type {
+                    enums::ModuleType::Kam => "kam",
+                    enums::ModuleType::Library => "库",
+                    enums::ModuleType::Template => "模板",
+                    enums::ModuleType::Repo => "仓库",
+                }
+            ),
+        );
+        description_map.insert(
+            "zh-TW".to_string(),
+            format!(
+                "一個{}模組",
+                match module_type {
+                    enums::ModuleType::Kam => "kam",
+                    enums::ModuleType::Library => "庫",
+                    enums::ModuleType::Template => "模板",
+                    enums::ModuleType::Repo => "倉庫",
+                }
+            ),
+        );
+        description_map.insert(
+            "ja".to_string(),
+            format!(
+                "{}モジュール",
+                match module_type {
+                    enums::ModuleType::Kam => "kam",
+                    enums::ModuleType::Library => "ライブラリ",
+                    enums::ModuleType::Template => "テンプレート",
+                    enums::ModuleType::Repo => "リポジトリ",
+                }
+            ),
+        );
+        description_map.insert(
+            "ko".to_string(),
+            format!(
+                "{} 모듈",
+                match module_type {
+                    enums::ModuleType::Kam => "kam",
+                    enums::ModuleType::Library => "라이브러리",
+                    enums::ModuleType::Template => "템플릿",
+                    enums::ModuleType::Repo => "저장소",
+                }
+            ),
+        );
+        description_map
+    }
     /// Get git remote origin URL from a directory
     fn get_git_remote_url(project_dir: &Path) -> Result<String, crate::errors::KamError> {
-        let repo = Repository::open(project_dir).map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e)))?;
-        let remote = repo.find_remote("origin").map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to find remote: {}", e)))?;
-        let url = remote.url().ok_or_else(|| crate::errors::KamError::CommandFailed("No URL for remote".to_string()))?;
-        let url = url.to_string();
+        let repo = Repository::open(project_dir).map_err(|e| {
+            crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e))
+        })?;
+        let remote = repo.find_remote("origin").map_err(|e| {
+            crate::errors::KamError::CommandFailed(format!("Failed to find remote: {}", e))
+        })?;
+        let url = remote.url().unwrap_or("https://github.com/MemDeco-WG/Kam");
+        let url = if url.is_empty() {
+            "https://github.com/MemDeco-WG/Kam".to_string()
+        } else {
+            url.to_string()
+        };
         // Convert SSH URL to HTTPS if needed
         let url = if url.starts_with("git@") {
             // git@github.com:user/repo.git -> https://github.com/user/repo
@@ -69,34 +136,89 @@ impl KamToml {
 
     /// Get git user info from a directory
     fn get_git_user_info(project_dir: &Path) -> Result<(String, String), crate::errors::KamError> {
-        let repo = Repository::open(project_dir).map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e)))?;
-        let config = repo.config().map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to get config: {}", e)))?;
-        let name = config.get_string("user.name").unwrap_or("Unknown".to_string());
-        let email = config.get_string("user.email").unwrap_or("unknown@example.com".to_string());
+        let repo = Repository::open(project_dir).map_err(|e| {
+            crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e))
+        })?;
+        let config = repo.config().map_err(|e| {
+            crate::errors::KamError::CommandFailed(format!("Failed to get config: {}", e))
+        })?;
+        let name = config
+            .get_string("user.name")
+            .unwrap_or("Unknown".to_string());
+        let email = config
+            .get_string("user.email")
+            .unwrap_or("unknown@example.com".to_string());
         Ok((name, email))
+    }
+
+    /// Generate updateJson URL from repository remote URL, project ID, and default branch
+    fn generate_update_json_url(remote_url: &str, id: &str, default_branch: &str) -> String {
+        if remote_url.contains("github.com") {
+            // Parse GitHub URL: https://github.com/owner/repo.git -> https://raw.githubusercontent.com/owner/repo/{branch}/update.json
+            let parts: Vec<&str> = remote_url.trim_end_matches(".git").split('/').collect();
+            if parts.len() >= 5 {
+                let owner = parts[3];
+                return format!(
+                    "https://raw.githubusercontent.com/{}/{}/{}/update.json",
+                    owner, id, default_branch
+                );
+            }
+        } else if remote_url.contains("gitlab.com") {
+            // GitLab: https://gitlab.com/owner/repo.git -> https://gitlab.com/owner/repo/-/raw/{branch}/update.json
+            let parts: Vec<&str> = remote_url.trim_end_matches(".git").split('/').collect();
+            if parts.len() >= 5 {
+                let owner = parts[3];
+                return format!(
+                    "https://gitlab.com/{}/{}/-/raw/{}/update.json",
+                    owner, id, default_branch
+                );
+            }
+        }
+        // Default or unknown
+        format!(
+            "https://raw.githubusercontent.com/user/{}/{}/update.json",
+            id, default_branch
+        )
     }
 
     /// Get git default branch from a directory
     fn get_git_default_branch(project_dir: &Path) -> Result<String, crate::errors::KamError> {
-        let repo = Repository::open(project_dir).map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e)))?;
-        // Try to get the default branch from remote HEAD
-        if let Ok(reference) = repo.find_reference("refs/remotes/origin/HEAD") {
-            if let Some(target) = reference.target() {
-                if let Ok(branch_ref) = repo.find_reference(&format!("refs/remotes/origin/{}", target)) {
-                    if let Some(name) = branch_ref.name() {
-                        if let Some(branch) = name.strip_prefix("refs/remotes/origin/") {
-                            return Ok(branch.to_string());
-                        }
-                    }
-                }
+        let repo = Repository::open(project_dir).map_err(|e| {
+            crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e))
+        })?;
+
+        // Try remote HEAD first
+        if let Some(branch) = Self::try_get_branch_from_head(&repo) {
+            return Ok(branch);
+        }
+
+        // Fallback to common branches
+        Self::find_existing_branch(&repo, &["main", "master"])
+    }
+
+    /// Try to get branch name from refs/remotes/origin/HEAD
+    fn try_get_branch_from_head(repo: &Repository) -> Option<String> {
+        let reference = repo.find_reference("refs/remotes/origin/HEAD").ok()?;
+        let target = reference.target()?;
+        let branch_ref_name = format!("refs/remotes/origin/{}", target);
+        let branch_ref = repo.find_reference(&branch_ref_name).ok()?;
+        let name = branch_ref.name()?;
+        name.strip_prefix("refs/remotes/origin/")
+            .map(|s| s.to_string())
+    }
+
+    /// Find the first existing branch from a list
+    fn find_existing_branch(
+        repo: &Repository,
+        branches: &[&str],
+    ) -> Result<String, crate::errors::KamError> {
+        for &branch in branches {
+            let ref_name = format!("refs/remotes/origin/{}", branch);
+            if repo.find_reference(&ref_name).is_ok() {
+                return Ok(branch.to_string());
             }
         }
-        // Fallback to main, then master
-        if repo.find_reference("refs/remotes/origin/main").is_ok() {
-            Ok("main".to_string())
-        } else {
-            Ok("master".to_string())
-        }
+        Ok("main".to_string()) // Default fallback
     }
 
     /// Construct a KamToml starting from a PropSection (useful for default
@@ -153,7 +275,10 @@ impl KamToml {
     }
 
     /// Auto-fill repository metadata from git remote
-    pub fn auto_fill_from_git(&mut self, project_dir: &std::path::Path) -> Result<(), crate::errors::KamError> {
+    pub fn auto_fill_from_git(
+        &mut self,
+        project_dir: &std::path::Path,
+    ) -> Result<(), crate::errors::KamError> {
         if let Some(mmrl) = &mut self.mmrl {
             if let Some(repo) = &mut mmrl.repo {
                 // Get git remote URL
@@ -173,8 +298,12 @@ impl KamToml {
                     repo.readme = Some(format!("{}#readme", remote_url));
 
                     // Get default branch for changelog URL
-                    let default_branch = Self::get_git_default_branch(project_dir).unwrap_or("main".to_string());
-                    repo.changelog = Some(format!("{}/blob/{}/CHANGELOG.md", remote_url, default_branch));
+                    let default_branch =
+                        Self::get_git_default_branch(project_dir).unwrap_or("main".to_string());
+                    repo.changelog = Some(format!(
+                        "{}/blob/{}/CHANGELOG.md",
+                        remote_url, default_branch
+                    ));
 
                     // Set support to issues
                     repo.support = Some(format!("{}/issues", remote_url));
@@ -183,15 +312,33 @@ impl KamToml {
                 // Set documentation URL (same as homepage for now)
                 repo.documentation = Some(remote_url.clone());
 
-                // Get git user info for maintainers
+                // Generate updateJson URL
+                let default_branch =
+                    Self::get_git_default_branch(project_dir).unwrap_or("main".to_string());
+                let update_json_url =
+                    Self::generate_update_json_url(&remote_url, &self.prop.id, &default_branch);
+                if self.prop.updateJson.is_none() {
+                    self.prop.updateJson = Some(update_json_url);
+                }
+
+                // Get git user info for maintainers and author
                 if let Ok((name, email)) = Self::get_git_user_info(project_dir) {
                     if !name.is_empty() && name != "Unknown" {
                         let maintainer = if email != "unknown@example.com" {
-                            format!("{} <{}>", name, email)
+                            format!("{} <{}>", name.clone(), email)
                         } else {
-                            name
+                            name.clone()
                         };
                         repo.maintainers = Some(vec![maintainer]);
+
+                        // Set author if not set
+                        if self.prop.author.is_empty() {
+                            self.prop.author = if email != "unknown@example.com" {
+                                format!("{} ({})", name, email)
+                            } else {
+                                name
+                            };
+                        }
                     }
                 }
 
@@ -206,9 +353,7 @@ impl KamToml {
 
                 // Set supported architectures for Android modules
                 if repo.arch.as_ref().unwrap_or(&vec![]).is_empty() {
-                    repo.arch = Some(vec![
-                        "arm64-v8a".to_string(),
-                    ]);
+                    repo.arch = Some(vec!["arm64-v8a".to_string()]);
                 }
 
                 // Set reasonable API levels
@@ -221,10 +366,7 @@ impl KamToml {
 
                 // Set some common features
                 if repo.features.as_ref().unwrap_or(&vec![]).is_empty() {
-                    repo.features = Some(vec![
-                        "systemless".to_string(),
-                        "bootless".to_string(),
-                    ]);
+                    repo.features = Some(vec!["systemless".to_string(), "bootless".to_string()]);
                 }
             }
         }
@@ -290,5 +432,30 @@ impl KamToml {
             .as_ref()
             .unwrap_or(&DependencySection::default())
             .resolve()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_auto_fill_from_git() {
+        let mut kt = KamToml::default();
+        let current_dir = std::env::current_dir().unwrap();
+        let result = kt.auto_fill_from_git(&current_dir);
+        // Should not error
+        assert!(result.is_ok());
+        // Check if repository is set
+        if let Some(mmrl) = &kt.mmrl {
+            if let Some(repo) = &mmrl.repo {
+                assert!(repo.repository.is_some());
+                assert!(repo.homepage.is_some());
+                // For GitHub repo, issues should be set
+                if repo.repository.as_ref().unwrap().contains("github.com") {
+                    assert!(repo.issues.is_some());
+                }
+            }
+        }
     }
 }

@@ -1,9 +1,8 @@
 [prop]
 id = "Kam"
 version = "1.0.0"
-versionCode = 1763281003716
+versionCode = 1763289057297
 author = "LIghtJUNction (LIghtJUNction.me@gmail.com)"
-updateJson = "https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json"
 
 [prop.name]
 en = "Kam"
@@ -91,8 +90,8 @@ dev = []
 
 [kam.build]
 target_dir = "dist"
-output_file = "{{id}}-{{versionCode}}"
-pre_build = 'echo "pre build..."'
+output_file = "Kam-1763289057297"
+pre_build = 'cargo install --path .'
 post_build = 'echo "post build..."'
 exclude = [
     ".git/",
@@ -122,6 +121,16 @@ used_template = "kam_template"
 
 [kam.lib]
 provides = []
+
+[kam.workspace]
+members = [".",
+"tmpl/tmpl_template",
+"tmpl/kam_template/",
+"tmpl/repo_template/",
+"tmpl/venv_template/",
+"tmpl/lib_template/",
+
+]
 
 [tmpl.variables]
 

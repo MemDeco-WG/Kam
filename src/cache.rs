@@ -1,5 +1,5 @@
 use crate::errors::cache::CacheError;
-
+use std::path::{Path, PathBuf, Component};
 /// # Kam Cache System
 ///
 /// Global cache mechanism for Kam modules, inspired by uv-cache.
@@ -29,7 +29,35 @@ use crate::errors::cache::CacheError;
 /// let bin_path = cache.bin_dir();
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-use std::path::{Path, PathBuf};
+
+
+/// Normalize a path without requiring the path to exist:
+/// - Removes `.` segments
+/// - Resolves `..` segments where possible (by popping a previous segment)
+/// - Preserves device prefixes and root dir on Windows
+///
+/// This is intentionally conservative and does NOT attempt to resolve symlinks:
+/// callers that want a canonical path should still call `std::fs::canonicalize`.
+fn normalize_path(pb: PathBuf) -> PathBuf {
+    use std::path::Component;
+    let mut normalized = PathBuf::new();
+    for comp in pb.components() {
+        match comp {
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(comp.as_os_str())
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                // If there is a component to pop and it isn't a prefix/root, pop it,
+                // otherwise preserve the `..` entry.
+                if !normalized.pop() {
+                    normalized.push("..");
+                }
+            }
+        }
+    }
+    normalized
+}
 
 // CacheError is defined in `src/errors/cache.rs` and re-exported here for
 // backwards compatibility as `crate::cache::CacheError`.
@@ -101,7 +129,15 @@ impl KamCache {
                     .unwrap_or_else(|_| PathBuf::from("."))
                     .join(p)
             };
-            return Ok(abs);
+
+            // Normalize the constructed path (strip `.` segments, resolve `..` where possible).
+            let normalized = normalize_path(abs);
+
+            // Prefer a canonical (absolute, symlink-resolved) path when available;
+            // fallback to the normalized path if the path does not yet exist.
+            let final_path = std::fs::canonicalize(&normalized).unwrap_or(normalized);
+
+            return Ok(final_path);
         }
 
         // Check if we're on Android
@@ -114,7 +150,13 @@ impl KamCache {
             .or_else(|_| std::env::var("USERPROFILE"))
             .map_err(|_| CacheError::CacheDirNotFound)?;
 
-        Ok(PathBuf::from(home).join(".kam"))
+        // Normalize and optionally canonicalize the home-based path to ensure
+        // we return an absolute path that does not contain stray `.` segments.
+        let path = PathBuf::from(home).join(".kam");
+        let normalized = normalize_path(path.clone());
+        let final_path = std::fs::canonicalize(&normalized).unwrap_or(normalized);
+
+        Ok(final_path)
     }
 
     /// Get the cache root directory

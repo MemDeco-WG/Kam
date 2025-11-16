@@ -1,11 +1,13 @@
+use crate::cache::KamCache;
 use crate::cmds::init::status::{StatusType, print_status};
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
+use crate::types::kam_toml::enums::ModuleType;
 use crate::types::kam_toml::sections::TmplSection;
+use serde_json;
 use std::collections::{BTreeMap, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
-// toml_edit not needed here; use toml::Value for mutation
 
 pub fn init_impl(
     path: &Path,
@@ -16,6 +18,7 @@ pub fn init_impl(
     description_map: HashMap<String, String>,
     impl_source: &str,
     template_vars: &mut HashMap<String, String>,
+    force: bool,
 ) -> Result<(), KamError> {
     // Parse the template source specification
     let source = crate::types::source::Source::parse(impl_source).map_err(|e| {
@@ -24,6 +27,10 @@ pub fn init_impl(
             impl_source, e
         ))
     })?;
+    // Debug: show initial parameters for this invocation
+    println!("DEBUG init_impl: init called with path: {}", path.display());
+    println!("DEBUG init_impl: impl_source: {}", impl_source);
+    println!("DEBUG init_impl: force: {}", force);
 
     // Create a dummy KamToml for the module (we'll load the real one from the template)
     let dummy_toml = KamToml::new_with_current_timestamp(
@@ -36,16 +43,68 @@ pub fn init_impl(
         None,
     );
 
-    // Create KamModule and fetch the template
-    let module = crate::types::modules::base::KamModule::new(dummy_toml, Some(source));
+    // Create KamModule and fetch the template (unpacked into a tempdir)
+    // Clone `source` so we can continue to use it later without moving
+    let module = crate::types::modules::base::KamModule::new(dummy_toml, Some(source.clone()));
     let template_path = module.fetch_to_temp()?;
 
-    // Determine archive_id from the template path
-    let archive_id = template_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("template")
-        .to_string();
+    // Determine archive_id from the source (prefer a human friendly/sanitized name)
+    //
+    // Previously we used the temp directory name (created by `tempfile::tempdir`) to
+    // compute the archive id; that produced `.tmp...` names like `.tmpkLbqXJ`. This
+    // caused `used_template` to store an unhelpful temp-dir name in `kam.toml`.
+    //
+    // Instead derive the archive id from the original source. For local paths use the
+    // file/directory name. For URLs and Git repositories use the last path segment
+    // (e.g. repo name or file name). Sanitize the resulting string to contain only
+    // lower-case alphanumeric, `-`, `_`, or `.` characters, replacing others with `-`.
+    let archive_id = {
+        // Sanitize an arbitrary string into a compact archive id
+        fn sanitize_name(s: &str) -> String {
+            let mut out = String::new();
+            for ch in s.chars() {
+                if ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-' {
+                    out.push(ch.to_ascii_lowercase());
+                } else {
+                    out.push('-');
+                }
+            }
+            // Trim leading/trailing separators inserted during sanitization
+            let trimmed = out.trim_matches(|c: char| c == '-' || c == '.').to_string();
+            if trimmed.is_empty() {
+                "template".to_string()
+            } else {
+                trimmed
+            }
+        }
+
+        // Candidate extraction logic:
+        // - Local: last path component
+        // - Url: last path component (strip query/fragment), drop extension if present
+        // - Git: last path component (strip `.git`); if ambiguous fallback to impl_source
+        let candidate = match &source {
+            crate::types::source::Source::Local { path } => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| path.to_string_lossy().to_string()),
+            crate::types::source::Source::Url { url } => {
+                // Remove query and fragment; take last path segment; remove extension
+                let segment = url.split('?').next().unwrap_or(&url).split('#').next().unwrap_or(&url);
+                let last = segment.rsplit('/').next().unwrap_or(segment);
+                last.split('.').next().unwrap_or(last).to_string()
+            }
+            crate::types::source::Source::Git { url, .. } => {
+                let mut s = url.as_str();
+                if s.ends_with(".git") {
+                    s = &s[..s.len() - 4];
+                }
+                s.rsplit('/').next().unwrap_or(s).to_string()
+            }
+        };
+
+        sanitize_name(&candidate)
+    };
 
     // Load template variables and insert defaults (refactored to helper to avoid deep nesting)
     let template_kam_path = template_path.join("kam.toml");
@@ -92,6 +151,7 @@ pub fn init_impl(
     let name_map_btree: BTreeMap<_, _> = name_map.into_iter().collect();
     let description_map_btree: BTreeMap<_, _> = description_map.into_iter().collect();
 
+    // Prepare KamToml and set the used template
     let kam_toml_rel = "kam.toml".to_string();
     print_status(StatusType::Add, &kam_toml_rel, false);
 
@@ -109,20 +169,14 @@ pub fn init_impl(
         variables: BTreeMap::new(),
     });
 
-    // Apply any template variables that target kam.toml itself. Variables
-    // intended to modify kam.toml must start with a leading '#', e.g.
-    // `#prop.name.en` or `#prop.version`. These are applied to the KamToml
-    // structure via toml_edit so nested fields can be set.
+    // Extract and separate '#'-prefixed variables that target kam.toml fields
     let mut kam_vars: Vec<(String, String)> = Vec::new();
-    let mut normal_vars: Vec<String> = Vec::new();
     for k in template_vars.keys() {
         if k.starts_with('#') {
             kam_vars.push((k.to_string(), template_vars.get(k).unwrap().clone()));
-        } else {
-            normal_vars.push(k.to_string());
         }
     }
-    // Remove kam vars from template_vars so they won't be applied to file contents later
+    // Remove kam vars from template_vars so they are not applied to file contents
     for k in &kam_vars {
         template_vars.remove(&k.0);
     }
@@ -130,9 +184,94 @@ pub fn init_impl(
     if !kam_vars.is_empty() {
         kt.apply_vars(kam_vars)?;
     }
+
+    // Write initial kam.toml (includes #var effects)
+    println!(
+        "DEBUG init_impl: about to write initial kam.toml to {}",
+        path.display()
+    );
+    println!(
+        "DEBUG init_impl: destination path exists: {}",
+        path.exists()
+    );
+    // Ensure the destination directory exists so writing kam.toml succeeds.
+    // If it does not exist, create all parent directories.
+    if !path.exists() {
+        std::fs::create_dir_all(path)?;
+    }
+    if path.exists() {
+        let has_entries = std::fs::read_dir(path)
+            .map(|mut r| r.next().is_some())
+            .unwrap_or(false);
+        println!(
+            "DEBUG init_impl: destination path already contains entries: {}",
+            has_entries
+        );
+    }
     kt.write_to_dir(path)?;
 
-    // Apply template variables to kam.toml as well
+    // Merge flattened variables from the freshly created `kt` into `template_vars`
+    // so that the templating context (used for kam.toml rendering as well as file
+    // copying) includes values derived from the final KamToml structure such as
+    // `id`, `version`, `name` and other property paths.
+    //
+    // Important note: we prefer explicit CLI-provided template variables already in
+    // `template_vars` and therefore only insert a key when it is not present,
+    // preserving CLI overrides.
+    let kt_vars = crate::template::TemplateVariableProcessor::flatten_kam_toml(&kt);
+    for (k, v) in kt_vars.into_iter() {
+        template_vars.entry(k).or_insert(v);
+    }
+
+    // Ensure shallow convenience keys exist for templates that expect them:
+    // id, name, version, versionCode, author, description.
+    //
+    // These are populated from the final KamToml structure (`kt`) and are only
+    // inserted when the key isn't already present: we do not override CLI or
+    // template-provided explicit values.
+    if !template_vars.contains_key("id") {
+        template_vars.insert("id".to_string(), kt.prop.id.clone());
+    }
+    if !template_vars.contains_key("version") {
+        template_vars.insert("version".to_string(), kt.prop.version.clone());
+    }
+    if !template_vars.contains_key("versionCode") {
+        template_vars.insert("versionCode".to_string(), kt.prop.versionCode.to_string());
+    }
+    if !template_vars.contains_key("author") {
+        template_vars.insert("author".to_string(), kt.prop.author.clone());
+    }
+
+    // For `name` and `description`, prefer the 'en' locale if present. Fall back
+    // to the first map entry otherwise (or id/empty string as a final fallback).
+    let shallow_name = kt
+        .prop
+        .name
+        .get("en")
+        .cloned()
+        .or_else(|| kt.prop.name.iter().next().map(|(_k, v)| v.clone()))
+        .unwrap_or_else(|| kt.prop.id.clone());
+    if !template_vars.contains_key("name") {
+        template_vars.insert("name".to_string(), shallow_name.clone());
+    }
+
+    let shallow_description = kt
+        .prop
+        .description
+        .get("en")
+        .cloned()
+        .or_else(|| kt.prop.description.iter().next().map(|(_k, v)| v.clone()))
+        .unwrap_or_default();
+    if !template_vars.contains_key("description") {
+        template_vars.insert("description".to_string(), shallow_description.clone());
+    }
+
+    eprintln!(
+        "DEBUG init_impl: merged kt flattened variables into template_vars, keys now: {:?}",
+        template_vars.keys().collect::<Vec<_>>()
+    );
+
+    // Apply non-# template variables into kam.toml (allows placeholders like {{project_name}} in kam.toml)
     let kam_toml_path = path.join("kam.toml");
     if kam_toml_path.exists() {
         let mut content = std::fs::read_to_string(&kam_toml_path)?;
@@ -141,46 +280,164 @@ pub fn init_impl(
             context.insert(k, v);
         }
         let mut tera = Tera::default();
-        content = tera.render_str(&content, &context).map_err(|e| KamError::TemplateRenderError(e.to_string()))?;
+        // Debugging: print path, content length, preview and template variables prior to rendering
+        let preview: String = content.chars().take(1024).collect();
+        let vars_json = serde_json::to_string(&template_vars)
+            .unwrap_or_else(|_| "<vars-json-error>".to_string());
+        eprintln!(
+            "DEBUG init_impl: rendering kam.toml: {}",
+            kam_toml_path.display()
+        );
+        eprintln!("DEBUG init_impl: content length: {}", content.len());
+        eprintln!("DEBUG init_impl: content preview: {}", preview);
+        eprintln!("DEBUG init_impl: template_vars: {}", vars_json);
+        content = tera.render_str(&content, &context).map_err(|e| {
+            // Also print debug info upon template render error for easier diagnosis
+            eprintln!("DEBUG init_impl: tera render error: {}", e);
+            eprintln!("DEBUG init_impl: failing content (preview): {}", preview);
+            eprintln!("DEBUG init_impl: template_vars (on error): {}", vars_json);
+            KamError::TemplateRenderError(e.to_string())
+        })?;
         std::fs::write(&kam_toml_path, content)?;
     }
 
-    // Copy src from template with tera templating.
-    if template_path.exists() {
-        let src_dir_placeholder = "{{id}}";
-        let mut context = Context::new();
-        for (k, v) in template_vars.iter() {
-            context.insert(k, v);
-        }
-        let mut tera = Tera::default();
-        let src_dir_replaced = tera.render_str(src_dir_placeholder, &context).map_err(|e| KamError::TemplateRenderError(e.to_string()))?;
-        let src_temp = template_path.join("src").join(&src_dir_replaced);
-
-        if src_temp.exists() {
-            let src_dir = path.join("src").join(id);
-            let src_rel = format!("src/{}/", id);
-            print_status(StatusType::Add, &src_rel, true);
-            std::fs::create_dir_all(&src_dir)?;
-            for entry in std::fs::read_dir(&src_temp)? {
-                let entry = entry?;
-                let filename = entry.file_name();
-                let file_name_str = filename.to_string_lossy().to_string();
-                let replaced_name = tera.render_str(&file_name_str, &context).map_err(|e| KamError::TemplateRenderError(e.to_string()))?;
-                let mut content = std::fs::read_to_string(entry.path())?;
-                content = tera.render_str(&content, &context).map_err(|e| KamError::TemplateRenderError(e.to_string()))?;
-                let dest_file = src_dir.join(&replaced_name);
-                let file_rel = format!("src/{}/{}", id, replaced_name);
-                print_status(StatusType::Add, &file_rel, false);
-                std::fs::write(&dest_file, content)?;
-            }
-        } else {
-            return Err(KamError::TemplateNotFound(
-                "Template source directory not found".to_string(),
-            ));
-        }
-    } else {
-        return Err(KamError::TemplateNotFound("Template not found".to_string()));
-    }
+    // Copy the template's files into the project root (this includes README, LICENSE, .kam_venv, src/<id>, etc.)
+    println!(
+        "DEBUG init_impl: about to copy files from {} to {}",
+        template_path.display(),
+        path.display()
+    );
+    println!(
+        "DEBUG init_impl: template_path exists: {}",
+        template_path.exists()
+    );
+    println!(
+        "DEBUG init_impl: archive_id: {}, force: {}",
+        archive_id, force
+    );
+    crate::template::TemplateManager::copy_and_replace(
+        &template_path,
+        path,
+        template_vars,
+        force,
+        &archive_id,
+    )?;
+    // Re-ensure kam.toml is the canonical one with applied '#'-vars (overwrite if template carried a kam.toml)
+    println!("DEBUG init_impl: re-writing kam.toml to {}", path.display());
+    println!(
+        "DEBUG init_impl: destination path exists (re-check): {}",
+        path.exists()
+    );
+    kt.write_to_dir(path)?;
 
     Ok(())
+}
+
+pub fn init_template(
+    path: &Path,
+    id: &str,
+    name_map: BTreeMap<String, String>,
+    version: &str,
+    author: &str,
+    description_map: BTreeMap<String, String>,
+    var: &[String],
+    impl_template: Option<String>,
+    force: bool,
+    _module_type: ModuleType,
+    _update_json: Option<String>,
+) -> Result<(), KamError> {
+    // Parse command-line template variables into a HashMap
+    let mut template_vars = crate::template::TemplateManager::parse_template_vars(var)?;
+
+    // Determine the candidate template spec (builtin name or a user-provided source)
+    let template_spec = impl_template
+        .as_deref()
+        .unwrap_or("kam_template")
+        .to_string();
+
+    // Detect if the chosen template is a builtin template ID
+    const BUILTIN_TEMPLATES: &[&str] = &[
+        "kam_template",
+        "lib_template",
+        "tmpl_template",
+        "repo_template",
+        "venv_template",
+    ];
+    let is_builtin = BUILTIN_TEMPLATES.contains(&template_spec.as_str());
+
+    if is_builtin {
+        // Ensure the built-in template archive exists in the cache
+        let cache = KamCache::new()?;
+        crate::template::TemplateManager::ensure_template(&template_spec)?;
+        let tmpl_dir = cache.tmpl_dir();
+
+        // Candidate paths for templates (gz/tgz/tar, zip, or directory)
+        let tar_gz_path = tmpl_dir.join(format!("{}.tar.gz", template_spec));
+        let zip_path = tmpl_dir.join(format!("{}.zip", template_spec));
+        let dir_path = tmpl_dir.join(&template_spec);
+
+        // Choose the first existing candidate
+        let chosen: Option<PathBuf> = if tar_gz_path.exists() {
+            Some(tar_gz_path)
+        } else if zip_path.exists() {
+            Some(zip_path)
+        } else if dir_path.exists() {
+            Some(dir_path)
+        } else {
+            None
+        };
+
+        if let Some(chosen_path) = chosen {
+            let src_spec = chosen_path.to_string_lossy().to_string();
+            // Convert BTreeMap -> HashMap to satisfy init_impl signature.
+            let name_hash: HashMap<String, String> = name_map
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            let description_hash: HashMap<String, String> = description_map
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            // Delegate to the "fetch-then-initialize" implementation
+            return init_impl(
+                path,
+                id,
+                name_hash,
+                version,
+                author,
+                description_hash,
+                &src_spec,
+                &mut template_vars,
+                force,
+            );
+        } else {
+            return Err(KamError::TemplateNotFound(format!(
+                "Builtin template '{}' not found in cache at {}",
+                template_spec,
+                tmpl_dir.display()
+            )));
+        }
+    } else {
+        // Non-builtin: treat as a general source spec (URL, git, or local path)
+        // Convert BTreeMap -> HashMap to satisfy init_impl signature.
+        let name_hash: HashMap<String, String> = name_map
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let description_hash: HashMap<String, String> = description_map
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        return init_impl(
+            path,
+            id,
+            name_hash,
+            version,
+            author,
+            description_hash,
+            &template_spec,
+            &mut template_vars,
+            force,
+        );
+    }
 }

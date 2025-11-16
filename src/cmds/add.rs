@@ -2,9 +2,10 @@ use crate::cache::KamCache;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::sections::dependency::{Dependency, VersionSpec};
-use crate::types::source::Source;
 use crate::types::modules::ModuleBackend;
+use crate::types::source::Source;
 
+use crate::utils::{compute_index_path, copy_dir_all, extract_package};
 use crate::venv::KamVenv;
 use clap::Args;
 use colored::Colorize;
@@ -67,15 +68,12 @@ pub fn run(args: AddArgs) -> Result<(), KamError> {
         args.version
     );
 
-
-
     // Initialize cache
     let cache = KamCache::new()?;
     cache.ensure_dirs()?;
 
-
-
-    let (actual_version, mut kam_toml) = fetch_library(&cache, library, &args.version, args.repo.as_deref())?;
+    let (actual_version, mut kam_toml) =
+        fetch_library(&cache, library, &args.version, args.repo.as_deref())?;
 
     // Extract library metadata
     let lib_info = LibraryInfo {
@@ -207,26 +205,7 @@ struct LibraryInfo {
     versionCode: i64, // Magisk module field naming style, do not change
 }
 
-/// Compute index path based on module name (similar to cargo's index structure)
-fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
-    let name_lower = module_name.to_lowercase();
-    let chars: Vec<char> = name_lower.chars().collect();
-
-    match chars.len() {
-        0 => index_base.to_path_buf(),
-        1 => index_base.join("1").join(&name_lower),
-        2 => index_base.join("2").join(&name_lower),
-        3 => index_base
-            .join("3")
-            .join(&chars[0].to_string())
-            .join(&name_lower),
-        _ => {
-            let prefix1 = chars[0..2].iter().collect::<String>();
-            let prefix2 = chars[2..4].iter().collect::<String>();
-            index_base.join(&prefix1).join(&prefix2).join(&name_lower)
-        }
-    }
-}
+/* compute_index_path moved to crate::utils::compute_index_path() */
 
 /// Fetch library from repository
 fn fetch_library(
@@ -276,7 +255,7 @@ fn fetch_library(
                             let temp_path = temp_dir.path();
 
                             // Extract package to temp
-                            extract_package(&source, temp_path)?;
+                            crate::utils::extract_package(&source, temp_path)?;
 
                             // Load kam.toml
                             let kam_toml = KamToml::load_from_dir(temp_path)?;
@@ -285,7 +264,13 @@ fn fetch_library(
                             install_library_to_cache(temp_path, &cache)?;
 
                             // Update local index
-                            update_local_cache_index(&cache, library, &actual_version, &kam_toml, package_file)?;
+                            update_local_cache_index(
+                                &cache,
+                                library,
+                                &actual_version,
+                                &kam_toml,
+                                package_file,
+                            )?;
 
                             println!("  {} Fetched from local repo", "✓".green());
                             return Ok((actual_version.to_string(), kam_toml));
@@ -330,15 +315,19 @@ fn fetch_library(
                 // Fetch to temp
                 match src {
                     Source::Url { url } => {
-                        let mut resp = reqwest::blocking::get(&url).map_err(|e| KamError::FetchFailed(format!("failed to download {}: {}", url, e)))?;
+                        let mut resp = reqwest::blocking::get(&url).map_err(|e| {
+                            KamError::FetchFailed(format!("failed to download {}: {}", url, e))
+                        })?;
                         if !resp.status().is_success() {
                             continue;
                         }
                         let mut data = Vec::new();
-                        resp.copy_to(&mut data).map_err(|e| KamError::FetchFailed(format!("read download body: {}", e)))?;
+                        resp.copy_to(&mut data).map_err(|e| {
+                            KamError::FetchFailed(format!("read download body: {}", e))
+                        })?;
                         let file_path = temp_path.join("download.zip");
                         fs::write(&file_path, &data)?;
-                        extract_package(&file_path, temp_path)?;
+                        crate::utils::extract_package(&file_path, temp_path)?;
                     }
                     _ => continue,
                 }
@@ -365,37 +354,7 @@ fn fetch_library(
     )))
 }
 
-/// Extract package archive (zip or tar.gz)
-fn extract_package(source: &Path, dest: &Path) -> Result<(), KamError> {
-    let ext = source.extension().and_then(|e| e.to_str());
-
-    match ext {
-        Some("zip") => {
-            let file = fs::File::open(source)?;
-            let mut archive =
-                zip::ZipArchive::new(file).map_err(|e| KamError::ExtractFailed(e.to_string()))?;
-            archive
-                .extract(dest)
-                .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
-        }
-        Some("gz") => {
-            let file = fs::File::open(source)?;
-            let gz = flate2::read::GzDecoder::new(file);
-            let mut archive = tar::Archive::new(gz);
-            archive
-                .unpack(dest)
-                .map_err(|e| KamError::ExtractFailed(e.to_string()))?;
-        }
-        _ => {
-            return Err(KamError::UnsupportedFormat(format!(
-                "Unsupported package format: {:?}",
-                ext
-            )));
-        }
-    }
-
-    Ok(())
-}
+/* extract_package moved to crate::utils::extract_package() */
 
 /// Fetch from GitHub releases
 fn fetch_from_github(
@@ -485,7 +444,7 @@ fn fetch_from_github(
 
                             let temp_dir = tempfile::tempdir()?;
                             let temp_extract_path = temp_dir.path();
-                            extract_package(&temp_path, temp_extract_path)?;
+                            crate::utils::extract_package(&temp_path, temp_extract_path)?;
 
                             // Load kam.toml
                             let kam_toml = KamToml::load_from_dir(temp_extract_path)?;
@@ -514,7 +473,6 @@ fn fetch_from_github(
     )))
 }
 
-/// Compute index path based on module name (similar to cargo's index structureInstall backend into cache
 /// Install backend into cache
 fn install_backend_into_cache(
     backend: &impl ModuleBackend,
@@ -524,10 +482,7 @@ fn install_backend_into_cache(
 }
 
 /// Install library artifacts to cache (lib, lib64, bin)
-fn install_library_to_cache(
-    temp_path: &Path,
-    cache: &KamCache,
-) -> Result<(), KamError> {
+fn install_library_to_cache(temp_path: &Path, cache: &KamCache) -> Result<(), KamError> {
     // Copy lib to cache/lib
     let src_lib = temp_path.join("lib");
     if src_lib.exists() {
@@ -549,23 +504,7 @@ fn install_library_to_cache(
     Ok(())
 }
 
-/// Copy directory recursively
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), KamError> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if file_type.is_dir() {
-            copy_dir_all(&src_path, &dst_path)?;
-        } else {
-            fs::copy(&src_path, &dst_path)?;
-        }
-    }
-    Ok(())
-}
+/* copy_dir_all moved to crate::utils::copy_dir_all() */
 
 /// Update local cache index for a published library
 fn update_local_cache_index(
@@ -575,8 +514,8 @@ fn update_local_cache_index(
     kam_toml: &KamToml,
     package_filename: &str,
 ) -> Result<(), KamError> {
-    use serde_json::json;
     use chrono;
+    use serde_json::json;
 
     // Create index directory structure based on module name
     let index_dir = cache.root().join("index");

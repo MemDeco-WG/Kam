@@ -81,7 +81,11 @@ impl Default for RepoSection {
             changelog_file: Some("CHANGELOG.md".to_string()),
             screenshots: Some(vec![]),
             categories: Some(vec!["tools".to_string()]),
-            keywords: Some(vec!["kam".to_string(), "module".to_string(), "android".to_string()]),
+            keywords: Some(vec![
+                "kam".to_string(),
+                "module".to_string(),
+                "android".to_string(),
+            ]),
             maintainers: Some(vec![]),
             repository: Some(String::new()),
             documentation: Some(String::new()),
@@ -102,7 +106,10 @@ impl Default for RepoSection {
             min_api: Some(0),
             max_api: Some(0),
             verified: Some(false),
-            features: Some(vec!["module-template".to_string(), "customization".to_string()]),
+            features: Some(vec![
+                "module-template".to_string(),
+                "customization".to_string(),
+            ]),
         }
     }
 }

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Kam venv activation (template)
+# Adds the .kam-venv/bin directory to PATH and sets a marker.
+# Uses the directory containing this script to compute the venv root.
+VENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+export KAM_OLD_PATH="$PATH"
+export PATH="$VENV_DIR/bin:$PATH"
+export KAM_VENV_ACTIVE=1
+printf "Kam virtual environment activated (Kam)\n"
+printf "Run 'deactivate' to exit\n"
+
+deactivate() {
+    if [ -n "${KAM_OLD_PATH:-}" ]; then
+        export PATH="$KAM_OLD_PATH"
+        unset KAM_OLD_PATH
+    fi
+    unset KAM_VENV_ACTIVE
+    unset -f deactivate
+}

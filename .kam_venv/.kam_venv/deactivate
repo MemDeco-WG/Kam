@@ -1,0 +1,8 @@
+#!/bin/sh
+# Simple deactivate script for template
+if [ -n "${KAM_OLD_PATH:-}" ]; then
+    export PATH="$KAM_OLD_PATH"
+    unset KAM_OLD_PATH
+fi
+unset KAM_VENV_ACTIVE
+echo "Kam virtual environment deactivated"

@@ -35,39 +35,39 @@ pub struct InitArgs {
     #[arg(short, long)]
     pub force: bool,
 
-    /// Template source to implement (local path, URL, or git repo)
-    #[arg(long)]
+    /// Deprecated: Template source to implement (local path, URL, or git repo)
+    /// NOTE: This option has been removed from the CLI. Use the dedicated
+    /// template selection flags (e.g. --kam, --lib, --tmpl, --repo, --venv)
+    /// which correspond to builtin template IDs instead.
+    #[arg(skip)]
     pub r#impl: Option<String>,
-
-    /// Create META-INF folder for traditional Magisk modules
-    #[arg(long)]
-    pub meta_inf: bool,
-
-    /// Create WEB-ROOT folder for web interface
-    #[arg(long)]
-    pub web_root: bool,
 
     /// Template variables in key=value format
     #[arg(long)]
     pub var: Vec<String>,
 
     /// Create a kam module
+    /// Template id: "kam_template"
     #[arg(long)]
     pub kam: bool,
 
     /// Create a library module (provides dependencies)
+    /// Template id: "lib_template"
     #[arg(long)]
     pub lib: bool,
 
     /// Create a template project
+    /// Template id: "tmpl_template"
     #[arg(long)]
     pub tmpl: bool,
 
     /// Create a repo module repository project
+    /// Template id: "repo_template"
     #[arg(long)]
     pub repo: bool,
 
     /// Create a venv template
+    /// Template id: "venv_template"
     #[arg(long)]
     pub venv: bool,
 }

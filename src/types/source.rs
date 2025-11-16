@@ -74,4 +74,20 @@ impl Source {
         // As last resort, treat as local path (may not exist yet)
         Ok(Source::Local { path: p })
     }
+
+    /// Helper: obtain a textual URL-like value (for network sources).
+    pub fn as_url(&self) -> Option<&str> {
+        match self {
+            Source::Url { url } => Some(url.as_str()),
+            Source::Git { url, .. } => Some(url.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Helper: a cheaply clonable owned version (small convenience wrapper).
+    /// In practice callers can use `.clone()` since Source derives `Clone`,
+    /// but this method keeps call sites self-documenting.
+    pub fn into_owned(self) -> Self {
+        self
+    }
 }

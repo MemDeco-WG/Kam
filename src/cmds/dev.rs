@@ -1,4 +1,5 @@
 use crate::errors::KamError;
+use chrono::Utc;
 use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -6,7 +7,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;
-use chrono::Utc;
 
 /// Arguments for the dev command
 #[derive(Args, Debug)]
@@ -69,7 +69,8 @@ fn collect(args: CollectArgs) -> Result<(), KamError> {
     // Read repo metadata from config.json
     let metadata: RepoMetadata = if config_path.exists() {
         let content = fs::read_to_string(&config_path)?;
-        serde_json::from_str(&content).map_err(|e| KamError::JsonError(format!("Failed to parse config.json: {}", e)))?
+        serde_json::from_str(&content)
+            .map_err(|e| KamError::JsonError(format!("Failed to parse config.json: {}", e)))?
     } else {
         // Default metadata if config.json doesn't exist
         RepoMetadata {
