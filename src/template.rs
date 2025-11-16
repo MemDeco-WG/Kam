@@ -5,6 +5,7 @@ use crate::types::kam_toml::sections::tmpl::VariableDefinition;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use tera::{Context, Tera};
 
 /// Template manager for handling built-in templates
 pub struct TemplateManager;
@@ -124,6 +125,10 @@ impl TemplateManager {
         force: bool,
         id: &str,
     ) -> Result<(), KamError> {
+        let mut tera = Tera::default();
+        tera.set_escape_fn(|s| s.to_string()); // No HTML escaping for our use case
+        let context = Context::from_serialize(vars).map_err(|e| KamError::CommandFailed(format!("Tera context error: {}", e)))?;
+
         for entry in std::fs::read_dir(src)? {
             let entry = entry?;
             let file_name = entry.file_name().into_string().map_err(|_| {
@@ -135,49 +140,37 @@ impl TemplateManager {
             if file_name == "kam.toml" {
                 continue;
             }
-            let replaced_name = Self::replace_placeholders(&file_name, vars);
-            if file_name == "src" && entry.file_type()?.is_dir() {
-                Self::copy_and_replace(&entry.path(), dst, vars, force, id)?;
-            } else if replaced_name == id && entry.file_type()?.is_dir() {
-                Self::copy_and_replace(&entry.path(), dst, vars, force, id)?;
-            } else {
-                let dst_path = dst.join(&replaced_name);
-                let rel_path = dst_path
-                    .strip_prefix(dst)
-                    .unwrap_or(&dst_path)
-                    .to_string_lossy()
-                    .to_string();
+            let replaced_name = tera.render_str(&file_name, &context).map_err(|e| KamError::CommandFailed(format!("Tera render error: {}", e)))?;
+            let dst_path = dst.join(&replaced_name);
+            let rel_path = dst_path
+                .strip_prefix(dst)
+                .unwrap_or(&dst_path)
+                .to_string_lossy()
+                .to_string();
 
-                if entry.file_type()?.is_dir() {
-                    crate::utils::Utils::print_status(
-                        &dst_path,
-                        &rel_path,
-                        crate::utils::PrintOp::Create { is_dir: true },
-                        force,
-                    );
-                    std::fs::create_dir_all(&dst_path)?;
-                    Self::copy_and_replace(&entry.path(), &dst_path, vars, force, id)?;
-                } else {
-                    let content = std::fs::read_to_string(entry.path())?;
-                    let replaced_content = Self::replace_placeholders(&content, vars);
-                    crate::utils::Utils::print_status(
-                        &dst_path,
-                        &rel_path,
-                        crate::utils::PrintOp::Create { is_dir: false },
-                        force,
-                    );
-                    std::fs::write(&dst_path, replaced_content)?;
-                }
+            if entry.file_type()?.is_dir() {
+                crate::utils::Utils::print_status(
+                    &dst_path,
+                    &rel_path,
+                    crate::utils::PrintOp::Create { is_dir: true },
+                    force,
+                );
+                std::fs::create_dir_all(&dst_path)?;
+                Self::copy_and_replace(&entry.path(), &dst_path, vars, force, id)?;
+            } else {
+                let content = std::fs::read_to_string(entry.path())?;
+                let replaced_content = tera.render_str(&content, &context).map_err(|e| KamError::CommandFailed(format!("Tera render error: {}", e)))?;
+                crate::utils::Utils::print_status(
+                    &dst_path,
+                    &rel_path,
+                    crate::utils::PrintOp::Create { is_dir: false },
+                    force,
+                );
+                std::fs::write(&dst_path, replaced_content)?;
             }
         }
         Ok(())
     }
 
-    fn replace_placeholders(text: &str, vars: &HashMap<String, String>) -> String {
-        let mut result = text.to_string();
-        for (k, v) in vars {
-            result = result.replace(&format!("{{{{{}}}}}", k), v);
-        }
-        result
-    }
+
 }

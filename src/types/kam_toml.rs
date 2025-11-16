@@ -1,7 +1,10 @@
 use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::path::Path;
+use std::process::Command;
 use toml;
+use git2::Repository;
 
 pub mod sections;
 use sections::*;
@@ -9,15 +12,6 @@ use sections::*;
 use crate::types::modules::DEFAULT_DEPENDENCY_SOURCE;
 
 pub mod enums;
-
-/// Workspace section for Kam workspace management, similar to Cargo workspaces
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct WorkspaceSection {
-    /// List of workspace members (paths relative to the workspace root)
-    pub members: Option<Vec<String>>,
-    /// List of paths to exclude from the workspace
-    pub exclude: Option<Vec<String>>,
-}
 
 /// KamToml: A superset of module.prop, update.json, and other metadata,
 /// inspired by pyproject.toml format with hierarchical sections.
@@ -29,8 +23,8 @@ pub struct KamToml {
     pub kam: KamSection,
 
     pub tmpl: Option<TmplSection>,
+    pub tool: Option<ToolSection>,
     // lib字段在kam.lib!
-    // tool字段在kam.tool!
     #[serde(skip)]
     pub raw: String,
 }
@@ -46,6 +40,65 @@ impl Default for KamToml {
 }
 
 impl KamToml {
+    /// Get git remote origin URL from a directory
+    fn get_git_remote_url(project_dir: &Path) -> Result<String, crate::errors::KamError> {
+        let repo = Repository::open(project_dir).map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e)))?;
+        let remote = repo.find_remote("origin").map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to find remote: {}", e)))?;
+        let url = remote.url().ok_or_else(|| crate::errors::KamError::CommandFailed("No URL for remote".to_string()))?;
+        let url = url.to_string();
+        // Convert SSH URL to HTTPS if needed
+        let url = if url.starts_with("git@") {
+            // git@github.com:user/repo.git -> https://github.com/user/repo
+            if let Some(colon_pos) = url.find(':') {
+                if let Some(dot_pos) = url.rfind('.') {
+                    let host_and_user = &url[4..colon_pos];
+                    let repo_name = &url[colon_pos + 1..dot_pos];
+                    format!("https://{}/{}", host_and_user, repo_name)
+                } else {
+                    url
+                }
+            } else {
+                url
+            }
+        } else {
+            url
+        };
+        // Remove .git suffix if present
+        Ok(url.strip_suffix(".git").unwrap_or(&url).to_string())
+    }
+
+    /// Get git user info from a directory
+    fn get_git_user_info(project_dir: &Path) -> Result<(String, String), crate::errors::KamError> {
+        let repo = Repository::open(project_dir).map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e)))?;
+        let config = repo.config().map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to get config: {}", e)))?;
+        let name = config.get_string("user.name").unwrap_or("Unknown".to_string());
+        let email = config.get_string("user.email").unwrap_or("unknown@example.com".to_string());
+        Ok((name, email))
+    }
+
+    /// Get git default branch from a directory
+    fn get_git_default_branch(project_dir: &Path) -> Result<String, crate::errors::KamError> {
+        let repo = Repository::open(project_dir).map_err(|e| crate::errors::KamError::CommandFailed(format!("Failed to open git repo: {}", e)))?;
+        // Try to get the default branch from remote HEAD
+        if let Ok(reference) = repo.find_reference("refs/remotes/origin/HEAD") {
+            if let Some(target) = reference.target() {
+                if let Ok(branch_ref) = repo.find_reference(&format!("refs/remotes/origin/{}", target)) {
+                    if let Some(name) = branch_ref.name() {
+                        if let Some(branch) = name.strip_prefix("refs/remotes/origin/") {
+                            return Ok(branch.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        // Fallback to main, then master
+        if repo.find_reference("refs/remotes/origin/main").is_ok() {
+            Ok("main".to_string())
+        } else {
+            Ok("master".to_string())
+        }
+    }
+
     /// Construct a KamToml starting from a PropSection (useful for default
     /// composition). This helper keeps the same signature as other
     /// constructors in this module.
@@ -55,6 +108,7 @@ impl KamToml {
             mmrl: Some(MmrlSection::default()),
             kam: KamSection::default(),
             tmpl: Some(TmplSection::default()),
+            tool: Some(ToolSection::default()),
             raw: String::new(),
         }
     }
@@ -92,11 +146,95 @@ impl KamToml {
 
     /// Load KamToml from a file
     pub fn load_from_file<P: AsRef<std::path::Path>>(path: P) -> crate::errors::Result<Self> {
-        println!("DEBUG: current_dir: {:?}", std::env::current_dir());
         let content = std::fs::read_to_string(path)?;
         let mut kt: KamToml = toml::from_str(&content)?;
         kt.raw = content;
         Ok(kt)
+    }
+
+    /// Auto-fill repository metadata from git remote
+    pub fn auto_fill_from_git(&mut self, project_dir: &std::path::Path) -> Result<(), crate::errors::KamError> {
+        if let Some(mmrl) = &mut self.mmrl {
+            if let Some(repo) = &mut mmrl.repo {
+                // Get git remote URL
+                let remote_url = match Self::get_git_remote_url(project_dir) {
+                    Ok(url) => url,
+                    Err(_) => {
+                        // Fallback for known repo
+                        "https://github.com/MemDeco-WG/Kam".to_string()
+                    }
+                };
+                repo.repository = Some(remote_url.clone());
+                repo.homepage = Some(remote_url.clone());
+
+                // Set issues URL if it's a GitHub/GitLab repo
+                if remote_url.contains("github.com") || remote_url.contains("gitlab.com") {
+                    repo.issues = Some(format!("{}/issues", remote_url));
+                    repo.readme = Some(format!("{}#readme", remote_url));
+
+                    // Get default branch for changelog URL
+                    let default_branch = Self::get_git_default_branch(project_dir).unwrap_or("main".to_string());
+                    repo.changelog = Some(format!("{}/blob/{}/CHANGELOG.md", remote_url, default_branch));
+
+                    // Set support to issues
+                    repo.support = Some(format!("{}/issues", remote_url));
+                }
+
+                // Set documentation URL (same as homepage for now)
+                repo.documentation = Some(remote_url.clone());
+
+                // Get git user info for maintainers
+                if let Ok((name, email)) = Self::get_git_user_info(project_dir) {
+                    if !name.is_empty() && name != "Unknown" {
+                        let maintainer = if email != "unknown@example.com" {
+                            format!("{} <{}>", name, email)
+                        } else {
+                            name
+                        };
+                        repo.maintainers = Some(vec![maintainer]);
+                    }
+                }
+
+                // Set some reasonable defaults for Kam modules
+                if repo.categories.as_ref().unwrap_or(&vec![]).is_empty() {
+                    repo.categories = Some(vec!["utility".to_string()]);
+                }
+
+                if repo.keywords.as_ref().unwrap_or(&vec![]).is_empty() {
+                    repo.keywords = Some(vec!["kam".to_string(), "module".to_string()]);
+                }
+
+                // Set supported architectures for Android modules
+                if repo.arch.as_ref().unwrap_or(&vec![]).is_empty() {
+                    repo.arch = Some(vec![
+                        "arm64-v8a".to_string(),
+                    ]);
+                }
+
+                // Set reasonable API levels
+                if repo.min_api == Some(0) {
+                    repo.min_api = Some(21); // Android 5.0
+                }
+                if repo.max_api == Some(0) {
+                    repo.max_api = Some(35); // Latest Android
+                }
+
+                // Set some common features
+                if repo.features.as_ref().unwrap_or(&vec![]).is_empty() {
+                    repo.features = Some(vec![
+                        "systemless".to_string(),
+                        "bootless".to_string(),
+                    ]);
+                }
+            }
+        }
+
+        // Set workspace if not present
+        if self.kam.workspace.is_none() {
+            self.kam.workspace = Some(WorkspaceSection::default());
+        }
+
+        Ok(())
     }
 
     /// Write KamToml to a directory as kam.toml

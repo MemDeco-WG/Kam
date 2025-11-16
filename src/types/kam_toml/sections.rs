@@ -11,6 +11,7 @@ pub mod prop;
 pub mod repo;
 pub mod tmpl;
 pub mod tool;
+pub mod workspace;
 
 // Re-export main types
 pub use crate::types::kam_toml::enums::{ModuleType, SupportedArch};
@@ -28,3 +29,4 @@ pub use prop::PropSection;
 pub use repo::RepoSection;
 pub use tmpl::{TmplSection, VariableDefinition};
 pub use tool::ToolSection;
+pub use workspace::WorkspaceSection;

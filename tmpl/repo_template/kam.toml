@@ -14,29 +14,32 @@ en = "{{description}}"
 [mmrl.repo]
 license = "MIT"
 license_file = "LICENSE"
-homepage = ""
-support = ""
-donate = ""
-cover = ""
-icon = ""
-readme = ""
+homepage = "{{repository}}"
+readme = "{{repository}}#readme"
 readme_file = "README.md"
-changelog = ""
+changelog = "{{repository}}/blob/main/CHANGELOG.md"
 changelog_file = "CHANGELOG.md"
 screenshots = []
-categories = []
-keywords = []
+categories = ["repositories"]
+keywords = ["kam", "repo", "android", "modules"]
 maintainers = []
 repository = "{{repository}}"
+documentation = ""
+issues = "{{repository}}/issues"
+funding = ""
+support = "{{repository}}/issues"
+donate = ""
+cover = ""
+icon = "icon.png"
 devices = []
-arch = []
+arch = ["arm64-v8a"]
 require = []
 antifeatures = []
 max_num = 0
-min_api = 0
-max_api = 0
+min_api = 21
+max_api = 35
 verified = false
-features = []
+features = ["module-repository"]
 
 [mmrl.repo.note]
 title = ""
@@ -110,6 +113,12 @@ note = "Required for repo template. Provide via --var example=<value> or edit ka
 help = "示例变量，用于说明如何在仓库模板中引用变量。"
 example = "example-value"
 choices = []
+
+[tool]
+
+[kam.workspace]
+
+[tmpl.variables]
 
 [kam.lib]
 provides = []

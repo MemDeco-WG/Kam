@@ -124,13 +124,15 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
 
     // Ensure cache is initialized early so templates and builtins are available.
     // Try automatic initialization; if it fails, print a helpful hint and continue.
-    if let Err(e) = crate::cache::KamCache::new().and_then(|c| c.ensure_dirs()) {
-        println!("Note: failed to initialize Kam cache: {}", e);
-        println!("You can initialize the cache by running: 'kam cache info' or 'kam sync'.");
-        println!(
-            "Continuing init without a cache - some templates or modules may not be available."
-        );
-    }
+    // Note: Only initialize if we might need external templates or modules
+    // For now, skip cache initialization to avoid creating .kam directory unnecessarily
+    // if let Err(e) = crate::cache::KamCache::new().and_then(|c| c.ensure_dirs()) {
+    //     println!("Note: failed to initialize Kam cache: {}", e);
+    //     println!("You can initialize the cache by running: 'kam cache info' or 'kam sync'.");
+    //     println!(
+    //         "Continuing init without a cache - some templates or modules may not be available."
+    //     );
+    // }
 
     // Validate conflicting flags
     let type_flags = [args.kam, args.lib, args.tmpl, args.repo, args.venv]

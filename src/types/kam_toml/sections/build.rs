@@ -53,8 +53,26 @@ impl Default for BuildSection {
             pre_build: pre,
             post_build: post,
             extra_includes: None,
-            exclude: None,
-            include: None,
+            exclude: Some(vec![
+                ".git/".to_string(),
+                "target/".to_string(),
+                "node_modules/".to_string(),
+                ".DS_Store".to_string(),
+                "Thumbs.db".to_string(),
+                "*.tmp".to_string(),
+                "*.log".to_string(),
+                "*.bak".to_string(),
+                ".kam/".to_string(),
+            ]),
+            include: Some(vec![
+                "META-INF/".to_string(),
+                "system/".to_string(),
+                "customize.sh".to_string(),
+                "module.prop".to_string(),
+                "service.sh".to_string(),
+                "post-fs-data.sh".to_string(),
+                "uninstall.sh".to_string(),
+            ]),
         }
     }
 }

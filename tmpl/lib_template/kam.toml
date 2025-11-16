@@ -16,27 +16,31 @@ en = "{{description}}"
 license = "MIT"
 license_file = "LICENSE"
 homepage = ""
-support = ""
-donate = ""
-cover = ""
-icon = ""
 readme = ""
 readme_file = "README.md"
 changelog = ""
 changelog_file = "CHANGELOG.md"
 screenshots = []
-categories = []
-keywords = []
+categories = ["tools"]
+keywords = ["kam", "library", "android"]
 maintainers = []
+repository = ""
+documentation = ""
+issues = ""
+funding = ""
+support = ""
+donate = ""
+cover = ""
+icon = "icon.png"
 devices = []
-arch = []
+arch = ["arm64-v8a"]
 require = []
 antifeatures = []
 max_num = 0
-min_api = 0
-max_api = 0
+min_api = 21
+max_api = 35
 verified = false
-features = []
+features = ["library"]
 
 [mmrl.repo.note]
 title = ""
@@ -102,5 +106,7 @@ provides = [
 ]
 
 [tool]
+
+[kam.workspace]
 
 [tmpl.variables]

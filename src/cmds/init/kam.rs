@@ -1,6 +1,7 @@
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
+use crate::types::kam_toml::sections::WorkspaceSection;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
@@ -41,6 +42,18 @@ pub fn init_kam(
         }
         _ => {}
     }
+
+    // Set default workspace for kam modules
+    if kt.kam.workspace.is_none() {
+        kt.kam.workspace = Some(WorkspaceSection::default());
+    }
+
+    // Auto-fill repository metadata from git
+    if let Err(e) = kt.auto_fill_from_git(path) {
+        eprintln!("Warning: Could not auto-fill git metadata: {}", e);
+    }
+
+
 
     let kam_toml_rel = "kam.toml".to_string();
     crate::cmds::init::status::print_status(
@@ -86,6 +99,9 @@ pub fn init_kam(
 
         crate::template::TemplateManager::copy_template_to(&template_dir, path, &vars, force, &id)?;
     }
+
+    // Ensure kam.toml is written with dynamic content, overriding any template copy
+    kt.write_to_dir(path)?;
 
     Ok(())
 }
