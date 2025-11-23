@@ -52,8 +52,6 @@ pub enum KamTomlError {
     UnsupportedArch(String, Vec<String>),
     #[error("Template module missing [kam.tmpl] section")]
     TemplateMissingTmpl,
-    #[error("Library module missing [kam.lib] section")]
-    LibraryMissingLib,
     #[error("Duplicate key in unique map: {0}")]
     DuplicateKey(String),
 }

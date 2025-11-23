@@ -80,7 +80,7 @@ fn collect(args: CollectArgs) -> Result<(), KamError> {
             donate: "".to_string(),
             submission: "".to_string(),
             cover: "".to_string(),
-            description: "A Kam module repository".to_string(),
+            description: "A Kam module".to_string(),
         }
     };
 

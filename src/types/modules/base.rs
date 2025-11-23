@@ -6,7 +6,6 @@ use std::fs;
 use std::io::{self};
 use tempfile::tempdir;
 
-use crate::cache::KamCache;
 use crate::errors::{KamError, Result};
 pub use crate::types::kam_toml::KamToml;
 
@@ -22,19 +21,18 @@ pub struct KamModule {
     pub source: Option<Source>,
 }
 
-/// Trait for module backends that can fetch and install module sources.
+/// Trait for module backends that can fetch module sources.
 pub trait ModuleBackend {
     fn canonical_cache_name(&self) -> Option<String>;
     fn fetch_to_temp(&self) -> Result<PathBuf>;
-    fn install_into_cache(&self, cache: &KamCache) -> Result<PathBuf>;
 }
 
 /// ModuleBackend contract and semantics
 ///
-/// Implementers of this trait provide three responsibilities:
-/// - `canonical_cache_name` (optional): return a stable name to install the
-///   module under in the cache (typically `id-version`). When `None` the
-///   caller will derive a name from the source.
+/// Implementers of this trait provide two responsibilities:
+/// - `canonical_cache_name` (optional): return a stable name for the module
+///   (typically `id-version`). When `None` the caller will derive a name
+///   from the source.
 /// - `fetch_to_temp`: fetch the module source and return a filesystem path
 ///   containing the unpacked source. The returned path points to a persisted
 ///   directory that the caller may inspect. Ownership/cleanup: implementers
@@ -42,14 +40,6 @@ pub trait ModuleBackend {
 ///   temporary directory that is "kept"). Callers that do not need the
 ///   intermediate copy should remove it when finished. In short, the caller
 ///   is responsible for deleting the returned path if it should not be kept.
-/// - `install_into_cache`: move or copy the fetched contents into the
-///   provided `KamCache` and return the destination path inside the cache.
-///
-/// Concurrency / atomicity: this trait does not prescribe locking semantics.
-/// The default `KamModule` implementation will overwrite an existing
-/// destination (remove + copy). If callers require concurrent-safe installs
-/// they should implement higher-level locking (for example file locks or
-/// a per-cache mutex) around calls to `install_into_cache`.
 ///
 /// Note: the trait is intentionally small so callers can mock or provide
 /// alternate backends (HTTP, Git, local archives, etc.).
@@ -269,69 +259,7 @@ impl KamModule {
         }
     }
 
-    /// Install (move) the fetched source into the cache under a canonical name if available.
-    /// Returns the destination path in the cache.
-    pub fn install_into_cache(&self, cache: &KamCache) -> Result<PathBuf> {
-        let src_path = self.fetch_to_temp()?;
-
-        // Determine destination name
-        let dest_name = if let Some(name) = self.canonical_cache_name() {
-            name
-        } else {
-            match &self.source {
-                Some(Source::Git { url, .. }) => sanitize_name(url),
-                Some(Source::Url { url }) => sanitize_name(url),
-                Some(Source::Local { path }) => sanitize_name(&path.to_string_lossy()),
-                None => {
-                    return Err(KamError::ParseSourceFailed(
-                        "no source available to derive name".to_string(),
-                    ));
-                }
-            }
-        };
-
-        let dest = cache.lib_dir().join(dest_name);
-
-        // Remove any existing destination to ensure a clean install
-        if dest.exists() {
-            fs::remove_dir_all(&dest)?;
-        }
-
-        // Try to perform a cheap/atomic move (rename) to avoid copy when
-        // possible ("zero-copy" case). This will succeed when the source
-        // and destination are on the same filesystem. If rename fails we
-        // fall back to copying the contents.
-        //
-        // Handle the common case where `src_path` contains a single child
-        // directory that actually holds the module root — in that case try
-        // to rename that child into place first.
-        let entries: Vec<_> = fs::read_dir(&src_path)?.collect();
-        if entries.len() == 1 {
-            let only = entries[0].as_ref().unwrap().path();
-            if only.is_dir() {
-                // attempt rename of the single-child dir
-                if let Err(_e) = fs::rename(&only, &dest) {
-                    // rename failed (likely cross-device) -> copy fallback
-                    copy_dir_all(&only, &dest)?;
-                    // attempt to remove the original temporary tree
-                    let _ = fs::remove_dir_all(&src_path);
-                }
-                return Ok(dest);
-            }
-        }
-
-        // Otherwise attempt to rename the fetched root dir directly
-        if let Err(_e) = fs::rename(&src_path, &dest) {
-            // rename failed (e.g. cross-device); create dest and copy
-            fs::create_dir_all(&dest)?;
-            copy_dir_all(&src_path, &dest)?;
-            // try to remove the temporary source tree; ignore errors
-            let _ = fs::remove_dir_all(&src_path);
-        }
-
-        Ok(dest)
     }
-}
 
 // Implement the ModuleBackend trait for KamModule so callers can use the
 // abstraction explicitly.
@@ -342,9 +270,7 @@ impl ModuleBackend for KamModule {
     fn fetch_to_temp(&self) -> Result<PathBuf> {
         self.fetch_to_temp()
     }
-    fn install_into_cache(&self, cache: &KamCache) -> Result<PathBuf> {
-        self.install_into_cache(cache)
-    }
+    
 }
 
 fn sanitize_name(s: &str) -> String {

@@ -37,7 +37,7 @@ pub struct InitArgs {
 
     /// Deprecated: Template source to implement (local path, URL, or git repo)
     /// NOTE: This option has been removed from the CLI. Use the dedicated
-    /// template selection flags (e.g. --kam, --lib, --tmpl, --repo, --venv)
+    /// template selection flags (e.g. --kam, --tmpl, --repo, --venv)
     /// which correspond to builtin template IDs instead.
     #[arg(skip)]
     pub r#impl: Option<String>,
@@ -51,10 +51,7 @@ pub struct InitArgs {
     #[arg(long)]
     pub kam: bool,
 
-    /// Create a library module (provides dependencies)
-    /// Template id: "lib_template"
-    #[arg(long)]
-    pub lib: bool,
+    
 
     /// Create a template project
     /// Template id: "tmpl_template"

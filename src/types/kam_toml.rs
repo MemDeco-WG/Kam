@@ -39,65 +39,49 @@ impl Default for KamToml {
 }
 
 impl KamToml {
-    /// Generate description map for a given module type
     pub fn generate_description_map(module_type: &enums::ModuleType) -> BTreeMap<String, String> {
-        let mut description_map = BTreeMap::new();
-        let desc = match module_type {
-            enums::ModuleType::Kam => "A kam module",
-            enums::ModuleType::Library => "A library module",
-            enums::ModuleType::Template => "A template module",
-            enums::ModuleType::Repo => "A repository module",
-        };
-        description_map.insert("en".to_string(), desc.to_string());
-        description_map.insert(
+        let mut map = BTreeMap::new();
+        map.insert(
+            "en".to_string(),
+            match module_type {
+                enums::ModuleType::Kam => "A kam module",
+                enums::ModuleType::Template => "A template module",
+            }
+            .to_string(),
+        );
+        map.insert(
             "zh-CN".to_string(),
-            format!(
-                "一个{}模块",
-                match module_type {
-                    enums::ModuleType::Kam => "kam",
-                    enums::ModuleType::Library => "库",
-                    enums::ModuleType::Template => "模板",
-                    enums::ModuleType::Repo => "仓库",
-                }
-            ),
+            match module_type {
+                enums::ModuleType::Kam => "kam",
+                enums::ModuleType::Template => "模板",
+            }
+            .to_string(),
         );
-        description_map.insert(
+        map.insert(
             "zh-TW".to_string(),
-            format!(
-                "一個{}模組",
-                match module_type {
-                    enums::ModuleType::Kam => "kam",
-                    enums::ModuleType::Library => "庫",
-                    enums::ModuleType::Template => "模板",
-                    enums::ModuleType::Repo => "倉庫",
-                }
-            ),
+            match module_type {
+                enums::ModuleType::Kam => "kam",
+                enums::ModuleType::Template => "模板",
+            }
+            .to_string(),
         );
-        description_map.insert(
+        map.insert(
             "ja".to_string(),
-            format!(
-                "{}モジュール",
-                match module_type {
-                    enums::ModuleType::Kam => "kam",
-                    enums::ModuleType::Library => "ライブラリ",
-                    enums::ModuleType::Template => "テンプレート",
-                    enums::ModuleType::Repo => "リポジトリ",
-                }
-            ),
+            match module_type {
+                enums::ModuleType::Kam => "kam",
+                enums::ModuleType::Template => "テンプレート",
+            }
+            .to_string(),
         );
-        description_map.insert(
+        map.insert(
             "ko".to_string(),
-            format!(
-                "{} 모듈",
-                match module_type {
-                    enums::ModuleType::Kam => "kam",
-                    enums::ModuleType::Library => "라이브러리",
-                    enums::ModuleType::Template => "템플릿",
-                    enums::ModuleType::Repo => "저장소",
-                }
-            ),
+            match module_type {
+                enums::ModuleType::Kam => "kam",
+                enums::ModuleType::Template => "템플릿",
+            }
+            .to_string(),
         );
-        description_map
+        map
     }
     /// Get git remote origin URL from a directory
     fn get_git_remote_url(project_dir: &Path) -> Result<String, crate::errors::KamError> {

@@ -1,7 +1,7 @@
 [prop]
 id = "Kam"
 version = "1.0.0"
-versionCode = 1763289057297
+versionCode = 1763702703037
 author = "LIghtJUNction (LIghtJUNction.me@gmail.com)"
 
 [prop.name]
@@ -13,10 +13,10 @@ zh-TW = "Kam"
 
 [prop.description]
 en = "A kam module"
-ja = "kamモジュール"
-ko = "kam 모듈"
-zh-CN = "一个kam模块"
-zh-TW = "一個kam模組"
+ja = "kam"
+ko = "kam"
+zh-CN = "kam"
+zh-TW = "kam"
 
 [mmrl.repo]
 license = "MIT"
@@ -90,9 +90,9 @@ dev = []
 
 [kam.build]
 target_dir = "dist"
-output_file = "Kam-1763289057297"
-pre_build = 'cargo install --path .'
-post_build = 'echo "post build..."'
+output_file = "{{id}}-{{versionCode}}"
+pre_build = "echo 'pre build...'"
+post_build = "echo 'post build...'"
 exclude = [
     ".git/",
     "target/",
@@ -119,18 +119,18 @@ used_template = "kam_template"
 
 [kam.tmpl.variables]
 
-[kam.lib]
-provides = []
+
 
 [kam.workspace]
-members = [".",
-"tmpl/tmpl_template",
-"tmpl/kam_template/",
-"tmpl/repo_template/",
-"tmpl/venv_template/",
-"tmpl/lib_template/",
-
+members = [
+    ".",
+    "tmpl/kam_template",
+    "tmpl/tmpl_template",
+    "tmpl/venv_template",
 ]
+
+[tmpl]
+used_template = "kam_template"
 
 [tmpl.variables]
 

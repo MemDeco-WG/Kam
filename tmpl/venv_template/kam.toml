@@ -83,5 +83,4 @@ extra_includes = []
 
 [kam.tmpl.variables]
 
-[kam.lib]
-provides = []
+

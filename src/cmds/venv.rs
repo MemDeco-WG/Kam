@@ -2,11 +2,10 @@ use clap::{Args, Subcommand};
 use colored::Colorize;
 use std::path::Path;
 
-use crate::cache::KamCache;
 use crate::errors::KamError;
-use crate::venv::{KamVenv, VenvType};
-use crate::types::kam_toml::KamToml;
 use crate::template::TemplateVariableProcessor;
+use crate::types::kam_toml::KamToml;
+use crate::venv::{KamVenv, VenvType};
 use std::collections::HashMap;
 
 /// Arguments for the venv command
@@ -135,12 +134,11 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
             } else {
                 VenvType::Runtime
             };
-            let venv = KamVenv::create_with_replacements(
-                &venv_path,
-                venv_type,
-                replacements_for_venv,
-            )
-            .map_err(|e| KamError::VenvCreateFailed(format!("Venv create failed: {}", e)))?;
+            let venv =
+                KamVenv::create_with_replacements(&venv_path, venv_type, replacements_for_venv)
+                    .map_err(|e| {
+                        KamError::VenvCreateFailed(format!("Venv create failed: {}", e))
+                    })?;
             println!("  {} Created at: {}", "✓".green(), venv.root().display());
             println!();
             println!("To activate the virtual environment:");
@@ -251,10 +249,9 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
                 )));
             }
 
-            let cache = KamCache::new()?;
-            let venv = KamVenv::load(&venv_path)?;
-            venv.link_binary(cache.bin_path(&name).as_path())?;
-            println!("{} Linked binary '{}' into venv", "✓".green(), name);
+            // Since cache system is removed, we can't link binaries from cache
+            println!("{} Binary linking by name no longer supported (cache system removed)", "⚠".yellow());
+            println!("  Binary name: {}", name);
             Ok(())
         }
 
@@ -266,15 +263,9 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
                 )));
             }
 
-            let cache = KamCache::new()?;
-            let venv = KamVenv::load(&venv_path)?;
-            let ver = if version.is_empty() {
-                "latest"
-            } else {
-                &version
-            };
-            venv.link_library(&id, ver, &cache)?;
-            println!("{} Linked library '{}@{}' into venv", "✓".green(), id, ver);
+            // For now, we'll provide a message that library linking requires a path
+            println!("{} Library linking by ID is no longer supported. Use direct path linking.", "⚠".yellow());
+            println!("  Library ID: {}, Version: {}", id, if version.is_empty() { "latest" } else { &version });
             Ok(())
         }
 
@@ -299,8 +290,9 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
                 set_env_if_missing("KAM_VERSION", &kam_toml.prop.version);
                 set_env_if_missing("KAM_AUTHOR", &kam_toml.prop.author);
 
-                let flat_vars: HashMap<String, String> = TemplateVariableProcessor::flatten_kam_toml(&kam_toml);
-                for (k, v) in flat_vars.into_iter() {
+                let flat_vars: HashMap<String, String> =
+                    TemplateVariableProcessor::flatten_kam_toml(&kam_toml);
+                for (k, _v) in flat_vars.into_iter() {
                     let env_key = format!(
                         "KAM_VAR_{}",
                         k.replace('.', "_").replace('-', "_").to_ascii_uppercase()
@@ -319,17 +311,23 @@ pub fn run(args: VenvArgs) -> Result<(), KamError> {
                     }
                 }
             } else {
-                println!("  {} No kam.toml found in {}; using existing environment values (if any)", "!".yellow(), args.path);
+                println!(
+                    "  {} No kam.toml found in {}; using existing environment values (if any)",
+                    "!".yellow(),
+                    args.path
+                );
             }
 
             println!(
-                "{} Ensuring virtual environment and synchronizing dependencies...",
+                "{} Ensuring virtual environment...",
                 "→".cyan()
             );
             // Reuse sync command logic: request venv creation and linking.
+            // Since we don't have a dev flag in the main VenvArgs, we default to non-dev mode
             let sync_args = crate::cmds::sync::SyncArgs {
                 path: args.path.clone(),
-                dev: false,
+                dev: false, // Default to non-dev mode
+                force: false,
             };
             crate::cmds::sync::run(sync_args)?;
             // After sync/run, activation hints are printed by sync when appropriate.

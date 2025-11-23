@@ -86,5 +86,3 @@ post_build = 'echo "post build..."'
 members = ["."]
 
 [tool]
-
-[tmpl.variables]

@@ -1,5 +1,5 @@
 use super::{
-    BuildSection, DependencySection, LibSection, ModuleType, SupportedArch, TmplSection,
+    BuildSection, DependencySection, ModuleType, SupportedArch, TmplSection,
     WorkspaceSection,
 };
 use serde::{Deserialize, Serialize};
@@ -27,8 +27,7 @@ pub struct KamSection {
     pub module_type: ModuleType,
     /// 模板相关子配置
     pub tmpl: Option<TmplSection>,
-    /// 库相关子配置
-    pub lib: Option<LibSection>,
+    
     /// 工作区配置
     pub workspace: Option<WorkspaceSection>,
 }
@@ -44,7 +43,7 @@ impl Default for KamSection {
             build: Some(BuildSection::default()),
             module_type: ModuleType::Kam,
             tmpl: Some(TmplSection::default()),
-            lib: Some(LibSection::default()),
+            
             workspace: Some(WorkspaceSection::default()),
         }
     }

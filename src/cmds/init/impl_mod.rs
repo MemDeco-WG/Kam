@@ -1,11 +1,10 @@
-use crate::cache::KamCache;
 use crate::cmds::init::status::{StatusType, print_status};
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
 use crate::types::kam_toml::sections::TmplSection;
-use serde_json;
 use crate::types::source::Source;
+use serde_json;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
@@ -146,7 +145,13 @@ pub fn init_impl(
                 Source::Url { url } => {
                     let s = url.as_str();
                     // Remove query and fragment; take last path segment; remove extension
-                    let segment = s.split('?').next().unwrap_or(s).split('#').next().unwrap_or(s);
+                    let segment = s
+                        .split('?')
+                        .next()
+                        .unwrap_or(s)
+                        .split('#')
+                        .next()
+                        .unwrap_or(s);
                     let last = segment.rsplit('/').next().unwrap_or(segment);
                     last.split('.').next().unwrap_or(last).to_string()
                 }
@@ -383,7 +388,6 @@ pub fn init_template(
     // Detect if the chosen template is a builtin template ID
     const BUILTIN_TEMPLATES: &[&str] = &[
         "kam_template",
-        "lib_template",
         "tmpl_template",
         "repo_template",
         "venv_template",
@@ -391,29 +395,17 @@ pub fn init_template(
     let is_builtin = BUILTIN_TEMPLATES.contains(&template_spec.as_str());
 
     if is_builtin {
-        // Ensure the built-in template archive exists in the cache
-        let cache = KamCache::new()?;
+        // Ensure the built-in template is available
         crate::template::TemplateManager::ensure_template(&template_spec)?;
-        let tmpl_dir = cache.tmpl_dir();
 
-        // Candidate paths for templates (gz/tgz/tar, zip, or directory)
-        let tar_gz_path = tmpl_dir.join(format!("{}.tar.gz", template_spec));
-        let zip_path = tmpl_dir.join(format!("{}.zip", template_spec));
-        let dir_path = tmpl_dir.join(&template_spec);
-
-        // Choose the first existing candidate
-        let chosen: Option<PathBuf> = if tar_gz_path.exists() {
-            Some(tar_gz_path)
-        } else if zip_path.exists() {
-            Some(zip_path)
-        } else if dir_path.exists() {
-            Some(dir_path)
-        } else {
-            None
-        };
-
-        if let Some(chosen_path) = chosen {
-            let src_spec = chosen_path.to_string_lossy().to_string();
+        // For builtin templates, we need to extract the embedded template to a temporary location
+        let asset_name = format!("{}.tar.gz", template_spec);
+        if let Some(asset) = crate::assets::tmpl::TmplAssets::get(&asset_name) {
+            // Create a temporary file to extract the template
+            let temp_dir = tempfile::tempdir()?;
+            let temp_path = temp_dir.path().join(format!("{}.tar.gz", template_spec));
+            std::fs::write(&temp_path, &asset.data)?;
+            
             // Convert BTreeMap -> HashMap to satisfy init_impl signature.
             let name_hash: HashMap<String, String> = name_map
                 .iter()
@@ -423,6 +415,7 @@ pub fn init_template(
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
+            
             // Delegate to the "fetch-then-initialize" implementation
             // Pass `template_spec` as explicit template id so `used_template` in
             // generated kam.toml references the friendly id rather than `.tmp*`.
@@ -433,16 +426,15 @@ pub fn init_template(
                 version,
                 author,
                 description_hash,
-                &src_spec,
+                temp_path.to_string_lossy().to_string().as_str(),
                 &mut template_vars,
                 force,
                 Some(template_spec.as_str()),
             );
         } else {
             return Err(KamError::TemplateNotFound(format!(
-                "Builtin template '{}' not found in cache at {}",
-                template_spec,
-                tmpl_dir.display()
+                "Builtin template '{}' not found in embedded assets",
+                template_spec
             )));
         }
     } else {
@@ -456,17 +448,17 @@ pub fn init_template(
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-    return init_impl(
-        path,
-        id,
-        name_hash,
-        version,
-        author,
-        description_hash,
-        &template_spec,
-        &mut template_vars,
-        force,
-        Some(template_spec.as_str()),
-    );
-}
+        return init_impl(
+            path,
+            id,
+            name_hash,
+            version,
+            author,
+            description_hash,
+            &template_spec,
+            &mut template_vars,
+            force,
+            Some(template_spec.as_str()),
+        );
+    }
 }

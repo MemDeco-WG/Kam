@@ -40,9 +40,6 @@ pub enum KamError {
     #[error("KamToml error: {0}")]
     KamToml(#[from] crate::errors::KamTomlError),
 
-    #[error("Cache error: {0}")]
-    Cache(#[from] crate::errors::CacheError),
-
     #[error("Command failed: {0}")]
     CommandFailed(String),
 

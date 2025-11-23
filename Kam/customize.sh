@@ -1,10 +1,10 @@
 #! bin/sh
 
-# Hello test_kam
+# Hello Kam
 
 # This is a customize script for the kam module
 # You can add custom installation or configuration commands here
 
-# "Installing test_kam module..."
+# "Installing [object] module..."
 
 # echo "Module installed successfully"

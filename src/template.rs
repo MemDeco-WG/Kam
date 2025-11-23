@@ -1,5 +1,4 @@
 use crate::assets::tmpl::TmplAssets;
-use crate::cache::KamCache;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use serde_json;
@@ -13,21 +12,11 @@ use walkdir::WalkDir;
 pub struct TemplateCacheManager;
 
 impl TemplateCacheManager {
-    /// Ensure a specific template archive is available in the cache
+    /// Ensure a specific template archive is available
     pub fn ensure_template(template: &str) -> Result<(), KamError> {
-        let cache = KamCache::new()?;
-        let tmpl_dir = cache.tmpl_dir();
-        let archive_path = tmpl_dir.join(format!("{}.tar.gz", template));
-
-        if archive_path.exists() {
-            return Ok(());
-        }
-
-        fs::create_dir_all(&tmpl_dir)?;
-
+        // Check if the embedded template exists
         let asset_name = format!("{}.tar.gz", template);
-        if let Some(content) = TmplAssets::get(&asset_name) {
-            fs::write(&archive_path, &content.data)?;
+        if crate::assets::tmpl::TmplAssets::get(&asset_name).is_some() {
             Ok(())
         } else {
             Err(KamError::TemplateNotFound(format!(
@@ -39,9 +28,8 @@ impl TemplateCacheManager {
 
     /// List all available built-in templates
     pub fn list_builtin_templates() -> Vec<String> {
-        TmplAssets::iter()
-            .filter_map(|name| name.strip_suffix(".tar.gz").map(|s| s.to_string()))
-            .collect()
+        // Return a basic list of known templates since we removed the cache system
+        vec!["kam_template".to_string(), "tmpl_template".to_string(), "repo_template".to_string(), "venv_template".to_string()]
     }
 }
 
@@ -177,10 +165,16 @@ impl TemplateCopier {
                 } else {
                     // intermediate object: create if missing
                     if !cur.contains_key(&key) {
-                        cur.insert(key.clone(), serde_json::Value::Object(serde_json::Map::new()));
+                        cur.insert(
+                            key.clone(),
+                            serde_json::Value::Object(serde_json::Map::new()),
+                        );
                     } else if !cur.get(&key).unwrap().is_object() {
                         // If a value already exists but isn't an object, replace it with an object
-                        cur.insert(key.clone(), serde_json::Value::Object(serde_json::Map::new()));
+                        cur.insert(
+                            key.clone(),
+                            serde_json::Value::Object(serde_json::Map::new()),
+                        );
                     }
                     cur = cur
                         .get_mut(&key)
@@ -251,8 +245,9 @@ impl TemplateCopier {
         }
 
         let root_value = serde_json::Value::Object(root_obj);
-        let context = Context::from_serialize(&root_value)
-            .map_err(|e| KamError::CommandFailed(format!("Failed to build template context: {}", e)))?;
+        let context = Context::from_serialize(&root_value).map_err(|e| {
+            KamError::CommandFailed(format!("Failed to build template context: {}", e))
+        })?;
 
         // Safety check: prevent copying into a destination that is inside the initial template root
         // (e.g. calling `kam init .` with the destination placed inside template source).
@@ -277,10 +272,13 @@ impl TemplateCopier {
             // Build a stable relative path for this entry and render it using Tera.
             // We render the entire relative path (not only the base name) so templates
             // can include directory components like `src/{{id}}/...`.
-            let rel = entry
-                .path()
-                .strip_prefix(src)
-                .map_err(|e| KamError::StripPrefixFailed(format!("failed to strip prefix {}: {}", src.display(), e)))?;
+            let rel = entry.path().strip_prefix(src).map_err(|e| {
+                KamError::StripPrefixFailed(format!(
+                    "failed to strip prefix {}: {}",
+                    src.display(),
+                    e
+                ))
+            })?;
             let rel_str = rel.to_string_lossy().replace('\\', "/");
 
             // Render the path using Tera. Guard against empty replacements or path
@@ -288,9 +286,12 @@ impl TemplateCopier {
             let replaced_rel = if rel_str.is_empty() {
                 String::new()
             } else {
-                tera
-                    .render_str(&rel_str, &context)
-                    .map_err(|e| KamError::CommandFailed(format!("Tera render error for path '{}': {}", rel_str, e)))?
+                tera.render_str(&rel_str, &context).map_err(|e| {
+                    KamError::CommandFailed(format!(
+                        "Tera render error for path '{}': {}",
+                        rel_str, e
+                    ))
+                })?
             };
             if replaced_rel.trim().is_empty() {
                 // Skip entries that render to an empty path.
@@ -360,7 +361,11 @@ impl TemplateCopier {
                     match tera.render_str(&text, &context) {
                         Ok(r) => r.into_bytes(),
                         Err(e) => {
-                            eprintln!("Warning: Tera failed to render file '{}': {}; using original content", entry.path().display(), e);
+                            eprintln!(
+                                "Warning: Tera failed to render file '{}': {}; using original content",
+                                entry.path().display(),
+                                e
+                            );
                             text.into_bytes()
                         }
                     }
@@ -402,7 +407,7 @@ impl TemplateManager {
         dst: &Path,
         kt: &KamToml,
         force: bool,
-        id: &str,
+        _id: &str,
     ) -> Result<(), KamError> {
         TemplateCopier::copy_template_to(src, dst, kt, force)
     }
@@ -412,7 +417,7 @@ impl TemplateManager {
         dst: &Path,
         vars: &HashMap<String, String>,
         force: bool,
-        id: &str,
+        _id: &str,
     ) -> Result<(), KamError> {
         TemplateCopier::copy_and_replace(src, dst, vars, force)
     }

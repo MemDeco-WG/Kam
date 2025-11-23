@@ -9,7 +9,7 @@ use kam::errors::KamError;
 #[command(
     name = "kam",
     about = "Kam — Super fast module manager",
-    long_about = "Kam is a lightweight module management tool providing dependency resolution, build, and cache management.",
+    long_about = "Kam is a lightweight module management tool providing dependency resolution, build, and module management.",
     version,
     // custom help template inspired by `uv` to provide grouped sections
     help_template = "{bin} — {about}\n\nUsage: {usage}\n\nCommands:\n{subcommands}\n\nOptions:\n{options}\n"
@@ -24,17 +24,18 @@ enum Commands {
     /// Initialize a new Kam project
     Init(kam::cmds::init::InitArgs),
 
-    /// Add a library dependency to the project
-    Add(kam::cmds::add::AddArgs),
+    
 
-    /// Manage the global cache
-    Cache(kam::cmds::cache::CacheArgs),
+    
 
     /// Check project files for syntax and formatting issues
     Check(kam::cmds::check::CheckArgs),
 
-    /// Development tools
-    Dev(kam::cmds::dev::DevArgs),
+    /// Manage module repositories
+    Repo(kam::cmds::repo::RepoArgs),
+
+    /// Manage modules (search, install, etc.)
+    Module(kam::cmds::module::ModuleArgs),
 
     /// Synchronize dependencies
     Sync(kam::cmds::sync::SyncArgs),
@@ -55,10 +56,10 @@ fn main() -> Result<(), KamError> {
 
     match cli.command {
         Commands::Init(args) => kam::cmds::init::run(args),
-        Commands::Add(args) => kam::cmds::add::run(args),
-        Commands::Cache(args) => kam::cmds::cache::run(args),
+        
         Commands::Check(args) => kam::cmds::check::run(args),
-        Commands::Dev(args) => kam::cmds::dev::run(args),
+        Commands::Repo(args) => kam::cmds::repo::run(args),
+        Commands::Module(args) => kam::cmds::module::run(args),
         Commands::Sync(args) => kam::cmds::sync::run(args),
         Commands::Build(args) => kam::cmds::build::run(args),
         Commands::Publish(args) => kam::cmds::publish::run(args),

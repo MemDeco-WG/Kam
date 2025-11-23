@@ -1,4 +1,3 @@
-use super::cache::KamCache;
 use super::errors::KamError;
 use colored::{Color, Colorize};
 use std::fs;
@@ -204,30 +203,7 @@ pub fn extract_package(source: &Path, dest: &Path) -> Result<(), crate::errors::
 
 /// Install library artifacts to cache (lib, lib64, bin)
 ///
-/// This central utility installs files from a temporary module extraction
-/// directory into the global cache. It mirrors the logic used in various
-/// commands and avoids duplicate implementations.
-pub fn install_library_artifacts(temp_path: &Path, cache: &KamCache) -> Result<(), KamError> {
-    // Copy lib to cache/lib
-    let src_lib = temp_path.join("lib");
-    if src_lib.exists() {
-        copy_dir_all(&src_lib, &cache.lib_dir())?;
-    }
 
-    // Copy lib64 to cache/lib64
-    let src_lib64 = temp_path.join("lib64");
-    if src_lib64.exists() {
-        copy_dir_all(&src_lib64, &cache.lib64_dir())?;
-    }
-
-    // Copy bin to cache/bin
-    let src_bin = temp_path.join("bin");
-    if src_bin.exists() {
-        copy_dir_all(&src_bin, &cache.bin_dir())?;
-    }
-
-    Ok(())
-}
 
 /// Create symlinks for all files in `src` inside `dst` recursively (where
 /// supported). On platforms where creating symlinks is not permitted, the

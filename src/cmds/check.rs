@@ -44,8 +44,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             .build();
 
         for entry in walker {
-            let entry = entry
-                .map_err(|e| KamError::Io(std::io::Error::other(e)))?;
+            let entry = entry.map_err(|e| KamError::Io(std::io::Error::other(e)))?;
             let path = entry.path();
             if path.is_file() {
                 // Skip files in .git directory

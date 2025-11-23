@@ -13,43 +13,7 @@ use super::pre_build::handle_pre_build_hook;
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
 
-/// Check that library modules have proper architecture subdirectories in lib/
-fn check_library_structure(project_path: &Path) -> Result<(), KamError> {
-    let lib_dir = project_path.join("lib");
-    if !lib_dir.exists() || !lib_dir.is_dir() {
-        return Ok(()); // No lib/ directory, nothing to check
-    }
 
-    let entries = fs::read_dir(&lib_dir)?;
-    let mut has_subdirs = false;
-    let mut has_direct_libs = false;
-
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            has_subdirs = true;
-        } else if path.is_file()
-            && path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|ext| ext == "so" || ext == "a" || ext == "dylib")
-                .unwrap_or(false)
-        {
-            has_direct_libs = true;
-        }
-    }
-
-    if has_direct_libs && !has_subdirs {
-        return Err(KamError::InvalidModuleStructure(
-            "Library module lib/ directory must contain architecture-specific subdirectories (e.g., lib/x86_64-linux-gnu/). \
-             Direct library files (.so, .a, .dylib) are not allowed in lib/ root. \
-             Please move them to appropriate subdirectories like lib/x86_64-linux-gnu/.".to_string(),
-        ));
-    }
-
-    Ok(())
-}
 
 pub fn determine_output_dir(
     project_root: &Path,
@@ -97,10 +61,7 @@ pub fn build_project(
 
     println!("  {} Module: {} v{}", "•".cyan(), module_id, version);
 
-    // Check library structure for Library modules
-    if kam_toml.kam.module_type == ModuleType::Library {
-        check_library_structure(project_path)?;
-    }
+    
 
     let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
     println!(
@@ -168,7 +129,9 @@ pub fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
     // filename WITHOUT extension. If an extension is present we warn and
     // ignore it. Placeholders like {{id}} are supported. The resolved basename
     // will be used for both module zip and source tar names.
-    let basename = if let Some(build_cfg) = &kam_toml.kam.build && let Some(of) = &build_cfg.output_file {
+    let basename = if let Some(build_cfg) = &kam_toml.kam.build
+        && let Some(of) = &build_cfg.output_file
+    {
         let trimmed = of.trim();
         if trimmed.is_empty() {
             default_basename
@@ -243,15 +206,23 @@ pub fn create_module_zip_if_needed(
 
         // Add other files if they exist
         // Include files referenced in kam.toml (mmrl.repo): readme, license, changelog
-        if let Some(mmrl) = &kam_toml.mmrl && let Some(repo) = &mmrl.repo {
+        if let Some(mmrl) = &kam_toml.mmrl
+            && let Some(repo) = &mmrl.repo
+        {
             let mut candidates: Vec<String> = Vec::new();
-            if let Some(r) = &repo.readme && !r.trim().is_empty() {
+            if let Some(r) = &repo.readme
+                && !r.trim().is_empty()
+            {
                 candidates.push(r.clone());
             }
-            if let Some(l) = &repo.license && !l.trim().is_empty() {
+            if let Some(l) = &repo.license
+                && !l.trim().is_empty()
+            {
                 candidates.push(l.clone());
             }
-            if let Some(c) = &repo.changelog && !c.trim().is_empty() {
+            if let Some(c) = &repo.changelog
+                && !c.trim().is_empty()
+            {
                 candidates.push(c.clone());
             }
 
@@ -396,7 +367,9 @@ pub fn create_source_archive(
     }
 
     // Add extra includes if specified
-    if let Some(build) = _kam_toml.kam.build.as_ref() && let Some(extra_includes) = build.extra_includes.as_ref() {
+    if let Some(build) = _kam_toml.kam.build.as_ref()
+        && let Some(extra_includes) = build.extra_includes.as_ref()
+    {
         for include in extra_includes {
             let source_path = effective_project_path.join(&include.source);
             if source_path.exists() && source_path.is_file() {
@@ -466,11 +439,11 @@ pub fn add_directory_to_zip<W: Write + std::io::Seek>(
 /// - Collects stderr bytes so we can present a meaningful error message when the command fails,
 /// - Prints output as it arrives, ensuring timely log streaming for long-running commands.
 pub fn run_command(cmd: &str, working_dir: &Path) -> Result<(), KamError> {
-    use std::process::{Command, Stdio};
+    use colored::Colorize;
     use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
     use std::sync::mpsc;
     use std::thread;
-    use colored::Colorize;
 
     // Spawn the child process and capture stdout/stderr
     let mut child = if cfg!(target_os = "windows") {

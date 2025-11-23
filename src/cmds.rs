@@ -1,9 +1,8 @@
-pub mod add;
 pub mod build;
-pub mod cache;
 pub mod check;
-pub mod dev;
 pub mod init;
+pub mod module;
 pub mod publish;
+pub mod repo;
 pub mod sync;
 pub mod venv;

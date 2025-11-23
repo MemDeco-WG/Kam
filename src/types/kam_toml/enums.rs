@@ -100,11 +100,7 @@ impl PartialEq<SupportedArch> for String {
 ///
 /// - `kam`：代表一个可发布的 Kam 模块
 /// - `template`：代表一个模板（用于生成其他模块）
-/// - `library`：代表一个仅作为库使用的模块
-/// - `repo`：代表一个模块仓库
 pub enum ModuleType {
     Kam,
     Template,
-    Library,
-    Repo,
 }

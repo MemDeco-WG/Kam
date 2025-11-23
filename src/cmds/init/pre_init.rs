@@ -34,13 +34,13 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     };
 
     // Validate conflicting flags
-    let type_flags = [args.kam, args.lib, args.tmpl, args.repo, args.venv]
+    let type_flags = [args.kam, args.tmpl, args.venv]
         .iter()
         .filter(|&&x| x)
         .count();
     if type_flags > 1 {
         return Err(KamError::InvalidModuleType(
-            "Cannot specify multiple module types: --kam, --lib, --tmpl, --repo, --venv"
+            "Cannot specify multiple module types: --kam, --tmpl, --repo, --venv"
                 .to_string(),
         ));
     }
@@ -48,18 +48,15 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     // Determine module type and template
     // Use builtin templates indicated by the CLI flags. The legacy `--impl`
     // option has been removed; please use the dedicated flags (e.g. --kam,
-    // --lib, --tmpl, --repo, --venv) which map to the builtin template ids.
+    // --tmpl, --venv) which map to the builtin template ids.
     let (module_type, impl_template) = if args.kam {
         (ModuleType::Kam, "kam_template".to_string())
-    } else if args.lib {
-        (ModuleType::Library, "lib_template".to_string())
     } else if args.tmpl {
         (ModuleType::Template, "tmpl_template".to_string())
-    } else if args.repo {
-        (ModuleType::Repo, "repo_template".to_string())
     } else if args.venv {
-        (ModuleType::Template, "venv_template".to_string())
+        (ModuleType::Template, "venv_template".to_string()) // venv is a special template
     } else {
+        // default to kam module
         (ModuleType::Kam, "kam_template".to_string())
     };
 
@@ -70,12 +67,10 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
 
     // Add project_name and description to template_vars
     let project_name = args.project_name.as_deref().unwrap_or("My Module");
-    let description = args.description.as_deref().unwrap_or(&match module_type {
+    let description = match module_type {
         ModuleType::Kam => "A kam module",
-        ModuleType::Library => "A library module",
         ModuleType::Template => "A template module",
-        ModuleType::Repo => "A repository module",
-    });
+    };
     template_vars.insert("project_name".to_string(), project_name.to_string());
     template_vars.insert("description".to_string(), description.to_string());
 
@@ -131,13 +126,6 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         return Err(KamError::CommandFailed(
             "Update JSON URL not generated from git".to_string(),
         ));
-    }
-
-    // For repo modules, initialize mmrl.repo with repository template variable
-    if module_type == ModuleType::Repo {
-        let mmrl = kam_toml.mmrl.get_or_insert_with(Default::default);
-        let repo = mmrl.repo.get_or_insert_with(Default::default);
-        repo.repository = Some("{{repository}}".to_string());
     }
 
     Ok(PreInitData {

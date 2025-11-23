@@ -2,7 +2,6 @@
 pub mod build;
 pub mod dependency;
 pub mod kam;
-pub mod kamlib;
 pub mod manager;
 pub mod mmrl;
 pub mod note;
@@ -20,7 +19,6 @@ pub use dependency::{
     Dependency, DependencySection, FlatDependencyGroup, FlatDependencyGroups, VersionSpec,
 };
 pub use kam::KamSection;
-pub use kamlib::LibSection;
 pub use manager::ManagerSection;
 pub use mmrl::MmrlSection;
 pub use note::NoteSection;
