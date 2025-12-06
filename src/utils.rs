@@ -17,6 +17,7 @@ pub enum PrintOp {
     Delete,
     Copy { from: String, to: String },
     Symlink { target: String, link_type: LinkType },
+    Skip,
 }
 
 #[derive(Debug)]
@@ -30,39 +31,38 @@ impl Utils {
     ///
     /// This is presentation-only and intentionally has no side effects other
     /// than printing. It's single-purpose so callers can reuse it consistently.
-    pub fn print_status(path: &Path, rel: &str, op: PrintOp, force: bool) {
-        if force || !path.exists() || matches!(op, PrintOp::Delete) {
-            match op {
-                PrintOp::Create { is_dir } => {
-                    let color = if is_dir { Color::Blue } else { Color::Green };
-                    println!("{}", format!("+ {}", rel).color(color));
-                }
-                PrintOp::Update => {
-                    println!("{}", format!("~ {}", rel).color(Color::Yellow));
-                }
-                PrintOp::Delete => {
-                    println!("{}", format!("- {}", rel).color(Color::Red));
-                }
-                PrintOp::Copy { from, to } => {
-                    println!(
-                        "{}",
-                        format!("{} -> {} (copy)", from, to).color(Color::Cyan)
-                    );
-                }
-                PrintOp::Symlink { target, link_type } => {
-                    let symbol = match link_type {
-                        LinkType::Soft => "-->",
-                        LinkType::Hard => "==>",
-                    };
-                    println!(
-                        "{}",
-                        format!("{} {} {} (symlink)", rel, symbol, target).color(Color::Magenta)
-                    );
-                }
+    pub fn print_status(path: &Path, rel: &str, op: PrintOp, _force: bool) {
+        match op {
+            PrintOp::Skip => {
+                // Show skipped files in dim gray
+                println!("{}", format!("- {}", rel).dimmed());
             }
-        } else {
-            // For existing files without force, keep the noise minimal by printing a dim "update".
-            println!("{}", format!("~ {}", rel).color(Color::Yellow));
+            PrintOp::Create { is_dir } => {
+                let color = if is_dir { Color::Blue } else { Color::Green };
+                println!("{}", format!("+ {}", rel).color(color));
+            }
+            PrintOp::Update => {
+                println!("{}", format!("~ {}", rel).color(Color::Yellow));
+            }
+            PrintOp::Delete => {
+                println!("{}", format!("- {}", rel).color(Color::Red));
+            }
+            PrintOp::Copy { from, to } => {
+                println!(
+                    "{}",
+                    format!("{} -> {} (copy)", from, to).color(Color::Cyan)
+                );
+            }
+            PrintOp::Symlink { target, link_type } => {
+                let symbol = match link_type {
+                    LinkType::Soft => "-->",
+                    LinkType::Hard => "==>",
+                };
+                println!(
+                    "{}",
+                    format!("{} {} {} (symlink)", rel, symbol, target).color(Color::Magenta)
+                );
+            }
         }
     }
 }
@@ -203,7 +203,6 @@ pub fn extract_package(source: &Path, dest: &Path) -> Result<(), crate::errors::
 
 /// Install library artifacts to cache (lib, lib64, bin)
 ///
-
 
 /// Create symlinks for all files in `src` inside `dst` recursively (where
 /// supported). On platforms where creating symlinks is not permitted, the

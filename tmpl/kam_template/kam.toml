@@ -2,31 +2,28 @@
 id = "kam_template"
 version = "0.1.0"
 versionCode = 1762850845388
-author = "Author (author@example.com)"
-
-[prop.name]
-en = "{{project_name}}"
-
-[prop.description]
-en = "{{description}}"
+author = "{{author}}"
+name = "{{project_name}}"
+description = "{{description}}"
+updateJson = "{{update_json}}"
 
 [mmrl.repo]
 license = "MIT"
 license_file = "LICENSE"
-homepage = ""
-readme = ""
+homepage = "{% if repository %}{{repository}}{% else %}https://github.com/{{author}}/{{prop.id}}{% endif %}"
+readme = "{% if repository %}{{repository}}/blob/main/README.md{% else %}https://github.com/{{author}}/{{prop.id}}/blob/main/README.md{% endif %}"
 readme_file = "README.md"
-changelog = ""
+changelog = "{% if repository %}{{repository}}/blob/main/CHANGELOG.md{% else %}https://github.com/{{author}}/{{prop.id}}/blob/main/CHANGELOG.md{% endif %}"
 changelog_file = "CHANGELOG.md"
 screenshots = []
 categories = ["tools"]
 keywords = ["kam", "module", "android", "template"]
-maintainers = []
-repository = ""
-documentation = ""
-issues = ""
-funding = ""
-support = ""
+maintainers = ["{{author}}"]
+repository = "{% if repository %}{{repository}}{% else %}https://github.com/{{author}}/{{prop.id}}{% endif %}"
+documentation = "{% if repository %}{{repository}}{% else %}https://github.com/{{author}}/{{prop.id}}{% endif %}"
+issues = "{% if repository %}{{repository}}/issues{% else %}https://github.com/{{author}}/{{prop.id}}/issues{% endif %}"
+funding = "https://github.com/sponsors/{{author}}"
+support = "{% if repository %}{{repository}}/issues{% else %}https://github.com/{{author}}/{{prop.id}}/issues{% endif %}"
 donate = ""
 cover = ""
 icon = "icon.png"
@@ -69,18 +66,17 @@ supported_arch = []
 conflicts = []
 module_type = "template"
 
-
-[kam.dependency]
-kam = []
-dev = []
-
 [kam.build]
 target_dir = "../../src/assets/tmpl"
 output_file = "kam_template"
-pre_build = 'echo "pre build..."'
-post_build = 'echo "post build..."'
+hooks_dir = "hooks"
+exclude = ["src/kam_template/"]
 
 [kam.tmpl.variables]
+[kam.tmpl.variables.repository]
+var_type = "string"
+required = false
+default = ""
 
 [kam.workspace]
 members = ["."]

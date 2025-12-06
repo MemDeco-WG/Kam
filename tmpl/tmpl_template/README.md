@@ -33,12 +33,6 @@ To create a new template module using this template:
    kam build
    ```
 
-4. Use the template to create new projects:
-
-   ``` bash
-   kam init new_project --impl my_template
-   ```
-
 ## Template Variables
 
 This template supports the following variables (defined in `kam.toml`):

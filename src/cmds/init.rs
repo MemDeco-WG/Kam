@@ -4,7 +4,6 @@ pub mod args;
 pub mod impl_mod;
 pub mod post_init;
 pub mod pre_init;
-pub mod status;
 pub use args::InitArgs;
 
 /// Run the init command
@@ -29,10 +28,10 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     impl_mod::init_template(
         &data.path,
         &data.id,
-        data.name_map.clone(),
+        data.name.clone(),
         &data.version,
         &data.author,
-        data.description_map.clone(),
+        data.description.clone(),
         &merged_var_vec,
         Some(data.impl_template.clone()),
         args.force,

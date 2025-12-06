@@ -1,14 +1,12 @@
 mod args;
 mod build_all;
 mod build_project;
-mod post_build;
-mod pre_build;
+mod hooks;
 
 pub use args::BuildArgs;
 pub use build_all::run_build_all;
 pub use build_project::build_project;
-pub use post_build::handle_post_build_hook;
-pub use pre_build::handle_pre_build_hook;
+pub use hooks::{run_post_build_hooks, run_pre_build_hooks};
 
 use crate::errors::kam::KamError;
 use std::path::Path;

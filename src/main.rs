@@ -4,6 +4,7 @@
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use kam::errors::KamError;
+use std::error::Error;
 
 #[derive(Parser)]
 #[command(
@@ -24,45 +25,40 @@ enum Commands {
     /// Initialize a new Kam project
     Init(kam::cmds::init::InitArgs),
 
-    
-
-    
-
-    /// Check project files for syntax and formatting issues
-    Check(kam::cmds::check::CheckArgs),
-
-    /// Manage module repositories
-    Repo(kam::cmds::repo::RepoArgs),
-
-    /// Manage modules (search, install, etc.)
-    Module(kam::cmds::module::ModuleArgs),
-
-    /// Synchronize dependencies
-    Sync(kam::cmds::sync::SyncArgs),
-
     /// Build the module
     Build(kam::cmds::build::BuildArgs),
 
-    /// Publish the module to a repository
-    Publish(kam::cmds::publish::PublishArgs),
+    /// Manage module version
+    Version(kam::cmds::version::VersionArgs),
 
-    /// Manage virtual environment
-    Venv(kam::cmds::venv::VenvArgs),
+    /// Manage local cache
+    Cache(kam::cmds::cache::CacheArgs),
+
+    /// Validate kam.toml configuration
+    Validate(kam::cmds::validate::ValidateArgs),
 }
 
-fn main() -> Result<(), KamError> {
+fn main() {
     dotenv().ok();
     let cli = Cli::parse();
 
-    match cli.command {
+    let res: Result<(), KamError> = match cli.command {
         Commands::Init(args) => kam::cmds::init::run(args),
-        
-        Commands::Check(args) => kam::cmds::check::run(args),
-        Commands::Repo(args) => kam::cmds::repo::run(args),
-        Commands::Module(args) => kam::cmds::module::run(args),
-        Commands::Sync(args) => kam::cmds::sync::run(args),
         Commands::Build(args) => kam::cmds::build::run(args),
-        Commands::Publish(args) => kam::cmds::publish::run(args),
-        Commands::Venv(args) => kam::cmds::venv::run(args),
+        Commands::Version(args) => kam::cmds::version::run(args),
+        Commands::Cache(args) => kam::cmds::cache::run(args),
+        Commands::Validate(args) => kam::cmds::validate::run(args),
+    };
+
+    if let Err(e) = res {
+        eprintln!("Error: {}", e);
+
+        let mut source = e.source();
+        while let Some(s) = source {
+            eprintln!("  Caused by: {}", s);
+            source = s.source();
+        }
+
+        std::process::exit(1);
     }
 }

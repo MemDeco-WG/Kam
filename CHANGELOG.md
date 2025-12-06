@@ -1,17 +1,12 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [Unreleased]
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## \[Unreleased\]
-
-## \[1.0.0\] - u64
+## [1.0.0]
 
 ### Added
 
 - Initial Kam-Kam-1.0.0
-  - Author: LIghtJUNction (LIghtJUNction.me@gmail.com)
-  - Version Code: {{versionCode}}
-  - Description: {{description}}
+  - Author: Your Name
+  - Version Code: 1765059491382
+  - Description: Describe your module here

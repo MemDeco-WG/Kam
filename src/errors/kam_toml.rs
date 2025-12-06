@@ -12,8 +12,8 @@ pub enum KamTomlError {
     TomlSer(#[from] toml::ser::Error),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("kam.toml not found")]
-    NotFound,
+    #[error("kam.toml not found at {0}")]
+    NotFound(String),
     #[error("kam.toml is empty")]
     EmptyFile,
     #[error("Missing required field: id")]

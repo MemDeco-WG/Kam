@@ -1,0 +1,118 @@
+{
+  "app": {
+    "title": "ModuleWebUI",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "warning": "Warning",
+    "info": "Info",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "dialog": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "close": "Close"
+  },
+  "about": {
+    "title": "About",
+    "version": "Version",
+    "description": "Modern module management interface built with Material Design 3 specifications.",
+    "github": "GitHub",
+    "please": "In",
+    "lookoursrc": "Look our source code"
+  },
+  "nav": {
+    "home": "Home",
+    "logs": "Logs",
+    "settings": "Settings",
+    "about": "About"
+  },
+  "home": {
+    "modules": {
+      "status": {
+        "running": "Module Running",
+        "stopped": "Module Stopped",
+        "error": "Module Error",
+        "normal-exit": "Module Normal Exit",
+        "unknown": "Status Unknown"
+      },
+      "name": "Module Name",
+      "path": "Module Path",
+      "pid": "Process ID",
+      "startTime": "Start Time",
+      "statusCheckFailed": "Module status check failed",
+      "errorInfo": "Error Info",
+      "refreshStatus": "Refresh Status",
+      "loading": "Loading module status...",
+      "lastUpdate": "Last Update"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "debugMode": "Debug Mode",
+    "debugModeDesc": "Enable debug mode to view detailed log information",
+    "nativeToast": "Use Native Toast",
+    "nativeToastDesc": "Use system native Toast notifications in KSU environment",
+    "themeHue": "Theme Hue",
+    "language": "Language",
+    "refresh": "Refresh Settings",
+    "reset": "Reset Settings",
+    "save": "Save Settings",
+    "cancel": "Cancel",
+    "resetConfirm": "Are you sure you want to reset all settings to default values? This action cannot be undone.",
+    "resetSuccess": "Settings have been reset to default values",
+    "saveSuccess": "Settings saved",
+    "loadFailed": "Failed to load settings",
+    "saveFailed": "Failed to save settings",
+    "unsavedChanges": "Unsaved Changes",
+    "unsavedMessage": "You have unsaved setting changes, are you sure you want to leave?"
+  },
+  "palette": {
+    "title": "Palette",
+    "primary": "Primary",
+    "secondary": "Secondary",
+    "tertiary": "Tertiary",
+    "neutral": "Neutral",
+    "error": "Error"
+  },
+  "logs": {
+    "selectFile": "Select Log File",
+    "selectPlaceholder": "Please select a log file",
+    "noFiles": "No log files found",
+    "noData": "No log data",
+    "loadFailed": "Failed to load logs",
+    "refresh": "Refresh Logs",
+    "clear": "Clear Logs",
+    "clearConfirm": "Are you sure you want to clear the logs? This action cannot be undone.",
+    "clearSuccess": "Logs cleared",
+    "selectFirst": "Please select a log file first",
+    "loading": "Loading logs..."
+  },
+  "common": {
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "unknown": "Unknown"
+  },
+  "errors": {
+    "loadFailed": "Load Failed",
+    "saveFailed": "Save Failed",
+    "operationFailed": "Operation Failed",
+    "fileNotFound": "File Not Found",
+    "networkError": "Network Error",
+    "unexpectedError": "Unexpected Error",
+    "ksuNotDefined": "KSU Environment Not Defined",
+    "permissionDenied": "Permission Denied",
+    "execFailed": "Execution Failed"
+  }
+}

@@ -1,392 +1,431 @@
-use crate::assets::tmpl::TmplAssets;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
-use serde_json;
-use std::collections::HashMap;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
 use walkdir::WalkDir;
 
-/// Template cache manager - handles template availability
+// Import assets
+use crate::assets::tmpl::TmplAssets;
+use crate::utils::{PrintOp, Utils};
+
 pub struct TemplateCacheManager;
 
 impl TemplateCacheManager {
-    /// Ensure a specific template archive is available
+    pub fn get_cache_dir() -> Result<PathBuf, KamError> {
+        let home = dirs::home_dir().ok_or_else(|| {
+            KamError::InvalidDirectory("Could not determine home directory".to_string())
+        })?;
+        let cache_dir = home.join(".kam").join("templates");
+        if !cache_dir.exists() {
+            fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
+        }
+        Ok(cache_dir)
+    }
+
+    /// List all available templates (built-in + cached)
+    pub fn list_templates() -> Vec<String> {
+        let mut templates = HashSet::new();
+
+        // 1. Built-in templates from assets
+        for file in TmplAssets::iter() {
+            let filename = file.as_ref();
+            if filename.ends_with(".tar.gz") {
+                if let Some(name) = filename.strip_suffix(".tar.gz") {
+                    templates.insert(name.to_string());
+                }
+            } else if filename.ends_with(".zip") {
+                if let Some(name) = filename.strip_suffix(".zip") {
+                    templates.insert(name.to_string());
+                }
+            }
+        }
+
+        // 2. Local cache templates
+        if let Ok(cache_dir) = Self::get_cache_dir() {
+            if let Ok(entries) = fs::read_dir(cache_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        // Handle .tar.gz special case for stem
+                        let name = if path.to_string_lossy().ends_with(".tar.gz") {
+                            stem.strip_suffix(".tar").unwrap_or(stem)
+                        } else {
+                            stem
+                        };
+                        templates.insert(name.to_string());
+                    }
+                }
+            }
+        }
+
+        let mut list: Vec<String> = templates.into_iter().collect();
+        list.sort();
+        list
+    }
+
+    /// Check if a template exists (built-in or cached)
     pub fn ensure_template(template: &str) -> Result<(), KamError> {
-        // Check if the embedded template exists
-        let asset_name = format!("{}.tar.gz", template);
-        if crate::assets::tmpl::TmplAssets::get(&asset_name).is_some() {
+        let list = Self::list_templates();
+        if list.contains(&template.to_string()) {
             Ok(())
         } else {
             Err(KamError::TemplateNotFound(format!(
-                "Built-in template '{}' not found",
+                "Template '{}' not found in built-in assets or local cache",
                 template
             )))
         }
     }
 
-    /// List all available built-in templates
-    pub fn list_builtin_templates() -> Vec<String> {
-        // Return a basic list of known templates since we removed the cache system
-        vec!["kam_template".to_string(), "tmpl_template".to_string(), "repo_template".to_string(), "venv_template".to_string()]
+    /// Get path to template archive/directory.
+    pub fn resolve_template_path(template: &str) -> Result<Option<PathBuf>, KamError> {
+        let cache_dir = Self::get_cache_dir()?;
+
+        // Check for directory
+        let dir_path = cache_dir.join(template);
+        if dir_path.exists() && dir_path.is_dir() {
+            return Ok(Some(dir_path));
+        }
+
+        // Check for archives
+        let extensions = [".tar.gz", ".tgz", ".zip"];
+        for ext in extensions {
+            let archive_path = cache_dir.join(format!("{}{}", template, ext));
+            if archive_path.exists() {
+                return Ok(Some(archive_path));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// List local cached templates
+    pub fn list_local_templates() -> Result<Vec<String>, KamError> {
+        let cache_dir = Self::get_cache_dir()?;
+        let mut templates = Vec::new();
+        if cache_dir.exists() {
+            for entry in fs::read_dir(cache_dir).map_err(KamError::Io)? {
+                let entry = entry.map_err(KamError::Io)?;
+                let path = entry.path();
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    let name = if path.to_string_lossy().ends_with(".tar.gz") {
+                        stem.strip_suffix(".tar").unwrap_or(stem)
+                    } else {
+                        stem
+                    };
+                    templates.push(name.to_string());
+                }
+            }
+        }
+        templates.sort();
+        Ok(templates)
+    }
+
+    /// Install a template from a local path (directory or archive)
+    pub fn install_template(name: &str, source: &Path) -> Result<(), KamError> {
+        let cache_dir = Self::get_cache_dir()?;
+
+        if source.is_dir() {
+            let dest = cache_dir.join(name);
+            if dest.exists() {
+                return Err(KamError::CommandFailed(format!(
+                    "Template '{}' already exists in cache",
+                    name
+                )));
+            }
+            crate::utils::copy_dir_all(source, &dest).map_err(KamError::Io)?;
+        } else if source.is_file() {
+            let filename = source
+                .file_name()
+                .ok_or_else(|| KamError::InvalidDirectory("Invalid source filename".to_string()))?
+                .to_string_lossy();
+
+            let dest_name = if filename.ends_with(".tar.gz") {
+                format!("{}.tar.gz", name)
+            } else if let Some(ext) = source.extension().and_then(|s| s.to_str()) {
+                format!("{}.{}", name, ext)
+            } else {
+                name.to_string()
+            };
+
+            let dest = cache_dir.join(dest_name);
+            if dest.exists() {
+                return Err(KamError::CommandFailed(format!(
+                    "Template '{}' already exists in cache",
+                    name
+                )));
+            }
+            fs::copy(source, &dest).map_err(KamError::Io)?;
+        } else {
+            return Err(KamError::InvalidDirectory(format!(
+                "Source '{}' does not exist",
+                source.display()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Remove a template from cache
+    pub fn remove_template(name: &str) -> Result<(), KamError> {
+        let cache_dir = Self::get_cache_dir()?;
+
+        // Check for directory
+        let dir_path = cache_dir.join(name);
+        if dir_path.exists() && dir_path.is_dir() {
+            fs::remove_dir_all(&dir_path).map_err(KamError::Io)?;
+            return Ok(());
+        }
+
+        // Check for archives
+        let extensions = [".tar.gz", ".tgz", ".zip"];
+        for ext in extensions {
+            let archive_path = cache_dir.join(format!("{}{}", name, ext));
+            if archive_path.exists() {
+                fs::remove_file(&archive_path).map_err(KamError::Io)?;
+                return Ok(());
+            }
+        }
+
+        Err(KamError::TemplateNotFound(format!(
+            "Template '{}' not found in cache",
+            name
+        )))
     }
 }
 
-/// Template variable processor - handles variable flattening and parsing
 pub struct TemplateVariableProcessor;
 
 impl TemplateVariableProcessor {
-    /// Flatten KamToml into a HashMap of string keys and values for template variables
-    pub fn flatten_kam_toml(kt: &KamToml) -> HashMap<String, String> {
-        let value = serde_json::to_value(kt).unwrap();
+    pub fn flatten_kam_toml(kam_toml: &KamToml) -> HashMap<String, String> {
         let mut vars = HashMap::new();
-        Self::flatten_json("", &value, &mut vars);
+
+        // Top-level shortcuts
+        vars.insert("id".to_string(), kam_toml.prop.id.clone());
+        vars.insert("name".to_string(), kam_toml.prop.get_name().to_string());
+        vars.insert("version".to_string(), kam_toml.prop.version.clone());
+        vars.insert(
+            "versionCode".to_string(),
+            kam_toml.prop.versionCode.to_string(),
+        );
+        vars.insert("author".to_string(), kam_toml.prop.author.clone());
+        vars.insert(
+            "description".to_string(),
+            kam_toml.prop.get_description().to_string(),
+        );
+
+        if let Some(uj) = &kam_toml.prop.updateJson {
+            vars.insert("update_json".to_string(), uj.clone());
+        }
+
+        // Prop section
+        vars.insert("prop.id".to_string(), kam_toml.prop.id.clone());
+        vars.insert(
+            "prop.name".to_string(),
+            kam_toml.prop.get_name().to_string(),
+        );
+        vars.insert("prop.version".to_string(), kam_toml.prop.version.clone());
+        vars.insert(
+            "prop.versionCode".to_string(),
+            kam_toml.prop.versionCode.to_string(),
+        );
+        vars.insert("prop.author".to_string(), kam_toml.prop.author.clone());
+        vars.insert(
+            "prop.description".to_string(),
+            kam_toml.prop.get_description().to_string(),
+        );
+
         vars
     }
 
-    /// Recursively flatten a serde_json::Value into a HashMap with dot-separated keys
-    fn flatten_json(prefix: &str, value: &serde_json::Value, vars: &mut HashMap<String, String>) {
-        match value {
-            serde_json::Value::Object(map) => {
-                for (k, v) in map {
-                    let new_prefix = if prefix.is_empty() {
-                        k.clone()
-                    } else {
-                        format!("{}.{}", prefix, k)
-                    };
-                    Self::flatten_json(&new_prefix, v, vars);
-                }
-            }
-            serde_json::Value::Array(arr) => {
-                vars.insert(prefix.to_string(), serde_json::to_string(arr).unwrap());
-            }
-            serde_json::Value::String(s) => {
-                vars.insert(prefix.to_string(), s.clone());
-            }
-            serde_json::Value::Number(n) => {
-                vars.insert(prefix.to_string(), n.to_string());
-            }
-            serde_json::Value::Bool(b) => {
-                vars.insert(prefix.to_string(), b.to_string());
-            }
-            serde_json::Value::Null => {}
-        }
-    }
-
-    /// Parse template variables from CLI arguments
     pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, KamError> {
-        let mut template_vars = HashMap::new();
+        let mut map = HashMap::new();
         for var in vars {
-            if let Some((key, value)) = var.split_once('=') {
-                template_vars.insert(key.to_string(), value.to_string());
+            if let Some((k, v)) = var.split_once('=') {
+                map.insert(k.to_string(), v.to_string());
             } else {
-                return Err(KamError::InvalidVarFormat(format!(
-                    "Invalid template variable format: {}",
-                    var
-                )));
+                map.insert(var.to_string(), "".to_string());
             }
         }
-        Ok(template_vars)
+        Ok(map)
     }
 }
 
-/// Template copier - handles copying and variable replacement
 pub struct TemplateCopier;
 
 impl TemplateCopier {
-    /// Copy template files from src directory to dst directory, replacing placeholders
-    pub fn copy_template_to(
-        src: &Path,
-        dst: &Path,
-        kt: &KamToml,
-        force: bool,
-    ) -> Result<(), KamError> {
-        let vars = TemplateVariableProcessor::flatten_kam_toml(kt);
-        Self::copy_and_replace(src, dst, &vars, force)
-    }
-
-    /// Copy template files from src directory to dst directory, replacing placeholders
-    ///
-    /// This wrapper canonicalizes `src` up-front and delegates actual work to an
-    /// internal function so we keep a stable notion of the template root across
-    /// recursion. The implementation:
-    /// - converts flattened variables into a nested JSON/Tera context so templated
-    ///   expressions like `{{prop.id}}` and `{{id}}` both work as expected,
-    /// - prevents recursive copies by rejecting destinations that would be inside
-    ///   the template source root, and
-    /// - avoids writing potentially unsafe paths (e.g. '..' components),
-    /// - supports both text (rendered) and binary (copied unchanged) files.
     pub fn copy_and_replace(
         src: &Path,
         dst: &Path,
         vars: &HashMap<String, String>,
         force: bool,
+        _template_id: &str,
     ) -> Result<(), KamError> {
-        // Resolve a stable absolute root for the template source: prefer a canonicalized
-        // path and fall back to normalizing against the current working directory.
-        let cwd = std::env::current_dir()?;
-        let root_src = std::fs::canonicalize(src).unwrap_or_else(|_| {
-            if src.is_absolute() {
-                src.to_path_buf()
-            } else {
-                cwd.join(src)
-            }
-        });
-
-        Self::copy_and_replace_internal(src, dst, vars, force, &root_src)
-    }
-
-    fn copy_and_replace_internal(
-        src: &Path,
-        dst: &Path,
-        vars: &HashMap<String, String>,
-        force: bool,
-        root_src: &Path,
-    ) -> Result<(), KamError> {
-        // Build Tera instance and convert flattened vars into a nested context.
-        let mut tera = Tera::default();
-        tera.set_escape_fn(|s| s.to_string());
-
-        // Build nested JSON object from flattened vars like "prop.id" -> { "prop": { "id": "..." } }
-        let mut root_obj = serde_json::Map::new();
-        for (k, v) in vars.iter() {
-            if k.trim().is_empty() {
-                continue;
-            }
-
-            let parts: Vec<&str> = k.split('.').filter(|s| !s.is_empty()).collect();
-            let mut cur = &mut root_obj;
-            for (i, part) in parts.iter().enumerate() {
-                let key = part.to_string();
-                if i + 1 == parts.len() {
-                    // leaf value
-                    cur.insert(key, serde_json::Value::String(v.clone()));
-                } else {
-                    // intermediate object: create if missing
-                    if !cur.contains_key(&key) {
-                        cur.insert(
-                            key.clone(),
-                            serde_json::Value::Object(serde_json::Map::new()),
-                        );
-                    } else if !cur.get(&key).unwrap().is_object() {
-                        // If a value already exists but isn't an object, replace it with an object
-                        cur.insert(
-                            key.clone(),
-                            serde_json::Value::Object(serde_json::Map::new()),
-                        );
-                    }
-                    cur = cur
-                        .get_mut(&key)
-                        .and_then(|v| v.as_object_mut())
-                        .expect("expected object");
-                }
-            }
-        }
-
-        // Convenience shallow keys fallback (id/version/author/name/description).
-        // This mirrors `init_impl` behaviour: templates can safely use `{{id}}` as
-        // well as `{{prop.id}}`.
-        if !root_obj.contains_key("id") {
-            if let Some(prop) = root_obj.get("prop").and_then(|v| v.as_object()) {
-                if let Some(idv) = prop.get("id").cloned() {
-                    root_obj.insert("id".to_string(), idv);
-                }
-            }
-        }
-
-        if !root_obj.contains_key("version") {
-            if let Some(prop) = root_obj.get("prop").and_then(|v| v.as_object()) {
-                if let Some(ver) = prop.get("version").cloned() {
-                    root_obj.insert("version".to_string(), ver);
-                }
-            }
-        }
-
-        if !root_obj.contains_key("author") {
-            if let Some(prop) = root_obj.get("prop").and_then(|v| v.as_object()) {
-                if let Some(a) = prop.get("author").cloned() {
-                    root_obj.insert("author".to_string(), a);
-                }
-            }
-        }
-
-        // For `name` and `description`, extract `en` fallback or the first locale.
-        if !root_obj.contains_key("name") {
-            if let Some(prop) = root_obj.get("prop").and_then(|v| v.as_object()) {
-                if let Some(namev) = prop.get("name") {
-                    if namev.is_string() {
-                        root_obj.insert("name".to_string(), namev.clone());
-                    } else if let Some(map) = namev.as_object() {
-                        if let Some(en) = map.get("en") {
-                            root_obj.insert("name".to_string(), en.clone());
-                        } else if let Some((_k, v)) = map.iter().next() {
-                            root_obj.insert("name".to_string(), v.clone());
-                        }
-                    }
-                }
-            }
-        }
-
-        if !root_obj.contains_key("description") {
-            if let Some(prop) = root_obj.get("prop").and_then(|v| v.as_object()) {
-                if let Some(desc) = prop.get("description") {
-                    if desc.is_string() {
-                        root_obj.insert("description".to_string(), desc.clone());
-                    } else if let Some(map) = desc.as_object() {
-                        if let Some(en) = map.get("en") {
-                            root_obj.insert("description".to_string(), en.clone());
-                        } else if let Some((_k, v)) = map.iter().next() {
-                            root_obj.insert("description".to_string(), v.clone());
-                        }
-                    }
-                }
-            }
-        }
-
-        let root_value = serde_json::Value::Object(root_obj);
-        let context = Context::from_serialize(&root_value).map_err(|e| {
-            KamError::CommandFailed(format!("Failed to build template context: {}", e))
-        })?;
-
-        // Safety check: prevent copying into a destination that is inside the initial template root
-        // (e.g. calling `kam init .` with the destination placed inside template source).
-        let cwd = std::env::current_dir()?;
-        let abs_dst = std::fs::canonicalize(dst).unwrap_or_else(|_| {
-            if dst.is_absolute() {
-                dst.to_path_buf()
-            } else {
-                cwd.join(dst)
-            }
-        });
-        if abs_dst.starts_with(root_src) {
+        if !src.exists() {
             return Err(KamError::InvalidDirectory(format!(
-                "Destination '{}' is inside the template source '{}': aborting to prevent recursive copy",
-                abs_dst.display(),
-                root_src.display()
+                "Source does not exist: {}",
+                src.display()
             )));
         }
 
+        // Build Tera context by unflattening the variables
+        let context_value = unflatten_vars(vars);
+        let context = Context::from_serialize(&context_value).map_err(|e| {
+            KamError::CommandFailed(format!("Failed to build template context: {}", e))
+        })?;
+
+        let mut tera = Tera::default();
+        tera.set_escape_fn(|s| s.to_string()); // Disable auto-escaping for file content
+
         for entry in WalkDir::new(src) {
-            let entry = entry?;
-            // Build a stable relative path for this entry and render it using Tera.
-            // We render the entire relative path (not only the base name) so templates
-            // can include directory components like `src/{{id}}/...`.
-            let rel = entry.path().strip_prefix(src).map_err(|e| {
-                KamError::StripPrefixFailed(format!(
-                    "failed to strip prefix {}: {}",
-                    src.display(),
-                    e
-                ))
-            })?;
-            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            let entry = entry.map_err(|e| KamError::Io(e.into()))?;
+            let src_path = entry.path();
 
-            // Render the path using Tera. Guard against empty replacements or path
-            // traversal which could produce incorrect target paths.
-            let replaced_rel = if rel_str.is_empty() {
-                String::new()
-            } else {
-                tera.render_str(&rel_str, &context).map_err(|e| {
-                    KamError::CommandFailed(format!(
-                        "Tera render error for path '{}': {}",
-                        rel_str, e
-                    ))
-                })?
-            };
-            if replaced_rel.trim().is_empty() {
-                // Skip entries that render to an empty path.
+            if src_path == src {
                 continue;
             }
 
-            // Do not accept `..` or other path traversal segments in the rendered relative path.
-            use std::path::Component;
-            let file_path_obj = Path::new(&replaced_rel);
-            if file_path_obj
-                .components()
-                .any(|c| matches!(c, Component::ParentDir))
-            {
-                return Err(KamError::InvalidDirectory(format!(
-                    "Invalid template path component '..' in '{}'",
-                    replaced_rel
-                )));
+            // Calculate relative path
+            let rel_path = src_path
+                .strip_prefix(src)
+                .map_err(|e| KamError::StripPrefixFailed(e.to_string()))?;
+
+            // Replace variables in filename
+            let rel_path_str = rel_path.to_string_lossy();
+            let mut dest_rel_path_str = rel_path_str.to_string();
+
+            // Simple string replacement for filenames
+            for (k, v) in vars {
+                let placeholder = format!("{{{{{}}}}}", k); // {{key}}
+                dest_rel_path_str = dest_rel_path_str.replace(&placeholder, v);
             }
 
-            // Build the concrete destination path for this entry using the fully rendered relative path.
-            // If `replaced_rel` is empty, map it to the destination root.
-            let dst_path = if replaced_rel.is_empty() {
-                dst.to_path_buf()
-            } else {
-                dst.join(&replaced_rel)
-            };
-            let rel_path = dst_path
-                .strip_prefix(dst)
-                .unwrap_or(&dst_path)
-                .to_string_lossy()
-                .to_string();
-
-            // Avoid copying into the template root (inside a walk of the template) which causes loops.
-            let abs_dst_path = std::fs::canonicalize(&dst_path).unwrap_or_else(|_| {
-                if dst_path.is_absolute() {
-                    dst_path.to_path_buf()
-                } else {
-                    cwd.join(&dst_path)
+            // Also try to render filename with Tera if it contains {{
+            if dest_rel_path_str.contains("{{") {
+                if let Ok(rendered) = tera.render_str(&dest_rel_path_str, &context) {
+                    dest_rel_path_str = rendered;
                 }
-            });
-            if abs_dst_path.starts_with(root_src) {
-                // Skip this entry and continue, rather than trying to copy back into the
-                // template's source. This is a defensive measure to prevent accidental
-                // recursion if templates contain self-referential symlinks or similar.
-                println!(
-                    "Warning: skipping {} -> {} (destination would be inside template source)",
-                    entry.path().display(),
-                    dst_path.display()
-                );
-                continue;
             }
+
+            let dst_path = dst.join(&dest_rel_path_str);
 
             if entry.file_type().is_dir() {
-                crate::utils::Utils::print_status(
-                    &dst_path,
-                    &rel_path,
-                    crate::utils::PrintOp::Create { is_dir: true },
-                    force,
-                );
-                // Create the directory and let WalkDir iterate its contents; do not recurse manually.
-                std::fs::create_dir_all(&dst_path)?;
-            } else {
-                // Read as bytes and only attempt template rendering when we can safely
-                // interpret the contents as UTF-8 text.
-                let data = std::fs::read(entry.path())?;
-                let rendered = if let Ok(text) = String::from_utf8(data.clone()) {
-                    match tera.render_str(&text, &context) {
-                        Ok(r) => r.into_bytes(),
-                        Err(e) => {
-                            eprintln!(
-                                "Warning: Tera failed to render file '{}': {}; using original content",
-                                entry.path().display(),
-                                e
-                            );
-                            text.into_bytes()
+                // Create directory silently without printing
+                fs::create_dir_all(&dst_path).map_err(KamError::Io)?;
+            } else if entry.file_type().is_file() {
+                // Ensure parent exists
+                if let Some(parent) = dst_path.parent() {
+                    fs::create_dir_all(parent).map_err(KamError::Io)?;
+                }
+
+                if dst_path.exists() && !force {
+                    Utils::print_status(&dst_path, &dest_rel_path_str, PrintOp::Skip, force);
+                    continue;
+                }
+
+                // Check if file exists before writing to determine correct status
+                let file_existed = dst_path.exists();
+
+                // Check if binary
+                if is_binary(src_path) {
+                    fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
+                } else {
+                    // Text file - perform substitution
+                    let content = fs::read_to_string(src_path);
+                    match content {
+                        Ok(text) => {
+                            match tera.render_str(&text, &context) {
+                                Ok(rendered) => {
+                                    fs::write(&dst_path, rendered).map_err(KamError::Io)?;
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "Warning: Failed to render template '{}': {}",
+                                        src_path.display(),
+                                        e
+                                    );
+                                    // Fallback to copy
+                                    fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            // Fallback to copy if read_to_string fails
+                            fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
                         }
                     }
-                } else {
-                    data
-                };
+                }
 
-                crate::utils::Utils::print_status(
-                    &dst_path,
-                    &rel_path,
-                    crate::utils::PrintOp::Create { is_dir: false },
-                    force,
-                );
-                std::fs::write(&dst_path, &rendered)?;
+                // Print appropriate status based on whether file existed before
+                if file_existed && force {
+                    Utils::print_status(&dst_path, &dest_rel_path_str, PrintOp::Update, force);
+                } else if !file_existed {
+                    Utils::print_status(
+                        &dst_path,
+                        &dest_rel_path_str,
+                        PrintOp::Create { is_dir: false },
+                        force,
+                    );
+                }
             }
         }
         Ok(())
     }
 }
 
-/// Legacy TemplateManager for backward compatibility
+fn unflatten_vars(vars: &HashMap<String, String>) -> Value {
+    let mut root = serde_json::Map::new();
+
+    for (key, value) in vars {
+        if key.trim().is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = key.split('.').collect();
+        let mut current = &mut root;
+
+        for (i, part) in parts.iter().enumerate() {
+            if i == parts.len() - 1 {
+                // Leaf
+                current.insert(part.to_string(), Value::String(value.clone()));
+            } else {
+                // Node
+                if !current.contains_key(*part) || !current[*part].is_object() {
+                    current.insert(part.to_string(), Value::Object(serde_json::Map::new()));
+                }
+                current = current.get_mut(*part).unwrap().as_object_mut().unwrap();
+            }
+        }
+    }
+    Value::Object(root)
+}
+
+fn is_binary(path: &Path) -> bool {
+    // Simple heuristic: read first few bytes and check for null byte
+    if let Ok(mut file) = fs::File::open(path) {
+        use std::io::Read;
+        let mut buffer = [0; 1024];
+        if let Ok(n) = file.read(&mut buffer) {
+            for b in &buffer[..n] {
+                if *b == 0 {
+                    return true;
+                }
+            }
+        }
+    }
+    // Check extension
+    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+        let binary_exts = [
+            "png", "jpg", "jpeg", "gif", "ico", "zip", "tar", "gz", "so", "a", "o", "bin", "exe",
+        ];
+        if binary_exts.contains(&ext.to_lowercase().as_str()) {
+            return true;
+        }
+    }
+    false
+}
+
 pub struct TemplateManager;
 
 impl TemplateManager {
@@ -395,21 +434,11 @@ impl TemplateManager {
     }
 
     pub fn list_builtin_templates() -> Vec<String> {
-        TemplateCacheManager::list_builtin_templates()
+        TemplateCacheManager::list_templates()
     }
 
     pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, KamError> {
         TemplateVariableProcessor::parse_template_vars(vars)
-    }
-
-    pub fn copy_template_to(
-        src: &Path,
-        dst: &Path,
-        kt: &KamToml,
-        force: bool,
-        _id: &str,
-    ) -> Result<(), KamError> {
-        TemplateCopier::copy_template_to(src, dst, kt, force)
     }
 
     pub fn copy_and_replace(
@@ -417,8 +446,8 @@ impl TemplateManager {
         dst: &Path,
         vars: &HashMap<String, String>,
         force: bool,
-        _id: &str,
+        template_id: &str,
     ) -> Result<(), KamError> {
-        TemplateCopier::copy_and_replace(src, dst, vars, force)
+        TemplateCopier::copy_and_replace(src, dst, vars, force, template_id)
     }
 }

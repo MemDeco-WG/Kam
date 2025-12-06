@@ -11,7 +11,7 @@ pub struct InitArgs {
     #[arg(long)]
     pub id: Option<String>,
 
-    /// Project name (default: "My Module")
+    /// Project name (default: "Example Module Name")
     #[arg(long)]
     pub project_name: Option<String>,
 
@@ -19,7 +19,7 @@ pub struct InitArgs {
     #[arg(long)]
     pub version: Option<String>,
 
-    /// Author name (default: "Author")
+    /// Author name (default: "Your Name")
     #[arg(long)]
     pub author: Option<String>,
 
@@ -27,7 +27,7 @@ pub struct InitArgs {
     #[arg(long)]
     pub update_json: Option<String>,
 
-    /// Description (default: "A module description")
+    /// Description (default: "Describe your module here")
     #[arg(long)]
     pub description: Option<String>,
 
@@ -37,7 +37,7 @@ pub struct InitArgs {
 
     /// Deprecated: Template source to implement (local path, URL, or git repo)
     /// NOTE: This option has been removed from the CLI. Use the dedicated
-    /// template selection flags (e.g. --kam, --tmpl, --repo, --venv)
+    /// template selection flags (e.g. --kam, --tmpl)
     /// which correspond to builtin template IDs instead.
     #[arg(skip)]
     pub r#impl: Option<String>,
@@ -46,25 +46,17 @@ pub struct InitArgs {
     #[arg(long)]
     pub var: Vec<String>,
 
+    /// Template to use (built-in ID or local path)
+    #[arg(short, long)]
+    pub template: Option<String>,
+
     /// Create a kam module
     /// Template id: "kam_template"
     #[arg(long)]
     pub kam: bool,
 
-    
-
     /// Create a template project
     /// Template id: "tmpl_template"
     #[arg(long)]
     pub tmpl: bool,
-
-    /// Create a repo module repository project
-    /// Template id: "repo_template"
-    #[arg(long)]
-    pub repo: bool,
-
-    /// Create a venv template
-    /// Template id: "venv_template"
-    #[arg(long)]
-    pub venv: bool,
 }

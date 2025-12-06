@@ -1,0 +1,90 @@
+[prop]
+id = "ak3_template"
+name = "ak3_template"
+version = "1.0.0"
+versionCode = 1765058577249
+author = "Your Name"
+description = "Describe your template here"
+
+[mmrl.repo]
+license = "MIT"
+license_file = "LICENSE"
+homepage = "https://github.com/Your Name/ak3_template"
+readme = "https://github.com/Your Name/ak3_template/blob/main/README.md"
+readme_file = "README.md"
+changelog = "https://github.com/Your Name/ak3_template/blob/main/CHANGELOG.md"
+changelog_file = "CHANGELOG.md"
+screenshots = []
+categories = ["tools"]
+keywords = [
+    "kam",
+    "template",
+    "android",
+]
+maintainers = ["Your Name"]
+repository = "https://github.com/Your Name/ak3_template"
+documentation = "https://github.com/Your Name/ak3_template"
+issues = "https://github.com/Your Name/ak3_template/issues"
+funding = "https://github.com/sponsors/Your Name"
+support = "https://github.com/Your Name/ak3_template/issues"
+donate = ""
+cover = ""
+icon = "icon.png"
+devices = []
+arch = ["arm64-v8a"]
+require = []
+antifeatures = []
+max_num = 0
+min_api = 21
+max_api = 35
+verified = false
+features = ["template"]
+
+[mmrl.repo.note]
+title = ""
+message = ""
+
+[mmrl.repo.manager.magisk]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.kernelsu]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.manager.apatch]
+devices = []
+arch = []
+require = []
+
+[mmrl.repo.options.archive]
+compression = ""
+
+[kam]
+min_api = 0
+max_api = 0
+supported_arch = []
+conflicts = []
+module_type = "kam"
+
+[kam.build]
+target_dir = "dist"
+output_file = "{{id}}-{{versionCode}}"
+hooks_dir = "hooks"
+
+[kam.tmpl.variables.example]
+var_type = "string"
+required = true
+default = ""
+
+[kam.tmpl.variables.repository]
+var_type = "string"
+required = false
+default = ""
+
+[kam.workspace]
+members = ["."]
+
+[tool]

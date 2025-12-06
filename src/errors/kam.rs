@@ -1,4 +1,3 @@
-use reqwest;
 use thiserror::Error;
 use toml;
 /// Kam-wide error type to avoid `Box<dyn Error>` in public APIs.
@@ -30,12 +29,6 @@ pub enum KamError {
 
     #[error("Strip prefix error: {0}")]
     StripPrefix(#[from] std::path::StripPrefixError),
-
-    #[error("Reqwest error: {0}")]
-    Reqwest(#[from] reqwest::Error),
-
-    #[error("Git error: {0}")]
-    Git(#[from] git2::Error),
 
     #[error("KamToml error: {0}")]
     KamToml(#[from] crate::errors::KamTomlError),
