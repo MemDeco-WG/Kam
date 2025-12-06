@@ -1,4 +1,5 @@
 use colored::*;
+use glob::glob;
 use std::path::Path;
 use std::time::Instant;
 
@@ -103,8 +104,56 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     let mut results = Vec::new();
 
     if let Some(members) = &workspace.members {
-        for member in members {
-            let result = build_workspace_member(project_path, member, args);
+        // Expand glob patterns in workspace members
+        let mut expanded_members = Vec::new();
+
+        for member_pattern in members {
+            // Check if pattern contains glob characters
+            if member_pattern.contains('*')
+                || member_pattern.contains('?')
+                || member_pattern.contains('[')
+            {
+                // It's a glob pattern - expand it
+                let pattern_path = project_path.join(member_pattern);
+                let pattern_str = pattern_path.to_string_lossy();
+
+                match glob(&pattern_str) {
+                    Ok(paths) => {
+                        for entry in paths.flatten() {
+                            // Normalize the entry path to absolute
+                            let abs_entry = if entry.is_absolute() {
+                                entry.clone()
+                            } else {
+                                project_path.join(&entry)
+                            };
+
+                            // Only include directories that have kam.toml
+                            if abs_entry.is_dir() && abs_entry.join("kam.toml").exists() {
+                                if let Ok(rel_path) = abs_entry.strip_prefix(project_path) {
+                                    let rel_str = rel_path.to_string_lossy().to_string();
+                                    expanded_members.push(rel_str);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("Warning: invalid glob pattern '{}': {}", member_pattern, e);
+                    }
+                }
+            } else {
+                // Not a glob pattern - use as-is
+                expanded_members.push(member_pattern.clone());
+            }
+        }
+
+        if expanded_members.is_empty() {
+            return Err(KamError::InvalidConfig(
+                "No workspace members found after expanding patterns".to_string(),
+            ));
+        }
+
+        for member in expanded_members {
+            let result = build_workspace_member(project_path, &member, args);
             results.push(result);
         }
     } else {

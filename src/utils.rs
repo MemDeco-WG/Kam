@@ -31,7 +31,7 @@ impl Utils {
     ///
     /// This is presentation-only and intentionally has no side effects other
     /// than printing. It's single-purpose so callers can reuse it consistently.
-    pub fn print_status(path: &Path, rel: &str, op: PrintOp, _force: bool) {
+    pub fn print_status(_path: &Path, rel: &str, op: PrintOp, _force: bool) {
         match op {
             PrintOp::Skip => {
                 // Show skipped files in dim gray

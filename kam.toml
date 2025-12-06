@@ -3,17 +3,17 @@ id = "Kam"
 name = "Kam"
 version = "1.0.3"
 versionCode = 1765059730753
-author = "Your Name"
+author = "LightJunction"
 description = "Describe your module here"
-updateJson = "https://raw.githubusercontent.com/user/repo/branch/update.json"
+updateJson = "https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json"
 
 [mmrl.repo]
 license = "MIT"
 license_file = "LICENSE"
-homepage = "https://github.com/Your Name/Kam"
-readme = "https://github.com/Your Name/Kam/blob/main/README.md"
+homepage = "https://github.com/MemDeco-WG/Kam"
+readme = "https://github.com/MemDeco-WG/Kam/blob/main/README.md"
 readme_file = "README.md"
-changelog = "https://github.com/Your Name/Kam/blob/main/CHANGELOG.md"
+changelog = "https://github.com/MemDeco-WG/Kam/blob/main/CHANGELOG.md"
 changelog_file = "CHANGELOG.md"
 screenshots = []
 categories = ["tools"]
@@ -23,12 +23,12 @@ keywords = [
     "android",
     "template",
 ]
-maintainers = ["Your Name"]
-repository = "https://github.com/Your Name/Kam"
-documentation = "https://github.com/Your Name/Kam"
-issues = "https://github.com/Your Name/Kam/issues"
-funding = "https://github.com/sponsors/Your Name"
-support = "https://github.com/Your Name/Kam/issues"
+maintainers = ["LightJunction"]
+repository = "https://github.com/MemDeco-WG/Kam"
+documentation = "https://github.com/MemDeco-WG/Kam"
+issues = "https://github.com/MemDeco-WG/Kam/issues"
+funding = "https://github.com/sponsors/LightJunction"
+support = "https://github.com/MemDeco-WG/Kam/issues"
 donate = ""
 cover = ""
 icon = "icon.png"
@@ -85,6 +85,9 @@ required = false
 default = ""
 
 [kam.workspace]
-members = ["."]
+members = [
+".",
+"tmpl/*_template",
+]
 
 [tool]

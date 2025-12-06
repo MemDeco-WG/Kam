@@ -14,7 +14,6 @@ pub struct VersionArgs {
 pub fn run(args: VersionArgs) -> Result<(), KamError> {
     let current_dir = std::env::current_dir()?;
     let mut kam_toml = KamToml::load_from_dir(&current_dir)?;
-    let mut changed = false;
 
     if let Some(v) = args.version {
         let new_version = match v.as_str() {
@@ -35,12 +34,11 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
                 new_version.green()
             );
             kam_toml.prop.version = new_version;
-            changed = true;
         } else {
             println!("Version unchanged: {}", kam_toml.prop.version.cyan());
         }
 
-        // Always update versionCode when version is changed
+        // Always update versionCode when version is provided
         let old_code = kam_toml.prop.versionCode;
         let new_code = chrono::Utc::now().timestamp_millis();
         println!(
@@ -49,17 +47,14 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
             new_code.to_string().green()
         );
         kam_toml.prop.versionCode = new_code;
-        changed = true;
+
+        kam_toml.write_to_dir(&current_dir)?;
     } else {
         println!("Current version: {}", kam_toml.prop.version.cyan());
         println!(
             "Current versionCode: {}",
             kam_toml.prop.versionCode.to_string().cyan()
         );
-    }
-
-    if changed {
-        kam_toml.write_to_dir(&current_dir)?;
     }
 
     Ok(())
