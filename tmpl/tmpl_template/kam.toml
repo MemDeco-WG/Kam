@@ -1,10 +1,11 @@
 [prop]
 id = "tmpl_template"
-version = "1.0.0"
-versionCode = 1762850845388
+version = "0.1.0"
+versionCode = 1
 author = "{{author}}"
 name = "{{project_name}}"
-description = "{{description}}"
+description = "{% if description %}{{description}}{% else %}A Kam template created with Kam{% endif %}"
+updateJson = "{{update_json}}"
 
 [mmrl.repo]
 license = "MIT"
@@ -81,6 +82,7 @@ var_type = "string"
 required = true
 default = ""
 
-[tool]
-
 [kam.workspace]
+members = ["."]
+
+[tool]

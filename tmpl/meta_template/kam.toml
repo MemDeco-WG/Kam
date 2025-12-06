@@ -4,7 +4,7 @@ version = "0.1.0"
 versionCode = 1
 author = "{{author}}"
 name = "{{project_name}}"
-description = "{{description}}"
+description = "{% if description %}{{description}}{% else %}A Magisk/KernelSU metamodule created with Kam{% endif %}"
 updateJson = "{{update_json}}"
 
 [mmrl.repo]

@@ -44,3 +44,6 @@ target
 /dist
 # local test
 /repo
+
+# Node.js dependencies
+node_modules/
