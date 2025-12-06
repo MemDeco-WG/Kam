@@ -2,6 +2,14 @@
 name = "kam"
 version = "0.1.0"
 edition = "2024"
+description = "A CLI tool for managing Magisk/KernelSU modules with built-in template support, build hooks, and workspace management"
+license = "GPL-3.0"
+repository = "https://github.com/MemDeco-WG/Kam"
+homepage = "https://github.com/MemDeco-WG/Kam"
+documentation = "https://github.com/MemDeco-WG/Kam/blob/main/README.md"
+keywords = ["magisk", "kernelsu", "android", "module", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+authors = ["LightJunction"]
 
 include = [
     "src/**/*",
@@ -11,11 +19,6 @@ include = [
     "public.asc",
 ]
 
-exclude = [
-    ".github",
-    "dist",
-    "tmpl"
-]
 [dependencies]
 clap = { version = "4.5.51", features = ["derive"] }
 rand = "0.9.2"
