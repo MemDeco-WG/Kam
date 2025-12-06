@@ -67,7 +67,7 @@ conflicts = []
 module_type = "template"
 
 [kam.build]
-target_dir = "../../src/assets/tmpl"
+target_dir = "../../templates/"
 output_file = "kam_template"
 hooks_dir = "hooks"
 exclude = ["src/kam_template/"]

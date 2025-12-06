@@ -66,10 +66,8 @@ supported_arch = []
 conflicts = []
 module_type = "template"
 
-
-
 [kam.build]
-target_dir = "../../src/assets/tmpl"
+target_dir = "../../templates/"
 output_file = "meta_template"
 hooks_dir = "hooks"
 

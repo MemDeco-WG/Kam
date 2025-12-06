@@ -34,6 +34,9 @@ enum Commands {
     /// Manage local cache
     Cache(kam::cmds::cache::CacheArgs),
 
+    /// Manage templates (import/export)
+    Tmpl(kam::cmds::tmpl::TmplArgs),
+
     /// Validate kam.toml configuration
     Validate(kam::cmds::validate::ValidateArgs),
 }
@@ -47,6 +50,7 @@ fn main() {
         Commands::Build(args) => kam::cmds::build::run(args),
         Commands::Version(args) => kam::cmds::version::run(args),
         Commands::Cache(args) => kam::cmds::cache::run(args),
+        Commands::Tmpl(args) => kam::cmds::tmpl::run(args),
         Commands::Validate(args) => kam::cmds::validate::run(args),
     };
 

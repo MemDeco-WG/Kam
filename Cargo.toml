@@ -16,6 +16,8 @@ exclude = [
     "hooks",
     "ModuleWebUI",
     "dist",
+    "/tmpl",
+    "src/Kam"
 ]
 
 
