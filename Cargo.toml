@@ -12,7 +12,6 @@ categories = ["command-line-utilities", "development-tools"]
 authors = ["LightJunction"]
 
 exclude = [
-    "tmpl",
     "target",
     "hooks",
     "ModuleWebUI",
