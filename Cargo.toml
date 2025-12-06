@@ -13,7 +13,6 @@ authors = ["LightJunction"]
 
 exclude = [
     "tmpl",
-    "src/Kam",
     "target",
     "hooks",
     "ModuleWebUI",
