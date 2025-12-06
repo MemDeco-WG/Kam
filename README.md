@@ -12,7 +12,7 @@ This template provides a basic structure for a Kam module, including:
 
 ## Usage
 
-To create a new Kam module using this template:
+### Quick Start
 
 1. Initialize a new project:
    
@@ -31,6 +31,52 @@ To create a new Kam module using this template:
    ``` bash
    kam build
    ```
+
+### Template Management
+
+Kam supports importing and exporting module templates for easy sharing and reuse.
+
+#### Import Templates
+
+Import a single template:
+```bash
+kam tmpl import templates/meta_template.tar.gz
+```
+
+Import multiple templates from a ZIP file:
+```bash
+kam tmpl import templates/all-templates.zip
+```
+
+#### List Available Templates
+
+```bash
+kam tmpl list
+```
+
+#### Export Templates
+
+Export a single template:
+```bash
+kam tmpl export meta_template -o my_template.tar.gz
+```
+
+Export multiple templates to a ZIP:
+```bash
+kam tmpl export kam_template ak3_template -o my_templates.zip
+```
+
+#### Additional Template Commands
+
+```bash
+# Remove a template from cache
+kam tmpl remove template_name
+
+# Show template cache directory
+kam tmpl path
+```
+
+For more details on templates, see [templates/README.md](templates/README.md).
 
 ## Module Information
 

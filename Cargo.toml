@@ -17,8 +17,8 @@ exclude = [
     "ModuleWebUI",
     "dist",
     "/tmpl",
+    "templates",
     "src/Kam",
-    "templates"
 ]
 
 
