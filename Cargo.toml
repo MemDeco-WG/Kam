@@ -11,13 +11,15 @@ keywords = ["magisk", "kernelsu", "android", "module", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 authors = ["LightJunction"]
 
-include = [
-    "src/**/*",
-    "Cargo.toml",
-    "README.md",
-    "LICENSE",
-    "public.asc",
+exclude = [
+    "tmpl",
+    "src/Kam",
+    "target",
+    "hooks",
+    "ModuleWebUI",
+    "dist",
 ]
+
 
 [dependencies]
 clap = { version = "4.5.51", features = ["derive"] }

@@ -4,7 +4,7 @@ name = "Kam"
 version = "1.0.3"
 versionCode = 1765059730753
 author = "LightJunction"
-description = "Describe your module here"
+description = "Kam： ksu/apu/magisk module builder."
 updateJson = "https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json"
 
 [mmrl.repo]
@@ -39,7 +39,7 @@ antifeatures = []
 max_num = 0
 min_api = 21
 max_api = 35
-verified = false
+verified = true
 features = [
     "module-template",
     "customization",
