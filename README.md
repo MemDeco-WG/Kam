@@ -1,40 +1,117 @@
-# Kam Module Template
+# Kam - KSU/APatch/Magisk Module Builder
 
-## Description
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/MemDeco-WG/Kam)
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 
-This is a template for creating Kam modules. Kam modules are custom modifications for Android devices, typically installed via Magisk or similar managers.
+English | [简体中文](README.zh-CN.md)
 
-This template provides a basic structure for a Kam module, including:
+## 📖 Overview
 
-- Module metadata and configuration
-- Installation scripts
-- Basic file structure
+Kam is a powerful Android module builder tool designed for KernelSU, APatch, and Magisk module developers. It provides complete project templates, build systems, and hook mechanisms to make module development simple and efficient.
 
-## Usage
+### ✨ Key Features
 
-### Quick Start
+- 🚀 **Quick Initialization** - Rapidly create new module projects using various templates
+- 🔧 **Automated Build** - One-click module ZIP packaging
+- 🎯 **Smart Sync** - Auto-sync `kam.toml` configuration to `module.prop` and `update.json`
+- 🪝 **Hook System** - Support custom script hooks before/after builds
+- 📦 **Template Management** - Import, export, and share module templates
+- 🌐 **WebUI Support** - Built-in WebUI building and integration
+- 🔄 **Version Management** - Automated version numbering and release
 
-1. Initialize a new project:
-   
-   ``` bash
-   kam init my_module --kam
-   ```
+## 🚀 Quick Start
 
-2. Customize the module:
-   
-   - Edit `kam.toml` for module metadata
-   - Modify `src/Kam/customize.sh` for installation logic
-   - Add module files to `src/Kam/`
+### Installation
 
-3. Build the module:
-   
-   ``` bash
-   kam build
-   ```
+```bash
+cargo install kam
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/MemDeco-WG/Kam.git
+cd Kam
+cargo build --release
+```
+
+### Create a New Module
+
+Using Kam template:
+
+```bash
+kam init my_awesome_module --kam
+```
+
+Using Meta template (meta-module):
+
+```bash
+kam init my_meta_module --meta
+```
+
+Using AnyKernel3 template (kernel module):
+
+```bash
+kam init my_kernel_module --ak3
+```
+
+### Configure Your Module
+
+Edit the `kam.toml` configuration file:
+
+```toml
+[prop]
+id = "my_awesome_module"
+name = "My Awesome Module"
+version = "1.0.0"
+versionCode = 1
+author = "YourName"
+description = "An awesome module for Android"
+updateJson = "https://example.com/update.json"
+
+[mmrl.repo]
+repository = "https://github.com/username/my_awesome_module"
+changelog = "https://github.com/username/my_awesome_module/blob/main/CHANGELOG.md"
+```
+
+### Add Module Files
+
+Add your module files to the `src/<module_id>/` directory:
+
+```
+src/my_awesome_module/
+├── module.prop          # Auto-generated
+├── customize.sh         # Installation script
+├── service.sh           # Service script
+├── system/              # System files
+│   └── bin/
+│       └── my_script
+└── webroot/             # WebUI files (optional)
+```
+
+### Build Your Module
+
+```bash
+kam build
+```
+
+The built module will be generated in the `dist/` directory.
+
+## 📚 Documentation
+
+### Template Types
+
+Kam provides several built-in templates:
+
+| Template | Description | Use Case |
+|----------|-------------|----------|
+| `--kam` | Standard Kam module | General module development |
+| `--meta` | Meta-module template | Meta modules (modules of modules) |
+| `--ak3` | AnyKernel3 template | Kernel modules |
+| `--tmpl` | Template development template | Creating new templates |
 
 ### Template Management
-
-Kam supports importing and exporting module templates for easy sharing and reuse.
 
 #### Import Templates
 
@@ -78,13 +155,177 @@ kam tmpl path
 
 For more details on templates, see [templates/README.md](templates/README.md).
 
-## Module Information
+### Build Options
 
-- **ID**: Kam
-- **Name**: Kam
-- **Version**: 0.1.0
-- **Author**: Author
+```bash
+# Basic build
+kam build
 
-## License
+# Build with automatic version bump
+kam build --bump
 
-This template is provided under the MIT License. See LICENSE file for details.
+# Build and create GitHub Release
+kam build --release
+
+# Debug mode
+KAM_DEBUG=1 kam build
+```
+
+### Hook System
+
+Kam supports executing custom scripts during the build process:
+
+#### Pre-build Hooks
+
+Create scripts in the `hooks/pre-build/` directory:
+
+```bash
+hooks/pre-build/
+├── 0.sync-module-files.sh    # Sync configuration files
+├── 1.custom-script.sh         # Custom script
+└── 2.another-script.sh
+```
+
+#### Post-build Hooks
+
+Create scripts in the `hooks/post-build/` directory:
+
+```bash
+hooks/post-build/
+├── 0.verify.sh                # Verify build
+├── 1.upload.sh                # Upload artifacts
+└── 2.notify.sh                # Send notifications
+```
+
+#### Available Environment Variables
+
+The following environment variables are available in hook scripts:
+
+| Variable | Description |
+|----------|-------------|
+| `KAM_PROJECT_ROOT` | Absolute path to the project root directory |
+| `KAM_HOOKS_ROOT` | Absolute path to the hooks directory |
+| `KAM_MODULE_ROOT` | Absolute path to the module source directory (e.g., `src/<id>`) |
+| `KAM_WEB_ROOT` | Absolute path to the module webroot directory |
+| `KAM_DIST_DIR` | Absolute path to the build output directory (e.g., `dist`) |
+| `KAM_MODULE_ID` | The module ID |
+| `KAM_MODULE_VERSION` | The module version |
+| `KAM_MODULE_VERSION_CODE` | The module version code |
+| `KAM_MODULE_NAME` | The module name |
+| `KAM_MODULE_AUTHOR` | The module author |
+| `KAM_MODULE_DESCRIPTION` | The module description |
+| `KAM_MODULE_UPDATE_JSON` | The module updateJson URL |
+| `KAM_STAGE` | Current build stage: `pre-build` or `post-build` |
+| `KAM_DEBUG` | Set to `1` to enable debug output |
+
+### Auto-Sync
+
+Kam automatically syncs `kam.toml` configuration to module files:
+
+- **module.prop** → `$KAM_MODULE_ROOT/module.prop`
+  - Contains module metadata (id, name, version, etc.)
+  
+- **update.json** → `$KAM_PROJECT_ROOT/update.json`
+  - Contains update information (version, versionCode, zipUrl, changelog)
+  - URLs are automatically inferred from `[mmrl.repo]` section
+
+### WebUI Integration
+
+Kam supports adding WebUI interfaces to modules:
+
+1. Develop your frontend application in the `webui/` directory
+2. WebUI will be automatically built and installed to `src/<module_id>/webroot/`
+3. Access via the manager's WebUI feature after module installation
+
+## 🔧 Advanced Usage
+
+### Workspace
+
+Kam supports workspace mode to manage multiple modules in one project:
+
+```toml
+[kam.workspace]
+members = [
+    ".",
+    "modules/module_a",
+    "modules/module_b",
+]
+```
+
+### Custom Build Configuration
+
+```toml
+[kam.build]
+target_dir = "dist"              # Output directory
+output_file = "{{id}}"           # Output filename template
+hooks_dir = "hooks"              # Hooks directory
+source_dir = "src/{{id}}"        # Source directory (optional)
+```
+
+### Conditional Compilation
+
+Use template variables for conditional compilation:
+
+```toml
+[kam.tmpl.variables.feature_x]
+var_type = "bool"
+required = false
+default = false
+```
+
+Use in scripts:
+
+```bash
+{% if feature_x %}
+# Feature X related code
+{% endif %}
+```
+
+## 📋 Project Structure
+
+```
+my_module/
+├── kam.toml                    # Kam configuration file
+├── src/
+│   └── my_module/              # Module source code
+│       ├── module.prop         # Module properties (auto-generated)
+│       ├── customize.sh        # Installation script
+│       ├── service.sh          # Service script
+│       └── system/             # System files
+├── hooks/
+│   ├── pre-build/              # Pre-build hooks
+│   └── post-build/             # Post-build hooks
+├── webui/                      # WebUI source code (optional)
+├── dist/                       # Build output
+├── update.json                 # Update information (auto-generated)
+└── README.md
+```
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
+
+1. Fork this repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Magisk](https://github.com/topjohnwu/Magisk) - The Magic Mask for Android
+- [KernelSU](https://github.com/tiann/KernelSU) - A Kernel-based root solution
+- [APatch](https://github.com/bmax121/APatch) - Another kernel-based root solution
+
+## 📞 Contact
+
+- GitHub Issues: [https://github.com/MemDeco-WG/Kam/issues](https://github.com/MemDeco-WG/Kam/issues)
+- Author: LightJunction
+
+---
+
+Built with ❤️ and Rust

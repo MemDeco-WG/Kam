@@ -14,7 +14,7 @@ fi
 
 # Generate detailed release notes
 RELEASE_NOTES=$(cat <<EOF
-# ${KAM_MODULE_VERSION_CODE}
+# ${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}
 
 ## Module Information
 - **Version**: ${KAM_MODULE_VERSION}
