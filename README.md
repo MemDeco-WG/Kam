@@ -334,6 +334,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Magisk](https://github.com/topjohnwu/Magisk) - The Magic Mask for Android
 - [KernelSU](https://github.com/tiann/KernelSU) - A Kernel-based root solution
 - [APatch](https://github.com/bmax121/APatch) - Another kernel-based root solution
+-
+[Mmrl](https://github.com/MMRLApp/MMRL)
 
 ## 📞 Contact
 
