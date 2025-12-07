@@ -5,15 +5,28 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-pub fn run_pre_build_hooks(project_root: &Path, kam_toml: &KamToml) -> Result<(), KamError> {
-    run_hooks(project_root, kam_toml, "pre-build")
+pub fn run_pre_build_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "pre-build")
 }
 
-pub fn run_post_build_hooks(project_root: &Path, kam_toml: &KamToml) -> Result<(), KamError> {
-    run_hooks(project_root, kam_toml, "post-build")
+pub fn run_post_build_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "post-build")
 }
 
-fn run_hooks(project_root: &Path, kam_toml: &KamToml, stage: &str) -> Result<(), KamError> {
+fn run_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    stage: &str,
+) -> Result<(), KamError> {
     // Load .env from project root if it exists and override existing env vars
     let env_path = project_root.join(".env");
     if env_path.exists() {
@@ -116,6 +129,7 @@ fn run_hooks(project_root: &Path, kam_toml: &KamToml, stage: &str) -> Result<(),
         ("KAM_HOOKS_ROOT", hooks_root.to_string_lossy().to_string()),
         ("KAM_MODULE_ROOT", module_root.to_string_lossy().to_string()),
         ("KAM_WEB_ROOT", web_root.to_string_lossy().to_string()),
+        ("KAM_DIST_DIR", output_dir.to_string_lossy().to_string()),
         ("KAM_MODULE_ID", kam_toml.prop.id.clone()),
         ("KAM_MODULE_VERSION", kam_toml.prop.version.clone()),
         (

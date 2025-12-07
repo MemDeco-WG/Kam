@@ -1,12 +1,6 @@
-# Changelog
+## 0.2.0 (2025-12-07)
 
-## [Unreleased]
+### Feat
 
-## [1.0.0]
-
-### Added
-
-- Initial Kam-Kam-1.0.0
-  - Author: Your Name
-  - Version Code: 1765059491382
-  - Description: Describe your module here
+- improve template descriptions and convert ak3_template to proper template format
+- add workspace glob pattern support and improve build exclusions
