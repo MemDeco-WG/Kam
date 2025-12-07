@@ -10,6 +10,7 @@ English | [简体中文](README.zh-CN.md)
 
 Kam is a powerful Android module builder tool designed for KernelSU, APatch, and Magisk module developers. It provides complete project templates, build systems, and hook mechanisms to make module development simple and efficient.
 
+
 ### ✨ Key Features
 
 - 🚀 **Quick Initialization** - Rapidly create new module projects using various templates
@@ -334,8 +335,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Magisk](https://github.com/topjohnwu/Magisk) - The Magic Mask for Android
 - [KernelSU](https://github.com/tiann/KernelSU) - A Kernel-based root solution
 - [APatch](https://github.com/bmax121/APatch) - Another kernel-based root solution
--
-[Mmrl](https://github.com/MMRLApp/MMRL)
+
+-[Mmrl](https://github.com/MMRLApp/MMRL) - Module repo.
+
+
 
 ## 📞 Contact
 
