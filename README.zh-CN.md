@@ -137,10 +137,13 @@ kam tmpl list
 kam tmpl export meta_template -o my_template.tar.gz
 ```
 
+注意：将单个模板导出为 `.tar.gz`（模板打包）时，Kam 不会执行 pre-build 或 post-build 钩子。模板打包无需执行钩子。
+
 导出多个模板到 ZIP：
 ```bash
 kam tmpl export kam_template ak3_template -o my_templates.zip
 ```
+
 
 #### 其他模板命令
 
@@ -214,6 +217,8 @@ hooks/post-build/
 | `KAM_MODULE_UPDATE_JSON` | 模块 updateJson URL |
 | `KAM_STAGE` | 当前构建阶段：`pre-build` 或 `post-build` |
 | `KAM_DEBUG` | 设置为 `1` 启用调试输出 |
+
+注意：当将单个模板导出为 `.tar.gz`（模板打包）时，Kam 不会执行 pre-build 或 post-build 钩子。模板打包通常不需要执行钩子。
 
 ### 自动同步
 

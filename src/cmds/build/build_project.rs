@@ -74,7 +74,19 @@ pub fn build_project(
     );
     println!();
 
-    run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+    // Templates are exported as tar.gz and normally do not require build hooks executed.
+    // Skip pre/post build hooks when packaging a template archive.
+    let is_template_build = kam_toml.kam.module_type == ModuleType::Template;
+
+    // Run pre-build hooks only for non-template modules
+    if !is_template_build {
+        run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+    } else {
+        println!(
+            "  {} Skipping build hooks for template packaging",
+            "•".cyan()
+        );
+    }
 
     println!("{}", "Packaging artifacts...".bold());
 
@@ -109,7 +121,10 @@ pub fn build_project(
         println!("  {} Package size: {}", "•".cyan(), size_str);
     }
 
-    run_post_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+    // Run post-build hooks only for non-template modules
+    if !is_template_build {
+        run_post_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+    }
 
     Ok(())
 }

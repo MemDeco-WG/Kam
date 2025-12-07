@@ -138,6 +138,8 @@ Export a single template:
 kam tmpl export meta_template -o my_template.tar.gz
 ```
 
+Note: When exporting templates as a single `.tar.gz` (template packaging), Kam will not execute pre-build or post-build hooks. Template packaging is treated as an artifact operation and hooks are not applied.
+
 Export multiple templates to a ZIP:
 ```bash
 kam tmpl export kam_template ak3_template -o my_templates.zip
