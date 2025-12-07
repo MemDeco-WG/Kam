@@ -1,7 +1,7 @@
 [prop]
 id = "kam_template"
 version = "0.1.0"
-versionCode = 1762850845388
+versionCode = {{versionCode}}
 author = "{{author}}"
 name = "{{project_name}}"
 description = "{% if description %}{{description}}{% else %}A Magisk/KernelSU module created with Kam{% endif %}"

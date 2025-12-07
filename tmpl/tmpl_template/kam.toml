@@ -1,7 +1,7 @@
 [prop]
 id = "tmpl_template"
 version = "0.1.0"
-versionCode = 1
+versionCode = {{versionCode}}
 author = "{{author}}"
 name = "{{project_name}}"
 description = "{% if description %}{{description}}{% else %}A Kam template created with Kam{% endif %}"

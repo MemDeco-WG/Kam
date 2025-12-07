@@ -19,14 +19,19 @@ Log-Info "Building module: $Env:KAM_MODULE_ID v$Env:KAM_MODULE_VERSION"
 # If KAM_DEBUG is enabled, pretty-print environment variables and update the prompt
 if ($Env:KAM_DEBUG -eq '1') {
     if (Get-Command Log-Warn -ErrorAction SilentlyContinue) {
-        Log-Warn "KAM_DEBUG is enabled — dumping environment variables"
+        Log-Warn "KAM_DEBUG is enabled — dumping environment variables starting with 'KAM'"
     } else {
-        Log-Info "KAM_DEBUG is enabled — dumping environment variables"
+        Log-Info "KAM_DEBUG is enabled — dumping environment variables starting with 'KAM'"
     }
 
-    # Print environment variables sorted and nicely formatted (Name / Value)
-    Get-ChildItem Env: | Sort-Object Name | ForEach-Object {
-        Write-Host ("  {0,-30} = {1}" -f $_.Name, $_.Value)
+    # Print KAM-prefixed environment variables sorted and nicely formatted (Name / Value)
+    $kams = @(Get-ChildItem Env: | Where-Object { $_.Name -like 'KAM*' } | Sort-Object Name)
+    if ($kams.Count -eq 0) {
+        Log-Info "No KAM-prefixed environment variables found."
+    } else {
+        $kams | ForEach-Object {
+            Write-Host ("  {0,-30} = {1}" -f $_.Name, $_.Value)
+        }
     }
 
     # Preserve the original prompt if present, and augment it with KAM debug info

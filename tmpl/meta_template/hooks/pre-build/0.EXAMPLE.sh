@@ -21,9 +21,9 @@ fi
 log_info "Running tmpl pre-build hook..."
 log_info "Building module: $KAM_MODULE_ID v$KAM_MODULE_VERSION"
 
-# If KAM_DEBUG is set to 1, print a pretty dump of all environment variables
+# If KAM_DEBUG is set to 1, print a pretty dump of KAM-prefixed environment variables
 if [ "${KAM_DEBUG:-}" = "1" ]; then
-    log_warn "KAM_DEBUG=1: dumping environment variables (sorted)"
+    log_warn "KAM_DEBUG=1: dumping KAM* environment variables (sorted)"
     # Ensure color variables exist to avoid raw escape sequences if utils.sh is missing
     if [ -z "${BLUE:-}" ]; then
         BLUE=""
@@ -31,12 +31,16 @@ if [ "${KAM_DEBUG:-}" = "1" ]; then
         YELLOW=""
         NC=""
     fi
-    printf "${BLUE}Environment variables:${NC}\n"
-    env | sort | while IFS= read -r line; do
-        name="${line%%=*}"
-        val="${line#*=}"
-        printf "  ${BLUE}%s${NC} = ${GREEN}%s${NC}\n" "$name" "$val"
-    done
+    if env | grep '^KAM' >/dev/null 2>&1; then
+        printf "${BLUE}KAM variables:${NC}\n"
+        env | sort | grep '^KAM' | while IFS= read -r line; do
+            name="${line%%=*}"
+            val="${line#*=}"
+            printf "  ${BLUE}%s${NC} = ${GREEN}%s${NC}\n" "$name" "$val"
+        done
+    else
+        log_info "No KAM-prefixed environment variables found."
+    fi
 
     # Update PS1 so child shells/interactive shells show we're in KAM debug mode
     if [ -z "$PS1" ]; then
