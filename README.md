@@ -161,6 +161,9 @@ For more details on templates, see [templates/README.md](templates/README.md).
 # Basic build
 kam build
 
+# build all
+kam build --all
+
 # Build with automatic version bump
 kam build --bump
 
@@ -178,6 +181,8 @@ Kam supports executing custom scripts during the build process:
 #### Pre-build Hooks
 
 Create scripts in the `hooks/pre-build/` directory:
+
+- examples
 
 ```bash
 hooks/pre-build/
@@ -224,7 +229,7 @@ Kam automatically syncs `kam.toml` configuration to module files:
 
 - **module.prop** → `$KAM_MODULE_ROOT/module.prop`
   - Contains module metadata (id, name, version, etc.)
-  
+
 - **update.json** → `$KAM_PROJECT_ROOT/update.json`
   - Contains update information (version, versionCode, zipUrl, changelog)
   - URLs are automatically inferred from `[mmrl.repo]` section
@@ -250,6 +255,13 @@ members = [
     "modules/module_a",
     "modules/module_b",
 ]
+
+# kam build --all
+# equal to:
+# kam build .
+# kam build modules/module_a
+# ...
+
 ```
 
 ### Custom Build Configuration

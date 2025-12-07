@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Feat
+
+- enhance hooks and documentation
+
 ## 0.3.0 (2025-12-07)
 
 ### Feat
