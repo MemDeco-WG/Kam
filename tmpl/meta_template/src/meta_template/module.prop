@@ -1,7 +1,0 @@
-id=meta_template
-name={{project_name}}
-version=0.1.0
-versionCode=1
-author={{author}}
-description={% if description %}{{description}}{% else %}A Magisk/KernelSU metamodule created with Kam{% endif %}
-updateJson={{update_json}}
