@@ -141,6 +141,20 @@ fn run_hooks(
             kam_toml.prop.versionCode.to_string(),
         ),
         ("KAM_MODULE_NAME", kam_toml.prop.get_name().to_string()),
+        ("KAM_MODULE_AUTHOR", kam_toml.prop.author.clone()),
+        (
+            "KAM_MODULE_DESCRIPTION",
+            kam_toml.prop.get_description().to_string(),
+        ),
+        (
+            "KAM_MODULE_UPDATE_JSON",
+            kam_toml
+                .prop
+                .updateJson
+                .as_ref()
+                .unwrap_or(&String::new())
+                .clone(),
+        ),
         ("KAM_STAGE", stage.to_string()),
         (
             "KAM_BUMP_ENABLED",
