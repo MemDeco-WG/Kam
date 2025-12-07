@@ -70,6 +70,8 @@ module_type = "template"
 target_dir = "../../src/assets/tmpl"
 output_file = "tmpl_template"
 hooks_dir = "hooks"
+exclude = ["src/tmpl_template/"]
+
 
 [kam.tmpl.variables]
 [kam.tmpl.variables.repository]

@@ -29,8 +29,8 @@ if ($Env:KAM_DEBUG -eq '1') {
     if ($kams.Count -eq 0) {
         Log-Info "No KAM-prefixed environment variables found."
     } else {
-        foreach ($envItem in $kams) {
-            Write-Host ("  {0,-30} = {1}" -f $envItem.Name, $envItem.Value)
+        $kams | ForEach-Object {
+            Write-Host ("  {0,-30} = {1}" -f $_.Name, $_.Value)
         }
     }
 

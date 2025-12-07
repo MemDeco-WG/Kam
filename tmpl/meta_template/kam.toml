@@ -70,6 +70,7 @@ module_type = "template"
 target_dir = "../../templates/"
 output_file = "meta_template"
 hooks_dir = "hooks"
+exclude = ["src/meta_template/"]
 
 [kam.tmpl.variables]
 [kam.tmpl.variables.repository]
