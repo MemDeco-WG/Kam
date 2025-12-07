@@ -4,6 +4,10 @@
 
 - enhance hooks and documentation
 
+### Fix
+
+- **template**: remove erroneous module.prop files from template source
+
 ## 0.3.0 (2025-12-07)
 
 ### Feat
