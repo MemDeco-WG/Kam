@@ -169,6 +169,10 @@ pub fn init_impl(
         .entry("description".to_string())
         .or_insert_with(|| kt.prop.description.clone());
 
+    // Check if kam.toml exists BEFORE copy_and_replace
+    let kam_toml_path = path.join("kam.toml");
+    let kam_toml_existed_before_copy = kam_toml_path.exists();
+
     // Copy files
     crate::template::TemplateManager::copy_and_replace(
         &template_path,
@@ -179,13 +183,13 @@ pub fn init_impl(
     )?;
 
     // If kam.toml doesn't exist (not in template), write the generated one
-    let kam_toml_path = path.join("kam.toml");
     if !kam_toml_path.exists() {
         kt.write_to_dir(path)?;
     }
 
     // Render kam.toml in place if it exists
-    if kam_toml_path.exists() {
+    // Only process if force is set OR kam.toml was just created (didn't exist before copy_and_replace)
+    if kam_toml_path.exists() && (force || !kam_toml_existed_before_copy) {
         let content = fs::read_to_string(&kam_toml_path).map_err(KamError::Io)?;
         let mut context = Context::new();
         for (k, v) in template_vars.iter() {

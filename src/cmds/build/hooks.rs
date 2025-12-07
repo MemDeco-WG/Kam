@@ -1,3 +1,4 @@
+use super::args::BuildArgs;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use colored::*;
@@ -9,16 +10,18 @@ pub fn run_pre_build_hooks(
     project_root: &Path,
     kam_toml: &KamToml,
     output_dir: &Path,
+    args: &BuildArgs,
 ) -> Result<(), KamError> {
-    run_hooks(project_root, kam_toml, output_dir, "pre-build")
+    run_hooks(project_root, kam_toml, output_dir, "pre-build", args)
 }
 
 pub fn run_post_build_hooks(
     project_root: &Path,
     kam_toml: &KamToml,
     output_dir: &Path,
+    args: &BuildArgs,
 ) -> Result<(), KamError> {
-    run_hooks(project_root, kam_toml, output_dir, "post-build")
+    run_hooks(project_root, kam_toml, output_dir, "post-build", args)
 }
 
 fn run_hooks(
@@ -26,6 +29,7 @@ fn run_hooks(
     kam_toml: &KamToml,
     output_dir: &Path,
     stage: &str,
+    args: &BuildArgs,
 ) -> Result<(), KamError> {
     // Load .env from project root if it exists and override existing env vars
     let env_path = project_root.join(".env");
@@ -138,6 +142,14 @@ fn run_hooks(
         ),
         ("KAM_MODULE_NAME", kam_toml.prop.get_name().to_string()),
         ("KAM_STAGE", stage.to_string()),
+        (
+            "KAM_BUMP_ENABLED",
+            if args.bump { "1" } else { "0" }.to_string(),
+        ),
+        (
+            "KAM_RELEASE_ENABLED",
+            if args.release { "1" } else { "0" }.to_string(),
+        ),
     ];
 
     println!(

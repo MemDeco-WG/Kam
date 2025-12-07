@@ -13,4 +13,12 @@ pub struct BuildArgs {
     /// Output directory (default: dist)
     #[arg(short, long)]
     pub output: Option<String>,
+
+    /// Enable KAM_BUMP_ENABLED environment variable (set to 1)
+    #[arg(short, long)]
+    pub bump: bool,
+
+    /// Enable KAM_RELEASE_ENABLED environment variable (set to 1)
+    #[arg(short, long)]
+    pub release: bool,
 }

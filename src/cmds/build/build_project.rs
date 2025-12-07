@@ -74,7 +74,7 @@ pub fn build_project(
     );
     println!();
 
-    run_pre_build_hooks(project_path, &kam_toml, &output_dir)?;
+    run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
 
     println!("{}", "Packaging artifacts...".bold());
 
@@ -109,7 +109,7 @@ pub fn build_project(
         println!("  {} Package size: {}", "•".cyan(), size_str);
     }
 
-    run_post_build_hooks(project_path, &kam_toml, &output_dir)?;
+    run_post_build_hooks(project_path, &kam_toml, &output_dir, args)?;
 
     Ok(())
 }
