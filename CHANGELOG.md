@@ -1,4 +1,8 @@
-## Unreleased
+## 0.3.0 (2025-12-07)
+
+### Feat
+
+- add automatic kam.toml to module.prop sync in pre-build hook
 
 ## 0.2.0 (2025-12-07)
 
