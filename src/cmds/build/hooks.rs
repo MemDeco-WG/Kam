@@ -1,6 +1,7 @@
 use super::args::BuildArgs;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
+use crate::types::kam_toml::enums::ModuleType;
 use colored::*;
 use std::fs;
 use std::path::Path;
@@ -31,6 +32,16 @@ fn run_hooks(
     stage: &str,
     args: &BuildArgs,
 ) -> Result<(), KamError> {
+    // Do not run hooks when packaging a template archive
+    if kam_toml.kam.module_type == ModuleType::Template {
+        println!(
+            "  {} Skipping {} hooks for template packaging",
+            "•".cyan(),
+            stage
+        );
+        return Ok(());
+    }
+
     // Load .env from project root if it exists and override existing env vars
     let env_path = project_root.join(".env");
     if env_path.exists() {
