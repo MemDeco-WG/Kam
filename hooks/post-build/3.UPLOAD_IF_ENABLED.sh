@@ -12,6 +12,6 @@ if ! require_command gh; then
     exit 1
 fi
 
-gh release create "$KAM_MODULE_VERSION" --title "$KAM_MODULE_VERSION" --notes "$KAM_MODULE_VERSION" "$KAM_DIST_DIR/$KAM_MODULE_ID.zip"
+gh release create "$KAM_MODULE_VERSION" --title "$KAM_MODULE_VERSION" --notes "$KAM_MODULE_VERSION" "$KAM_DIST_DIR/*"
 
 echo "Upload complete"
