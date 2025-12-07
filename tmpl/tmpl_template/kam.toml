@@ -6,6 +6,7 @@ author = "{{author}}"
 name = "{{project_name}}"
 description = "{% if description %}{{description}}{% else %}A Kam template created with Kam{% endif %}"
 updateJson = "{{update_json}}"
+metamodule = false
 
 [mmrl.repo]
 license = "MIT"

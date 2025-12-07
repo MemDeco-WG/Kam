@@ -6,6 +6,7 @@ author = "{{author}}"
 name = "{{project_name}}"
 description = "{% if description %}{{description}}{% else %}A Magisk/KernelSU metamodule created with Kam{% endif %}"
 updateJson = "{{update_json}}"
+metamodule = true # or 1
 
 [mmrl.repo]
 license = "MIT"
@@ -35,7 +36,7 @@ max_num = 0
 min_api = 21
 max_api = 35
 verified = false
-features = ["module-template", "system-modification"]
+features = ["meta-module", "kam"]
 
 [mmrl.repo.note]
 title = ""

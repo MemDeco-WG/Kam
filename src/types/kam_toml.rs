@@ -76,6 +76,7 @@ impl KamToml {
             author,
             description,
             updateJson: update_json,
+            metamodule: false,
         });
         if let Some(mt) = module_type {
             kt.kam.module_type = mt;

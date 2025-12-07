@@ -6,6 +6,7 @@ versionCode = 1  # Will be auto-generated as timestamp during initialization
 author = "{{author}}"
 description = "{% if description %}{{description}}{% else %}An AnyKernel3 flashable zip created with Kam{% endif %}"
 updateJson = "{{update_json}}"
+metamodule = false
 
 [mmrl.repo]
 license = "MIT"

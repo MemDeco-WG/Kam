@@ -6,6 +6,7 @@ author = "{{author}}"
 name = "{{project_name}}"
 description = "{% if description %}{{description}}{% else %}A Magisk/KernelSU module created with Kam{% endif %}"
 updateJson = "{{update_json}}"
+metamodule = false
 
 [mmrl.repo]
 license = "MIT"
@@ -76,7 +77,7 @@ exclude = ["src/kam_template/"]
 [kam.tmpl.variables.repository]
 var_type = "string"
 required = false
-default = ""
+default = "https://github.com/{{author}}/{{prop.id}}"
 
 [kam.workspace]
 members = ["."]

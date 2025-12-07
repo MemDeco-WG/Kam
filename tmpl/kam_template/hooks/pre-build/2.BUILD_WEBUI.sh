@@ -42,10 +42,10 @@ if [ $? -ne 0 ]; then
 fi
 
 # Move dist to webroot
-# For template builds, install to src/{{prop.id}}/webroot (the template directory)
+# For template builds, install to src/Kam/webroot (the template directory)
 # instead of src/kam_template/webroot (which would be created based on kam.toml id)
 DIST_DIR="$WEBUI_DIR/dist"
-TARGET_WEBROOT="$KAM_PROJECT_ROOT/src/{{prop.id}}/webroot"
+TARGET_WEBROOT="$KAM_PROJECT_ROOT/src/Kam/webroot"
 
 if [ ! -d "$DIST_DIR" ]; then
     log_error "Dist directory not found at $DIST_DIR after build"

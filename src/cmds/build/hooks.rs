@@ -164,6 +164,16 @@ fn run_hooks(
             "KAM_RELEASE_ENABLED",
             if args.release { "1" } else { "0" }.to_string(),
         ),
+        (
+            "KAM_GIT_REPO",
+            kam_toml
+                .mmrl
+                .as_ref()
+                .and_then(|m| m.repo.as_ref())
+                .and_then(|r| r.repository.as_ref())
+                .unwrap_or(&String::new())
+                .clone(),
+        ),
     ];
 
     println!(

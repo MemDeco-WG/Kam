@@ -197,6 +197,7 @@ pub fn create_kam_module_zip(
         if let Some(uj) = &kam_toml.prop.updateJson {
             prop_content.push_str(&format!("updateJson={}\n", uj));
         }
+        prop_content.push_str(&format!("metamodule={}\n", kam_toml.prop.metamodule));
         zip.start_file("module.prop", options)?;
         zip.write_all(prop_content.as_bytes())?;
     } else {
