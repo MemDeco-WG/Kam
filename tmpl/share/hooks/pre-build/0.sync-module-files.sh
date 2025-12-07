@@ -1,6 +1,8 @@
 #!/bin/sh
 # Sync kam.toml to module.prop and update.json
-# This hook generates module.prop and update.json from kam.toml before the build process starts.
+# This hook generates:
+# - module.prop in module directory ($KAM_MODULE_ROOT/module.prop)
+# - update.json in project root ($KAM_PROJECT_ROOT/update.json)
 
 # Source common utilities
 if [ -f "$KAM_HOOKS_ROOT/lib/utils.sh" ]; then
@@ -29,9 +31,11 @@ case "$KAM_MODULE_ID" in
         ;;
 esac
 
-# Use KAM_MODULE_ROOT environment variable for module directory
+# Determine file paths
+# module.prop goes to module directory
 MODULE_PROP_PATH="${KAM_MODULE_ROOT}/module.prop"
-UPDATE_JSON_PATH="${KAM_MODULE_ROOT}/update.json"
+# update.json goes to project root directory
+UPDATE_JSON_PATH="${KAM_PROJECT_ROOT}/update.json"
 
 # Check if the module root directory exists
 if [ ! -d "$KAM_MODULE_ROOT" ]; then
