@@ -59,7 +59,7 @@ class DevGuidePage {
         title: this.t("devguide.openRepo", "Open repository"),
         action: () => {
           try {
-            window.open("https://github.com/MemDeco-WG/ModuleWebUI", "_blank");
+            window.open("https://github.com/MemDeco-WG/Kam", "_blank");
           } catch (err) {
             window.core && window.core.showError && window.core.showError(`${err}`, "DevGuidePage");
           }
