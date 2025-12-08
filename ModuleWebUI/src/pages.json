@@ -20,6 +20,13 @@
       "showInNav": true,
       "order": 3,
       "module": "settings"
+    },
+    "kam": {
+      "title": "nav.kam",
+      "icon": "terminal",
+      "showInNav": true,
+      "order": 4,
+      "module": "kam"
     }
   },
   "defaultPage": "home"

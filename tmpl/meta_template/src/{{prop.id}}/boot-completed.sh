@@ -15,14 +15,14 @@
 
 MODDIR="${0%/*}"
 
-echo "[{{prop.id}}] Executing boot-completed.sh..." > /dev/kmsg
+ui_print "[{{prop.id}}] Executing boot-completed.sh..." > /dev/kmsg
 
 # ---------------------------------------------------------
 # YOUR LOGIC GOES HERE
 # ---------------------------------------------------------
 
 # Example: Trigger a final cleanup or notification
-# echo "[{{prop.id}}] System boot completed successfully." > /dev/kmsg
+# ui_print "[{{prop.id}}] System boot completed successfully." > /dev/kmsg
 
 # ---------------------------------------------------------
 

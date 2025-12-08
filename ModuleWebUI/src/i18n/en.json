@@ -30,7 +30,8 @@
     "home": "Home",
     "logs": "Logs",
     "settings": "Settings",
-    "about": "About"
+    "about": "About",
+    "kam": "Kam"
   },
   "home": {
     "modules": {
@@ -114,5 +115,37 @@
     "ksuNotDefined": "KSU Environment Not Defined",
     "permissionDenied": "Permission Denied",
     "execFailed": "Execution Failed"
+  },
+  "kam": {
+    "title": "Kam Usage",
+    "subtitle": "Kam - KSU/APatch/Magisk Module Builder",
+    "openRepo": "Open Kam Repository",
+    "copy": "Copy",
+    "copySuccess": "Copied to clipboard",
+    "copyFailed": "Copy failed",
+    "install": {
+      "title": "Installation",
+      "desc": "Install via cargo or build from source"
+    },
+    "init": {
+      "title": "Create a New Module",
+      "desc": "Use kam's templates to quickly scaffold a module project"
+    },
+    "build": {
+      "title": "Build your Module",
+      "desc": "Basic build and options"
+    },
+    "tmpl": {
+      "title": "Template Management",
+      "desc": "Manage and share templates"
+    },
+    "hooks": {
+      "title": "Hook System",
+      "desc": "Place scripts in hooks/pre-build or hooks/post-build to execute custom automation during builds"
+    },
+    "webui": {
+      "title": "WebUI Integration",
+      "desc": "Develop web UI in the webui/ directory; the web UI will be installed to src/<module_id>/webroot/ on build"
+    }
   }
 }
