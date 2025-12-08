@@ -1,5 +1,5 @@
 #!/bin/sh
-
+exit 0
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 
