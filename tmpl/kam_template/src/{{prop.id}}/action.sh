@@ -15,6 +15,25 @@
 # - OUTPUT:       Standard output (echo) is usually displayed to the user (e.g., as a Toast).
 #
 # ---------------------------------------------------------------------------------------
+# REQUIREMENTS
+# ---------------------------------------------------------------------------------------
+# Minimum supported versions (required):
+# - Magisk (stable): 28.0+
+# - Magisk (alpha builds): alpha28001+ (e.g., 28001 or newer)
+# - KernelSU kernel module: build 11986 / KernelSU v1.0.2+
+# - (M/R)KernelSU (NEXT): build 12300+
+#
+# Notes:
+# - These version constraints are required for KernelSU Manager (UI), KernelSU kernel
+#   driver functionality, and the `ksud` utility that Module WebUI/Action scripts rely on.
+# - 'alpha28001+' refers to Magisk alpha/canary builds and may be required for
+#   certain alpha-only features. Test accordingly if you're using alpha builds.
+# - '(M/R)KernelSU (NEXT)' refers to Main/Release NEXT builds of KernelSU where
+#   newer manager and kernel build IDs are used.
+# - If your module requires a higher version, add required runtime checks before
+#   invoking version-specific features or APIs.
+#
+# ---------------------------------------------------------------------------------------
 # MODULE CONFIGURATION (ksud)
 # ---------------------------------------------------------------------------------------
 # KernelSU provides a persistent key-value store for modules.

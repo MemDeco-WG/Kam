@@ -146,6 +146,12 @@
     "webui": {
       "title": "WebUI Integration",
       "desc": "Develop web UI in the webui/ directory; the web UI will be installed to src/<module_id>/webroot/ on build"
+    },
+    "readme": {
+      "title": "Documentation",
+      "loading": "Loading documentation...",
+      "notFound": "Documentation not available",
+      "parseFailed": "Failed to render documentation"
     }
   }
 }

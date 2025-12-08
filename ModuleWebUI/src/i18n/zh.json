@@ -70,9 +70,15 @@
     "copy": "复制",
     "copySuccess": "已复制到剪贴板",
     "copyFailed": "复制失败",
+    "readme": {
+      "title": "文档",
+      "loading": "正在加载文档...",
+      "notFound": "文档不可用",
+      "parseFailed": "渲染文档失败"
+    },
     "install": {
       "title": "安装",
-      "desc": "使用 cargo 安装或从源码构建以获得最新版本。"
+      "desc": "通过 cargo 安装或从源码构建以获得最新功能。"
     },
     "init": {
       "title": "创建新模块",

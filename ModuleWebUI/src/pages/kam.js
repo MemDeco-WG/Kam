@@ -8,7 +8,7 @@
  * - Copy to clipboard is supported via the Clipboard API with a fallback for older browsers.
  * - Actions are provided to open the repo and quickly copy the basic build command.
  */
-import { marked } from 'marked';
+import { marked } from "marked";
 
 class KamPage {
   constructor() {
@@ -190,6 +190,20 @@ class KamPage {
           </div>
         </section>
 
+        <!-- Terminal integration -->
+        <section class="kam-section">
+          <h3>${t("kam.terminal.title", "Terminal")}</h3>
+          <p>${t("kam.terminal.desc", "Run shell commands via KernelSU")}</p>
+          <div class="kam-terminal">
+            <div class="kam-terminal-controls">
+              <input id="kam-terminal-input" class="terminal-input" placeholder="${t("kam.terminal.placeholder", "Enter command...")}" />
+              <button id="kam-terminal-run" class="copy-btn small">${t("kam.terminal.run", "Run")}</button>
+              <button id="kam-terminal-clear" class="copy-btn small">${t("kam.terminal.clear", "Clear")}</button>
+            </div>
+            <pre id="kam-terminal-output" class="terminal-output"></pre>
+          </div>
+        </section>
+
       </div>
     `;
   }
@@ -287,6 +301,38 @@ class KamPage {
     this.copyButtons.forEach((btn) => {
       btn.addEventListener("click", this._boundCopyHandler);
     });
+
+    // Terminal bindings
+    const runBtn = document.getElementById("kam-terminal-run");
+    const clearBtn = document.getElementById("kam-terminal-clear");
+    const input = document.getElementById("kam-terminal-input");
+
+    if (runBtn) {
+      this._boundTerminalHandler = () => {
+        const cmd = input && input.value ? input.value.trim() : "";
+        if (cmd) this.runTerminalCommand(cmd);
+      };
+      runBtn.addEventListener("click", this._boundTerminalHandler);
+    }
+
+    if (clearBtn) {
+      this._boundTerminalClearHandler = () => {
+        const out = document.getElementById("kam-terminal-output");
+        if (out) out.textContent = "";
+      };
+      clearBtn.addEventListener("click", this._boundTerminalClearHandler);
+    }
+
+    if (input) {
+      this._boundTerminalKeyHandler = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const cmd = input.value.trim();
+          if (cmd) this.runTerminalCommand(cmd);
+        }
+      };
+      input.addEventListener("keydown", this._boundTerminalKeyHandler);
+    }
   }
 
   cleanup() {
@@ -295,59 +341,81 @@ class KamPage {
       this.copyButtons.length > 0 &&
       this._boundCopyHandler
     ) {
-      cleanup() {
-        if (this.copyButtons && this.copyButtons.length > 0 && this._boundCopyHandler) {
-          this.copyButtons.forEach((btn) => {
-            try {
-              btn.removeEventListener("click", this._boundCopyHandler);
-            } catch (err) {
-              // ignore
-            }
-          });
-        }
-        this.copyButtons = [];
-        this._boundCopyHandler = null;
-      }
-
-      async loadReadme() {
-        const container = document.getElementById('kam-readme');
-        if (!container) return;
-
-        // Show a small loading message while we fetch content
-        container.innerHTML = `<div class="loading">${window.i18n ? window.i18n.t("kam.readme.loading", "Loading README...") : "Loading README..."}</div>`;
-
-        let md = "";
-
-        // Attempt to fetch local doc first (Kam/docs/user.md)
+      this.copyButtons.forEach((btn) => {
         try {
-          let response = await fetch("/docs/user.md");
-          if (response.ok) {
-            md = await response.text();
-          } else {
-            // Fallback to GitHub raw README
-            response = await fetch("https://raw.githubusercontent.com/MemDeco-WG/Kam/main/README.md");
-            if (response.ok) {
-              md = await response.text();
-            }
-          }
+          btn.removeEventListener("click", this._boundCopyHandler);
         } catch (err) {
-          if (window.core && window.core.isDebugMode()) {
-            window.core.logDebug(`Failed to fetch README: ${err.message}`, "KAM");
-          }
+          // ignore
         }
+      });
+    }
 
-        if (md) {
-          try {
-            const html = marked.parse(md);
-            container.innerHTML = `<div class="kam-readme-content">${html}</div>`;
-          } catch (err) {
-            // If marked fails for any reason, put raw MD as text
-            container.textContent = md;
-          }
-        } else {
-          container.innerHTML = `<div class="muted">${window.i18n ? window.i18n.t("kam.readme.notFound", "README not found") : "README not found"}</div>`;
+    // Remove any terminal-related listeners as well if present
+    try {
+      const runBtn = document.getElementById("kam-terminal-run");
+      if (runBtn && this._boundTerminalHandler) {
+        runBtn.removeEventListener("click", this._boundTerminalHandler);
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      const input = document.getElementById("kam-terminal-input");
+      if (input && this._boundTerminalKeyHandler) {
+        input.removeEventListener("keydown", this._boundTerminalKeyHandler);
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    this.copyButtons = [];
+    this._boundCopyHandler = null;
+    this._boundTerminalHandler = null;
+    this._boundTerminalKeyHandler = null;
+  }
+
+  async loadReadme() {
+    const container = document.getElementById("kam-readme");
+    if (!container) return;
+
+    // Show a small loading message while we fetch content
+    container.innerHTML = `<div class="loading">${window.i18n ? window.i18n.t("kam.readme.loading", "Loading README...") : "Loading README..."}</div>`;
+
+    let md = "";
+
+    // Attempt to fetch local doc first (Kam/docs/user.md)
+    try {
+      let response = await fetch("/docs/user.md");
+      if (response.ok) {
+        md = await response.text();
+      } else {
+        // Fallback to GitHub raw README
+        response = await fetch(
+          "https://raw.githubusercontent.com/MemDeco-WG/Kam/main/README.md",
+        );
+        if (response.ok) {
+          md = await response.text();
         }
       }
+    } catch (err) {
+      if (window.core && window.core.isDebugMode()) {
+        window.core.logDebug(`Failed to fetch README: ${err.message}`, "KAM");
+      }
+    }
+
+    if (md) {
+      try {
+        const html = marked.parse(md);
+        container.innerHTML = `<div class="kam-readme-content">${html}</div>`;
+      } catch (err) {
+        // If marked fails for any reason, put raw MD as text
+        container.textContent = md;
+      }
+    } else {
+      container.innerHTML = `<div class="muted">${window.i18n ? window.i18n.t("kam.readme.notFound", "README not found") : "README not found"}</div>`;
+    }
+  }
 
   // Helper to copy text to the clipboard with fallback
   _copyText(text) {
