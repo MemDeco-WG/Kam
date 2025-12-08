@@ -10,6 +10,10 @@ English | [简体中文](README.zh-CN.md)
 
 Kam is a lightweight, networkless CLI tool for Magisk, KernelSU, and APatch module developers. It focuses on fast, offline-first module initialization (scaffolding) and packaging (build). Kam is designed to be minimal and work without network connectivity.
 
+### Migration Note
+
+The `[kam].dependency` section and related dependency management functionality have been removed. If your `kam.toml` contains a `dependency` section, please remove it before upgrading. Kam no longer resolves or manages external dependencies; use external tools or prebuild hooks to include required artifacts in the module source.
+
 
 ### ✨ Key Features
 
