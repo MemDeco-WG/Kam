@@ -19,7 +19,6 @@ on:
         type: string
         default: "true"
 
-# Permissions: allow the workflow to push commits (auto-commit action) and read actions
 permissions:
   contents: write
   actions: read

@@ -56,7 +56,7 @@ jobs:
           commit_message: >
             chore: apply config
             - Template: ${{ github.event.inputs.template-url || 'No template' }}
-            - Command: ${{ github.event.inputs.init-command || github.event.inputs.build-command }}
+            - Command: ${{ github.event.inputs.init-command || github.event.inputs.kam-command }}
           file_pattern: "*"
           push_options: "--force-with-lease"
         env:
