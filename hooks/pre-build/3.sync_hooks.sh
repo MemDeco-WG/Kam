@@ -40,17 +40,32 @@ if [ ! -d "$KAM_TMPL_ROOT" ]; then
     exit 0
 fi
 
-# Helper to copy a file if it exists
+# Helper to copy a file if it exists and only overwrite if destination exists
 copy_if_exists() {
     src="$1"
     dst="$2"
-    if [ -f "$src" ]; then
-        mkdir -p "$(dirname "$dst")"
+
+    # Only proceed if the source file exists
+    if [ ! -f "$src" ]; then
+        return 0
+    fi
+
+    # Only overwrite when the destination file exists — do not create new files in templates
+    if [ -f "$dst" ]; then
         if cp -f "$src" "$dst"; then
-            log_info "Copied: $(basename "$src") -> $dst"
+            log_info "Copied: $(basename \"$src\") -> $dst"
+
+            # Ensure shell scripts stay executable
+            case "$(basename \"$dst\")" in
+                *.sh)
+                    chmod +x "$dst" 2>/dev/null || true
+                    ;;
+            esac
         else
             log_warn "Failed to copy: $src -> $dst"
         fi
+    else
+        log_info "Skipping copy; destination does not exist: $dst"
     fi
 }
 
@@ -85,14 +100,18 @@ for tmpl_dir in "$KAM_TMPL_ROOT"/*; do
             for srcfile in "$src_stage_dir"/*; do
                 [ -f "$srcfile" ] || continue
                 base=$(basename "$srcfile")
-                # Prefer an existing lowercase counterpart on the template side:
                 lowerbase=$(printf "%s" "$base" | tr '[:upper:]' '[:lower:]')
-                if [ -f "$target_stage_dir/$lowerbase" ]; then
-                    dest="$target_stage_dir/$lowerbase"
-                else
+
+                # Only overwrite if a same-name (exact or lowercase) file already exists in the template.
+                if [ -f "$target_stage_dir/$base" ]; then
                     dest="$target_stage_dir/$base"
+                    copy_if_exists "$srcfile" "$dest"
+                elif [ -f "$target_stage_dir/$lowerbase" ]; then
+                    dest="$target_stage_dir/$lowerbase"
+                    copy_if_exists "$srcfile" "$dest"
+                else
+                    log_info "Skipping $base for $tmpl_name/$stage - target file does not exist"
                 fi
-                copy_if_exists "$srcfile" "$dest"
             done
         fi
     done
