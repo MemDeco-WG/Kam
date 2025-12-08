@@ -5,7 +5,7 @@
 [submodule "tmpl/ak3_template/src/AnyKernel3"]
 	path = tmpl/ak3_template/src/AnyKernel3
 	url = https://github.com/osm0sis/AnyKernel3.git
-	branch = main
+	branch = master
 [submodule "KamHooks"]
 	path = KamHooks
 	url = https://github.com/MemDeco-WG/KamHooks.git
