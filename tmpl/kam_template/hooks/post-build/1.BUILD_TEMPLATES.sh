@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # 2.BUILD_TEMPLATES.sh - compress all files in templates directory into dist/templates.zip
 
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
