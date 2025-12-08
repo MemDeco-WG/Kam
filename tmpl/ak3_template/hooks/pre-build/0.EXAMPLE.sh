@@ -35,4 +35,11 @@ if [ "${KAM_DEBUG:-}" = "1" ]; then
     export PS1="[KAM_DEBUG:${KAM_MODULE_ID}] $PS1"
 fi
 
+# check
+
+which || { echo "which command not found.(termux? pkg install which.)" && exit 1; }
+which python
+which cargo
+which gh
+
 # Add your pre-build logic here (e.g., downloading assets, checking environment)

@@ -14,30 +14,9 @@ require_command gh
 # Temporary changelog file for download
 TMP_CHANGELOG=""
 
-# Prefer to derive repository info using the `gh` CLI when available.
-# Fallback order:
-# 1. gh repo view --json nameWithOwner
-# 2. KAM_GITHUB_REPOSITORY (explicitly provided)
-# 3. GITHUB_REPOSITORY (GitHub Actions)
-# 4. parsed git remote origin URL
-REPO_FROM_GH=""
-if command -v gh >/dev/null 2>&1; then
-    REPO_FROM_GH=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)
-fi
-
-GITHUB_REPO="${REPO_FROM_GH:-${KAM_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}}"
-
-# If still empty, try parsing the git origin remote for owner/repo
-if [ -z "$GITHUB_REPO" ] && command -v git >/dev/null 2>&1; then
-    GIT_DIR="${KAM_PROJECT_ROOT:-.}"
-    ORIGIN_URL=$(git -C "$GIT_DIR" remote get-url origin 2>/dev/null || true)
-    if [ -n "$ORIGIN_URL" ]; then
-        PARSED_REPO=$(echo "$ORIGIN_URL" | sed -E 's#.*[:/](.+?/[^/]+)(\.git)?$#\1#')
-        if [ -n "$PARSED_REPO" ]; then
-            GITHUB_REPO="$PARSED_REPO"
-        fi
-    fi
-fi
+# Determine the GitHub repository using the gh CLI (primary method).
+# `require_command gh` has already ensured gh is present.
+GITHUB_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)
 cleanup_tmp() {
     if [ -n "$TMP_CHANGELOG" ] && [ -f "$TMP_CHANGELOG" ]; then
         rm -f "$TMP_CHANGELOG"

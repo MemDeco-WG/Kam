@@ -14,14 +14,9 @@ require_command gh
 # Temporary changelog file for download
 TMP_CHANGELOG=""
 
-# Determine the GitHub repository using gh CLI (primary source).
-# require_command gh was already called above, so gh should be available.
+# Determine the GitHub repository using the gh CLI (primary method).
+# `require_command gh` has already ensured gh is present.
 GITHUB_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)
-
-# Allow override by KAM_GITHUB_REPOSITORY if explicitly provided (optional).
-if [ -n "${KAM_GITHUB_REPOSITORY:-}" ]; then
-    GITHUB_REPO="${KAM_GITHUB_REPOSITORY}"
-fi
 cleanup_tmp() {
     if [ -n "$TMP_CHANGELOG" ] && [ -f "$TMP_CHANGELOG" ]; then
         rm -f "$TMP_CHANGELOG"
