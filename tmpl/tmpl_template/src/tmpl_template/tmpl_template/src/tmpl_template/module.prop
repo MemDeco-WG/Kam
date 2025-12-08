@@ -1,7 +1,0 @@
-id=tmpl_template
-name={{project_name}}
-version=0.1.0
-versionCode=1
-author={{author}}
-description={% if description %}{{description}}{% else %}A Kam template created with Kam{% endif %}
-updateJson={{update_json}}
