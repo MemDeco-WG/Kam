@@ -2,8 +2,9 @@
 
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
-
 log_info "Building WebUI for module: $KAM_MODULE_ID"
+
+require_command yarn "please install yarn first."
 
 WEBUI_DIR="$KAM_PROJECT_ROOT/ModuleWebUI"
 BUILD_SCRIPT="$WEBUI_DIR/build.sh"
@@ -26,6 +27,7 @@ fi
 # We change directory to ModuleWebUI because the build script might rely on relative paths (e.g. node_modules)
 (
     cd "$WEBUI_DIR" || exit 1
+    yarn install
     ./build.sh "$KAM_MODULE_ID"
 )
 

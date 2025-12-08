@@ -37,7 +37,7 @@ fi
 
 # check
 
-which || { echo "which command not found.(termux? pkg install which.)" && exit 1; }
+which kam
 which python
 which cargo
 which gh

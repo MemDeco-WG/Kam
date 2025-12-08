@@ -1,7 +1,7 @@
 id=Kam
 name=Kam
-version=0.4.6
-versionCode=1765216968653
+version=0.4.8
+versionCode=1765217409045
 author=LightJunction
 description=Kam： ksu/apu/magisk module builder.
 updateJson=https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json
