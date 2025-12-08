@@ -1,0 +1,2 @@
+This file ensures the system directory is created.
+Place your system files here to be overlaid by KernelSU.
