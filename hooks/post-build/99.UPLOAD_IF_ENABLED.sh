@@ -10,6 +10,20 @@ fi
 require_command gh
 
 TMP_CHANGELOG=""
+
+# Determine the GitHub repository using gh CLI (primary method)
+GITHUB_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)
+
+# Construct a download URL and changelog URL(s) based on the repo info
+if [ -n "$GITHUB_REPO" ]; then
+    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${KAM_MODULE_VERSION}/${KAM_MODULE_ID}.zip"
+    CHANGELOG_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/main/CHANGELOG.md"
+    CHANGELOG_BLOB_URL="https://github.com/${GITHUB_REPO}/blob/main/CHANGELOG.md"
+else
+    DOWNLOAD_URL="${KAM_MODULE_ID}.zip"
+    CHANGELOG_RAW_URL=""
+    CHANGELOG_BLOB_URL=""
+fi
 cleanup_tmp() {
     if [ -n "$TMP_CHANGELOG" ] && [ -f "$TMP_CHANGELOG" ]; then
         rm -f "$TMP_CHANGELOG"
@@ -61,19 +75,30 @@ get_changelog_path() {
         fi
     fi
 
-    # Try a best-effort fetch from the GitHub repository if available
-    if [ -n "$GITHUB_REPOSITORY" ]; then
-        if command -v curl >/dev/null 2>&1; then
+    # Try a best-effort fetch from the GitHub repository if available.
+    # Prefer the gh CLI for authenticated/raw retrieval; fall back to curl/wget if needed.
+    if [ -n "$GITHUB_REPO" ]; then
+        if command -v gh >/dev/null 2>&1; then
             TMP_CHANGELOG=$(mktemp)
-            if curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/CHANGELOG.md" -o "$TMP_CHANGELOG"; then
+            if gh api -H "Accept: application/vnd.github.v3.raw" "/repos/${GITHUB_REPO}/contents/CHANGELOG.md" > "$TMP_CHANGELOG" 2>/dev/null; then
                 echo "$TMP_CHANGELOG"
                 return 0
             fi
             rm -f "$TMP_CHANGELOG" 2>/dev/null || true
             TMP_CHANGELOG=""
-        elif command -v wget >/dev/null 2>&1; then
+        fi
+
+        if [ -n "$CHANGELOG_RAW_URL" ] && command -v curl >/dev/null 2>&1; then
             TMP_CHANGELOG=$(mktemp)
-            if wget -qO "$TMP_CHANGELOG" "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/CHANGELOG.md"; then
+            if curl -fsSL "$CHANGELOG_RAW_URL" -o "$TMP_CHANGELOG"; then
+                echo "$TMP_CHANGELOG"
+                return 0
+            fi
+            rm -f "$TMP_CHANGELOG" 2>/dev/null || true
+            TMP_CHANGELOG=""
+        elif [ -n "$CHANGELOG_RAW_URL" ] && command -v wget >/dev/null 2>&1; then
+            TMP_CHANGELOG=$(mktemp)
+            if wget -qO "$TMP_CHANGELOG" "$CHANGELOG_RAW_URL"; then
                 echo "$TMP_CHANGELOG"
                 return 0
             fi
@@ -152,7 +177,13 @@ fi
 
 # As a final fallback, include a link to the changelog file
 if [ -z "$CHANGELOG_SECTION" ]; then
-    CHANGELOG_SECTION="- See [CHANGELOG.md](https://github.com/\${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for detailed changes."
+    if [ -n "$CHANGELOG_BLOB_URL" ]; then
+        CHANGELOG_SECTION="- See [CHANGELOG.md](${CHANGELOG_BLOB_URL}) for detailed changes."
+    elif [ -n "$GITHUB_REPO" ]; then
+        CHANGELOG_SECTION="- See [CHANGELOG.md](https://github.com/${GITHUB_REPO}/blob/main/CHANGELOG.md) for detailed changes."
+    else
+        CHANGELOG_SECTION="- See CHANGELOG.md for detailed changes."
+    fi
 fi
 
 # Trim trailing newlines for a cleaner block (optional)
@@ -172,7 +203,7 @@ RELEASE_NOTES=$(cat <<EOF
 ${KAM_MODULE_DESCRIPTION}
 
 ## Download
-- [${KAM_MODULE_ID}.zip](https://github.com/\${GITHUB_REPOSITORY}/releases/download/${KAM_MODULE_VERSION}/${KAM_MODULE_ID}.zip)
+- [${KAM_MODULE_ID}.zip](${DOWNLOAD_URL})
 
 ## Installation
 1. Download the module ZIP file

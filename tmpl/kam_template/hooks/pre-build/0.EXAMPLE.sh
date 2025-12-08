@@ -2,21 +2,7 @@
 # Example pre-build hook script
 # This script runs before the build process starts.
 
-# Source common utilities
-if [ -f "$KAM_HOOKS_ROOT/lib/utils.sh" ]; then
-    . "$KAM_HOOKS_ROOT/lib/utils.sh"
-else
-    echo "Warning: utils.sh not found at $KAM_HOOKS_ROOT/lib/utils.sh"
-    # Define fallback logging functions and color variables if utils.sh is missing
-    BLUE=""
-    GREEN=""
-    YELLOW=""
-    NC=""
-    log_info() { echo "[INFO] $1"; }
-    log_warn() { echo "[WARN] $1"; }
-    log_error() { echo "[ERROR] $1"; }
-    log_success() { echo "[SUCCESS] $1"; }
-fi
+. "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 log_info "Running tmpl pre-build hook..."
 log_info "Building module: $KAM_MODULE_ID v$KAM_MODULE_VERSION"
