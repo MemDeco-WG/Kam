@@ -1,6 +1,6 @@
 // Declare submodules
 pub mod build;
-pub mod dependency;
+
 pub mod kam;
 pub mod manager;
 pub mod mmrl;
@@ -15,9 +15,7 @@ pub mod workspace;
 // Re-export main types
 pub use crate::types::kam_toml::enums::{ModuleType, SupportedArch};
 pub use build::BuildSection;
-pub use dependency::{
-    Dependency, DependencySection, FlatDependencyGroup, FlatDependencyGroups, VersionSpec,
-};
+
 pub use kam::KamSection;
 pub use manager::ManagerSection;
 pub use mmrl::MmrlSection;

@@ -1,7 +1,4 @@
-use super::{
-    BuildSection, DependencySection, ModuleType, SupportedArch, TmplSection,
-    WorkspaceSection,
-};
+use super::{BuildSection, ModuleType, SupportedArch, TmplSection, WorkspaceSection};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -19,15 +16,14 @@ pub struct KamSection {
     pub supported_arch: Option<Vec<SupportedArch>>,
     /// 与该模块冲突的模块 ID 列表
     pub conflicts: Option<Vec<String>>,
-    /// 依赖声明（分 kam / dev）
-    pub dependency: Option<DependencySection>,
+
     /// 打包/构建相关的配置
     pub build: Option<BuildSection>,
     /// 模块类型（kam/template/library）
     pub module_type: ModuleType,
     /// 模板相关子配置
     pub tmpl: Option<TmplSection>,
-    
+
     /// 工作区配置
     pub workspace: Option<WorkspaceSection>,
 }
@@ -39,11 +35,11 @@ impl Default for KamSection {
             max_api: Some(0),
             supported_arch: Some(Vec::new()),
             conflicts: Some(Vec::new()),
-            dependency: Some(DependencySection::default()),
+
             build: Some(BuildSection::default()),
             module_type: ModuleType::Kam,
             tmpl: Some(TmplSection::default()),
-            
+
             workspace: Some(WorkspaceSection::default()),
         }
     }

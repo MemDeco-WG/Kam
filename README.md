@@ -8,17 +8,18 @@ English | [简体中文](README.zh-CN.md)
 
 ## 📖 Overview
 
-Kam is a powerful Android module builder tool designed for KernelSU, APatch, and Magisk module developers. It provides complete project templates, build systems, and hook mechanisms to make module development simple and efficient.
+Kam is a lightweight, networkless CLI tool for Magisk, KernelSU, and APatch module developers. It focuses on fast, offline-first module initialization (scaffolding) and packaging (build). Kam is designed to be minimal and work without network connectivity.
 
 
 ### ✨ Key Features
 
 - 🚀 **Quick Initialization** - Rapidly create new module projects using various templates
 - 🔧 **Automated Build** - One-click module ZIP packaging
+- 🔒 **Lightweight & Offline** - Kam does not require network access and is designed to be minimal
 - 🎯 **Smart Sync** - Auto-sync `kam.toml` configuration to `module.prop` and `update.json`
 - 🪝 **Hook System** - Support custom script hooks before/after builds
 - 📦 **Template Management** - Import, export, and share module templates
-- 🌐 **WebUI Support** - Built-in WebUI building and integration
+- 🌐 **WebUI Integration** - Built-in WebUI building and integration (note: Kam does not provide runtime module management)
 - 🔄 **Version Management** - Automated version numbering and release
 
 ## 🚀 Quick Start

@@ -5,8 +5,6 @@ use toml;
 pub mod sections;
 use sections::*;
 
-pub const DEFAULT_DEPENDENCY_SOURCE: &str = "https://github.com/MemDeco-WG/Kam-Index";
-
 pub mod enums;
 
 /// KamToml: A superset of module.prop, update.json, and other metadata,
@@ -142,21 +140,5 @@ impl KamToml {
         } else {
             current.insert(last.to_string(), toml::Value::String(new_value.to_string()));
         }
-    }
-
-    /// Get effective source URL for dependencies
-    pub fn get_effective_source(dep: &Dependency) -> String {
-        dep.source
-            .clone()
-            .unwrap_or_else(|| DEFAULT_DEPENDENCY_SOURCE.to_string())
-    }
-
-    /// Resolve dependencies into flattened groups
-    pub fn resolve_dependencies(&self) -> crate::errors::Result<sections::FlatDependencyGroups> {
-        self.kam
-            .dependency
-            .as_ref()
-            .unwrap_or(&DependencySection::default())
-            .resolve()
     }
 }

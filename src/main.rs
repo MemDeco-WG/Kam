@@ -9,8 +9,8 @@ use std::error::Error;
 #[derive(Parser)]
 #[command(
     name = "kam",
-    about = "Kam — Super fast module manager",
-    long_about = "Kam is a lightweight module management tool providing dependency resolution, build, and module management.",
+    about = "Kam — Lightweight, offline module initializer & packager",
+    long_about = "Kam is a small, network-free CLI focused on module initialization (scaffolding) and packaging (build). Lightweight and offline-first.",
     version,
     // custom help template inspired by `uv` to provide grouped sections
     help_template = "{bin} — {about}\n\nUsage: {usage}\n\nCommands:\n{subcommands}\n\nOptions:\n{options}\n"

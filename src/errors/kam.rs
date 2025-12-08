@@ -117,9 +117,6 @@ pub enum KamError {
     #[error("Venv create failed: {0}")]
     VenvCreateFailed(String),
 
-    #[error("Dependency resolution failed: {0}")]
-    DependencyResolutionFailed(String),
-
     #[error("Invalid module structure: {0}")]
     InvalidModuleStructure(String),
 

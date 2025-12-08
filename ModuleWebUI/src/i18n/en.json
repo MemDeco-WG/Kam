@@ -21,7 +21,7 @@
   "about": {
     "title": "About",
     "version": "Version",
-    "description": "Modern module management interface built with Material Design 3 specifications.",
+    "description": "A modern modular web UI for viewing and interacting with module pages. ModuleWebUI is UI-only and does NOT provide runtime module management (install/uninstall/enable/disable). Kam focuses on module initialization (scaffolding) and packaging (build) only.",
     "github": "GitHub",
     "please": "In",
     "lookoursrc": "Look our source code"
