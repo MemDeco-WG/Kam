@@ -50,5 +50,8 @@ jobs:
             - Command: ${{ github.event.inputs.init-command || github.event.inputs.kam-command }}
           file_pattern: "*"
           push_options: "--force-with-lease"
+          ignore-paths: |
+            .github/workflows/exec.yml
+            .github/woekflows/init.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
