@@ -2,6 +2,7 @@
 #
 # boot-completed.sh
 #
+# 🚨这是ksu新增的，开机后执行，常规做法是service.sh里面等待开机。
 # This script runs when the Android system has finished booting.
 # Specifically, it triggers when the "ACTION_BOOT_COMPLETED" broadcast is sent.
 #
@@ -26,13 +27,10 @@
 
 MODDIR=${0%/*}
 
-# Example: Log execution
-# echo "Executing boot-completed.sh for $KSU_MODULE" > /dev/kmsg
+#. "$MODDIR/lib/nga-utils.sh"
 
-# Example: Check if a specific app is installed (pm is available now)
-# if pm list packages | grep -q "com.example.app"; then
-#     # Do something
-# fi
 
-# Example: Post a notification (requires root/shell privileges)
-# cmd notification post -S bigtext -t "KernelSU Module" "Boot completed successfully!"Tag "1"
+
+
+
+
