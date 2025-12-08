@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/MemDeco-WG/Kam)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 
-English | [简体中文](README.zh-CN.md)
+English | [中文](README.zh-CN.md)
 
 ## 📖 Overview
 
@@ -186,6 +186,8 @@ KAM_DEBUG=1 kam build
 
 Kam supports executing custom scripts during the build process:
 
+Note: The hook runner executes files directly and does not perform OS-specific interpreter selection or special-case file extensions. It simply executes each file found in the hooks directory and defers to the operating system for execution. Ensure your hook scripts are runnable on your target environment (for example, include a shebang and mark the script executable on Unix with `chmod +x`, or run shell scripts via WSL/Git Bash on Windows).
+
 #### Pre-build Hooks
 
 Create scripts in the `hooks/pre-build/` directory:
@@ -194,9 +196,10 @@ Create scripts in the `hooks/pre-build/` directory:
 
 ```bash
 hooks/pre-build/
-├── 0.sync-module-files.sh    # Sync configuration files
-├── 1.custom-script.sh         # Custom script
-└── 2.another-script.sh
+├── 0.EXAMPLE.sh              # Example pre-build hook (template)
+├── 1.SYNC_MODULE_FILES.sh    # Sync configuration files (script)
+├── 2.BUILD_WEBUI.sh          # Build WebUI
+
 ```
 
 #### Post-build Hooks

@@ -187,9 +187,10 @@ Kam 支持在构建过程中执行自定义脚本：
 
 ```bash
 hooks/pre-build/
-├── 0.sync-module-files.sh    # 同步配置文件
-├── 1.custom-script.sh         # 自定义脚本
-└── 2.another-script.sh
+├── 0.EXAMPLE.sh              # 示例 pre-build 钩子 (模板)
+├── 1.SYNC_MODULE_FILES.sh    # 同步配置文件 (脚本)
+├── 2.BUILD_WEBUI.sh          # 构建 WebUI
+
 ```
 
 #### Post-build 钩子（构建后）
@@ -198,9 +199,9 @@ hooks/pre-build/
 
 ```bash
 hooks/post-build/
-├── 0.verify.sh                # 验证构建
-├── 1.upload.sh                # 上传构建产物
-└── 2.notify.sh                # 发送通知
+├── 0.EXAMPLE.sh                # 示例 post-build 钩子 (模板)
+├── 1.BUILD_TEMPLATES.sh        # 构建模板
+└── 99.UPLOAD_IF_ENABLED.sh     # 上传构建产物（如果启用）
 ```
 
 #### 可用的环境变量
@@ -232,7 +233,7 @@ Kam 会自动同步 `kam.toml` 的配置到模块文件：
 
 - **module.prop** → `$KAM_MODULE_ROOT/module.prop`
   - 包含模块元数据（id、name、version 等）
-  
+
 - **update.json** → `$KAM_PROJECT_ROOT/update.json`
   - 包含更新信息（version、versionCode、zipUrl、changelog）
   - 自动从 `[mmrl.repo]` 推断 URL

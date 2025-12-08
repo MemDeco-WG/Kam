@@ -1,88 +1,116 @@
-# {{project_name}}
+# Kam Build Hooks
 
-{{description}}
+Hooks allow you to run custom scripts at different stages of the build process. Kam provides a flexible hook system with shared utilities and environment variables.
 
-This is a **KernelSU Metamodule** project created with [Kam](https://github.com/MemDeco-WG/Kam).
+## Naming Convention
 
-## What is a Metamodule?
+To distinguish between template-provided hooks and project-specific hooks, Kam uses the following naming convention for hook files in `hooks/pre-build/` and `hooks/post-build/`:
 
-A metamodule is a special type of KernelSU module that controls how *other* regular modules are installed and mounted. It replaces the internal mounting logic of KernelSU, allowing for complete customization of the module system (e.g., using OverlayFS, Magic Mount, etc.).
+- `N.UPPERCASE.xxx` (e.g., `0.EXAMPLE.sh`, `2.BUILD_WEBUI.sh`) — Template-provided hooks (included in templates).
+- `N.lowercase.xxx` (e.g., `1.custom-script.sh`) — Project-level custom hooks added in your project.
 
-**Note:** Only one metamodule can be installed at a time.
+Hooks are executed in order by their numeric prefix. Template hooks are typically included by templates and executed unless overridden by a project-level custom hook with the same numeric prefix.
 
-## Project Structure
+## Built-in Hooks
 
-```text
-.
-├── kam.toml                 # Project configuration
-├── src/
-│   └── {{prop.id}}/         # Module source code
-│       ├── module.prop      # Generated automatically
-│       ├── metamount.sh     # [CRITICAL] Mount handler
-│       ├── metainstall.sh   # [OPTIONAL] Installation hook for other modules
-│       ├── metauninstall.sh # [OPTIONAL] Cleanup hook for other modules
-│       ├── post-fs-data.sh  # Standard lifecycle script
-│       ├── service.sh       # Standard lifecycle script
-│       └── ...
-└── hooks/                   # Build hooks (pre/post build scripts)
-```
+### `1.SYNC_MODULE_FILES.sh` / `1.SYNC_MODULE_FILES.ps1`
 
-## Metamodule Hooks
+This pre-build hook automatically syncs the `[prop]` section from `kam.toml` to the `module.prop` file in your module directory and generates `update.json` in the project root.
 
-This template includes the three special hooks available to metamodules.
+**Purpose**: Since `kam.toml` is a superset of `module.prop`, this hook ensures that `module.prop` is always up-to-date before the build starts. It also generates a basic `update.json` used for update information (version, versionCode, zipUrl, changelog) which is useful for release and update tooling.
 
-### 1. `metamount.sh` (Mount Handler)
-This is the most important script. It runs during boot and is responsible for mounting all regular modules.
+**Location**: The generated `module.prop` will be placed at `src/<module_id>/module.prop`. The generated `update.json` will be placed at the project root: `update.json`.
 
-*   **Execution:** Runs after `post-fs-data` but before `post-mount`.
-*   **Responsibility:** Iterate through `/data/adb/modules`, check for `disable`/`skip_mount` flags, and mount module files into the system.
-*   **CRITICAL:** You **MUST** set the mount source/device to `KSU` (e.g., `mount -o bind,dev=KSU ...`). This allows KernelSU to track the mounts.
+**Properties synced / generated**:
+- `id`
+- `name`
+- `version`
+- `versionCode`
+- `author`
+- `description`
+- `updateJson` (if set)
 
-### 2. `metainstall.sh` (Installation Hook)
-This script is **sourced** by the KernelSU installer when a user installs a *regular* module.
+This hook runs automatically before every build and is included in the standard module templates (`kam_template`, `meta_template`).
 
-*   **Execution:** During module installation (after extraction, before finalization).
-*   **Responsibility:** Validate module compatibility, modify module files before they are installed, or prepare custom storage.
-*   **Note:** This does NOT run when installing the metamodule itself.
+## Execution behavior
 
-### 3. `metauninstall.sh` (Cleanup Hook)
-This script runs when a regular module is uninstalled.
+Kam executes hook files by directly invoking the file and defers to the operating system (or the file itself, via shebang or file associations) to determine how it runs. The hook runner intentionally does not attempt to pick or call interpreters based on the platform or file extension. Ensure your scripts are runnable on the target environment (for example: add `#!/bin/sh` and `chmod +x` for Unix-like systems, or run shell scripts via WSL/Git Bash on Windows).
 
-*   **Execution:** Before the module directory is removed.
-*   **Responsibility:** Clean up any resources (like separate images or databases) associated with the module being removed.
+## Environment Variables
 
-## Lifecycle Scripts
+When hooks are executed, Kam injects the following environment variables, which you can use in your scripts:
 
-Metamodules also support standard KernelSU lifecycle scripts, which run **before** regular modules:
+| Variable | Description |
+|----------|-------------|
+| `KAM_PROJECT_ROOT` | Absolute path to the project root directory. |
+| `KAM_HOOKS_ROOT` | Absolute path to the hooks directory. Useful for sourcing shared scripts. |
+| `KAM_MODULE_ROOT` | Absolute path to the module source directory (e.g. `src/<id>`). |
+| `KAM_WEB_ROOT` | Absolute path to the module webroot directory (`<module_root>/webroot`). |
+| `KAM_DIST_DIR` | Absolute path to the build output directory (e.g. `dist`). Useful for uploading artifacts. |
+| `KAM_MODULE_ID` | The module ID defined in `kam.toml`. |
+| `KAM_MODULE_VERSION` | The module version. |
+| `KAM_MODULE_VERSION_CODE` | The module version code. |
+| `KAM_MODULE_NAME` | The module name. |
+| `KAM_MODULE_AUTHOR` | The module author. |
+| `KAM_MODULE_DESCRIPTION` | The module description. |
+| `KAM_MODULE_UPDATE_JSON` | The module updateJson URL (if set). |
+| `KAM_STAGE` | Current build stage: `pre-build` or `post-build`. |
+| `KAM_DEBUG` | Set to `1` to enable debug output in hooks. |
 
-1.  `post-fs-data.sh` (Metamodule) -> `post-fs-data.sh` (Regular Modules)
-2.  `metamount.sh` (Metamodule)
-3.  `service.sh` (Metamodule) -> `service.sh` (Regular Modules)
-4.  `boot-completed.sh` (Metamodule) -> `boot-completed.sh` (Regular Modules)
+## 中文（简体）
 
-## Configuration
+钩子允许你在构建过程中的不同阶段运行自定义脚本。Kam 提供灵活的钩子系统，附带共享的工具和预定义的环境变量，便于在钩子脚本中使用。
 
-Edit `kam.toml` to configure your project.
+### 命名约定
 
-*   **[prop]**: Basic module metadata (id, name, version, author).
-    *   `metamodule = true` is set automatically for this template.
-*   **[mmrl.repo]**: Metadata for MMRL/module repositories.
-*   **[kam.build]**: Build settings (output directory, excludes).
+为了区分由模板提供的钩子和项目层面自定义的钩子，Kam 在 `hooks/pre-build/` 和 `hooks/post-build/` 中采用如下命名约定：
 
-## Building
+- `N.UPPERCASE.xxx`（例如：`0.EXAMPLE.sh`、`2.BUILD_WEBUI.sh`）—— 模板提供的钩子（由模板包含并随模板分发）。
+- `N.lowercase.xxx`（例如：`1.custom-script.sh`）—— 项目层面自定义钩子（由模块作者在项目中添加）。
 
-Run the following command to build your metamodule:
+钩子文件按照数值前缀进行顺序执行（例如 `0.*`、`1.*`、`2.*` 等）。若项目中定义了与模板中相同数字前缀的自定义钩子，则会覆盖模板钩子。
 
-```bash
-kam build
-```
+### 内置钩子
 
-The output zip file will be located in `dist/` (or the target directory specified in `kam.toml`).
+#### `1.SYNC_MODULE_FILES.sh` / `1.SYNC_MODULE_FILES.ps1`
 
-## Installation
+该构建前（pre-build）钩子会把 `kam.toml` 中的 `[prop]` 部分同步到模块目录的 `module.prop`，并在项目根目录生成 `update.json` 文件。
 
-1.  Open KernelSU Manager.
-2.  Install the generated ZIP file like a regular module.
-3.  Reboot.
+- 目的：`kam.toml` 是 `module.prop` 的超集。此钩子确保构建前 `module.prop` 是最新的，同时生成的 `update.json` 可供发布/更新工具使用（包含 version、versionCode、zipUrl 与 changelog 等信息）。
+- 生成位置：`module.prop` 位于 `src/<module_id>/module.prop`；`update.json` 生成到项目根目录 `update.json`。
+- 同步 / 生成字段：
+  - `id`
+  - `name`
+  - `version`
+  - `versionCode`
+  - `author`
+  - `description`
+  - `updateJson`（若设置）
 
-**Warning:** Installing a metamodule will replace any existing metamodule. Ensure you have a backup or know how to restore if boot issues occur.
+此钩子随标准模板（如 `kam_template`、`meta_template`）包含，并在每次构建前自动运行。
+
+### 执行行为
+
+Kam 在执行钩子时会直接调用钩子文件，由操作系统或文件本身（通过 shebang 或文件关联）决定如何运行。钩子执行器不会基于平台或文件扩展名自动选择解释器。请确保脚本在目标环境中可执行（例如在类 Unix 系统上添加 `#!/bin/sh` 并设置可执行权限 `chmod +x`，在 Windows 上通过 WSL/Git Bash 等工具运行 shell 脚本）。
+
+### 环境变量
+
+执行钩子时，Kam 会注入下列环境变量，供脚本使用：
+
+| 变量 | 说明 |
+|------|------|
+| `KAM_PROJECT_ROOT` | 项目根目录绝对路径。 |
+| `KAM_HOOKS_ROOT` | 钩子目录绝对路径（通常用于引入共享脚本）。 |
+| `KAM_MODULE_ROOT` | 模块源码目录绝对路径（例如：`src/<id>`）。 |
+| `KAM_WEB_ROOT` | 模块 webroot 目录绝对路径（例如：`<module_root>/webroot`）。 |
+| `KAM_DIST_DIR` | 构建输出目录绝对路径（例如：`dist`）。 |
+| `KAM_MODULE_ID` | `kam.toml` 中定义的模块 ID。 |
+| `KAM_MODULE_VERSION` | 模块版本号。 |
+| `KAM_MODULE_VERSION_CODE` | 模块 versionCode。 |
+| `KAM_MODULE_NAME` | 模块名称。 |
+| `KAM_MODULE_AUTHOR` | 模块作者名。 |
+| `KAM_MODULE_DESCRIPTION` | 模块的描述字段（description）。 |
+| `KAM_MODULE_UPDATE_JSON` | 若设置，会包含 update JSON 的 URL。 |
+| `KAM_STAGE` | 当前构建阶段：`pre-build` 或 `post-build`。 |
+| `KAM_DEBUG` | 若设为 `1`，钩子会输出调试信息。 |
+

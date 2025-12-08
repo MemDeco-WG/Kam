@@ -187,6 +187,9 @@ fn run_hooks(
         ),
     ];
 
+    // Execute hook files directly and let the OS determine execution behavior.
+    // This runner intentionally avoids OS-specific wrappers or extension-based dispatch.
+    // If a script cannot be executed on the current platform, it will fail and return an error.
     println!(
         "{} Running {} hooks from {}",
         "•".cyan(),
@@ -202,6 +205,9 @@ fn run_hooks(
     // Sort by filename to ensure deterministic order (01-init.sh, 02-build.sh, etc.)
     entries.sort_by_key(|e| e.file_name());
 
+    // Iterate hooks in deterministic order and execute each non-hidden file directly.
+    // The hook runner doesn't attempt to interpret file extensions or choose a runtime;
+    // it simply invokes the file and defers to the platform to handle the execution.
     for entry in entries {
         let path = entry.path();
         if path.is_file() {
@@ -217,68 +223,64 @@ fn run_hooks(
 
             let filename = path.file_name().unwrap().to_string_lossy();
 
-            // On Unix, skip .ps1 files
-            #[cfg(unix)]
-            if path.extension().and_then(|s| s.to_str()) == Some("ps1") {
-                continue;
-            }
-
             println!("  {} Executing {}", "→".blue(), filename);
 
-            #[cfg(unix)]
-            let status = Command::new(&path)
+            // Capture stdout/stderr to provide more detailed and actionable errors when
+            // a hook fails. We intentionally avoid platform-specific interpreter selection
+            // — the hook runner invokes the file and defers to the OS to decide how to run it.
+            let output = Command::new(&path)
                 .current_dir(project_root)
                 .envs(env_vars.iter().cloned())
-                .status();
+                .output();
 
-            #[cfg(windows)]
-            let status = {
-                // Simple extension check for Windows execution
-                let ext = path
-                    .extension()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                match ext.as_str() {
-                    "ps1" => Command::new("powershell")
-                        .arg("-ExecutionPolicy")
-                        .arg("Bypass")
-                        .arg("-File")
-                        .arg(&path)
-                        .current_dir(project_root)
-                        .envs(env_vars.iter().cloned())
-                        .status(),
-                    "bat" | "cmd" => Command::new("cmd")
-                        .arg("/C")
-                        .arg(&path)
-                        .current_dir(project_root)
-                        .envs(env_vars.iter().cloned())
-                        .status(),
-                    // Try direct execution for .exe or if file association works
-                    _ => Command::new(&path)
-                        .current_dir(project_root)
-                        .envs(env_vars.iter().cloned())
-                        .status(),
-                }
-            };
+            match output {
+                Ok(out) => {
+                    if !out.status.success() {
+                        // Limit captured output to avoid extremely large messages
+                        let mut stdout = String::from_utf8_lossy(&out.stdout).to_string();
+                        let mut stderr = String::from_utf8_lossy(&out.stderr).to_string();
+                        const MAX_LEN: usize = 2048;
+                        if stdout.len() > MAX_LEN {
+                            stdout.truncate(MAX_LEN);
+                            stdout.push_str("... [truncated]");
+                        }
+                        if stderr.len() > MAX_LEN {
+                            stderr.truncate(MAX_LEN);
+                            stderr.push_str("... [truncated]");
+                        }
 
-            match status {
-                Ok(s) => {
-                    if !s.success() {
+                        // Build readable status string
+                        let status_code = out
+                            .status
+                            .code()
+                            .map(|c| c.to_string())
+                            .unwrap_or_else(|| out.status.to_string());
+
                         return Err(KamError::CommandFailed(format!(
-                            "Hook script {} failed with status: {}",
-                            filename, s
+                            "Hook script {} failed with status: {}\nStdout:\n{}\nStderr:\n{}",
+                            filename, status_code, stdout, stderr
                         )));
                     }
                 }
                 Err(e) => {
-                    // If permission denied on Unix, hint about chmod +x
-                    #[cfg(unix)]
-                    if e.kind() == std::io::ErrorKind::PermissionDenied {
-                        eprintln!(
-                            "  {} Permission denied. Make sure the script is executable (chmod +x).",
-                            "!".yellow()
-                        );
+                    // Provide a cross-platform hint about permission, missing runtime, or execution issues.
+                    // We intentionally don't decide the platform; just provide helpful hints so users can
+                    // address common runtime/permission issues.
+                    match e.kind() {
+                        std::io::ErrorKind::PermissionDenied => {
+                            eprintln!(
+                                "  {} Permission denied. Make sure the script is executable and accessible. On Unix, you may need to run: chmod +x <file>. On Windows, ensure the script association or runtime is available (or run via WSL/Git Bash).",
+                                "!".yellow()
+                            );
+                        }
+                        std::io::ErrorKind::NotFound => {
+                            eprintln!(
+                                "  {} Not found. Could not execute {}. Ensure the script has an interpreter or runtime available on the system (e.g., `sh`, `bash`, or `pwsh`), or invoke the script via a shell that is available on your platform.",
+                                "!".yellow(),
+                                filename
+                            );
+                        }
+                        _ => {}
                     }
                     return Err(KamError::CommandFailed(format!(
                         "Failed to execute hook {}: {}",

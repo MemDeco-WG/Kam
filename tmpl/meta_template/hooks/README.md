@@ -23,6 +23,8 @@ This pre-build hook automatically syncs the `[prop]` section from `kam.toml` to 
 
 This hook runs automatically before every build and is included in the standard module templates (`kam_template`, `meta_template`).
 
+> Execution behavior: Kam executes hook files by directly invoking the file and defers to the operating system and the file itself (e.g. shebang or file association) to determine how it should be executed. The hook runner intentionally avoids OS-specific interpreter selection or extension-based dispatch. Ensure your hook scripts are runnable on the target environment (for example: `chmod +x` and a `#!/bin/sh` shebang on Unix-like systems, or run shell scripts via WSL/Git Bash on Windows).
+
 ## Environment Variables
 
 When hooks are executed, Kam injects the following environment variables, which you can use in your scripts:

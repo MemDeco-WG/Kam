@@ -1,6 +1,14 @@
 #!/bin/sh
 
-. "$KAM_HOOKS_ROOT/lib/utils.sh"
+# Source common utilities
+if [ -f "$KAM_HOOKS_ROOT/lib/utils.sh" ]; then
+    . "$KAM_HOOKS_ROOT/lib/utils.sh"
+else
+    # Fallback logging if utils.sh is missing
+    log_info() { echo "[INFO] $1"; }
+    log_error() { echo "[ERROR] $1"; }
+    log_success() { echo "[SUCCESS] $1"; }
+fi
 
 log_info "Building WebUI for module: $KAM_MODULE_ID"
 
