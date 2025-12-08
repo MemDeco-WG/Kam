@@ -4,14 +4,6 @@ Hooks allow you to run custom scripts at different stages of the build process. 
 
 ## Built-in Hooks
 
-### `0.sync-module-prop.sh` / `0.sync-module-prop.ps1`
-
-This pre-build hook automatically syncs the `[prop]` section from `kam.toml` to `module.prop` file in your module directory.
-
-**Purpose**: Since `kam.toml` is a superset of `module.prop`, this hook ensures that `module.prop` is always up-to-date before the build starts. This is useful if you have other scripts or tools that need to read `module.prop` during the build process.
-
-**Location**: The generated `module.prop` will be placed at `src/<module_id>/module.prop`.
-
 **Properties synced**:
 - `id`
 - `name`

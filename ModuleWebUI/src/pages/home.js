@@ -6,24 +6,47 @@ class HomePage {
   }
 
   async render() {
-    return `
-                <!-- 模块状态显示区域 -->
-                <div class="module-status-container">
-                    <div id="module-status-card" class="status-card loading">
-                        <div class="loading-spinner"></div>
-                        <div class="loading-text">${window.i18n.t(
-                          "home.modules.loading"
-                        )}</div>
-                    </div>
-                    <div id="custom-actions-container" class="custom-actions-container"></div>
+    try {
+      return `
+                  <!-- 模块状态显示区域 -->
+                  <div class="module-status-container">
+                      <div id="module-status-card" class="status-card loading">
+                          <div class="loading-spinner"></div>
+                          <div class="loading-text">${window.i18n.t(
+                            "home.modules.loading",
+                          )}</div>
+                      </div>
+                      <div id="custom-actions-container" class="custom-actions-container"></div>
+                  </div>
+          `;
+    } catch (error) {
+      // If rendering the page fails for any reason, show a minimal fallback UI
+      // instead of rendering a blank page. Also log the error to the console for debugging.
+      console.error("HomePage.render failed:", error);
+      return `
+          <div class="kam-page page-section">
+            <div class="status-card">
+              <div class="status-card-content">
+                <div class="status-info-container">
+                  <div class="status-title-row">
+                    <span>${window.i18n ? window.i18n.t("home.modules.renderErrorTitle", "UI Unavailable") : "UI Unavailable"}</span>
+                  </div>
+                  <div class="status-details">
+                    <div class="status-detail-row">${window.i18n ? window.i18n.t("home.modules.renderErrorMessage", "Module UI is currently unavailable. Please check logs for details.") : "Module UI is currently unavailable. Please check logs for details."}</div>
+                  </div>
                 </div>
+              </div>
+            </div>
+          </div>
         `;
+    }
   }
 
-  /**
+  /*
    * 获取页面操作按钮配置
    * @returns {Array} 按钮配置数组
    */
+
   getPageActions() {
     return [
       {
@@ -85,7 +108,7 @@ class HomePage {
     try {
       // 读取主模块状态
       const moduleInfo = await this.readModuleInfo(
-        window.core.MODULE_PATH || "."
+        window.core.MODULE_PATH || ".",
       );
       this.renderModuleStatus(moduleInfo);
     } catch (error) {
@@ -100,12 +123,12 @@ class HomePage {
                     <div class="status-info-container">
                         <div class="status-title-row">
                             <span>${window.i18n.t(
-                              "home.modules.statusCheckFailed"
+                              "home.modules.statusCheckFailed",
                             )}</span>
                         </div>
                         <div class="status-details">
                             <div class="status-detail-row">${window.i18n.t(
-                              "home.modules.errorInfo"
+                              "home.modules.errorInfo",
                             )}: ${error.message}</div>
                         </div>
                     </div>
@@ -121,7 +144,9 @@ class HomePage {
   }
 
   async renderCustomActions() {
-    const customActionsContainer = document.getElementById("custom-actions-container");
+    const customActionsContainer = document.getElementById(
+      "custom-actions-container",
+    );
     if (!customActionsContainer) return;
     customActionsContainer.innerHTML = `
                     <div class="custom-actions">
@@ -235,6 +260,9 @@ class HomePage {
     };
 
     const config = statusConfig[moduleInfo.status] || statusConfig["error"];
+    const showDetails = ["running", "error", "normal-exit"].includes(
+      moduleInfo.status,
+    );
 
     container.innerHTML = `
                 <div class="status-card-content">
@@ -246,6 +274,9 @@ class HomePage {
                         </div>
                     </div>
                     <div class="status-info-container">
+                        ${
+                          showDetails
+                            ? `
                         <div class="status-title-row">
                             <span>${config.title}</span>
                         </div>
@@ -253,25 +284,23 @@ class HomePage {
                             ${
                               moduleInfo.pid
                                 ? `<div class="status-detail-row">${window.i18n.t(
-                                    "home.modules.pid"
+                                    "home.modules.pid",
                                   )}: ${moduleInfo.pid}</div>`
                                 : ""
                             }
                             ${
                               moduleInfo.startTime
                                 ? `<div class="status-detail-row">${window.i18n.t(
-                                    "home.modules.startTime"
+                                    "home.modules.startTime",
                                   )}: ${new Date(
-                                    moduleInfo.startTime
+                                    moduleInfo.startTime,
                                   ).toLocaleString()}</div>`
                                 : ""
                             }
-                            <div class="status-detail-row">${window.i18n.t(
-                              "home.modules.lastUpdate"
-                            )}: ${new Date(
-      moduleInfo.lastUpdate
-    ).toLocaleString()}</div>
                         </div>
+                        `
+                            : ``
+                        }
                     </div>
                 </div>
         `;
@@ -282,36 +311,45 @@ class HomePage {
    * 绑定自定义按钮事件
    */
   bindCustomActions() {
-    const action1 = document.getElementById('custom-action-1');
-    const action2 = document.getElementById('custom-action-2');
-    const action3 = document.getElementById('custom-action-3');
+    const action1 = document.getElementById("custom-action-1");
+    const action2 = document.getElementById("custom-action-2");
+    const action3 = document.getElementById("custom-action-3");
 
     if (action1) {
-      action1.addEventListener('click', () => {
+      action1.addEventListener("click", () => {
         // 开发者可以在这里绑定自定义事件
-        window.core.showToast(window.i18n.t("home.customActions.action1Clicked"), "info");
+        window.core.showToast(
+          window.i18n.t("home.customActions.action1Clicked"),
+          "info",
+        );
         if (window.core.isDebugMode()) {
-          window.core.logDebug('Custom Action 1 clicked', 'HOME');
+          window.core.logDebug("Custom Action 1 clicked", "HOME");
         }
       });
     }
 
     if (action2) {
-      action2.addEventListener('click', () => {
+      action2.addEventListener("click", () => {
         // 开发者可以在这里绑定自定义事件
-        window.core.showToast(window.i18n.t("home.customActions.action2Clicked"), "info");
+        window.core.showToast(
+          window.i18n.t("home.customActions.action2Clicked"),
+          "info",
+        );
         if (window.core.isDebugMode()) {
-          window.core.logDebug('Custom Action 2 clicked', 'HOME');
+          window.core.logDebug("Custom Action 2 clicked", "HOME");
         }
       });
     }
 
     if (action3) {
-      action3.addEventListener('click', () => {
+      action3.addEventListener("click", () => {
         // 开发者可以在这里绑定自定义事件
-        window.core.showToast(window.i18n.t("home.customActions.action3Clicked"), "info");
+        window.core.showToast(
+          window.i18n.t("home.customActions.action3Clicked"),
+          "info",
+        );
         if (window.core.isDebugMode()) {
-          window.core.logDebug('Custom Action 3 clicked', 'HOME');
+          window.core.logDebug("Custom Action 3 clicked", "HOME");
         }
       });
     }

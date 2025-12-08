@@ -73,7 +73,6 @@ output_file = "tmpl_template"
 hooks_dir = "hooks"
 exclude = ["src/tmpl_template/"]
 
-
 [kam.tmpl.variables]
 [kam.tmpl.variables.repository]
 var_type = "string"

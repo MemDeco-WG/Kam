@@ -253,3 +253,75 @@
         overflow-wrap: anywhere;
     }
 }
+
+/* Terminal UI styles - make the usage page terminal more real and usable */
+.kam-page .kam-terminal {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-s);
+    margin-top: var(--spacing-m);
+}
+
+.kam-page .kam-terminal .kam-terminal-controls {
+    display: flex;
+    gap: var(--spacing-s);
+    align-items: center;
+}
+
+.kam-page .kam-terminal .terminal-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.6rem 0.9rem;
+    border-radius: var(--border-radius-s);
+    border: 1px solid var(--outline-variant);
+    background: var(--surface-container-lowest);
+    color: var(--on-surface);
+    font-family: "Roboto Mono", "Consolas", Monaco, "Courier New", monospace;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+/* Make the output area look like a terminal with monospace text and scroll */
+.kam-page .kam-terminal .terminal-output {
+    min-height: 220px;
+    max-height: 420px;
+    padding: var(--spacing-m);
+    margin-top: var(--spacing-s);
+    border-radius: var(--border-radius-s);
+    background-color: var(--surface-container-low);
+    border: 1px solid var(--outline-variant);
+    overflow: auto;
+    color: var(--on-surface);
+    font-family: "Roboto Mono", "Consolas", Monaco, "Courier New", monospace;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    tab-size: 2;
+}
+
+/* Small visual differentiation for stdout / stderr content if inserted as spans */
+.kam-page .kam-terminal .terminal-output .stdout {
+    color: var(--on-surface);
+}
+.kam-page .kam-terminal .terminal-output .stderr {
+    color: var(--on-error-container);
+}
+
+/* Buttons next to the input should remain small but aligned with input */
+.kam-page .kam-terminal .kam-terminal-controls .copy-btn {
+    padding: 0.48rem 0.7rem;
+    min-width: 80px;
+}
+
+/* Responsive: keep controls stacked on narrow screens */
+@media (max-width: 768px) {
+    .kam-page .kam-terminal .kam-terminal-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .kam-page .kam-terminal .terminal-input {
+        width: 100%;
+    }
+}

@@ -2,7 +2,8 @@ use super::args::BuildArgs;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
-use colored::*;
+use crate::utils::Utils;
+
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -34,11 +35,7 @@ fn run_hooks(
 ) -> Result<(), KamError> {
     // Do not run hooks when packaging a template archive
     if kam_toml.kam.module_type == ModuleType::Template {
-        println!(
-            "  {} Skipping {} hooks for template packaging",
-            "•".cyan(),
-            stage
-        );
+        Utils::info(&format!("Skipping {} hooks for template packaging", stage));
         return Ok(());
     }
 
@@ -67,12 +64,12 @@ fn run_hooks(
 
                     // Validate key (must be valid identifier)
                     if key.is_empty() || !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                        eprintln!(
+                        Utils::warn(&format!(
                             "Warning: Invalid environment variable name '{}' at line {} in {}",
                             key,
                             line_num + 1,
                             env_path.display()
-                        );
+                        ));
                         continue;
                     }
 
@@ -98,12 +95,12 @@ fn run_hooks(
                         std::env::set_var(key, value);
                     }
                 } else if !line.is_empty() {
-                    eprintln!(
+                    Utils::warn(&format!(
                         "Warning: Malformed line {} in {}: {}",
                         line_num + 1,
                         env_path.display(),
                         line
-                    );
+                    ));
                 }
             }
         }
@@ -190,12 +187,11 @@ fn run_hooks(
     // Execute hook files directly and let the OS determine execution behavior.
     // This runner intentionally avoids OS-specific wrappers or extension-based dispatch.
     // If a script cannot be executed on the current platform, it will fail and return an error.
-    println!(
-        "{} Running {} hooks from {}",
-        "•".cyan(),
+    Utils::info(&format!(
+        "Running {} hooks from {}",
         stage,
-        hooks_dir.display().to_string().dimmed()
-    );
+        hooks_dir.display()
+    ));
 
     let mut entries: Vec<_> = fs::read_dir(&hooks_dir)
         .map_err(KamError::Io)?
@@ -223,7 +219,7 @@ fn run_hooks(
 
             let filename = path.file_name().unwrap().to_string_lossy();
 
-            println!("  {} Executing {}", "→".blue(), filename);
+            Utils::executing(&filename);
 
             // Capture stdout/stderr to provide more detailed and actionable errors when
             // a hook fails. We intentionally avoid platform-specific interpreter selection
@@ -235,6 +231,11 @@ fn run_hooks(
 
             match output {
                 Ok(out) => {
+                    // Print structured stdout/stderr from the executed command to surface
+                    // any non-fatal messages (e.g. `[WARN] gh release create ...`) even
+                    // when the exit code is zero. This helps users quickly spot warnings.
+                    Utils::print_cmd_output(&out.stdout, &out.stderr);
+
                     if !out.status.success() {
                         // Limit captured output to avoid extremely large messages
                         let mut stdout = String::from_utf8_lossy(&out.stdout).to_string();
@@ -268,17 +269,15 @@ fn run_hooks(
                     // address common runtime/permission issues.
                     match e.kind() {
                         std::io::ErrorKind::PermissionDenied => {
-                            eprintln!(
-                                "  {} Permission denied. Make sure the script is executable and accessible. On Unix, you may need to run: chmod +x <file>. On Windows, ensure the script association or runtime is available (or run via WSL/Git Bash).",
-                                "!".yellow()
+                            Utils::warn(
+                                "Permission denied. Make sure the script is executable and accessible. On Unix, you may need to run: chmod +x <file>. On Windows, ensure the script association or runtime is available (or run via WSL/Git Bash).",
                             );
                         }
                         std::io::ErrorKind::NotFound => {
-                            eprintln!(
-                                "  {} Not found. Could not execute {}. Ensure the script has an interpreter or runtime available on the system (e.g., `sh`, `bash`, or `pwsh`), or invoke the script via a shell that is available on your platform.",
-                                "!".yellow(),
+                            Utils::warn(&format!(
+                                "Not found. Could not execute {}. Ensure the script has an interpreter or runtime available on the system (e.g., `sh`, `bash`, or `pwsh`), or invoke the script via a shell that is available on your platform.",
                                 filename
-                            );
+                            ));
                         }
                         _ => {}
                     }

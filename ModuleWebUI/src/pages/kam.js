@@ -14,6 +14,13 @@ class KamPage {
   constructor() {
     this.copyButtons = [];
     this._boundCopyHandler = null;
+
+    // Terminal state and bindings
+    this._terminalHistory = [];
+    this._terminalHistoryIndex = -1;
+    this._boundTerminalHandler = null;
+    this._boundTerminalKeyHandler = null;
+    this._boundTerminalClearHandler = null;
   }
 
   render() {
@@ -32,7 +39,7 @@ class KamPage {
       initMeta: "kam init my_meta_module -t meta",
       initAK3: "kam init my_kernel_module -t ak3",
       build: "kam build",
-      buildAll: "kam build --all",
+      buildAll: "kam build -a",
       buildBump: "kam build --bump",
       buildRelease: "kam build --release",
       tmplImport: "kam tmpl import templates/meta_template.tar.gz",
@@ -329,9 +336,87 @@ class KamPage {
           e.preventDefault();
           const cmd = input.value.trim();
           if (cmd) this.runTerminalCommand(cmd);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          if (!this._terminalHistory || this._terminalHistory.length === 0)
+            return;
+          this._terminalHistoryIndex = Math.max(
+            0,
+            (typeof this._terminalHistoryIndex === "number"
+              ? this._terminalHistoryIndex
+              : this._terminalHistory.length) - 1,
+          );
+          input.value = this._terminalHistory[this._terminalHistoryIndex] || "";
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          if (!this._terminalHistory || this._terminalHistory.length === 0)
+            return;
+          this._terminalHistoryIndex = Math.min(
+            this._terminalHistory.length,
+            (typeof this._terminalHistoryIndex === "number"
+              ? this._terminalHistoryIndex
+              : this._terminalHistory.length - 1) + 1,
+          );
+          input.value = this._terminalHistory[this._terminalHistoryIndex] || "";
         }
       };
       input.addEventListener("keydown", this._boundTerminalKeyHandler);
+    }
+  }
+
+  // Execute a command and append its output to the terminal output area
+  runTerminalCommand(cmd) {
+    const out = document.getElementById("kam-terminal-output");
+    if (!out) return;
+
+    // Append the command line with a prompt
+    const promptLine = document.createElement("div");
+    promptLine.className = "terminal-line";
+    const promptSpan = document.createElement("span");
+    promptSpan.className = "terminal-prompt";
+    promptSpan.textContent = "$";
+    promptLine.appendChild(promptSpan);
+    const cmdSpan = document.createElement("span");
+    cmdSpan.textContent = " " + cmd;
+    promptLine.appendChild(cmdSpan);
+    out.appendChild(promptLine);
+
+    // Save to history and reset index, clear input
+    const inputEl = document.getElementById("kam-terminal-input");
+    if (inputEl) {
+      this._terminalHistory = this._terminalHistory || [];
+      this._terminalHistory.push(cmd);
+      this._terminalHistoryIndex = this._terminalHistory.length;
+      inputEl.value = "";
+    }
+
+    // Use KSU interface if available
+    if (window.core && typeof window.core.execCommand === "function") {
+      window.core.execCommand(cmd, (output, success, details) => {
+        const lines = (output || "").split(/\r?\n/);
+        if (!lines.length || (lines.length === 1 && lines[0] === "")) {
+          const lineEl = document.createElement("div");
+          lineEl.className = "terminal-line stdout";
+          lineEl.textContent = success ? "[OK]" : "[No output]";
+          out.appendChild(lineEl);
+        } else {
+          for (const ln of lines) {
+            const lineEl = document.createElement("div");
+            lineEl.className =
+              "terminal-line " + (success ? "stdout" : "stderr");
+            lineEl.textContent = ln;
+            out.appendChild(lineEl);
+          }
+        }
+        out.scrollTop = out.scrollHeight;
+      });
+    } else {
+      // Browser fallback simulation
+      const lineEl = document.createElement("div");
+      lineEl.className = "terminal-line stdout";
+      lineEl.textContent = "[Simulated] " + cmd;
+      out.appendChild(lineEl);
+      out.scrollTop = out.scrollHeight;
     }
   }
 
@@ -364,6 +449,15 @@ class KamPage {
       const input = document.getElementById("kam-terminal-input");
       if (input && this._boundTerminalKeyHandler) {
         input.removeEventListener("keydown", this._boundTerminalKeyHandler);
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      const clearBtn = document.getElementById("kam-terminal-clear");
+      if (clearBtn && this._boundTerminalClearHandler) {
+        clearBtn.removeEventListener("click", this._boundTerminalClearHandler);
       }
     } catch (e) {
       // ignore

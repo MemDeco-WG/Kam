@@ -65,6 +65,113 @@ impl Utils {
             }
         }
     }
+
+    /// Print a bold, centered banner to visually separate a logical operation.
+    ///
+    /// Uses a flower "✿" as a visual accent (梅花) and draws a simple separator.
+    /// The banner attempt to center the title within an 80-column width; if the
+    /// title is longer than the width it'll simply be printed without additional
+    /// padding.
+    pub fn banner(title: &str) {
+        // A sane default width — this avoids adding another dependency for
+        // terminal size detection but still produces a nice separator.
+        let width: usize = 80;
+        let title_text = format!(" ✿ {} ✿ ", title);
+        let title_len = title_text.chars().count();
+
+        let left_len = if width > title_len {
+            (width - title_len) / 2
+        } else {
+            0
+        };
+        let right_len = if width > title_len {
+            width - title_len - left_len
+        } else {
+            0
+        };
+
+        let left = "─".repeat(left_len);
+        let right = "─".repeat(right_len);
+
+        println!(
+            "{}",
+            format!("{}{}{}", left, title_text, right).cyan().bold()
+        );
+        println!();
+    }
+
+    /// Print a "key: value" pair with a clear bullet icon and subtle value styling.
+    pub fn kv(key: &str, value: &str) {
+        println!("  {} {}: {}", "•".cyan(), key.bold(), value.dimmed());
+    }
+
+    /// Print a generic informational line.
+    pub fn info(msg: &str) {
+        println!("  {} {}", "•".cyan(), msg);
+    }
+
+    /// Print an executing line for tasks such as scripts or commands being run.
+    pub fn executing(msg: &str) {
+        println!("  {} {}", "→".blue(), msg);
+    }
+
+    /// Print a success line with a prominent green check.
+    pub fn success(msg: &str) {
+        println!("{} {}", "✓".green().bold(), msg.green());
+    }
+
+    /// Print a warning line with yellow emphasis.
+    /// Print a warning message in yellow.
+    pub fn warn(msg: &str) {
+        println!("  {} {}", "!".yellow(), msg.yellow());
+    }
+
+    /// Print an error message in bold red with context.
+    pub fn error(msg: &str) {
+        eprintln!("{} {}", "✗".red().bold(), msg.red());
+    }
+
+    /// Print stdout/stderr from a command execution in a readable form.
+    ///
+    /// Both `stdout` and `stderr` are accepted as byte slices to match the types
+    /// returned by `std::process::Output`. They are printed lossily to avoid
+    /// panics on non-UTF-8 bytes and to remain resilient across platforms.
+    pub fn print_cmd_output(stdout: &[u8], stderr: &[u8]) {
+        // Convert to string lossily to handle non-UTF8 bytes gracefully
+        let s_out = String::from_utf8_lossy(stdout);
+        let s_err = String::from_utf8_lossy(stderr);
+
+        // Helper to classify and print a single line
+        fn print_line<S: AsRef<str>>(line: S) {
+            let l = line.as_ref().trim();
+            if l.is_empty() {
+                return;
+            }
+            let upper = l.to_ascii_uppercase();
+            // Prefer mapping to structured prints: WARN -> warn, ERROR/FAIL -> error, otherwise info.
+            if upper.contains("[WARN]") || upper.starts_with("WARN") || upper.contains("WARNING") {
+                Utils::warn(l);
+            } else if upper.contains("[ERROR]")
+                || upper.starts_with("ERROR")
+                || upper.contains("FAIL")
+                || upper.contains("[ERR]")
+            {
+                Utils::error(l);
+            } else {
+                Utils::info(l);
+            }
+        }
+
+        // Print stdout lines (map common prefixes to structured outputs)
+        for line in s_out.lines() {
+            print_line(line);
+        }
+
+        // Print stderr lines (treat as warnings/errors when applicable)
+        for line in s_err.lines() {
+            print_line(line);
+        }
+    }
 }
 
 /// Ensure the parent directory for `path` exists.

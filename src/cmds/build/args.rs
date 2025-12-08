@@ -7,7 +7,7 @@ pub struct BuildArgs {
     pub path: String,
 
     /// Build all workspace members
-    #[arg(long)]
+    #[arg(short, long)]
     pub all: bool,
 
     /// Output directory (default: dist)

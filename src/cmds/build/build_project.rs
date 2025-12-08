@@ -1,5 +1,5 @@
 use crate::types::kam_toml::enums::ModuleType;
-use colored::*;
+
 use glob::Pattern;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{self, File};
@@ -13,6 +13,7 @@ use super::args::BuildArgs;
 use super::hooks::{run_post_build_hooks, run_pre_build_hooks};
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
+use crate::utils::Utils;
 
 pub fn determine_output_dir(
     project_root: &Path,
@@ -52,8 +53,7 @@ pub fn build_project(
     })?;
     let project_path = project_root.as_path();
 
-    println!("{}", "Building module...".bold().cyan());
-    println!();
+    Utils::banner("Building module...");
 
     // Load kam.toml
     let kam_toml = if let Some(kt) = preloaded_kam_toml {
@@ -64,14 +64,10 @@ pub fn build_project(
     let module_id = &kam_toml.prop.id;
     let version = &kam_toml.prop.version;
 
-    println!("  {} Module: {} v{}", "•".cyan(), module_id, version);
+    Utils::kv("Module", &format!("{} v{}", module_id, version));
 
     let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
-    println!(
-        "  {} Output: {}",
-        "•".cyan(),
-        output_dir.display().to_string().dimmed()
-    );
+    Utils::kv("Output", &output_dir.display().to_string());
     println!();
 
     // Templates are exported as tar.gz and normally do not require build hooks executed.
@@ -82,13 +78,10 @@ pub fn build_project(
     if !is_template_build {
         run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
     } else {
-        println!(
-            "  {} Skipping build hooks for template packaging",
-            "•".cyan()
-        );
+        Utils::info(&format!("Skipping build hooks for template packaging"));
     }
 
-    println!("{}", "Packaging artifacts...".bold());
+    Utils::banner("Packaging artifacts...");
 
     let basename = determine_basename(&kam_toml)?;
 
@@ -113,12 +106,11 @@ pub fn build_project(
         };
 
         println!();
-        println!(
-            "  {} Build time: {:.2}s",
-            "•".cyan(),
-            build_duration.as_secs_f64()
+        Utils::kv(
+            "Build time",
+            &format!("{:.2}s", build_duration.as_secs_f64()),
         );
-        println!("  {} Package size: {}", "•".cyan(), size_str);
+        Utils::kv("Package size", &size_str);
     }
 
     // Run post-build hooks only for non-template modules
@@ -169,11 +161,10 @@ pub fn create_kam_module_zip(
     };
 
     if !src_dir.exists() {
-        println!(
-            "  {} Source directory not found: {}",
-            "!".yellow(),
+        Utils::warn(&format!(
+            "Source directory not found: {}",
             src_dir.display()
-        );
+        ));
         // We allow building even if src dir is missing, but it might be empty
     }
 
@@ -198,7 +189,7 @@ pub fn create_kam_module_zip(
 
     if !module_prop_exists {
         // Generate module.prop if it doesn't exist
-        println!("  {} Generating module.prop", "+".green());
+        Utils::info("Generating module.prop");
         let mut prop_content = String::new();
         prop_content.push_str(&format!("id={}\n", kam_toml.prop.id));
         prop_content.push_str(&format!("name={}\n", kam_toml.prop.get_name()));
@@ -216,10 +207,7 @@ pub fn create_kam_module_zip(
         zip.start_file("module.prop", options)?;
         zip.write_all(prop_content.as_bytes())?;
     } else {
-        println!(
-            "  {} Using existing module.prop (from pre-build hook)",
-            "+".green()
-        );
+        Utils::info("Using existing module.prop (from pre-build hook)");
     }
 
     // Add source files (module dir: src/<module_id>) flattened to root
@@ -361,7 +349,7 @@ pub fn create_kam_module_zip(
                     let mut buffer = Vec::new();
                     file.read_to_end(&mut buffer)?;
                     zip.write_all(&buffer)?;
-                    println!("  {} {}", "+".green(), file_name);
+                    Utils::info(&file_name);
                 }
             }
         }
@@ -369,12 +357,10 @@ pub fn create_kam_module_zip(
 
     zip.finish()?;
 
-    println!();
-    println!(
-        "{} Built Kam module: {}",
-        "✓".green().bold(),
-        module_output_file.display().to_string().green()
-    );
+    Utils::success(&format!(
+        "Built Kam module: {}",
+        module_output_file.display()
+    ));
     Ok(module_output_file)
 }
 
@@ -500,10 +486,9 @@ pub fn create_template_archive(
 
     tar.finish()?;
 
-    println!(
-        "{} Built template archive: {}",
-        "✓".green().bold(),
-        source_output_file.display().to_string().green()
-    );
+    Utils::success(&format!(
+        "Built template archive: {}",
+        source_output_file.display()
+    ));
     Ok(source_output_file)
 }

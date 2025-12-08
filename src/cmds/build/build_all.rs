@@ -7,6 +7,7 @@ use super::args::BuildArgs;
 use super::build_project::build_project;
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
+use crate::utils::Utils;
 
 struct BuildResult {
     member: String,
@@ -17,7 +18,7 @@ struct BuildResult {
 fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -> BuildResult {
     let member_path = project_path.join(member);
     if !member_path.exists() {
-        println!("Warning: workspace member {} not found", member);
+        Utils::warn(&format!("workspace member {} not found", member));
         return BuildResult {
             member: member.to_string(),
             success: false,
@@ -25,24 +26,18 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
         };
     }
     if !member_path.join("kam.toml").exists() {
-        println!("Skipping {}: no kam.toml found", member);
+        Utils::info(&format!("Skipping {}: no kam.toml found", member));
         return BuildResult {
             member: member.to_string(),
             success: false,
             error: Some("no kam.toml found".to_string()),
         };
     }
-    println!();
-    println!(
-        "{}",
-        format!("Building workspace member: {}", member)
-            .bold()
-            .cyan()
-    );
+    Utils::banner(&format!("Building workspace member: {}", member));
     let original_cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
         Err(e) => {
-            println!("Failed to get current dir: {}", e);
+            Utils::error(&format!("Failed to get current dir: {}", e));
             return BuildResult {
                 member: member.to_string(),
                 success: false,
@@ -51,7 +46,11 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
         }
     };
     if let Err(e) = std::env::set_current_dir(&member_path) {
-        println!("Failed to change to {}: {}", member_path.display(), e);
+        Utils::error(&format!(
+            "Failed to change to {}: {}",
+            member_path.display(),
+            e
+        ));
         return BuildResult {
             member: member.to_string(),
             success: false,
@@ -67,7 +66,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
                 error: None,
             },
             Err(e) => {
-                println!("Failed to build {}: {}", member, e);
+                Utils::error(&format!("Failed to build {}: {}", member, e));
                 BuildResult {
                     member: member.to_string(),
                     success: false,
@@ -76,7 +75,10 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
             }
         },
         Err(e) => {
-            println!("Skipping {}: failed to load kam.toml: {}", member, e);
+            Utils::warn(&format!(
+                "Skipping {}: failed to load kam.toml: {}",
+                member, e
+            ));
             BuildResult {
                 member: member.to_string(),
                 success: false,
@@ -86,7 +88,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
     };
 
     if let Err(e) = std::env::set_current_dir(original_cwd) {
-        println!("Failed to restore cwd: {}", e);
+        Utils::warn(&format!("Failed to restore cwd: {}", e));
     }
 
     result
@@ -165,44 +167,39 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
 
     // Print summary
     println!();
-    println!("{}", "═".repeat(60).dimmed());
-    println!("{}", "Workspace Build Summary".bold());
-    println!("{}", "═".repeat(60).dimmed());
+    Utils::banner("Workspace Build Summary");
 
     let success_count = results.iter().filter(|r| r.success).count();
     let failed_count = results.len() - success_count;
 
     for result in &results {
         if result.success {
-            println!("  {} {}", "✓".green(), result.member);
+            Utils::success(&result.member);
         } else {
-            println!(
-                "  {} {} - {}",
-                "✗".red(),
+            Utils::error(&format!(
+                "{} - {}",
                 result.member,
                 result
                     .error
                     .as_ref()
                     .unwrap_or(&"unknown error".to_string())
-                    .dimmed()
-            );
+            ));
         }
     }
 
     println!();
-    println!(
-        "  {} Total: {} | {} Success: {} | {} Failed: {}",
-        "•".cyan(),
-        results.len(),
-        "✓".green(),
-        success_count,
-        "✗".red(),
-        failed_count
+    Utils::kv(
+        "Total",
+        &format!(
+            "{} | Success: {} | Failed: {}",
+            results.len(),
+            success_count,
+            failed_count
+        ),
     );
-    println!(
-        "  {} Total time: {:.2}s",
-        "•".cyan(),
-        total_duration.as_secs_f64()
+    Utils::kv(
+        "Total time",
+        &format!("{:.2}s", total_duration.as_secs_f64()),
     );
     println!("{}", "═".repeat(60).dimmed());
 

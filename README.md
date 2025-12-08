@@ -170,6 +170,7 @@ For more details on templates, see [templates/README.md](templates/README.md).
 kam build
 
 # build all
+kam build -a    # shorthand for --all
 kam build --all
 
 # Build with automatic version bump
