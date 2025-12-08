@@ -36,9 +36,8 @@ pub struct InitArgs {
     pub force: bool,
 
     /// Deprecated: Template source to implement (local path, URL, or git repo)
-    /// NOTE: This option has been removed from the CLI. Use the dedicated
-    /// template selection flags (e.g. --kam, --tmpl)
-    /// which correspond to builtin template IDs instead.
+    /// NOTE: This option has been removed from the CLI. Use -t/--template
+    /// and --tmpl to select built-in templates (e.g., kam_template, ak3_template).
     #[arg(skip)]
     pub r#impl: Option<String>,
 
@@ -49,11 +48,6 @@ pub struct InitArgs {
     /// Template to use (built-in ID or local path)
     #[arg(short, long)]
     pub template: Option<String>,
-
-    /// Create a kam module
-    /// Template id: "kam_template"
-    #[arg(long)]
-    pub kam: bool,
 
     /// Create a template project
     /// Template id: "tmpl_template"

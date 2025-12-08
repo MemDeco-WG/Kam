@@ -34,23 +34,40 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     };
 
     // Validate conflicting flags
-    let type_flags = [args.kam, args.tmpl, args.template.is_some()]
+    // Only `--tmpl` and `-t/--template` are valid mutually exclusive options.
+    let type_flags = [args.tmpl, args.template.is_some()]
         .iter()
         .filter(|&&x| x)
         .count();
     if type_flags > 1 {
         return Err(KamError::InvalidModuleType(
-            "Cannot specify multiple module types: --kam, --tmpl, --template".to_string(),
+            "Cannot specify multiple module types: --tmpl, -t/--template".to_string(),
         ));
     }
 
-    // Determine module type and template
-    let (module_type, impl_template) = if args.kam {
-        (ModuleType::Kam, "kam_template".to_string())
-    } else if args.tmpl {
+    // Determine module type and template.
+    // The -t/--template option supports:
+    //  1) A full template id (e.g., "kam_template" or "kam_template.tar.gz"),
+    //  2) A short builtin id (e.g., "kam", "meta", "ak3") which will map to "<id>_template",
+    //  3) A local path or archive (e.g., /path/to/template.tar.gz or https://.../template.tar.gz).
+    let (module_type, impl_template) = if args.tmpl {
         (ModuleType::Template, "tmpl_template".to_string())
     } else if let Some(t) = &args.template {
-        (ModuleType::Kam, t.clone())
+        // Detect likely path/archive/URL to avoid appending suffix in those cases.
+        let is_path_or_archive = t.contains('/')
+            || t.contains('\\')
+            || t.contains(':')
+            || t.ends_with(".tar.gz")
+            || t.ends_with(".tgz")
+            || t.ends_with(".zip");
+
+        let impl_spec = if t.ends_with("_template") || is_path_or_archive {
+            t.clone()
+        } else {
+            format!("{}_template", t)
+        };
+
+        (ModuleType::Kam, impl_spec)
     } else {
         // default to kam module
         (ModuleType::Kam, "kam_template".to_string())

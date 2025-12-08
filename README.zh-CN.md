@@ -46,19 +46,19 @@ cargo build --release
 使用 Kam 模板创建模块：
 
 ```bash
-kam init my_awesome_module --kam
+kam init my_awesome_module -t kam
 ```
 
 使用 Meta 模板（元模块）：
 
 ```bash
-kam init my_meta_module --meta
+kam init my_meta_module -t meta
 ```
 
 使用 AnyKernel3 模板（内核模块）：
 
 ```bash
-kam init my_kernel_module --ak3
+kam init my_kernel_module -t ak3
 ```
 
 ### 配置模块
@@ -111,10 +111,10 @@ Kam 提供多种内置模板：
 
 | 模板 | 说明 | 适用场景 |
 |------|------|----------|
-| `--kam` | 标准 Kam 模块 | 通用模块开发 |
-| `--meta` | 元模块模板 | 元模块（模块的模块） |
-| `--ak3` | AnyKernel3 模板 | 内核模块 |
-| `--tmpl` | 模板开发模板 | 创建新的模板 |
+| `-t kam` | 标准 Kam 模块（映射到 `kam_template`） | 通用模块开发 |
+| `-t meta` | 元模块模板（映射到 `meta_template`） | 元模块（模块的模块） |
+| `-t ak3` | AnyKernel3 模板（映射到 `ak3_template`） | 内核模块 |
+| `--tmpl` | 模板开发模板（映射到 `tmpl_template`） | 创建新的模板 |
 
 ### 模板管理
 

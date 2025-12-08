@@ -12,12 +12,17 @@ on:
         description: "Full initialization command (complete command to run after setup/template import)"
         required: false
         type: string
-        default: "kam init . --kam -f"
+        default: "kam init . --tmpl -f"
       enable-cache:
         description: "Toggle version-aware caching for kam and Cargo"
         required: false
         type: string
         default: "true"
+
+# Permissions: allow the workflow to push commits (auto-commit action) and read actions
+permissions:
+  contents: write
+  actions: read
 
 jobs:
   run-initialization:

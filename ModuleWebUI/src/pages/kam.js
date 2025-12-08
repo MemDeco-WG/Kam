@@ -28,9 +28,9 @@ class KamPage {
       installCargo: "cargo install kam",
       installFromSource:
         "git clone https://github.com/MemDeco-WG/Kam.git\ncd Kam\ncargo build --release",
-      initKam: "kam init my_awesome_module --kam",
-      initMeta: "kam init my_meta_module --meta",
-      initAK3: "kam init my_kernel_module --ak3",
+      initKam: "kam init my_awesome_module -t kam",
+      initMeta: "kam init my_meta_module -t meta",
+      initAK3: "kam init my_kernel_module -t ak3",
       build: "kam build",
       buildAll: "kam build --all",
       buildBump: "kam build --bump",

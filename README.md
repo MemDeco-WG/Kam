@@ -47,19 +47,19 @@ cargo build --release
 Using Kam template:
 
 ```bash
-kam init my_awesome_module --kam
+kam init my_awesome_module -t kam
 ```
 
 Using Meta template (meta-module):
 
 ```bash
-kam init my_meta_module --meta
+kam init my_meta_module -t meta
 ```
 
 Using AnyKernel3 template (kernel module):
 
 ```bash
-kam init my_kernel_module --ak3
+kam init my_kernel_module -t ak3
 ```
 
 ### Configure Your Module
@@ -112,10 +112,10 @@ Kam provides several built-in templates:
 
 | Template | Description | Use Case |
 |----------|-------------|----------|
-| `--kam` | Standard Kam module | General module development |
-| `--meta` | Meta-module template | Meta modules (modules of modules) |
-| `--ak3` | AnyKernel3 template | Kernel modules |
-| `--tmpl` | Template development template | Creating new templates |
+| `-t kam` | Standard Kam module (maps to `kam_template`) | General module development |
+| `-t meta` | Meta-module template (maps to `meta_template`) | Meta modules (modules of modules) |
+| `-t ak3` | AnyKernel3 template (maps to `ak3_template`) | Kernel modules |
+| `--tmpl` | Template development template (maps to `tmpl_template`) | Creating new templates |
 
 ### Template Management
 
@@ -128,7 +128,7 @@ kam tmpl import templates/meta_template.tar.gz
 
 Import multiple templates from a ZIP file:
 ```bash
-kam tmpl import templates/all-templates.zip
+kam tmpl import templates.zip
 ```
 
 #### List Available Templates

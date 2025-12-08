@@ -1,5 +1,9 @@
 name: Kam Project Initialization
 
+permissions:
+  contents: write
+  actions: read
+
 on:
   workflow_dispatch:
     inputs:
@@ -12,7 +16,7 @@ on:
         description: "Full initialization command (complete command to run after setup/template import)"
         required: false
         type: string
-        default: "kam init . --kam -f"
+        default: "kam init . -t kam -f"
       enable-cache:
         description: "Toggle version-aware caching for kam and Cargo"
         required: false
