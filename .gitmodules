@@ -10,3 +10,7 @@
 	path = KamHooks
 	url = https://github.com/MemDeco-WG/KamHooks.git
 	branch = main
+[submodule "KamModuleX"]
+	path = KamModuleX
+	url = https://github.com/MemDeco-WG/KamModuleX.git
+	branch = main
