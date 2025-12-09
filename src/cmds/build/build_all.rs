@@ -26,14 +26,18 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
         };
     }
     if !member_path.join("kam.toml").exists() {
-        Utils::info(&format!("Skipping {}: no kam.toml found", member));
+        if !args.quiet {
+            Utils::info(&format!("Skipping {}: no kam.toml found", member));
+        }
         return BuildResult {
             member: member.to_string(),
             success: false,
             error: Some("no kam.toml found".to_string()),
         };
     }
-    Utils::banner(&format!("Building workspace member: {}", member));
+    if !args.quiet {
+        Utils::banner(&format!("Building workspace member: {}", member));
+    }
     let original_cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
         Err(e) => {
@@ -166,42 +170,48 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     let total_duration = start_time.elapsed();
 
     // Print summary
-    println!();
-    Utils::banner("Workspace Build Summary");
+    if !args.quiet {
+        println!();
+        Utils::banner("Workspace Build Summary");
+    }
 
     let success_count = results.iter().filter(|r| r.success).count();
     let failed_count = results.len() - success_count;
 
-    for result in &results {
-        if result.success {
-            Utils::success(&result.member);
-        } else {
-            Utils::error(&format!(
-                "{} - {}",
-                result.member,
-                result
-                    .error
-                    .as_ref()
-                    .unwrap_or(&"unknown error".to_string())
-            ));
+    if !args.quiet {
+        for result in &results {
+            if result.success {
+                Utils::success(&result.member);
+            } else {
+                Utils::error(&format!(
+                    "{} - {}",
+                    result.member,
+                    result
+                        .error
+                        .as_ref()
+                        .unwrap_or(&"unknown error".to_string())
+                ));
+            }
         }
     }
 
-    println!();
-    Utils::kv(
-        "Total",
-        &format!(
-            "{} | Success: {} | Failed: {}",
-            results.len(),
-            success_count,
-            failed_count
-        ),
-    );
-    Utils::kv(
-        "Total time",
-        &format!("{:.2}s", total_duration.as_secs_f64()),
-    );
-    println!("{}", "═".repeat(60).dimmed());
+    if !args.quiet {
+        println!();
+        Utils::kv(
+            "Total",
+            &format!(
+                "{} | Success: {} | Failed: {}",
+                results.len(),
+                success_count,
+                failed_count
+            ),
+        );
+        Utils::kv(
+            "Total time",
+            &format!("{:.2}s", total_duration.as_secs_f64()),
+        );
+        println!("{}", "═".repeat(60).dimmed());
+    }
 
     if failed_count > 0 {
         return Err(KamError::CommandFailed(format!(

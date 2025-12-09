@@ -177,6 +177,21 @@ kam build --release
 KAM_DEBUG=1 kam build
 ```
 
+### 检查项目文件
+
+验证项目中的常见数据文件（JSON、YAML、Markdown）。该命令会检查解析错误以及基本的格式问题；使用 `--fix` 尝试自动修复文件。
+
+```bash
+# 检查当前目录并以人类可读方式输出
+kam check
+
+# 以 JSON 格式输出结果
+kam check --json
+
+# 尝试自动修复 / 格式化文件
+kam check --fix
+```
+
 ### 钩子系统
 
 Kam 支持在构建过程中执行自定义脚本：
@@ -266,7 +281,7 @@ members = [
 ```toml
 [kam.build]
 target_dir = "dist"              # 输出目录
-output_file = "{{id}}"           # 输出文件名模板
+output_file = "{{id}}-{{versionCode}}-{{version}}"           # 输出文件名模板
 hooks_dir = "hooks"              # 钩子目录
 source_dir = "src/{{id}}"        # 源码目录（可选）
 ```

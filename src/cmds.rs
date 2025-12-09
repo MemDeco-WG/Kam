@@ -1,6 +1,13 @@
 pub mod build;
 pub mod cache;
+pub mod check;
+pub mod completion;
+pub mod export;
 pub mod init;
+pub mod secret;
+pub mod secret_crypto;
+pub mod sign;
 pub mod tmpl;
 pub mod validate;
+pub mod verify;
 pub mod version;

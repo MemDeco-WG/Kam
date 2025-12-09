@@ -21,4 +21,8 @@ pub struct BuildArgs {
     /// Enable KAM_RELEASE_ENABLED environment variable (set to 1)
     #[arg(short, long)]
     pub release: bool,
+
+    /// Suppress most output; show only warnings and errors
+    #[arg(short, long)]
+    pub quiet: bool,
 }

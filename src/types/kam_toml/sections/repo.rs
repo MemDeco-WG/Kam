@@ -1,6 +1,23 @@
 use super::{ManagerSection, NoteSection, OptionsSection};
 use serde::{Deserialize, Serialize};
 
+/// A maintainer entry can be a simple string (name) or an object with name, link and type
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum MaintainerEntry {
+    Name(String),
+    Object(Maintainer),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[allow(non_snake_case)]
+pub struct Maintainer {
+    #[serde(rename = "type")]
+    pub r#type: Option<String>,
+    pub name: String,
+    pub link: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
 /// 仓库/发布信息节，包含展示与分发相关的元数据（匹配 repo.json 规范）
@@ -25,8 +42,8 @@ pub struct RepoSection {
     pub categories: Option<Vec<String>>,
     /// 关键字标签列表，便于搜索或索引
     pub keywords: Option<Vec<String>>,
-    /// 维护者列表（用户名或联系方式）
-    pub maintainers: Option<Vec<String>>,
+    /// 维护者列表（可支持字符串或对象形式）
+    pub maintainers: Option<Vec<MaintainerEntry>>,
     /// 源代码仓库地址（例如 GitHub 仓库 URL）
     pub repository: Option<String>,
     /// 文档链接（外部文档或站点）
@@ -110,6 +127,64 @@ impl Default for RepoSection {
                 "module-template".to_string(),
                 "customization".to_string(),
             ]),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::kam_toml::KamToml;
+    use toml;
+
+    #[test]
+    fn parse_maintainers_object_and_string() {
+        let toml_str = r#"
+    [prop]
+    id = "example"
+    name = "Example"
+    version = "1.0.0"
+    versionCode = 1
+    author = "Alice"
+    description = "desc"
+    metamodule = false
+
+    [kam]
+    module_type = "kam"
+
+    [mmrl.repo]
+    repository = "https://github.com/test/repo"
+
+    [[mmrl.repo.maintainers]]
+    type = "add"
+    name = "tiann"
+    link = "https://github.com/tiann"
+
+    [[mmrl.repo.maintainers]]
+    name = "someone"
+    "#;
+
+        let v: KamToml = toml::from_str(toml_str).unwrap();
+        let maint = v
+            .mmrl
+            .and_then(|m| m.repo)
+            .and_then(|r| r.maintainers)
+            .unwrap();
+        assert_eq!(maint.len(), 2);
+        match &maint[0] {
+            MaintainerEntry::Object(o) => {
+                assert_eq!(o.name, "tiann");
+                assert_eq!(o.link.as_ref().unwrap(), "https://github.com/tiann");
+            }
+            _ => panic!("Expected object"),
+        }
+        match &maint[1] {
+            MaintainerEntry::Name(s) => {
+                assert_eq!(s, "someone");
+            }
+            MaintainerEntry::Object(o) => {
+                assert_eq!(o.name, "someone");
+            }
         }
     }
 }

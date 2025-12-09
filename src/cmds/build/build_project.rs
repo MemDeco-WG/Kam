@@ -53,7 +53,9 @@ pub fn build_project(
     })?;
     let project_path = project_root.as_path();
 
-    Utils::banner("Building module...");
+    if !args.quiet {
+        Utils::banner("Building module...");
+    }
 
     // Load kam.toml
     let kam_toml = if let Some(kt) = preloaded_kam_toml {
@@ -64,11 +66,17 @@ pub fn build_project(
     let module_id = &kam_toml.prop.id;
     let version = &kam_toml.prop.version;
 
-    Utils::kv("Module", &format!("{} v{}", module_id, version));
+    if !args.quiet {
+        Utils::kv("Module", &format!("{} v{}", module_id, version));
+    }
 
     let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
-    Utils::kv("Output", &output_dir.display().to_string());
-    println!();
+    if !args.quiet {
+        Utils::kv("Output", &output_dir.display().to_string());
+    }
+    if !args.quiet {
+        println!();
+    }
 
     // Templates are exported as tar.gz and normally do not require build hooks executed.
     // Skip pre/post build hooks when packaging a template archive.
@@ -78,20 +86,29 @@ pub fn build_project(
     if !is_template_build {
         run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
     } else {
-        Utils::info(&format!("Skipping build hooks for template packaging"));
+        if !args.quiet {
+            Utils::info(&format!("Skipping build hooks for template packaging"));
+        }
     }
 
-    Utils::banner("Packaging artifacts...");
+    if !args.quiet {
+        Utils::banner("Packaging artifacts...");
+    }
 
     let basename = determine_basename(&kam_toml)?;
 
     let start_time = Instant::now();
     let output_file = match kam_toml.kam.module_type {
-        ModuleType::Kam => {
-            create_kam_module_zip(&kam_toml, &output_dir, &basename, project_path, module_id)?
-        }
+        ModuleType::Kam => create_kam_module_zip(
+            &kam_toml,
+            &output_dir,
+            &basename,
+            project_path,
+            module_id,
+            args,
+        )?,
         ModuleType::Template => {
-            create_template_archive(&kam_toml, &output_dir, &basename, project_path)?
+            create_template_archive(&kam_toml, &output_dir, &basename, project_path, args)?
         }
     };
     let build_duration = start_time.elapsed();
@@ -136,8 +153,8 @@ pub fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
     }
 
     Ok(format!(
-        "{}-{}",
-        kam_toml.prop.id, kam_toml.prop.versionCode
+        "{}-{}-{}",
+        kam_toml.prop.id, kam_toml.prop.versionCode, kam_toml.prop.version
     ))
 }
 
@@ -147,6 +164,7 @@ pub fn create_kam_module_zip(
     basename: &str,
     project_path: &Path,
     module_id: &str,
+    args: &BuildArgs,
 ) -> Result<PathBuf, KamError> {
     let module_output_file = output_dir.join(format!("{}.zip", basename));
 
@@ -161,10 +179,12 @@ pub fn create_kam_module_zip(
     };
 
     if !src_dir.exists() {
-        Utils::warn(&format!(
-            "Source directory not found: {}",
-            src_dir.display()
-        ));
+        if !args.quiet {
+            Utils::warn(&format!(
+                "Source directory not found: {}",
+                src_dir.display()
+            ));
+        }
         // We allow building even if src dir is missing, but it might be empty
     }
 
@@ -189,7 +209,9 @@ pub fn create_kam_module_zip(
 
     if !module_prop_exists {
         // Generate module.prop if it doesn't exist
-        Utils::info("Generating module.prop");
+        if !args.quiet {
+            Utils::info("Generating module.prop");
+        }
         let mut prop_content = String::new();
         prop_content.push_str(&format!("id={}\n", kam_toml.prop.id));
         prop_content.push_str(&format!("name={}\n", kam_toml.prop.get_name()));
@@ -206,7 +228,7 @@ pub fn create_kam_module_zip(
         prop_content.push_str(&format!("metamodule={}\n", kam_toml.prop.metamodule));
         zip.start_file("module.prop", options)?;
         zip.write_all(prop_content.as_bytes())?;
-    } else {
+    } else if !args.quiet {
         Utils::info("Using existing module.prop (from pre-build hook)");
     }
 
@@ -244,13 +266,19 @@ pub fn create_kam_module_zip(
             .hidden(false)
             .build();
 
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .template("  {spinner:.cyan} Packaging files: {pos} - {msg}")
-                .unwrap(),
-        );
-        pb.enable_steady_tick(std::time::Duration::from_millis(100));
+        let pb = if args.quiet {
+            None
+        } else {
+            let pb = ProgressBar::new_spinner();
+            pb.set_style(
+                ProgressStyle::default_spinner()
+                    .template("  {spinner:.cyan} Packaging files: {pos} - {msg}")
+                    .unwrap(),
+            );
+            pb.enable_steady_tick(std::time::Duration::from_millis(100));
+            Some(pb)
+        };
+        // Progress bar created only if not quiet
 
         let mut count = 0;
         for result in walker {
@@ -297,7 +325,9 @@ pub fn create_kam_module_zip(
                 } else {
                     rel_str.to_string()
                 };
-                pb.set_message(display_name);
+                if let Some(p) = &pb {
+                    p.set_message(display_name);
+                }
 
                 zip.start_file(rel_str.to_string(), options)?;
                 let mut f = File::open(path).map_err(|e| {
@@ -309,10 +339,14 @@ pub fn create_kam_module_zip(
                 std::io::copy(&mut f, &mut zip)?;
 
                 count += 1;
-                pb.set_position(count);
+                if let Some(p) = &pb {
+                    p.set_position(count);
+                }
             }
         }
-        pb.finish_with_message(format!("{} (Done)", count));
+        if let Some(p) = pb {
+            p.finish_with_message(format!("{} (Done)", count));
+        }
     }
 
     // Add other files if they exist (readme, license, changelog)
@@ -349,7 +383,9 @@ pub fn create_kam_module_zip(
                     let mut buffer = Vec::new();
                     file.read_to_end(&mut buffer)?;
                     zip.write_all(&buffer)?;
-                    Utils::info(&file_name);
+                    if !args.quiet {
+                        Utils::info(&file_name);
+                    }
                 }
             }
         }
@@ -357,10 +393,12 @@ pub fn create_kam_module_zip(
 
     zip.finish()?;
 
-    Utils::success(&format!(
-        "Built Kam module: {}",
-        module_output_file.display()
-    ));
+    if !args.quiet {
+        Utils::success(&format!(
+            "Built Kam module: {}",
+            module_output_file.display()
+        ));
+    }
     Ok(module_output_file)
 }
 
@@ -369,6 +407,7 @@ pub fn create_template_archive(
     output_dir: &Path,
     basename: &str,
     project_root: &Path,
+    args: &BuildArgs,
 ) -> Result<PathBuf, KamError> {
     let source_filename = format!("{}.tar.gz", basename);
     let source_output_file = output_dir.join(&source_filename);
@@ -416,13 +455,18 @@ pub fn create_template_archive(
         })
         .build();
 
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("  {spinner:.cyan} Packaging files: {pos} - {msg}")
-            .unwrap(),
-    );
-    pb.enable_steady_tick(std::time::Duration::from_millis(100));
+    let pb = if args.quiet {
+        None
+    } else {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("  {spinner:.cyan} Packaging files: {pos} - {msg}")
+                .unwrap(),
+        );
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
+        Some(pb)
+    };
 
     let mut count = 0;
     for result in walker {
@@ -474,21 +518,29 @@ pub fn create_template_archive(
             } else {
                 rel_str.to_string()
             };
-            pb.set_message(display_name);
+            if let Some(p) = &pb {
+                p.set_message(display_name);
+            }
 
             tar.append_path_with_name(path, rel_path)?;
 
             count += 1;
-            pb.set_position(count);
+            if let Some(p) = &pb {
+                p.set_position(count);
+            }
         }
     }
-    pb.finish_with_message(format!("{} (Done)", count));
+    if let Some(p) = pb {
+        p.finish_with_message(format!("{} (Done)", count));
+    }
 
     tar.finish()?;
 
-    Utils::success(&format!(
-        "Built template archive: {}",
-        source_output_file.display()
-    ));
+    if !args.quiet {
+        Utils::success(&format!(
+            "Built template archive: {}",
+            source_output_file.display()
+        ));
+    }
     Ok(source_output_file)
 }

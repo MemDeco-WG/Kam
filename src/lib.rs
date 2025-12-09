@@ -1,6 +1,7 @@
 // kam library
 
 pub mod assets;
+pub mod cli;
 pub mod cmds;
 pub mod errors;
 pub mod template;

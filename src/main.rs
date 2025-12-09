@@ -1,45 +1,12 @@
 //
 // 👀
 //
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use dotenvy::dotenv;
 use kam::errors::KamError;
 use std::error::Error;
 
-#[derive(Parser)]
-#[command(
-    name = "kam",
-    about = "Kam — Lightweight, offline module initializer & packager",
-    long_about = "Kam is a small, network-free CLI focused on module initialization (scaffolding) and packaging (build). Lightweight and offline-first.",
-    version,
-    // custom help template inspired by `uv` to provide grouped sections
-    help_template = "{bin} — {about}\n\nUsage: {usage}\n\nCommands:\n{subcommands}\n\nOptions:\n{options}\n"
-)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Initialize a new Kam project
-    Init(kam::cmds::init::InitArgs),
-
-    /// Build the module
-    Build(kam::cmds::build::BuildArgs),
-
-    /// Manage module version
-    Version(kam::cmds::version::VersionArgs),
-
-    /// Manage local cache
-    Cache(kam::cmds::cache::CacheArgs),
-
-    /// Manage templates (import/export)
-    Tmpl(kam::cmds::tmpl::TmplArgs),
-
-    /// Validate kam.toml configuration
-    Validate(kam::cmds::validate::ValidateArgs),
-}
+use kam::cli::{Cli, Commands};
 
 fn main() {
     dotenv().ok();
@@ -52,6 +19,12 @@ fn main() {
         Commands::Cache(args) => kam::cmds::cache::run(args),
         Commands::Tmpl(args) => kam::cmds::tmpl::run(args),
         Commands::Validate(args) => kam::cmds::validate::run(args),
+        Commands::Completions(args) => kam::cmds::completion::run(args),
+        Commands::Secret(args) => kam::cmds::secret::run(args),
+        Commands::Sign(args) => kam::cmds::sign::run(args),
+        Commands::Verify(args) => kam::cmds::verify::run(args),
+        Commands::Check(args) => kam::cmds::check::run(args),
+        Commands::Export(args) => kam::cmds::export::run(args),
     };
 
     if let Err(e) = res {

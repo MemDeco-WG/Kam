@@ -183,6 +183,21 @@ kam build --release
 KAM_DEBUG=1 kam build
 ```
 
+### Check Project Files
+
+Verify common data files in the project (JSON, YAML, Markdown). This command checks for parse errors and basic formatting issues; add `--fix` to attempt automatic fixes.
+
+```bash
+# Check current directory and print results (human friendly)
+kam check
+
+# Output results as JSON
+kam check --json
+
+# Attempt to auto-fix/format files
+kam check --fix
+```
+
 ### Hook System
 
 Kam supports executing custom scripts during the build process:
@@ -281,7 +296,7 @@ members = [
 ```toml
 [kam.build]
 target_dir = "dist"              # Output directory
-output_file = "{{id}}"           # Output filename template
+output_file = "{{id}}-{{versionCode}}-{{version}}"           # Output filename template
 hooks_dir = "hooks"              # Hooks directory
 source_dir = "src/{{id}}"        # Source directory (optional)
 ```

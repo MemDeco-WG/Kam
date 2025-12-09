@@ -16,7 +16,7 @@ pub struct ExtraInclude {
 ///
 /// - `source_dir`：自定义源代码目录（默认为 `src/<id>`）
 /// - `target_dir`：打包输出目录，默认 "dist"
-/// - `output_file`：可选的输出文件名（为空时使用 `<id>-<version>.zip`）
+/// - `output_file`：可选的输出文件名（为空时使用 `<id>-<versionCode>-<version>.zip`）
 /// - `hooks_dir`：钩子脚本目录，默认 "hooks"
 /// - `extra_includes`：额外包含的文件列表
 /// - `exclude`：额外的排除路径列表（支持 glob 模式）
@@ -36,7 +36,7 @@ impl Default for BuildSection {
         BuildSection {
             source_dir: None,
             target_dir: Some("dist".to_string()),
-            output_file: Some("{{id}}-{{versionCode}}".to_string()),
+            output_file: Some("{{id}}-{{versionCode}}-{{version}}".to_string()),
             hooks_dir: Some("hooks".to_string()),
             extra_includes: None,
             exclude: Some(vec![

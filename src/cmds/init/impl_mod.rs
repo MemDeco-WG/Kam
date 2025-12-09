@@ -214,7 +214,8 @@ pub fn init_impl(
                             // Reset target_dir to "dist" (template may have ../../src/assets/tmpl)
                             build.target_dir = Some("dist".to_string());
                             // Reset output_file to use the new module ID
-                            build.output_file = Some("{{id}}-{{versionCode}}".to_string());
+                            build.output_file =
+                                Some("{{id}}-{{versionCode}}-{{version}}".to_string());
                             // Clear template-specific exclude list
                             build.exclude = None;
                         }
