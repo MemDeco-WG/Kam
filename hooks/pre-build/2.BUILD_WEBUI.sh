@@ -1,6 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
+
 
 log_info "Building WebUI for module: $KAM_MODULE_ID"
 

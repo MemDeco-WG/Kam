@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # 3.sync_hooks.sh
 #
@@ -82,11 +82,17 @@ for tmpl_dir in "$KAM_TMPL_ROOT"/*; do
     copy_if_exists "$KAM_HOOKS_SRC/LICENSE" "$tmpl_dir/LICENSE"
     copy_if_exists "$KAM_HOOKS_SRC/README.md" "$tmpl_dir/README.md"
 
-    # Copy lib utilities
+    # Copy lib utilities (these files are shared across templates; always copy/sync them)
     if [ -d "$KAM_HOOKS_SRC/lib" ]; then
-        for libfile in "$KAM_HOOKS_SRC"/lib/*; do
-            [ -f "$libfile" ] || continue
-            copy_if_exists "$libfile" "$tmpl_dir/hooks/lib/$(basename "$libfile")"
+        for libitem in "$KAM_HOOKS_SRC"/lib/*; do
+            [ -e "$libitem" ] || continue
+            dest="$tmpl_dir/hooks/lib/$(basename "$libitem")"
+            # Recursively copy files or directories; overwrite existing ones in templates
+            if cp -a "$libitem" "$dest"; then
+                log_info "Synced shared lib: $(basename "$libitem") -> $dest"
+            else
+                log_warn "Failed to copy: $libitem -> $dest"
+            fi
         done
     fi
 
@@ -122,5 +128,71 @@ for tmpl_dir in "$KAM_TMPL_ROOT"/*; do
     fi
 
 done
+
+# Also sync into the project's hooks directory (KAM_PROJECT_ROOT/hooks)
+KAM_PROJECT_HOOKS="${KAM_PROJECT_HOOKS:-$KAM_PROJECT_ROOT/hooks}"
+
+# Skip if the project hooks root is the same as the KamHooks source root
+if [ -n "$KAM_PROJECT_HOOKS" ] && [ "$KAM_PROJECT_HOOKS" != "$KAM_HOOKS_SRC" ]; then
+    log_info "Syncing KamHooks into project hooks at: $KAM_PROJECT_HOOKS"
+
+    # Ensure project hooks directories exist
+    mkdir -p "$KAM_PROJECT_HOOKS" "$KAM_PROJECT_HOOKS/pre-build" "$KAM_PROJECT_HOOKS/post-build" "$KAM_PROJECT_HOOKS/lib" >/dev/null 2>&1 || true
+
+    # Copy root-level files (always copy to project hooks)
+    if [ -f "$KAM_HOOKS_SRC/LICENSE" ]; then
+        if cp -f "$KAM_HOOKS_SRC/LICENSE" "$KAM_PROJECT_HOOKS/LICENSE"; then
+            log_info "Copied: LICENSE -> $KAM_PROJECT_HOOKS/LICENSE"
+        else
+            log_warn "Failed to copy: LICENSE -> $KAM_PROJECT_HOOKS/LICENSE"
+        fi
+    fi
+
+    if [ -f "$KAM_HOOKS_SRC/README.md" ]; then
+        if cp -f "$KAM_HOOKS_SRC/README.md" "$KAM_PROJECT_HOOKS/README.md"; then
+            log_info "Copied: README.md -> $KAM_PROJECT_HOOKS/README.md"
+        else
+            log_warn "Failed to copy: README.md -> $KAM_PROJECT_HOOKS/README.md"
+        fi
+    fi
+
+    # Copy lib utilities (create or overwrite in project)
+    if [ -d "$KAM_HOOKS_SRC/lib" ]; then
+        for libitem in "$KAM_HOOKS_SRC"/lib/*; do
+            [ -e "$libitem" ] || continue
+            dest="$KAM_PROJECT_HOOKS/lib/$(basename "$libitem")"
+            if cp -a "$libitem" "$dest"; then
+                log_info "Synced project lib: $(basename \"$libitem\") -> $dest"
+                chmod +x "$dest" 2>/dev/null || true
+            else
+                log_warn "Failed to copy: $libitem -> $dest"
+            fi
+        done
+    fi
+
+    # Copy/pre-create pre-build and post-build scripts (overwrite/create)
+    for stage in pre-build post-build; do
+        src_stage_dir="$KAM_HOOKS_SRC/$stage"
+        proj_stage_dir="$KAM_PROJECT_HOOKS/$stage"
+
+        if [ -d "$src_stage_dir" ]; then
+            mkdir -p "$proj_stage_dir" >/dev/null 2>&1 || true
+            for srcfile in "$src_stage_dir"/*; do
+                [ -f "$srcfile" ] || continue
+                dest="$proj_stage_dir/$(basename "$srcfile")"
+                if cp -a "$srcfile" "$dest"; then
+                    log_info "Synced project hook: $(basename \"$srcfile\") -> $dest"
+                    case "$(basename "$dest")" in
+                        *.sh)
+                            chmod +x "$dest" 2>/dev/null || true
+                            ;;
+                    esac
+                else
+                    log_warn "Failed to copy: $srcfile -> $dest"
+                fi
+            done
+        fi
+    done
+fi
 
 log_success "Hooks sync complete"

@@ -1,11 +1,10 @@
-#!/bin/sh
+#!/bin/bash
 # Sync kam.toml to module.prop and update.json
 # This hook generates:
 # - module.prop in module directory ($KAM_MODULE_ROOT/module.prop)
 # - update.json in project root ($KAM_PROJECT_ROOT/update.json)
 
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
-
 
 log_info "Syncing kam.toml to module.prop and update.json..."
 

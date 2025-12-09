@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Example post-build hook script
 # This script runs after the build process completes.
 

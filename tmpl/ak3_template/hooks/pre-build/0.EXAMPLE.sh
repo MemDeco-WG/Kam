@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Example pre-build hook script
 # This script runs before the build process starts.
 

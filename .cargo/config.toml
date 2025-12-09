@@ -1,0 +1,33 @@
+# Kam/.cargo/config.toml
+#
+# Per-target configuration for cross-compiling to Android (aarch64).
+# - Set rustflags to abort on panic which avoids linking libunwind (common Android/Ndk issue).
+# - Set a suggested linker (clang) for Android target. Adjust the exact linker path (or name)
+#   to match the NDK/toolchain available on your build host or in your cross/Docker environment.
+#
+# Notes:
+# - This config aims to avoid the common "cannot find -lunwind" linker error by switching the
+#   panic strategy to abort at compile time for this target. If you intentionally need unwinding,
+#   you should ensure your NDK/toolchain provides libunwind for the target and remove/change
+#   the panic configuration here.
+#
+# - The `linker` setting is intentionally a plain tool name; if you require an explicit path
+#   to clang from your NDK, replace the value with the full path, e.g.:
+#     linker = "/path/to/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+#
+# - Cross/Docker environments may override or ignore local toolchains. If you're using `cross`,
+#   it uses prebuilt images; a transparent fix is to prefer `cargo-ndk` or a cross image that
+#   includes a suitable NDK with libunwind support.
+#
+# Example:
+#   To force abort-on-panic and prefer clang as a linker for the target:
+#
+#     [target.aarch64-linux-android]
+#     rustflags = ["-C", "panic=abort"]
+#     linker = "aarch64-linux-android-clang"
+#
+
+[target.aarch64-linux-android]
+rustflags = ["-C", "panic=abort"]
+# Prefer clang from Android NDK. Replace with the full path if needed in your environment.
+linker = "aarch64-linux-android-clang"

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Common utility functions for Kam hooks
 
 # Colors
@@ -24,13 +24,77 @@ log_error() {
     printf "${RED}[ERROR]${NC} %s\n" "$1"
 }
 
-# Check if a command exists
-require_command() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        log_error "Command '$1' is required but not found."
+# exit_if_sudo [<message>] [--return]
+# If --return (or -r) is passed as second arg, the function returns 1 instead of exiting.
+# This implementation is Bash-only and relies on $EUID (no POSIX fallbacks).
+exit_if_sudo() {
+    local message="${1:-Do not run this script as root or via sudo. Please run as a normal user.}"
+    local do_return=0
+
+    case "$2" in
+        --return|-r) do_return=1 ;;
+    esac
+
+    # Running as root or invoked via sudo (Bash-only).
+    if (( EUID == 0 )) || [[ -n "${SUDO_USER:-}" ]] || [[ -n "${SUDO_UID:-}" ]] || [[ -n "${SUDO_COMMAND:-}" ]]; then
+        if declare -F log_error >/dev/null 2>&1; then
+            log_error "$message"
+        else
+            printf '%s\n' "$message" >&2
+        fi
+
+        # Explicit request to return instead of exit
+        if (( do_return != 0 )); then
+            return 1
+        fi
+
+        # If this function was invoked from a sourced script (rather than a top-level
+        # invoked script), prefer returning so we don't terminate the caller's shell.
+        # BASH_SOURCE[1] is the caller; $0 is the top-level invocation.
+        if [[ "${BASH_SOURCE[1]:-}" != "${0}" ]]; then
+            return 1
+        fi
+
         exit 1
     fi
 }
+
+# Check if a command exists
+has_command() {
+    cmd="$1"
+
+    if [ -z "$cmd" ]; then
+        log_error "has_command: command name is required"
+        exit 1
+    fi
+
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Usage: require_command <command> [<error message>]
+# If the command is not available and a custom message is provided, it will be printed;
+# otherwise a default error message is shown.
+require_command() {
+    cmd="$1"
+    msg="$2"
+
+    if has_command "$cmd"; then
+        return 0
+    else
+        if [ -n "$msg" ]; then
+            log_error "$msg"
+        else
+            log_error "Command '$cmd' is required but not found."
+        fi
+        exit 1
+    fi
+}
+
+
 
 # Check if a variable is set
 require_env() {
@@ -41,10 +105,6 @@ require_env() {
         exit 1
     fi
 }
-
-
-
-
 
 # Magisk-like utility functions
 
