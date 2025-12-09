@@ -1,94 +1,94 @@
-[prop]
-id = "Kam"
-name = "Kam"
-version = "0.4.11"
-versionCode = 1765224108685
-author = "LightJunction"
-description = "Kam： ksu/apu/magisk module builder."
-updateJson = "https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json"
-metamodule = false
-
-[mmrl.repo]
-license = "MIT"
-license_file = "LICENSE"
-homepage = "https://github.com/MemDeco-WG/Kam"
-readme = "https://github.com/MemDeco-WG/Kam/blob/main/README.md"
-readme_file = "README.md"
-changelog = "https://github.com/MemDeco-WG/Kam/blob/main/CHANGELOG.md"
-changelog_file = "CHANGELOG.md"
-screenshots = []
-categories = ["tools"]
-keywords = [
-    "kam",
-    "module",
-    "android",
-    "template",
-]
-maintainers = ["LightJunction"]
-repository = "https://github.com/MemDeco-WG/Kam"
-documentation = "https://github.com/MemDeco-WG/Kam"
-issues = "https://github.com/MemDeco-WG/Kam/issues"
-funding = "https://github.com/sponsors/LightJunction"
-support = "https://github.com/MemDeco-WG/Kam/issues"
-donate = ""
-cover = ""
-icon = "icon.png"
-devices = []
-arch = ["arm64-v8a"]
-require = []
-antifeatures = []
-max_num = 0
-min_api = 21
-max_api = 35
-verified = true
-features = [
-    "module-template",
-    "customization",
-]
-
-[mmrl.repo.note]
-title = ""
-message = ""
-
-[mmrl.repo.manager.magisk]
-devices = []
-arch = []
-require = []
-
-[mmrl.repo.manager.kernelsu]
-devices = []
-arch = []
-require = []
-
-[mmrl.repo.manager.apatch]
-devices = []
-arch = []
-require = []
-
-[mmrl.repo.options.archive]
-compression = ""
-
 [kam]
-min_api = 0
-max_api = 0
-supported_arch = []
 conflicts = []
+max_api = 0
+min_api = 0
 module_type = "kam"
+supported_arch = []
 
 [kam.build]
-target_dir = "dist"
-output_file = "{{id}}-{{versionCode}}-{{version}}"
 hooks_dir = "hooks"
+output_file = "{{id}}-{{versionCode}}-{{version}}"
+target_dir = "dist"
 
 [kam.tmpl.variables.repository]
-var_type = "string"
-required = false
 default = ""
+required = false
+var_type = "string"
 
 [kam.workspace]
 members = [
     "tmpl/*_template",
     ".",
 ]
+
+[mmrl.repo]
+antifeatures = []
+arch = ["arm64-v8a"]
+categories = ["tools"]
+changelog = "https://github.com/MemDeco-WG/Kam/blob/main/CHANGELOG.md"
+changelog_file = "CHANGELOG.md"
+cover = ""
+devices = []
+documentation = "https://github.com/MemDeco-WG/Kam"
+donate = ""
+features = [
+    "module-template",
+    "customization",
+]
+funding = "https://github.com/sponsors/LightJunction"
+homepage = "https://github.com/MemDeco-WG/Kam"
+icon = "icon.png"
+issues = "https://github.com/MemDeco-WG/Kam/issues"
+keywords = [
+    "kam",
+    "module",
+    "android",
+    "template",
+]
+license = "MIT"
+license_file = "LICENSE"
+maintainers = ["LightJunction"]
+max_api = 35
+max_num = 0
+min_api = 21
+readme = "https://github.com/MemDeco-WG/Kam/blob/main/README.md"
+readme_file = "README.md"
+repository = "https://github.com/MemDeco-WG/Kam"
+require = []
+screenshots = []
+support = "https://github.com/MemDeco-WG/Kam/issues"
+verified = true
+
+[mmrl.repo.manager.apatch]
+arch = []
+devices = []
+require = []
+
+[mmrl.repo.manager.kernelsu]
+arch = []
+devices = []
+require = []
+
+[mmrl.repo.manager.magisk]
+arch = []
+devices = []
+require = []
+
+[mmrl.repo.note]
+message = ""
+title = ""
+
+[mmrl.repo.options.archive]
+compression = ""
+
+[prop]
+author = "LightJunction"
+description = "Kam： ksu/apu/magisk module builder."
+id = "Kam"
+metamodule = false
+name = "Kam"
+updateJson = "https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json"
+version = "0.4.11"
+versionCode = 1765224108685
 
 [tool]

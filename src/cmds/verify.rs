@@ -1,6 +1,5 @@
 use clap::Args;
 
-
 #[derive(Args, Debug)]
 pub struct VerifyArgs {
     /// Path to the artifact to verify (required for .sig verification)
@@ -27,7 +26,5 @@ pub struct VerifyArgs {
 }
 
 pub fn run(_args: VerifyArgs) -> Result<(), crate::errors::KamError> {
-
     Ok(())
 }
-

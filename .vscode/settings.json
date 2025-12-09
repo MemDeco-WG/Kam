@@ -1,20 +1,15 @@
 {
-    // Force LF line endings in this workspace
-    "files.eol": "\n",
-    // Helpful defaults for consistent text files
-    "files.insertFinalNewline": true,
-    "files.trimTrailingWhitespace": true,
-    "cSpell.words": [
-        "antifeatures",
-        "metamodule",
-        "mmrl",
-        "tiann",
-        "tmpl"
-    ]
-    ,
-    // Terminal font settings (workspace-level). Replace with your preferred font.
-    "terminal.integrated.fontFamily": "Fira Code, Menlo, Monaco, 'Courier New', monospace",
-    // Optional: terminal font size
-    "terminal.integrated.fontSize": 12,
-    "deepscan.enable": true
+  "cSpell.words": [
+    "antifeatures",
+    "metamodule",
+    "mmrl",
+    "tiann",
+    "tmpl"
+  ],
+  "deepscan.enable": true,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "terminal.integrated.fontFamily": "Fira Code, Menlo, Monaco, 'Courier New', monospace",
+  "terminal.integrated.fontSize": 12
 }

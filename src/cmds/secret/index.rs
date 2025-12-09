@@ -72,10 +72,7 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                     .and_then(|x| x.as_str())
                     .unwrap_or("file")
                     .to_string();
-                let last_probe = val
-                    .get("last_probe")
-                    .and_then(|x| x.as_i64())
-                    .unwrap_or(0);
+                let last_probe = val.get("last_probe").and_then(|x| x.as_i64()).unwrap_or(0);
                 let size = val.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
                 new.entries.insert(
                     k.clone(),
@@ -128,10 +125,7 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                     .and_then(|x| x.as_str())
                     .unwrap_or("file")
                     .to_string();
-                let last_probe = val
-                    .get("last_probe")
-                    .and_then(|x| x.as_i64())
-                    .unwrap_or(0);
+                let last_probe = val.get("last_probe").and_then(|x| x.as_i64()).unwrap_or(0);
                 let size = val.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
                 new.entries.insert(
                     k.clone(),

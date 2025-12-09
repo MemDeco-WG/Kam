@@ -1,7 +1,7 @@
 pub mod args;
+pub mod file;
 pub mod handler;
 pub mod index;
-pub mod file;
 pub mod utils;
 pub use args::*;
 pub use handler::run;

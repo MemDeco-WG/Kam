@@ -1,7 +1,7 @@
-use clap::{Args, Subcommand};
 use crate::errors::KamError;
-use std::path::{Path, PathBuf};
+use clap::{Args, Subcommand};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Args, Debug)]
 pub struct ConfigArgs {
@@ -57,7 +57,8 @@ fn read_toml(path: &Path) -> Result<toml::Value, KamError> {
         return Ok(toml::Value::Table(Default::default()));
     }
     let s = fs::read_to_string(path).map_err(KamError::Io)?;
-    let v: toml::Value = toml::from_str(&s).map_err(|e| KamError::CommandFailed(format!("Failed to parse config file: {}", e)))?;
+    let v: toml::Value = toml::from_str(&s)
+        .map_err(|e| KamError::CommandFailed(format!("Failed to parse config file: {}", e)))?;
     Ok(v)
 }
 
@@ -65,7 +66,8 @@ fn write_toml(path: &Path, v: &toml::Value) -> Result<(), KamError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(KamError::Io)?;
     }
-    let s = toml::to_string_pretty(v).map_err(|e| KamError::CommandFailed(format!("Failed to serialize config: {}", e)))?;
+    let s = toml::to_string_pretty(v)
+        .map_err(|e| KamError::CommandFailed(format!("Failed to serialize config: {}", e)))?;
     fs::write(path, s).map_err(KamError::Io)?;
     Ok(())
 }
@@ -152,7 +154,11 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                 println!("{}", val);
                 Ok(())
             } else {
-                Err(KamError::CommandFailed(format!("Key '{}' not found in {}", key, path.display())))
+                Err(KamError::CommandFailed(format!(
+                    "Key '{}' not found in {}",
+                    key,
+                    path.display()
+                )))
             }
         }
         ConfigCommand::Set { key, value } => {
@@ -170,7 +176,11 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                 println!("Unset {} in {}", key, path.display());
                 Ok(())
             } else {
-                Err(KamError::CommandFailed(format!("Key '{}' not found in {}", key, path.display())))
+                Err(KamError::CommandFailed(format!(
+                    "Key '{}' not found in {}",
+                    key,
+                    path.display()
+                )))
             }
         }
         ConfigCommand::List => {

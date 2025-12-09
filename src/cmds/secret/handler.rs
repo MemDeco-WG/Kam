@@ -2,13 +2,13 @@ use colored::*;
 use std::fs;
 use std::io::{Read, Write};
 
-use crate::errors::KamError;
 use super::args::{SecretArgs, SecretCommands};
-use super::index::{load_index, save_index};
 use super::file::secret_file_path;
-use super::utils::{read_secret_blob, global_with_backup_default};
-use rpassword::prompt_password;
+use super::index::{load_index, save_index};
+use super::utils::{global_with_backup_default, read_secret_blob};
+use crate::errors::KamError;
 use chrono::TimeZone;
+use rpassword::prompt_password;
 
 pub fn run(args: SecretArgs) -> Result<(), KamError> {
     match args.command {
@@ -58,7 +58,15 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 }
             }
         }
-        SecretCommands::Add { name, file, file_path, value, force_file, password, with_backup: _ } => {
+        SecretCommands::Add {
+            name,
+            file,
+            file_path,
+            value,
+            force_file,
+            password,
+            with_backup: _,
+        } => {
             let chosen_file = file.or(file_path);
             let data = if let Some(path) = chosen_file {
                 fs::read(&path).map_err(KamError::Io)?
@@ -77,10 +85,12 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             let pw = if let Some(pw) = password {
                 pw
             } else {
-                let p1 = prompt_password("Encryption password: ")
-                    .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?;
-                let p2 = prompt_password("Confirm encryption password: ")
-                    .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?;
+                let p1 = prompt_password("Encryption password: ").map_err(|e| {
+                    KamError::CommandFailed(format!("Failed to read password: {}", e))
+                })?;
+                let p2 = prompt_password("Confirm encryption password: ").map_err(|e| {
+                    KamError::CommandFailed(format!("Failed to read password: {}", e))
+                })?;
                 if p1 != p2 {
                     return Err(KamError::CommandFailed(
                         "Passwords do not match; aborting".to_string(),
@@ -95,15 +105,20 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             super::file::store_secret(&name, &blob, true, force_file)?;
             println!("{} Secret '{}' saved.", "✓".green(), name);
         }
-        SecretCommands::Get { name, out, password } => {
+        SecretCommands::Get {
+            name,
+            out,
+            password,
+        } => {
             let blob = read_secret_blob(&name)?;
             // Try to decrypt if it looks like an encrypted blob
             let plaintext = if blob.starts_with(b"KAMKEYv1") {
                 let pw = if let Some(pw) = password {
                     pw
                 } else {
-                    prompt_password("Password: ")
-                        .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?
+                    prompt_password("Password: ").map_err(|e| {
+                        KamError::CommandFailed(format!("Failed to read password: {}", e))
+                    })?
                 };
                 crate::cmds::secret_crypto::decrypt_with_password(&blob, &pw)?
             } else {
@@ -143,15 +158,20 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             save_index(&idx)?;
             println!("{} Secret '{}' removed.", "✓".green(), name);
         }
-        SecretCommands::Export { name, path, encrypted } => {
+        SecretCommands::Export {
+            name,
+            path,
+            encrypted,
+        } => {
             let blob = read_secret_blob(&name)?;
             if encrypted {
                 fs::write(&path, &blob).map_err(KamError::Io)?;
             } else {
                 // Decrypt before exporting
                 if blob.starts_with(b"KAMKEYv1") {
-                    let pw = prompt_password("Password: ")
-                        .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?;
+                    let pw = prompt_password("Password: ").map_err(|e| {
+                        KamError::CommandFailed(format!("Failed to read password: {}", e))
+                    })?;
                     let plaintext = crate::cmds::secret_crypto::decrypt_with_password(&blob, &pw)?;
                     fs::write(&path, &plaintext).map_err(KamError::Io)?;
                 } else {
@@ -180,10 +200,13 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             if data.starts_with(b"KAMKEYv1") {
                 super::file::store_secret(&final_name, &data, true, false)?;
             } else {
-                let pw = prompt_password("Encryption password for import: ")
-                    .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?;
-                let pw2 = prompt_password("Confirm encryption password for import: ")
-                    .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?;
+                let pw = prompt_password("Encryption password for import: ").map_err(|e| {
+                    KamError::CommandFailed(format!("Failed to read password: {}", e))
+                })?;
+                let pw2 =
+                    prompt_password("Confirm encryption password for import: ").map_err(|e| {
+                        KamError::CommandFailed(format!("Failed to read password: {}", e))
+                    })?;
                 if pw != pw2 {
                     return Err(KamError::CommandFailed(
                         "Passwords do not match; aborting import".to_string(),

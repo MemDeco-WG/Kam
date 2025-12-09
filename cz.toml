@@ -1,7 +1,7 @@
 [tool.commitizen]
+major_version_zero = true
 name = "cz_conventional_commits"
 tag_format = "$version"
-version_scheme = "semver"
-version_provider = "cargo"
 update_changelog_on_bump = true
-major_version_zero = true
+version_provider = "cargo"
+version_scheme = "semver"

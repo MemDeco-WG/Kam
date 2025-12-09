@@ -1,6 +1,6 @@
 use crate::cmds::secret::file::read_secret_file;
-use crate::errors::KamError;
 use crate::cmds::secret::index::{load_index, save_index};
+use crate::errors::KamError;
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
 use chrono::Utc;

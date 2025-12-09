@@ -1,12 +1,12 @@
+use crate::cmds::secret::index::{SecretMeta, load_index, save_index};
 use crate::errors::KamError;
-use crate::cmds::secret::index::{load_index, save_index, SecretMeta};
-use chrono::Utc;
-use std::fs;
-use std::path::PathBuf;
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
+use chrono::Utc;
+use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 
 fn secrets_dir() -> Result<PathBuf, KamError> {
     let home = dirs::home_dir().ok_or_else(|| {
@@ -17,7 +17,9 @@ fn secrets_dir() -> Result<PathBuf, KamError> {
         fs::create_dir_all(&dir).map_err(KamError::Io)?;
         #[cfg(unix)]
         {
-            let mut perm = fs::metadata(home.join(".kam")).map_err(KamError::Io)?.permissions();
+            let mut perm = fs::metadata(home.join(".kam"))
+                .map_err(KamError::Io)?
+                .permissions();
             perm.set_mode(0o700);
             fs::set_permissions(home.join(".kam"), perm).map_err(KamError::Io)?;
         }
@@ -79,15 +81,17 @@ pub fn store_secret(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use serial_test::serial;
     use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     #[serial]
     fn add_and_read_with_file_fallback_updates_index() {
         let d = tempdir().unwrap();
-        unsafe { std::env::set_var("HOME", d.path().to_str().unwrap()); }
+        unsafe {
+            std::env::set_var("HOME", d.path().to_str().unwrap());
+        }
         let name = "test_secret";
         let blob = b"some-secret-data".to_vec();
 
@@ -113,7 +117,9 @@ mod tests {
     #[serial]
     fn add_with_backup_attempts_fallback_file() {
         let d = tempdir().unwrap();
-        unsafe { std::env::set_var("HOME", d.path().to_str().unwrap()); }
+        unsafe {
+            std::env::set_var("HOME", d.path().to_str().unwrap());
+        }
         let name = "baktest";
         let blob = b"secretdata".to_vec();
         // Attempt to store with backup (force_file = false, with_backup = true)
