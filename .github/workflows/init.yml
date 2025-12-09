@@ -16,7 +16,7 @@ on:
         description: "Full initialization command (complete command to run after setup/template import)"
         required: false
         type: string
-        default: "kam init . -t kam -f"
+        default: "kam init . -t kam_template"
       enable-cache:
         description: "Toggle version-aware caching for kam and Cargo"
         required: false
@@ -58,11 +58,11 @@ jobs:
             - Template: ${{ github.event.inputs.template-url || 'No template' }}
             - Command: ${{ github.event.inputs.init-command || github.event.inputs.kam-command }}
           file_pattern: |
-            *
+            **/*
             !.github/workflows/exec.yml
             !.github/workflows/init.yml
 
           push_options: "--force-with-lease"
-
+          
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

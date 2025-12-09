@@ -49,7 +49,7 @@ jobs:
             - Template: ${{ github.event.inputs.template-url || 'No template' }}
             - Command: ${{ github.event.inputs.init-command || github.event.inputs.kam-command }}
           file_pattern: |
-            *
+            **/*
             !.github/workflows/exec.yml
             !.github/workflows/init.yml
 

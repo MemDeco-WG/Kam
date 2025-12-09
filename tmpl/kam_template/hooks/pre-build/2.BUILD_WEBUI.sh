@@ -1,5 +1,5 @@
 #!/bin/bash
-
+exit 0 # comment out to enable
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 
