@@ -1,7 +1,8 @@
 #!/bin/bash
-exit 0 # comment out to enable
+
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
+log_warn " comment out to enable !" && exit 0
 
 log_info "Building WebUI for module: $KAM_MODULE_ID"
 

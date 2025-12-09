@@ -26,7 +26,7 @@ pub struct VerifyArgs {
     pub secret: String,
 }
 
-pub fn run(args: VerifyArgs) -> Result<(), crate::errors::KamError> {
+pub fn run(_args: VerifyArgs) -> Result<(), crate::errors::KamError> {
 
     Ok(())
 }

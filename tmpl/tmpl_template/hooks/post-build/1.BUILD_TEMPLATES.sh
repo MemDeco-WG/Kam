@@ -1,7 +1,9 @@
 #!/bin/bash
 # 2.BUILD_TEMPLATES.sh - compress all files in templates directory into dist/templates.zip
-exit 0 # comment out to enable
+
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
+
+log_warn " comment out to enable !" && exit 0
 
 # Where to output the ZIP (KAM_DIST_DIR preferred, default to KAM_PROJECT_ROOT/dist)
 DIST="${KAM_DIST_DIR:-$KAM_PROJECT_ROOT/dist}"

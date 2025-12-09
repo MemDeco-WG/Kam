@@ -1,4 +1,4 @@
-# Kam - KSU/APatch/Magisk Module Builder
+# Kam - Offline-first module scaffolding, packaging, and template toolkit
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/MemDeco-WG/Kam)
@@ -8,11 +8,8 @@ English | [中文](README.zh-CN.md)
 
 ## 📖 Overview
 
-Kam is a lightweight, networkless CLI tool for Magisk, KernelSU, and APatch module developers. It focuses on fast, offline-first module initialization (scaffolding) and packaging (build). Kam is designed to be minimal and work without network connectivity.
+Kam is an offline-first CLI toolkit for scaffolding, building, and distributing Android module packages and templates. It focuses on rapid project initialization, reproducible offline builds, template management, and convenient repository/metadata export for module maintainers and distribution channels. Kam still supports building modules for Magisk, KernelSU, and APatch workflows.
 
-### Migration Note
-
-The `[kam].dependency` section and related dependency management functionality have been removed. If your `kam.toml` contains a `dependency` section, please remove it before upgrading. Kam no longer resolves or manages external dependencies; use external tools or prebuild hooks to include required artifacts in the module source.
 
 
 ### ✨ Key Features
@@ -21,6 +18,8 @@ The `[kam].dependency` section and related dependency management functionality h
 - 🔧 **Automated Build** - One-click module ZIP packaging
 - 🔒 **Lightweight & Offline** - Kam does not require network access and is designed to be minimal
 - 🎯 **Smart Sync** - Auto-sync `kam.toml` configuration to `module.prop` and `update.json`
+ - ⚙️ **Config Management** - `kam config` to manage global (`~/.kam/config.toml`) and project-level (`./.kam/config.toml`) settings to avoid repetitive edits
+ - 🗂️ **Repo & Metadata Export** - Export `kam.toml` into repo.json, module.json, track.json, config.json for marketplaces or registries
 - 🪝 **Hook System** - Support custom script hooks before/after builds
 - 📦 **Template Management** - Import, export, and share module templates
 - 🌐 **WebUI Integration** - Built-in WebUI building and integration (note: Kam does not provide runtime module management)
@@ -62,6 +61,12 @@ Using AnyKernel3 template (kernel module):
 kam init my_kernel_module -t ak3
 ```
 
+Using Astrbot template.
+
+```bash
+kam init my_astrbot_module -t astr_template
+```
+
 ### Configure Your Module
 
 Edit the `kam.toml` configuration file:
@@ -80,6 +85,28 @@ updateJson = "https://example.com/update.json"
 repository = "https://github.com/username/my_awesome_module"
 changelog = "https://github.com/username/my_awesome_module/blob/main/CHANGELOG.md"
 ```
+
+### Manage Kam Configuration
+
+Kam provides a `kam config` command to manage per-project and global configuration, similar to `git config`:
+
+Examples:
+
+```bash
+# Set a project-level configuration (stored in `./.kam/config.toml`)
+kam config set prop.author "YourName"
+
+# Get a project-level configuration
+kam config get prop.author
+
+# Set a global configuration (stored in `~/.kam/config.toml`)
+kam config --global set prop.author "YourName"
+
+# List configuration of current target (project or global)
+kam config list
+```
+
+This avoids frequent manual edits of `kam.toml` for values that should be global or common across projects.
 
 ### Add Module Files
 

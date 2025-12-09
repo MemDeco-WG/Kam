@@ -1,19 +1,27 @@
-# Kam - KSU/APatch/Magisk 模块构建工具
+# Kam -基于模板的模块构建工具
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 [![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/MemDeco-WG/Kam)
 
 [English](README.md) | 简体中文
 
 ## 📖 简介
 
-Kam 是一个强大的 Android 模块构建工具，专为 KernelSU、APatch 和 Magisk 模块开发者设计。它提供了完整的项目模板、构建系统和钩子机制，让模块开发变得简单高效。
+Kam 是一个强大的基于模板的模块构建工具，
 
-### 迁移说明
+目前支持的模板：
+- Magisk/Apu/Ksu 模块
 
-- `dependency` 字段与相关依赖管理功能已从 `kam` 中彻底移除。
-  - 如果你的 `kam.toml` 中存在 `[kam].dependency` 或相关配置，请将其删除。
-  - Kam 不再解析或管理外部依赖，若需包含或预装外部构件，请在构建前使用自有脚本或 `hooks/pre-build` 将构件放入模块源码里，或采用 CI 工具在构建前进行预取。
+- Anykernel3 模板
+
+- Astrbot V5 模板(计划中)
+
+Kam的核心职责
+解析模板
+初始化
+构建_版本控制
+
 
 ### ✨ 主要特性
 
@@ -46,20 +54,27 @@ cargo build --release
 使用 Kam 模板创建模块：
 
 ```bash
-kam init my_awesome_module -t kam
+kam init my_awesome_module -t kam_template
 ```
 
 使用 Meta 模板（元模块）：
 
 ```bash
-kam init my_meta_module -t meta
+kam init my_meta_module -t meta_template
 ```
 
 使用 AnyKernel3 模板（内核模块）：
 
 ```bash
-kam init my_kernel_module -t ak3
+kam init my_kernel_module -t ak3_template
 ```
+
+使用Astrbot模块模板 (计划支持)
+
+```bash
+kam init my_astrbot_module -t astr_template
+```
+
 
 ### 配置模块
 

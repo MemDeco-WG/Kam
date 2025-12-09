@@ -132,6 +132,8 @@ for tmpl_dir in "$KAM_TMPL_ROOT"/*; do
 
 done
 
+log_warn " comment out to sync this project's hooks file !" && exit 0
+
 # Also sync into the project's hooks directory (KAM_PROJECT_ROOT/hooks)
 KAM_PROJECT_HOOKS="${KAM_PROJECT_HOOKS:-$KAM_PROJECT_ROOT/hooks}"
 

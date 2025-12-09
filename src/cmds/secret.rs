@@ -25,6 +25,61 @@ pub struct SecretArgs {
     pub command: SecretCommands,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use serial_test::serial;
+    // env used directly via std::env::set_var
+
+    #[test]
+    #[serial]
+    fn add_and_read_with_file_fallback_updates_index() {
+        let d = tempdir().unwrap();
+        unsafe { std::env::set_var("HOME", d.path().to_str().unwrap()); }
+        let name = "test_secret";
+        let blob = b"some-secret-data".to_vec();
+
+        // Store using file fallback
+        assert!(store_secret(name, &blob, false, true, false).is_ok());
+
+        // Read back
+        let read = read_secret_blob(name).unwrap();
+        assert_eq!(read, blob);
+
+        // Index should contain metadata
+        let idx = load_index().unwrap();
+        let meta = idx.entries.get(name).unwrap();
+        assert_eq!(meta.storage, "file");
+        assert_eq!(meta.size, blob.len() as u64);
+        assert!(meta.created_at > 0);
+    }
+
+    #[serial]
+    fn add_with_backup_attempts_fallback_file() {
+        let d = tempdir().unwrap();
+        unsafe { std::env::set_var("HOME", d.path().to_str().unwrap()); }
+        let name = "baktest";
+        let blob = b"secretdata".to_vec();
+        // Attempt to store with backup (force_file = false, with_backup = true)
+        let res = store_secret(name, &blob, true, false, true);
+        assert!(res.is_ok());
+        // Check index and/or file
+        let idx = load_index().unwrap();
+        if let Some(meta) = idx.entries.get(name) {
+            // If keyring claimed, that's ok; fallback may or may not exist due to environment
+            assert!(meta.storage == "keyring" || meta.storage == "file");
+        }
+        // If unexpected, check fallback path exists
+        if let Ok(p) = secret_file_path(name) {
+            if p.exists() {
+                let s = fs::read_to_string(&p).unwrap();
+                assert!(!s.is_empty());
+            }
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum SecretCommands {
     /// List saved secrets
@@ -50,6 +105,9 @@ pub enum SecretCommands {
         /// Force storing to local file instead of system keyring
         #[arg(long, default_value_t = false)]
         force_file: bool,
+        /// Also create an encrypted fallback file under ~/.kam/secrets
+        #[arg(long, default_value_t = false)]
+        with_backup: bool,
         /// Pass the password on the CLI (not recommended); password will be prompted if not set
         #[arg(long)]
         password: Option<String>,
@@ -199,14 +257,19 @@ fn load_index() -> Result<SecretIndex, KamError> {
                     .and_then(|x| x.as_str())
                     .unwrap_or("file")
                     .to_string();
+                let last_probe = val
+                    .get("last_probe")
+                    .and_then(|x| x.as_i64())
+                    .unwrap_or(0);
+                let size = val.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
                 new.entries.insert(
                     k.clone(),
                     SecretMeta {
                         encrypted,
                         created_at,
                         storage,
-                        last_probe: 0,
-                        size: 0,
+                        last_probe,
+                        size,
                     },
                 );
             }
@@ -222,16 +285,16 @@ fn load_index() -> Result<SecretIndex, KamError> {
         })?;
         let mut new = SecretIndex::default();
         for n in legacy.names {
-            new.entries.insert(
-                n,
-                SecretMeta {
-                    encrypted: false,
-                    created_at: 0,
-                    storage: "file".to_string(),
-                    last_probe: 0,
-                    size: 0,
-                },
-            );
+                new.entries.insert(
+                    n,
+                    SecretMeta {
+                        encrypted: false,
+                        created_at: 0,
+                        storage: "file".to_string(),
+                        last_probe: 0,
+                        size: 0,
+                    },
+                );
         }
         new
     } else if v.is_object() {
@@ -250,14 +313,19 @@ fn load_index() -> Result<SecretIndex, KamError> {
                     .and_then(|x| x.as_str())
                     .unwrap_or("file")
                     .to_string();
+                let last_probe = val
+                    .get("last_probe")
+                    .and_then(|x| x.as_i64())
+                    .unwrap_or(0);
+                let size = val.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
                 new.entries.insert(
                     k.clone(),
                     SecretMeta {
                         encrypted,
                         created_at,
                         storage,
-                        last_probe: 0,
-                        size: 0,
+                        last_probe,
+                        size,
                     },
                 );
             }
@@ -304,6 +372,34 @@ fn load_index() -> Result<SecretIndex, KamError> {
             changed = true;
         }
     }
+    // Additional normalization: if entry claims keyring but keyring get fails and file exists, switch to file
+    for (name, meta) in idx.entries.iter_mut() {
+        if meta.storage == "keyring" {
+            let mut keyring_ok = false;
+            if let Ok(entry) = Entry::new(SERVICE_NAME, name) {
+                if entry.get_password().is_ok() {
+                    keyring_ok = true;
+                }
+            }
+            if !keyring_ok {
+                // try file fallback
+                if let Ok(p) = secret_file_path(name) {
+                    if p.exists() {
+                        if let Ok(metadata) = fs::metadata(&p) {
+                            meta.storage = "file".to_string();
+                            meta.last_probe = Utc::now().timestamp_millis();
+                            meta.size = metadata.len();
+                            changed = true;
+                        }
+                    } else {
+                        // mark as unknown to avoid repeated probing that might be expensive
+                        meta.storage = "unknown".to_string();
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
     if changed {
         // update index on disk
         save_index(&idx)?;
@@ -319,19 +415,70 @@ fn save_index(idx: &SecretIndex) -> Result<(), KamError> {
     Ok(())
 }
 
+#[cfg(test)]
+mod idx_tests {
+    use super::*;
+    use tempfile::tempdir;
+    use serial_test::serial;
+    // no extra imports
+
+    #[test]
+    #[serial]
+    fn normalize_keyring_to_file_if_file_exists() {
+        let d = tempdir().unwrap();
+        let home = d.path();
+        unsafe { std::env::set_var("HOME", home.to_str().unwrap()); }
+        // create secrets dir and a file
+        let dir = secrets_dir().unwrap();
+        let p = dir.join("mysecret.blob");
+        fs::write(&p, b"hello").unwrap();
+        // create an index claiming keyring
+        let mut idx = SecretIndex::default();
+        idx.entries.insert(
+            "mysecret".to_string(),
+            SecretMeta {
+                encrypted: false,
+                created_at: 0,
+                storage: "keyring".to_string(),
+                last_probe: 0,
+                size: 0,
+            },
+        );
+        save_index(&idx).unwrap();
+        let loaded = load_index().unwrap();
+        let meta = loaded.entries.get("mysecret").unwrap();
+        assert_eq!(meta.storage, "file");
+        assert!(meta.size > 0);
+    }
+}
+
 fn store_secret(
     name: &str,
     blob: &[u8],
     encrypted: bool,
     force_file: bool,
+    with_backup: bool,
 ) -> Result<(), KamError> {
     let s = BASE64_ENGINE.encode(blob);
     // First try system keyring
     let mut stored_in_keyring = false;
     match Entry::new(SERVICE_NAME, name) {
         Ok(entry) => {
-            if !force_file && entry.set_password(&s).is_ok() {
-                stored_in_keyring = true;
+            if !force_file {
+                if entry.set_password(&s).is_ok() {
+                    // Try to read back to confirm persistence
+                    if let Ok(readback) = entry.get_password() {
+                                if readback == s {
+                                    stored_in_keyring = true;
+                                } else {
+                                    // fallback to file if readback differs
+                                    stored_in_keyring = false;
+                                }
+                    } else {
+                        // If we cannot read back immediately, fallback to file storage
+                        stored_in_keyring = false;
+                    }
+                }
             }
         }
         Err(_) => {}
@@ -340,6 +487,20 @@ fn store_secret(
     // If keyring failed, fallback to local secure file storage
     if !stored_in_keyring {
         write_secret_file(name, &s.as_bytes())?;
+    }
+    else {
+        // If stored in keyring, also attempt to write an encrypted fallback file for robustness.
+        // Only write if the fallback file does not already exist. If writing fails, log a non-fatal warning.
+        if let Ok(p) = secret_file_path(name) {
+            if !p.exists() {
+                if with_backup {
+                    match write_secret_file(name, &s.as_bytes()) {
+                    Ok(()) => println!("{} Encrypted fallback secret file created for {}", "✓".green(), name),
+                    Err(e) => eprintln!("Warning: failed to write fallback secret file for {}: {}", name, e),
+                    }
+                }
+            }
+        }
     }
     let mut idx = load_index()?;
     let storage = if stored_in_keyring { "keyring" } else { "file" };
@@ -421,13 +582,20 @@ pub fn read_secret_blob(name: &str) -> Result<Vec<u8>, KamError> {
         Err(e) => file_err = Some(format!("Fallback file error: {}", e)),
     }
 
-    // If we got here, both keyring and file methods failed; provide a combined message
+    // If we got here, both keyring and file methods failed; record the probe time & provide a combined message
     let mut err_msg = "No matching entry found in secure storage".to_string();
     if let Some(k) = keyring_err {
         err_msg.push_str(&format!(": keyring: {}", k));
     }
     if let Some(f) = file_err {
         err_msg.push_str(&format!(", fallback: {}", f));
+    }
+    if let Ok(mut idx) = load_index() {
+        if let Some(meta) = idx.entries.get_mut(name) {
+            meta.last_probe = Utc::now().timestamp_millis();
+            // size left unchanged
+            let _ = save_index(&idx);
+        }
     }
     Err(KamError::CommandFailed(err_msg))
 }
@@ -508,6 +676,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             value,
             force_file,
             password,
+            with_backup,
         } => {
             let chosen_file = file.or(file_path);
             let data = if let Some(path) = chosen_file {
@@ -527,12 +696,19 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             let pw = if let Some(pw) = password {
                 pw
             } else {
-                prompt_password("Encryption password: ").map_err(|e| {
-                    KamError::CommandFailed(format!("Failed to read password: {}", e))
-                })?
+                let p1 = prompt_password("Encryption password: ")
+                    .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?;
+                let p2 = prompt_password("Confirm encryption password: ")
+                    .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?;
+                if p1 != p2 {
+                    return Err(KamError::CommandFailed(
+                        "Passwords do not match; aborting".to_string(),
+                    ));
+                }
+                p1
             };
             let blob = encrypt_with_password(&data, &pw)?;
-            store_secret(&name, &blob, true, force_file)?;
+            store_secret(&name, &blob, true, force_file, with_backup)?;
             println!("{} Secret '{}' saved.", "✓".green(), name);
         }
         SecretCommands::Get {
@@ -632,13 +808,21 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             };
             // If the file looks like encrypted blob (has magic header), store as-is; else encrypt before storing
             if data.starts_with(b"KAMKEYv1") {
-                store_secret(&final_name, &data, true, false)?;
+                store_secret(&final_name, &data, true, false, false)?;
             } else {
                 let pw = prompt_password("Encryption password for import: ").map_err(|e| {
                     KamError::CommandFailed(format!("Failed to read password: {}", e))
                 })?;
+                let pw2 = prompt_password("Confirm encryption password for import: ").map_err(|e| {
+                    KamError::CommandFailed(format!("Failed to read password: {}", e))
+                })?;
+                if pw != pw2 {
+                    return Err(KamError::CommandFailed(
+                        "Passwords do not match; aborting import".to_string(),
+                    ));
+                }
                 let blob = encrypt_with_password(&data, &pw)?;
-                store_secret(&final_name, &blob, true, false)?;
+                store_secret(&final_name, &blob, true, false, false)?;
             }
             println!("{} Secret '{}' imported.", "✓".green(), final_name);
         }

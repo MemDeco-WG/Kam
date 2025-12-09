@@ -3,8 +3,8 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(
     name = "kam",
-    about = "Kam — Lightweight, offline module initializer & packager",
-    long_about = "Kam is a small, network-free CLI focused on module initialization (scaffolding) and packaging (build). Lightweight and offline-first.",
+    about = "Kam — Offline-first module scaffolding, packaging, and template toolkit",
+    long_about = "Kam is an offline-first CLI toolkit for scaffolding, building, and distributing Android modules and templates. It supports module initialization, packaging, template management, and repo metadata exports.",
     version,
     help_template = "{bin} — {about}\n\nUsage: {usage}\n\nCommands:\n{subcommands}\n\nOptions:\n{options}\n"
 )]
@@ -15,38 +15,40 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize a new Kam project
+    /// Initialize a new Kam project from templates (supports meta and kernel templates)
     Init(crate::cmds::init::InitArgs),
 
-    /// Build the module
+    /// Build and package a module into a deployable ZIP artifact
     Build(crate::cmds::build::BuildArgs),
 
-    /// Manage module version
+    /// Manage module versions and bump policies
     Version(crate::cmds::version::VersionArgs),
 
-    /// Manage local cache
+    /// Manage local template and artifact cache
     Cache(crate::cmds::cache::CacheArgs),
 
-    /// Manage templates (import/export)
+    /// Manage templates: import, export, package, and list
     Tmpl(crate::cmds::tmpl::TmplArgs),
 
-    /// Validate kam.toml configuration
+    /// Validate `kam.toml` configuration and templates
     Validate(crate::cmds::validate::ValidateArgs),
 
-    /// Generate shell completion scripts
+    /// Generate shell completion scripts for common shells
     Completions(crate::cmds::completion::CompletionArgs),
 
-    /// Secret keyring management for signing
+    /// Secret keyring management (used by sign/verify tasks)
     Secret(crate::cmds::secret::SecretArgs),
 
-    /// Sign an artifact (zip) using developer private key from keyring
+    /// Sign an artifact using a key from the keyring or a PEM file
     Sign(crate::cmds::sign::SignArgs),
-    /// Verify an artifact signature or a sigstore bundle
+    /// Verify an artifact signature (.sig) or a sigstore bundle (DSSE)
     Verify(crate::cmds::verify::VerifyArgs),
 
-    /// Check project JSON/YAML/Markdown files
+    /// Check project JSON/YAML/Markdown files (lint/format/parse)
     Check(crate::cmds::check::CheckArgs),
 
-    /// 导出 kam.toml 为 module.prop/module.json/update.json
+    /// Export `kam.toml` to `module.prop`, `module.json`, `repo.json`, `track.json`, `config.json`, `update.json`
     Export(crate::cmds::export::ExportArgs),
+    /// Manage per-project or global kam configuration (similar to git config)
+    Config(crate::cmds::config::ConfigArgs),
 }

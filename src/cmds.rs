@@ -11,3 +11,4 @@ pub mod tmpl;
 pub mod validate;
 pub mod verify;
 pub mod version;
+pub mod config;

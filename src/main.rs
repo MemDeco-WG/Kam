@@ -25,6 +25,7 @@ fn main() {
         Commands::Verify(args) => kam::cmds::verify::run(args),
         Commands::Check(args) => kam::cmds::check::run(args),
         Commands::Export(args) => kam::cmds::export::run(args),
+        Commands::Config(args) => kam::cmds::config::run(args),
     };
 
     if let Err(e) = res {
