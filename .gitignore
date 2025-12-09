@@ -34,3 +34,7 @@ target
 
 # Node.js dependencies
 node_modules/
+
+templates
+
+dist

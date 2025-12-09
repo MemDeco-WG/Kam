@@ -2,6 +2,7 @@
 #
 # action.sh
 #
+# 🚨 模块卡片按钮点击时执行，需新版
 # This script is executed when the user clicks the "Action" button in the KernelSU Manager
 # or triggers an action via the Module WebUI.
 #
@@ -17,6 +18,7 @@
 # ---------------------------------------------------------------------------------------
 # REQUIREMENTS
 # ---------------------------------------------------------------------------------------
+# 🚨 版本要求
 # Minimum supported versions (required):
 # - Magisk (stable): 28.0+
 # - Magisk (alpha builds): alpha28001+ (e.g., 28001 or newer)
@@ -36,6 +38,7 @@
 # ---------------------------------------------------------------------------------------
 # MODULE CONFIGURATION (ksud)
 # ---------------------------------------------------------------------------------------
+# 🚨 仅限新版本
 # KernelSU provides a persistent key-value store for modules.
 #
 # Get value:      val=$(ksud module config get <key>)
@@ -76,11 +79,45 @@ MODDIR=${0%/*}
 # Supported keys: manage.su_compat, manage.kernel_umount, manage.enhanced_security
 
 # ksud module config set manage.su_compat true
-# echo "Enforced SU Compatibility"
+# ui_print "Enforced SU Compatibility"
 
 # ---------------------------------------------------------------------------------------
 # DEFAULT ACTION
 # ---------------------------------------------------------------------------------------
 
-echo "Action script executed!"
-echo "Edit action.sh to add custom logic."
+ui_print "Action script executed!"
+ui_print "Edit action.sh to add custom logic."
+
+
+# ---------------------------------------------------------------------------------
+# Use Nga utils
+# -----------------------------------------------------------------------------------
+# run2null echo "这句话将消失"
+# run22null echo "这句话不会消失" # 仅移除标准错误
+# echo $(until_key) # 输出按下的按键
+
+# 音量+	KEY_VOLUMEUP	up
+# 音量-	KEY_VOLUMEDOWN	down
+# 电源键	KEY_POWER	power
+# 静音键	KEY_MUTE	mute
+# 肩键等额外按键	KEY_FX	fX
+
+# echo $(until_key_up_down) # 输出按下的按键，只能为 up 或 down
+# echo $(until_key_up_down_power) # 输出按下的按键，只能为 up 或 down 或 power
+
+# echo $(until_key_up) # 输出按下的按键，只能为 up
+# echo $(until_key_down) # 输出按下的按键，只能为 down
+# echo $(until_key_power) # 输出按下的按键，只能为 power
+
+# goto_url "https://bilibili.com" # 跳转 bilibili
+# goto_app "ren.shiror.su/dev.oom_wg.ssu.SSUUI" # 打开app
+
+# echo "我现在在 '$(get_work_dir .)' 正好好待着呢" # 输出后将会是 “我现在在 '<当前目录的父目录路径>' 正好好待着呢”
+
+# newline # 不传入内容，默认打印一行空行
+
+# newline 3 # 传入内容，打印指定行数的空行
+
+# ---------------------------------------------------------------------------------
+# Use Nga utils
+# -----------------------------------------------------------------------------------

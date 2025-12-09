@@ -1,9 +1,12 @@
 [submodule "tmpl/kam_template/ModuleWebUI"]
 	path = tmpl/kam_template/ModuleWebUI
 	url = https://github.com/MemDeco-WG/ModuleWebUI.git
+	branch = main
 [submodule "tmpl/ak3_template/src/AnyKernel3"]
 	path = tmpl/ak3_template/src/AnyKernel3
 	url = https://github.com/osm0sis/AnyKernel3.git
+	branch = master
 [submodule "KamHooks"]
 	path = KamHooks
 	url = https://github.com/MemDeco-WG/KamHooks.git
+	branch = main

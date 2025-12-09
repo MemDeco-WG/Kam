@@ -24,6 +24,9 @@ log_info "Syncing hooks..."
 KAM_HOOKS_SRC="${KAM_HOOKS_SRC:-$KAM_PROJECT_ROOT/KamHooks}"
 KAM_TMPL_ROOT="${KAM_TMPL_ROOT:-$KAM_PROJECT_ROOT/tmpl}"
 
+cd $KAM_HOOKS_SRC && git pull origin main
+cd -
+
 # Basic sanity checks
 if [ -z "$KAM_PROJECT_ROOT" ]; then
     log_warn "KAM_PROJECT_ROOT is not set; using current directory"
