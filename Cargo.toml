@@ -26,6 +26,9 @@ walkdir = "2.3.3"
 zip = "6.0.0"
 tree-sitter = "0.25.10"
 tree-sitter-bash = "0.25.1"
+sigstore-sign = "0.6.0"
+rcgen = "0.14.5"
+hex = "0.4.3"
 
 [dependencies.chrono]
 features = ["serde"]
