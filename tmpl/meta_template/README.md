@@ -57,7 +57,7 @@ When hooks are executed, Kam injects the following environment variables, which 
 | `KAM_MODULE_UPDATE_JSON` | The module updateJson URL (if set). |
 | `KAM_STAGE` | Current build stage: `pre-build` or `post-build`. |
 | `KAM_DEBUG` | Set to `1` to enable debug output in hooks. |
-| `KAM_SIGN_ENABLE` | Set to `1` when build invoked with `-s/--sign`. Useful to trigger automatic signing in hooks. |
+| `KAM_SIGN_ENABLED` | Set to `1` when build invoked with `-s/--sign`. Useful to trigger automatic signing in hooks. |
 | `KAM_IMMUTABLE_RELEASE` | Set to `1` when build invoked with `-i/--immutable-release`. Hooks can use this to opt into immutable release behavior. |
 | `KAM_PRE_RELEASE` | Set to `1` when build invoked with `-P/--pre-release`. Hooks can use this to change release handling (e.g., skip uploads). |
 
@@ -72,14 +72,12 @@ Private key password:
 
 Default post-build hook behaviors:
 
-- `8000.SIGN_IF_ENABLE.sh`: If `KAM_SIGN_ENABLE=1`, this hook will run `kam sign` against artifacts in the `dist/` directory. By default it uses `--sigstore --timestamp`. You can disable Sigstore with `KAM_SIGN_SIGSTORE=0` in your environment or `.env` file.
+ - `8000.SIGN_IF_ENABLE.sh`: If `KAM_SIGN_ENABLED=1`, this hook will run `kam sign` against artifacts in the `dist/` directory. By default it uses `--sigstore --timestamp`. You can disable Sigstore with `KAM_SIGN_SIGSTORE=0` in your environment or `.env` file.
 - `9000.UPLOAD_IF_ENABLED.sh`: If `KAM_RELEASE_ENABLED=1`, this hook creates a GitHub Release using the assets in `dist/` and will include signatures (`*.sig`, `*.tsr`, `*.sigstore.json`) automatically if `KAM_SIGN_ENABLE=1` is set. Use `KAM_PRE_RELEASE=1` to create a pre-release. If `KAM_IMMUTABLE_RELEASE=1` is set and the release tag already exists, the upload will be skipped to avoid modifying an immutable release.
 
-| `KAM_SIGN_ENABLE` | Set to `1` when build invoked with `-s/--sign`. Useful to trigger automatic signing in hooks. |
+| `KAM_SIGN_ENABLED` | Set to `1` when build invoked with `-s/--sign`. Useful to trigger automatic signing in hooks. |
 | `KAM_IMMUTABLE_RELEASE` | Set to `1` when build invoked with `-i/--immutable-release`. Hooks can use this to opt into immutable release behavior. |
 | `KAM_PRE_RELEASE` | Set to `1` when build invoked with `-P/--pre-release`. Hooks can use this to change release handling (e.g., skip uploads). |
-
-## 中文（简体）
 
 钩子允许你在构建过程中的不同阶段运行自定义脚本。Kam 提供灵活的钩子系统，附带共享的工具和预定义的环境变量，便于在钩子脚本中使用。
 
@@ -94,8 +92,6 @@ Default post-build hook behaviors:
 
 ### 内置钩子
 
-#### `1.SYNC_MODULE_FILES.sh` / `1.SYNC_MODULE_FILES.ps1`
-
 该构建前（pre-build）钩子会把 `kam.toml` 中的 `[prop]` 部分同步到模块目录的 `module.prop`，并在项目根目录生成 `update.json` 文件。
 
 - 目的：`kam.toml` 是 `module.prop` 的超集。此钩子确保构建前 `module.prop` 是最新的，同时生成的 `update.json` 可供发布/更新工具使用（包含 version、versionCode、zipUrl 与 changelog 等信息）。
@@ -105,9 +101,6 @@ Default post-build hook behaviors:
   - `name`
   - `version`
   - `versionCode`
-  - `author`
-  - `description`
-  - `updateJson`（若设置）
 
 此钩子随标准模板（如 `kam_template`、`meta_template`）包含，并在每次构建前自动运行。
 
@@ -135,7 +128,7 @@ Kam 在执行钩子时会直接调用钩子文件，由操作系统或文件本�
 | `KAM_MODULE_UPDATE_JSON` | 若设置，会包含 update JSON 的 URL。 |
 | `KAM_STAGE` | 当前构建阶段：`pre-build` 或 `post-build`。 |
 | `KAM_DEBUG` | 若设为 `1`，钩子会输出调试信息。 |
-| `KAM_SIGN_ENABLE` | 若为 `1` 则表示 build 时带有 `-s/--sign`，钩子可据此触发签名步骤。 |
+| `KAM_SIGN_ENABLED` | 若为 `1` 则表示 build 时带有 `-s/--sign`，钩子可据此触发签名步骤。 |
 | `KAM_IMMUTABLE_RELEASE` | 若为 `1` 则表示 build 时带有 `-i/--immutable-release`，钩子可据此选择不可变发布相关行为。 |
 | `KAM_PRE_RELEASE` | 若为 `1` 则表示 build 时带有 `-P/--pre-release`，钩子可据此调整发布流程（例如跳过发布）。 |
 

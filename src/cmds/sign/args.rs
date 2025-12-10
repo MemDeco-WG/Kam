@@ -40,7 +40,5 @@ pub struct SignArgs {
     /// If omitted, uses global config `sign.tsa.url` or default Sigstore TSA.
     #[arg(long)]
     pub tsa_url: Option<String>,
-    /// Generate only attestation files (no `.sig`) - write only attestation/DSSE bundles
-    #[arg(long, default_value_t = false)]
-    pub attestation_only: bool,
+
 }

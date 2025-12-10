@@ -54,9 +54,24 @@ pub fn write_sigstore_bundle(
         }));
         let mut ts_obj = serde_json::Map::new();
         ts_obj.insert("rfc3161Timestamps".to_string(), serde_json::Value::Array(rfc_arr));
-        // Insert into bundle
+        // Insert into verificationMaterial in the bundle
         if let Some(obj) = bundle.as_object_mut() {
-            obj.insert("timestampVerificationData".to_string(), serde_json::Value::Object(ts_obj));
+            if let Some(vm) = obj.get_mut("verificationMaterial") {
+                if vm.is_null() {
+                    // replace Null with an object containing timestampVerificationData
+                    let mut new_vm = serde_json::Map::new();
+                    new_vm.insert(
+                        "timestampVerificationData".to_string(),
+                        serde_json::Value::Object(ts_obj),
+                    );
+                    obj.insert("verificationMaterial".to_string(), serde_json::Value::Object(new_vm));
+                } else if let Some(vm_obj) = vm.as_object_mut() {
+                    vm_obj.insert(
+                        "timestampVerificationData".to_string(),
+                        serde_json::Value::Object(ts_obj),
+                    );
+                }
+            }
         }
     }
 
@@ -64,9 +79,6 @@ pub fn write_sigstore_bundle(
     let mut f = fs::File::create(&bundle_path).map_err(KamError::Io)?;
     let v = serde_json::to_vec_pretty(&bundle).map_err(|e| KamError::CommandFailed(format!("Failed to serialize bundle JSON: {}", e)))?;
     f.write_all(&v).map_err(KamError::Io)?;
-    // Also write a release-attestation file for GitHub and similar tooling.
-    let attestation_path = out_dir.join(format!("{}.attestation.json", filename));
-    let mut f2 = fs::File::create(&attestation_path).map_err(KamError::Io)?;
-    f2.write_all(&v).map_err(KamError::Io)?;
+    // We write only the .sigstore.json bundle; do not duplicate it as .attestation.json.
     Ok(bundle_path)
 }

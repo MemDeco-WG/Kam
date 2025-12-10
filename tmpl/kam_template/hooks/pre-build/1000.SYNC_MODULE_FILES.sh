@@ -30,7 +30,7 @@ MODULE_PROP_PATH="${KAM_MODULE_ROOT}/module.prop"
 # update.json goes to project root directory
 UPDATE_JSON_PATH="${KAM_PROJECT_ROOT}/update.json"
 # module.json path
-MODULE_JSON_PATH="${KAM_MODULE_ROOT}/module.json"
+MODULE_JSON_PATH="${KAM_PROJECT_ROOT}/module.json"
 
 # Check if the module root directory exists
 if [ ! -d "$KAM_MODULE_ROOT" ]; then

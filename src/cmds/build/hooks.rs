@@ -135,6 +135,50 @@ fn run_hooks(
     };
     let web_root = module_root.join("webroot");
 
+    // Determine repo and ref for KAM_REPO / KAM_REPO_REF
+    let mut detected_repo = String::new();
+    if let Ok(repo) = std::env::var("GITHUB_REPOSITORY") {
+        detected_repo = repo;
+    } else if !kam_toml
+        .mmrl
+        .as_ref()
+        .and_then(|m| m.repo.as_ref())
+        .and_then(|r| r.repository.as_ref())
+        .unwrap_or(&String::new())
+        .is_empty()
+    {
+        detected_repo = kam_toml
+            .mmrl
+            .as_ref()
+            .and_then(|m| m.repo.as_ref())
+            .and_then(|r| r.repository.as_ref())
+            .unwrap_or(&String::new())
+            .clone();
+    }
+
+    // Determine repo ref (branch) from environment or local git
+    let mut detected_ref = String::new();
+    if let Ok(github_ref) = std::env::var("GITHUB_REF") {
+        // Trim refs/heads/ prefix when present
+        detected_ref = github_ref
+            .strip_prefix("refs/heads/")
+            .unwrap_or(&github_ref)
+            .to_string();
+    } else {
+        // Attempt to run git rev-parse --abbrev-ref HEAD
+        if let Ok(out) = Command::new("git")
+            .arg("rev-parse")
+            .arg("--abbrev-ref")
+            .arg("HEAD")
+            .current_dir(project_root)
+            .output()
+        {
+            if out.status.success() {
+                detected_ref = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            }
+        }
+    }
+
     let env_vars = [
         (
             "KAM_PROJECT_ROOT",
@@ -179,6 +223,10 @@ fn run_hooks(
             if args.sign { "1" } else { "0" }.to_string(),
         ),
         (
+            "KAM_SIGN_ENABLED",
+            if args.sign { "1" } else { "0" }.to_string(),
+        ),
+        (
             "KAM_PRE_RELEASE",
             if args.pre_release { "1" } else { "0" }.to_string(),
         ),
@@ -196,6 +244,10 @@ fn run_hooks(
                 .unwrap_or(&String::new())
                 .clone(),
         ),
+            ("KAM_GITHUB_REPO", detected_repo.clone()),
+            ("KAM_REPO", detected_repo.clone()),
+            ("KAM_REPO_REF", detected_ref.clone()),
+            ("KAM_RELEASE_TAG", kam_toml.prop.version.clone()),
     ];
 
     // Execute hook files directly and let the OS determine execution behavior.

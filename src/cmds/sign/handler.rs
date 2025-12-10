@@ -53,8 +53,8 @@ fn sign_single_file(src_path: &Path, args: &SignArgs, sigstore_mode: bool) -> Re
         fs::write(&cert_file, cert_data).map_err(KamError::Io)?;
     }
 
-    // Write .sig if not sigstore-only or attestation_only
-    if !sigstore_mode && !args.attestation_only {
+    // Write .sig if not sigstore-only
+    if !sigstore_mode {
         let path = out_dir.join(format!("{}.sig", filename));
         use base64::engine::Engine as _;
         use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
@@ -197,10 +197,8 @@ fn sign_single_file(src_path: &Path, args: &SignArgs, sigstore_mode: bool) -> Re
 
 pub fn run(args: SignArgs) -> Result<(), KamError> {
     // determine sigstore mode
-    let mut sigstore_mode = args.sigstore;
-    if args.attestation_only {
-        sigstore_mode = true;
-    }
+    let sigstore_mode = args.sigstore;
+    // attestation-only flag removed; sigstore_mode follows args.sigstore
 
     // If src provided, sign single file
     if let Some(src_str) = args.src.as_ref() {
@@ -301,7 +299,6 @@ mod tests {
             tsa_url: None,
             dist: None,
             all: false,
-            attestation_only: false,
         };
         let res = run(args);
         assert!(res.is_ok());
@@ -335,7 +332,6 @@ mod tests {
             tsa_url: None,
             dist: None,
             all: false,
-            attestation_only: false,
         };
         let res = run(args);
         assert!(res.is_ok());
