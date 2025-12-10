@@ -314,4 +314,4 @@ choice() {
     done
 }
 
-. /etc/os-release
+. /etc/os-release || log_info "/etc/os-release not found."

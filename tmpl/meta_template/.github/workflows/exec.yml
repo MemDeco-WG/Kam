@@ -33,6 +33,11 @@ jobs:
         ${{ github.event.inputs.kam-command }}
       env:
         GH_TOKEN: ${{ github.token }}
+
+
+
+
+
     - name: Auto-commit changes
       uses: stefanzweifel/git-auto-commit-action@v7
       with:

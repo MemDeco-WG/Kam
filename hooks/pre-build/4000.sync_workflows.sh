@@ -8,8 +8,6 @@ fi
 # Load helpers
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
-# update KamModuleX submodule
-git submodule update
 
 # cp workflows
 cp -rf "$KAM_PROJECT_ROOT/KamModuleX/.github/workflows" "$KAM_PROJECT_ROOT/.github/"
