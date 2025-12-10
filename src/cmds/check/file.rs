@@ -97,6 +97,36 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
                 }
             }
         }
+        "markdown" => {
+            // Normalize CRLF to LF, remove trailing spaces on each line and ensure file ends with a single newline
+            if do_fix {
+                let mut normalized = s.replace("\r\n", "\n");
+                // Replace remaining CR if any
+                normalized = normalized.replace("\r", "\n");
+
+                // Remove trailing spaces from each line
+                let lines: Vec<&str> = normalized.lines().collect();
+                let stripped: Vec<String> = lines
+                    .iter()
+                    .map(|l| l.trim_end().to_string())
+                    .collect();
+                normalized = stripped.join("\n");
+
+                // Ensure final newline
+                if !normalized.ends_with('\n') {
+                    normalized.push('\n');
+                }
+
+                if normalized != s {
+                    fs::OpenOptions::new()
+                        .write(true)
+                        .truncate(true)
+                        .open(path)?
+                        .write_all(normalized.as_bytes())?;
+                    fr.fixed = true;
+                }
+            }
+        }
         _ => {}
     }
 

@@ -1,6 +1,6 @@
 # setup-kam — GitHub Action
 
-- [![Release](https://img.shields.io/github/v/tag/MemDeco-WG/setup-kam?label=release)](https://github.com/MemDeco-WG/setup-kam/releases) 
+- [![Release](https://img.shields.io/github/v/tag/MemDeco-WG/setup-kam?label=release)](https://github.com/MemDeco-WG/setup-kam/releases)
 
 - [![License](https://img.shields.io/github/license/MemDeco-WG/setup-kam.svg)](LICENSE)
 

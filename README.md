@@ -180,9 +180,8 @@ kam tmpl export kam_template ak3_template -o my_templates.zip
 
 #### Download / Update Templates (new)
 
-- Pull templates from a remote URL and import them into the local cache (downloads to a temp file and imports using `kam tmpl import -f`). The download link is recorded in the global config (~/.kam/config.toml).
- - Pull templates from a remote URL and import them into the local cache (downloads to a temp file and imports using `kam tmpl import -f`). The download link is recorded in the global config (~/.kam/config.toml) as `tmpl.pull.url`.
-  The last download timestamp is stored as `tmpl.pull.last_download`.
+ - Download templates from a remote URL (downloaded to a temp file and imported via `kam tmpl import -f`). The download link is recorded in the global config (`~/.kam/config.toml`) as `tmpl.pull.url`.
+ - The last download timestamp is stored as `tmpl.pull.last_download`.
 
 ```bash
 # Use default download link (recorded in global config)
@@ -209,13 +208,14 @@ kam tmpl remove template_name
 kam tmpl path
 ```
 
-For more details on templates, see [templates/README.md](templates/README.md).
+For more details on templates, see [templates/README.md](docs/templates.md).
 
 ### ⚠️ Network & Optional Online Features
 
 Kam is offline-first, but supports optional network-backed functionality to increase security and convenience. These features are not required for basic scaffolding and builds, but may be enabled by flags or in future updates:
 
 - **Timestamped signatures / Sigstore** — Using `kam sign` with Sigstore/timestamping enabled may contact a timestamp authority (TSA) or Sigstore services to generate RFC 3161 timestamped signatures or to record signatures on transparency logs (Rekor). This requires network access when enabled.
+  Note: `kam sign` now *defaults* to requesting an RFC3161 timestamp (network required). Use `--timestamp=false` to disable timestamping if you need fully offline operations.
 - **Template downloads (planned)** — A `kam tmpl pull` command will be added to make it easy to fetch and import templates from remote repositories or template registries.
 
 When possible, these features are optional and disabled by default to preserve the offline-first behavior of Kam.

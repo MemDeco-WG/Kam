@@ -327,9 +327,10 @@ impl TemplateCopier {
                 // Check if file exists before writing to determine correct status
                 let file_existed = dst_path.exists();
 
-                // Check if binary
+                // Check if binary: explicitly skip binary files while applying template
                 if is_binary(src_path) {
-                    fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
+                    Utils::print_status(&dst_path, &dest_rel_path_str, PrintOp::Skip, force);
+                    continue;
                 } else {
                     // Text file - perform substitution
                     let content = fs::read_to_string(src_path);
@@ -424,6 +425,40 @@ fn is_binary(path: &Path) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use std::io::Write;
+
+    #[test]
+    fn test_copy_and_replace_skips_binary() {
+        let src_dir = tempdir().expect("tempdir");
+        let dst_dir = tempdir().expect("tempdir");
+
+        let binary_file = src_dir.path().join("image.png");
+        let mut bf = std::fs::File::create(&binary_file).unwrap();
+        bf.write_all(&[0u8, 0u8, 0u8, 0u8]).unwrap(); // include null byte
+
+        let text_file = src_dir.path().join("README.md");
+        let mut tf = std::fs::File::create(&text_file).unwrap();
+        tf.write_all(b"Hello {{name}}\n").unwrap();
+
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("name".to_string(), "World".to_string());
+
+        TemplateManager::copy_and_replace(src_dir.path(), dst_dir.path(), &vars, true, "test")
+            .expect("copy_and_replace");
+
+        // Binary should be skipped
+        assert!(!dst_dir.path().join("image.png").exists());
+
+        // Text should be present and rendered
+        let rendered = std::fs::read_to_string(dst_dir.path().join("README.md")).unwrap();
+        assert!(rendered.contains("Hello World"));
+    }
 }
 
 pub struct TemplateManager;

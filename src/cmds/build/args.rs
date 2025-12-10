@@ -22,6 +22,18 @@ pub struct BuildArgs {
     #[arg(short, long)]
     pub release: bool,
 
+    /// Enable KAM_SIGN_ENABLE environment variable (set to 1)
+    #[arg(short = 's', long)]
+    pub sign: bool,
+
+    /// Enable KAM_IMMUTABLE_RELEASE environment variable (set to 1)
+    #[arg(short = 'i', long = "immutable-release")]
+    pub immutable_release: bool,
+
+    /// Enable KAM_PRE_RELEASE environment variable (set to 1)
+    #[arg(short = 'P', long = "pre-release")]
+    pub pre_release: bool,
+
     /// Suppress most output; show only warnings and errors
     #[arg(short, long)]
     pub quiet: bool,

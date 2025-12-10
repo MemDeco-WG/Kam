@@ -12,6 +12,7 @@ pub fn write_sigstore_bundle(
     payload: &Value,
     signature: &[u8],
     cert_der: Option<&[u8]>,
+    tsr: Option<&[u8]>,
 ) -> Result<PathBuf, KamError> {
     // Base64 encode payload
     let payload_bytes = serde_json::to_vec(payload).map_err(|e| KamError::CommandFailed(format!("Failed to serialize payload: {}", e)))?;
@@ -34,7 +35,7 @@ pub fn write_sigstore_bundle(
         serde_json::Value::Null
     };
 
-    let bundle = serde_json::json!({
+    let mut bundle = serde_json::json!({
         "dsseEnvelope": {
             "payload": payload_b64,
             "payloadType": "application/vnd.in-toto+json",
@@ -43,6 +44,21 @@ pub fn write_sigstore_bundle(
         "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
         "verificationMaterial": verification
     });
+
+    // Attach timestamp verification data if provided (.tsr / RFC3161 response)
+    if let Some(tsr_bytes) = tsr {
+        // Build timestampVerificationData: { "rfc3161Timestamps": [ {"signedTimestamp": "<base64>"} ] }
+        let mut rfc_arr = Vec::new();
+        rfc_arr.push(serde_json::json!({
+            "signedTimestamp": BASE64_ENGINE.encode(tsr_bytes),
+        }));
+        let mut ts_obj = serde_json::Map::new();
+        ts_obj.insert("rfc3161Timestamps".to_string(), serde_json::Value::Array(rfc_arr));
+        // Insert into bundle
+        if let Some(obj) = bundle.as_object_mut() {
+            obj.insert("timestampVerificationData".to_string(), serde_json::Value::Object(ts_obj));
+        }
+    }
 
     let bundle_path = out_dir.join(format!("{}.sigstore.json", filename));
     let mut f = fs::File::create(&bundle_path).map_err(KamError::Io)?;

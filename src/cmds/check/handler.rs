@@ -1,4 +1,6 @@
 use colored::*;
+use indicatif::{ProgressBar, ProgressStyle};
+use std::io::IsTerminal;
 #[cfg(test)]
 use std::fs;
 #[cfg(test)]
@@ -28,6 +30,44 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         "templates",
         "tmpl",
     ];
+    // First pass: count total files matching supported extensions
+    let mut total_files: usize = 0;
+    for entry in walkdir::WalkDir::new(project_path)
+        .into_iter()
+        .filter_entry(|e| {
+            if e.depth() == 0 {
+                return true;
+            }
+            if e.file_type().is_dir() {
+                let name = e.file_name().to_string_lossy();
+                return !skip_dirs.contains(&name.as_ref());
+            }
+            true
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let path = entry.path();
+        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+            match ext.to_lowercase().as_str() {
+                "json" | "yml" | "yaml" | "toml" | "sh" | "bash" | "md" => total_files += 1,
+                _ => {}
+            }
+        }
+    }
+
+    let show_progress = !args.json && std::io::stdout().is_terminal();
+    let pb = if show_progress && total_files > 0 {
+        let pb = ProgressBar::new(total_files as u64);
+        let style = ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+            .unwrap()
+            .progress_chars("#>-");
+        pb.set_style(style);
+        Some(pb)
+    } else {
+        None
+    };
+
     for entry in walkdir::WalkDir::new(project_path)
         .into_iter()
         .filter_entry(|e| {
@@ -56,7 +96,15 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
 
             let res = check_file(path, kind, args.fix)?;
             results.push(res);
+            if let Some(ref p) = pb {
+                p.set_message(format!("{}", path.display()));
+                p.inc(1);
+            }
         }
+    }
+
+    if let Some(ref p) = pb {
+        p.finish_and_clear();
     }
 
     // Output

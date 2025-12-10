@@ -313,3 +313,5 @@ choice() {
         log_warn "Invalid choice: $ans"
     done
 }
+
+. /etc/os-release

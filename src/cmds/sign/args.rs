@@ -23,4 +23,12 @@ pub struct SignArgs {
     /// Generate sigstore DSSE bundle JSON in addition to signature
     #[arg(long, default_value_t = false)]
     pub sigstore: bool,
+    /// Contact a Timestamp Authority to get RFC3161 timestamp for the signed artifact.
+    /// Defaults to true to include timestamps by default.
+    #[arg(short, long, default_value_t = true)]
+    pub timestamp: bool,
+    /// Time Stamp Authority (TSA) URL to use for RFC3161 timestamps
+    /// If omitted, uses global config `sign.tsa.url` or default Sigstore TSA.
+    #[arg(long)]
+    pub tsa_url: Option<String>,
 }

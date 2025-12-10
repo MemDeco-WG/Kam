@@ -17,6 +17,18 @@ TMP_CHANGELOG=""
 # Determine the GitHub repository using the gh CLI (primary method).
 # `require_command gh` has already ensured gh is present.
 GITHUB_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)
+PRE_RELEASE_FLAG=""
+if [ "$KAM_PRE_RELEASE" = "1" ]; then
+    PRE_RELEASE_FLAG="--prerelease"
+fi
+
+# If immutable release is enabled, and a release already exists, skip upload
+if [ "$KAM_IMMUTABLE_RELEASE" = "1" ]; then
+    if gh release view "$KAM_MODULE_VERSION" >/dev/null 2>&1; then
+        echo "Immutable release exists for $KAM_MODULE_VERSION; skipping upload to avoid modification."
+        exit 0
+    fi
+fi
 cleanup_tmp() {
     if [ -n "$TMP_CHANGELOG" ] && [ -f "$TMP_CHANGELOG" ]; then
         rm -f "$TMP_CHANGELOG"
@@ -184,24 +196,49 @@ EOF
 )
 
 # Release creation using GitHub CLI
+ASSETS=("$KAM_DIST_DIR"/*)
+ASSET_ARGS=()
+for a in "${ASSETS[@]}"; do
+    if [ -f "$a" ]; then
+        ASSET_ARGS+=("$a")
+    fi
+done
+
+# If signatures were generated, include them as assets as well
+if [ "$KAM_SIGN_ENABLE" = "1" ]; then
+    for a in "${ASSETS[@]}"; do
+        if [ -f "$a.sig" ]; then
+            ASSET_ARGS+=("$a.sig")
+        fi
+        if [ -f "$a.tsr" ]; then
+            ASSET_ARGS+=("$a.tsr")
+        fi
+        if [ -f "$a.sigstore.json" ]; then
+            ASSET_ARGS+=("$a.sigstore.json")
+        fi
+    done
+fi
 if [ "${KAM_RELEASE_GENERATE_NOTES:-1}" != "0" ]; then
     if gh release create "$KAM_MODULE_VERSION" \
         --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
         --generate-notes \
-        "$KAM_DIST_DIR/*"; then
+        $PRE_RELEASE_FLAG \
+        "${ASSET_ARGS[@]}"; then
         log_success "Release created with auto-generated notes."
     else
         log_warn "Failed to generate notes, falling back to manual release notes."
         gh release create "$KAM_MODULE_VERSION" \
             --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
+            $PRE_RELEASE_FLAG \
             --notes "$RELEASE_NOTES" \
-            "$KAM_DIST_DIR/*"
+            "${ASSET_ARGS[@]}"
     fi
 else
     gh release create "$KAM_MODULE_VERSION" \
         --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
+        $PRE_RELEASE_FLAG \
         --notes "$RELEASE_NOTES" \
-        "$KAM_DIST_DIR/*"
+        "${ASSET_ARGS[@]}"
 fi
 
 echo "Upload complete"

@@ -30,6 +30,9 @@ sigstore-sign = "0.6.0"
 rcgen = "0.14.5"
 hex = "0.4.3"
 reqwest = { version = "0.12.25", features = ["blocking", "rustls-tls"] }
+sigstore-tsa = "0.6.0"
+tokio = { version = "1.39", features = ["rt", "macros"] }
+sigstore-types = "0.6.0"
 
 [dependencies.chrono]
 features = ["serde"]

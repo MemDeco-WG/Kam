@@ -149,7 +149,7 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
                         .push(format!("Parse error at {}:{}", pos.row + 1, pos.column + 1));
                 }
                 for i in 0..node.child_count() {
-                    if let Some(child) = node.child(i) {
+                    if let Some(child) = node.child(i as u32) {
                         walk_node(child, fr);
                     }
                 }
