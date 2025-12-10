@@ -80,7 +80,7 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
     println!("{} Downloading templates from: {}", "→".cyan(), download_url);
 
     // Create HTTP client with a reasonable timeout
-    let client = Client::builder().timeout(Duration::from_secs(120)).build().map_err(|e| KamError::CommandFailed(format!("Failed to build HTTP client: {}", e)))?;
+    let client = Client::builder().timeout(Duration::from_secs(120)).redirect(Policy::default()).build().map_err(|e| KamError::CommandFailed(format!("Failed to build HTTP client: {}", e)))?;
     let resp = client.get(download_url).send().map_err(|e| KamError::CommandFailed(format!("Failed to download template: {}", e)))?;
     if !resp.status().is_success() {
         return Err(KamError::CommandFailed(format!("Download failed: HTTP {}", resp.status())));
