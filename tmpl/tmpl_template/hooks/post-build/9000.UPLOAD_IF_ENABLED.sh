@@ -2,17 +2,22 @@
 
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
-# Exit if release is disabled
-if [ "$KAM_RELEASE_ENABLED" != "1" ]; then
-    log_warn "Release is disabled, skipping upload"
+# If release disabled, skip
+if [ "${KAM_RELEASE_ENABLED:-0}" != "1" ]; then
+    log_warn "KAM_RELEASE_ENABLED != 1, skipping upload"
     exit 0
 fi
 
+# Ensure `gh` (GitHub CLI) is present
 require_command gh
 
+# Choose tag to use for release
 TAG=${KAM_RELEASE_TAG:-$KAM_MODULE_VERSION}
 
-# Prepare release notes
+# Determine dist dir
+DIST="${KAM_DIST_DIR:-${KAM_PROJECT_ROOT:-$PWD}/dist}"
+
+# Build a simple release notes file (temporary)
 TMP_CHANGELOG=$(mktemp)
 cleanup_tmp() {
     if [ -n "$TMP_CHANGELOG" ] && [ -f "$TMP_CHANGELOG" ]; then
@@ -22,7 +27,7 @@ cleanup_tmp() {
 }
 trap cleanup_tmp EXIT
 
-# Attempt to extract changelog section for this version from CHANGELOG.md
+# Try to pick a short changelog for this version
 CHANGELOG_SECTION=""
 if [ -f "$KAM_PROJECT_ROOT/CHANGELOG.md" ]; then
     CHANGELOG_SECTION=$(awk -v ver="${KAM_MODULE_VERSION}" 'BEGIN{found=0} $0 ~ ver {found=1; next} found && /^#+[ ]/ {exit} found{print}' "$KAM_PROJECT_ROOT/CHANGELOG.md" || true)
@@ -32,59 +37,53 @@ if [ -z "$CHANGELOG_SECTION" ] && command -v git >/dev/null 2>&1; then
     if [ -n "$PREV_TAG" ]; then
         CHANGELOG_SECTION=$(git log --pretty=format:'- %s' "${PREV_TAG}"..HEAD 2>/dev/null || true)
     else
-        CHANGELOG_SECTION=$(git log --pretty=format:'- %s' -n 50 2>/dev/null || true)
+        CHANGELOG_SECTION=$(git log --pretty=format:'- %s' -n 20 2>/dev/null || true)
     fi
 fi
 if [ -z "$CHANGELOG_SECTION" ]; then
-    CHANGELOG_SECTION="- See CHANGELOG.md for detailed changes."
+    CHANGELOG_SECTION="- See CHANGELOG.md"
 fi
 
+# Minimal release notes
 RELEASE_NOTES=$(cat <<EOF
-# ${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}
+${KAM_MODULE_NAME:-$KAM_MODULE_ID} v${KAM_MODULE_VERSION:-unknown}
 
-## Module Information
-- **Version**: ${KAM_MODULE_VERSION}
-- **Version Code**: ${KAM_MODULE_VERSION_CODE}
-- **Module ID**: ${KAM_MODULE_ID}
-- **Author**: ${KAM_MODULE_AUTHOR}
+Module: ${KAM_MODULE_ID}
+Version: ${KAM_MODULE_VERSION}
+Author: ${KAM_MODULE_AUTHOR:-unknown}
 
-## Description
-${KAM_MODULE_DESCRIPTION}
-
-## Download
-- [${KAM_MODULE_ID}.zip](https://github.com/${KAM_GITHUB_REPO}/releases/download/${KAM_MODULE_VERSION}/${KAM_MODULE_ID}.zip)
-
-## Changelog
+Changelog:
 ${CHANGELOG_SECTION}
 
----
-Built with [Kam](https://github.com/MemDeco-WG/Kam)
+Built with Kam
 EOF
 )
 printf "%s\n" "$RELEASE_NOTES" > "$TMP_CHANGELOG"
 
-# Create release if it does not exist, otherwise edit notes
+# Create or update release
 if ! gh release view "$TAG" >/dev/null 2>&1; then
     PRE_FLAG=""
     if [ "${KAM_PRE_RELEASE:-0}" = "1" ]; then
         PRE_FLAG="--prerelease"
     fi
-    gh release create "$TAG" \
-        --title "$KAM_MODULE_ID" \
-        --notes-file "$TMP_CHANGELOG" \
-        $PRE_FLAG || log_warn "Failed to create release $TAG"
+    log_info "Creating GitHub release $TAG"
+    gh release create "$TAG" --title "${KAM_MODULE_ID:-$TAG}" --notes-file "$TMP_CHANGELOG" $PRE_FLAG || log_warn "Failed to create release $TAG"
 else
-    gh release edit "$TAG" --title "$KAM_MODULE_ID" --notes-file "$TMP_CHANGELOG" || log_warn "Failed to edit release $TAG"
+    log_info "Editing GitHub release $TAG"
+    gh release edit "$TAG" --title "${KAM_MODULE_ID:-$TAG}" --notes-file "$TMP_CHANGELOG" || log_warn "Failed to edit release $TAG"
 fi
 
-log_info "Uploading attestation JSON assets from $KAM_DIST_DIR to release $TAG"
+# Upload files from DIST to the release (clobber existing)
+if [ -d "$DIST" ]; then
+    log_info "Uploading assets from $DIST to release $TAG"
+    for f in "$DIST"/*; do
+        [ -f "$f" ] || continue
+        log_info "Uploading: $f"
+        gh release upload "$TAG" "$f" --clobber || log_warn "Failed to upload: $f"
+    done
+else
+    log_warn "Dist directory not found: $DIST"
+fi
 
-for f in "$KAM_DIST_DIR"/*.attestation.json "$KAM_DIST_DIR"/*.sigstore.json; do
-    [ -f "$f" ] || continue
-    log_info "Uploading asset: $f"
-    gh release upload "$TAG" "$f" --clobber || log_warn "Failed to upload $f"
-done
-
-log_success "Upload complete"
-
+log_success "Upload step finished"
 exit 0
