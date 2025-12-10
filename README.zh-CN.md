@@ -54,7 +54,6 @@ cargo build --release
 使用 Kam 模板创建模块：
 
 ```bash
-kam init my_awesome_module -t kam_template
 ```
 
 使用 Meta 模板（元模块）：
@@ -156,10 +155,8 @@ kam tmpl list
 导出单个模板：
 ```bash
 kam tmpl export meta_template -o my_template.tar.gz
-```
 
 注意：将单个模板导出为 `.tar.gz`（模板打包）时，Kam 不会执行 pre-build 或 post-build 钩子。模板打包无需执行钩子。
-
 导出多个模板到 ZIP：
 ```bash
 kam tmpl export kam_template ak3_template -o my_templates.zip
@@ -175,6 +172,28 @@ kam tmpl remove template_name
 # 显示模板缓存目录
 kam tmpl path
 ```
+
+### ⚠️ 网络与可选在线功能
+
+Kam 以离线为优先，但支持可选的在线特性以提升安全性和便利性：
+
+- **时间戳签名 / Sigstore** — 当启用 `kam sign` 的时间戳或 Sigstore 功能时，Kam 可能会联系时间戳服务器 (TSA) 或 Sigstore 的在线服务来生成 RFC 3161 时间戳签名或将签名记录到透明日志 (Rekor)。启用这些功能时需要网络访问。
+- **模板下载（已实现）** — 新增 `kam tmpl pull` 命令，方便从远程仓库或模板注册表拉取并导入模板（默认为 GitHub latest release templates.zip）。
+  已记录的下载链接保存在全局配置 `~/.kam/config.toml` 下的 `tmpl.pull.url`；最近一次下载时间保存在 `tmpl.pull.last_download`。
+
+示例：
+```bash
+# 使用默认地址（将被记录到全局配置）
+kam tmpl pull
+
+# 指定 URL 并记录到全局配置
+kam tmpl pull https://example.com/templates.zip
+
+# 使用已记录在全局配置的链接重新下载并导入
+kam tmpl update
+```
+
+这些功能默认情况下尽量关闭，以保留 Kam 的离线优先特性。
 
 ### 构建选项
 
@@ -230,16 +249,10 @@ hooks/pre-build/
 ```bash
 hooks/post-build/
 ├── 0.EXAMPLE.sh                # 示例 post-build 钩子 (模板)
-├── 1.BUILD_TEMPLATES.sh        # 构建模板
-└── 99.UPLOAD_IF_ENABLED.sh     # 上传构建产物（如果启用）
-```
 
 #### 可用的环境变量
 
-钩子脚本中可以使用以下环境变量：
-
 | 变量 | 说明 |
-|------|------|
 | `KAM_PROJECT_ROOT` | 项目根目录绝对路径 |
 | `KAM_HOOKS_ROOT` | 钩子目录绝对路径 |
 | `KAM_MODULE_ROOT` | 模块源目录绝对路径（如 `src/<id>`） |

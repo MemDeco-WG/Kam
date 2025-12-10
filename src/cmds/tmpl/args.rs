@@ -48,4 +48,21 @@ pub enum TmplCommands {
 
     /// Show template cache directory path
     Path,
+    /// Download templates from a URL and import them
+    Pull {
+        /// Download URL (defaults to GitHub latest release templates ZIP)
+        url: Option<String>,
+        /// (NOTE: URLs are always recorded in global config: `~/.kam/config.toml`)
+        /// The `--global` flag is accepted for CLI consistency but has no effect.
+        #[arg(long)]
+        global: bool,
+    },
+
+    /// Re-download based on recorded URL in config and import
+    Update {
+        /// (NOTE: URLs are always read from global config: `~/.kam/config.toml`)
+        /// The `--global` flag is accepted for CLI consistency but has no effect.
+        #[arg(long)]
+        global: bool,
+    },
 }

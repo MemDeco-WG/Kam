@@ -16,7 +16,7 @@ Kam is an offline-first CLI toolkit for scaffolding, building, and distributing 
 
 - 🚀 **Quick Initialization** - Rapidly create new module projects using various templates
 - 🔧 **Automated Build** - One-click module ZIP packaging
-- 🔒 **Lightweight & Offline** - Kam does not require network access and is designed to be minimal
+ - 🔒 **Offline-first (network optional)** - Kam is designed to work offline and does not require network access for most commands. However, some commands optionally rely on network services for additional capabilities (see below).
 - 🎯 **Smart Sync** - Auto-sync `kam.toml` configuration to `module.prop` and `update.json`
  - ⚙️ **Config Management** - `kam config` to manage global (`~/.kam/config.toml`) and project-level (`./.kam/config.toml`) settings to avoid repetitive edits
  - 🗂️ **Repo & Metadata Export** - Export `kam.toml` into repo.json, module.json, track.json, config.json for marketplaces or registries
@@ -178,6 +178,27 @@ Export multiple templates to a ZIP:
 kam tmpl export kam_template ak3_template -o my_templates.zip
 ```
 
+#### Download / Update Templates (new)
+
+- Pull templates from a remote URL and import them into the local cache (downloads to a temp file and imports using `kam tmpl import -f`). The download link is recorded in the global config (~/.kam/config.toml).
+ - Pull templates from a remote URL and import them into the local cache (downloads to a temp file and imports using `kam tmpl import -f`). The download link is recorded in the global config (~/.kam/config.toml) as `tmpl.pull.url`.
+  The last download timestamp is stored as `tmpl.pull.last_download`.
+
+```bash
+# Use default download link (recorded in global config)
+kam tmpl pull
+
+# Provide URL (the URL will be recorded in global config)
+kam tmpl pull https://example.com/templates.zip
+```
+
+- Update (re-download) using the recorded link saved by `kam tmpl pull`:
+
+```bash
+kam tmpl update
+```
+```
+
 #### Additional Template Commands
 
 ```bash
@@ -189,6 +210,15 @@ kam tmpl path
 ```
 
 For more details on templates, see [templates/README.md](templates/README.md).
+
+### ⚠️ Network & Optional Online Features
+
+Kam is offline-first, but supports optional network-backed functionality to increase security and convenience. These features are not required for basic scaffolding and builds, but may be enabled by flags or in future updates:
+
+- **Timestamped signatures / Sigstore** — Using `kam sign` with Sigstore/timestamping enabled may contact a timestamp authority (TSA) or Sigstore services to generate RFC 3161 timestamped signatures or to record signatures on transparency logs (Rekor). This requires network access when enabled.
+- **Template downloads (planned)** — A `kam tmpl pull` command will be added to make it easy to fetch and import templates from remote repositories or template registries.
+
+When possible, these features are optional and disabled by default to preserve the offline-first behavior of Kam.
 
 ### Build Options
 

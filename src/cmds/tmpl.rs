@@ -5,6 +5,7 @@ use colored::Colorize;
 pub mod args;
 pub mod export;
 pub mod import;
+pub mod pull;
 
 pub use args::{TmplArgs, TmplCommands};
 
@@ -13,6 +14,8 @@ pub fn run(args: TmplArgs) -> Result<(), KamError> {
     match args.command {
         TmplCommands::List => list_templates(),
         TmplCommands::Import { path, name, force } => import::import_template(&path, name, force),
+        TmplCommands::Pull { url, global } => pull::run_pull(url, global),
+        TmplCommands::Update { global } => pull::run_update(global),
         TmplCommands::Export {
             templates,
             output,
