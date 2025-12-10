@@ -28,7 +28,6 @@ jobs:
       run: |
         kam build --help
         chmod +x hooks/**/*
-        chmod +x ModuleWebUI/*
         chmod +x src/**/*
         echo "Executing: ${{ github.event.inputs.kam-command }}"
         ${{ github.event.inputs.kam-command }}

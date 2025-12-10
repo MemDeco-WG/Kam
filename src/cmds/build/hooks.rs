@@ -7,6 +7,8 @@ use crate::utils::Utils;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::io::IsTerminal;
+use indicatif::{ProgressBar, ProgressStyle};
 
 pub fn run_pre_build_hooks(
     project_root: &Path,
@@ -199,11 +201,7 @@ fn run_hooks(
     // Execute hook files directly and let the OS determine execution behavior.
     // This runner intentionally avoids OS-specific wrappers or extension-based dispatch.
     // If a script cannot be executed on the current platform, it will fail and return an error.
-    Utils::info(&format!(
-        "Running {} hooks from {}",
-        stage,
-        hooks_dir.display()
-    ));
+    // We'll display a header after we've determined the total number of hooks
 
     let mut entries: Vec<_> = fs::read_dir(&hooks_dir)
         .map_err(KamError::Io)?
@@ -213,9 +211,34 @@ fn run_hooks(
     // Sort by filename to ensure deterministic order (01-init.sh, 02-build.sh, etc.)
     entries.sort_by_key(|e| e.file_name());
 
+    // Determine if we should show a progress bar
+    let show_progress = !args.quiet && std::io::stdout().is_terminal();
+    let total_hooks = entries.iter().filter(|e| e.path().is_file()).count();
+    if !args.quiet {
+        Utils::section(&format!(
+            "Running {} hooks from {} ({} script(s))",
+            stage,
+            hooks_dir.display(),
+            total_hooks
+        ));
+    }
+    let pb = if show_progress && total_hooks > 0 {
+        let pb = ProgressBar::new(total_hooks as u64);
+        let style = ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+        )
+        .unwrap()
+        .progress_chars("#>-");
+        pb.set_style(style);
+        Some(pb)
+    } else {
+        None
+    };
+
     // Iterate hooks in deterministic order and execute each non-hidden file directly.
     // The hook runner doesn't attempt to interpret file extensions or choose a runtime;
     // it simply invokes the file and defers to the platform to handle the execution.
+    let mut idx = 0usize;
     for entry in entries {
         let path = entry.path();
         if path.is_file() {
@@ -230,8 +253,13 @@ fn run_hooks(
             }
 
             let filename = path.file_name().unwrap().to_string_lossy();
-
-            Utils::executing(&filename);
+            idx += 1;
+            // Set progress bar message if present; otherwise print executing line with index info
+            if let Some(pb) = &pb {
+                pb.set_message(format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
+            } else {
+                Utils::executing(&format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
+            }
 
             // Capture stdout/stderr to provide more detailed and actionable errors when
             // a hook fails. We intentionally avoid platform-specific interpreter selection
@@ -269,10 +297,17 @@ fn run_hooks(
                             .map(|c| c.to_string())
                             .unwrap_or_else(|| out.status.to_string());
 
+                        if let Some(pb) = &pb {
+                            pb.finish_and_clear();
+                        }
                         return Err(KamError::CommandFailed(format!(
                             "Hook script {} failed with status: {}\nStdout:\n{}\nStderr:\n{}",
                             filename, status_code, stdout, stderr
                         )));
+                    }
+                    // For non-interactive output (no progress bar), print a success line per hook for clarity
+                    if pb.is_none() {
+                        Utils::success(&format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
                     }
                 }
                 Err(e) => {
@@ -293,13 +328,25 @@ fn run_hooks(
                         }
                         _ => {}
                     }
+                    if let Some(pb) = &pb {
+                        pb.finish_and_clear();
+                    }
                     return Err(KamError::CommandFailed(format!(
                         "Failed to execute hook {}: {}",
                         filename, e
                     )));
                 }
             }
+            // Increment and update progress bar on successful run
+            if let Some(pb) = &pb {
+                pb.inc(1);
+            }
         }
+    }
+
+    // Finish the progress bar if shown
+    if let Some(pb) = &pb {
+        pb.finish_with_message("Done");
     }
 
     Ok(())

@@ -24,7 +24,7 @@ keywords = [
     "android",
     "template",
 ]
-maintainers = ["LightJunction"]
+maintainers = []
 repository = "https://github.com/MemDeco-WG/Kam"
 documentation = "https://github.com/MemDeco-WG/Kam"
 issues = "https://github.com/MemDeco-WG/Kam/issues"

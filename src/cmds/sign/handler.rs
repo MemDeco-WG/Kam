@@ -83,15 +83,48 @@ fn sign_single_file(src_path: &Path, args: &SignArgs, sigstore_mode: bool) -> Re
         }
         use sigstore_types::SignatureBytes;
         let sig_bytes = SignatureBytes::from(sig_der.as_slice());
+
+        // load/history map from config: sign.tsa.history
+        let mut history_map: StdHashMap<String, bool> = StdHashMap::new();
+        if let Some(home) = dirs::home_dir() {
+            let cfg_path = home.join(".kam").join("config.toml");
+            if cfg_path.exists() {
+                if let Ok(s) = std::fs::read_to_string(&cfg_path) {
+                    if let Ok(v) = toml::from_str::<toml::Value>(&s) {
+                        if let Some(tbl) = v
+                            .get("sign")
+                            .and_then(|x| x.get("tsa"))
+                            .and_then(|x| x.get("history"))
+                            .and_then(|x| x.as_table())
+                        {
+                            for (k, v) in tbl.iter() {
+                                history_map.insert(k.clone(), v.as_bool().unwrap_or(false));
+                            }
+                        }
+                    }
+                }
+            }
+        }
         for url in candidates.iter() {
             let client = SigstoreTsaClient::new(url.clone());
             match tokio::runtime::Runtime::new() {
                 Ok(rt) => match rt.block_on(client.timestamp_signature(&sig_bytes)) {
                     Ok(token) => {
                         tsr_opt = Some(token.as_bytes().to_vec());
+                        history_map.insert(url.clone(), true);
+                        // persist updated history map
+                        if let Err(e) = update_tsa_history_in_config(&history_map) {
+                            eprintln!("{} Failed to write TSA history to config: {}", "!".yellow(), e);
+                        }
                         break;
                     }
-                    Err(_e) => continue,
+                    Err(_e) => {
+                        history_map.insert(url.clone(), false);
+                        if let Err(e) = update_tsa_history_in_config(&history_map) {
+                            eprintln!("{} Failed to write TSA history to config: {}", "!".yellow(), e);
+                        }
+                        continue
+                    },
                 },
                 Err(_) => continue,
             }

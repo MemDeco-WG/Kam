@@ -3,6 +3,7 @@ use colored::{Color, Colorize};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use terminal_size::{terminal_size, Width};
 
 pub struct Utils;
 
@@ -73,9 +74,8 @@ impl Utils {
     /// title is longer than the width it'll simply be printed without additional
     /// padding.
     pub fn banner(title: &str) {
-        // A sane default width — this avoids adding another dependency for
-        // terminal size detection but still produces a nice separator.
-        let width: usize = 80;
+        // Use the terminal size to render a centered banner dynamically.
+        let width: usize = terminal_size().map(|(Width(w), _)| w as usize).unwrap_or(80);
         let title_text = format!(" ✿ {} ✿ ", title);
         let title_len = title_text.chars().count();
 
@@ -103,6 +103,27 @@ impl Utils {
     /// Print a "key: value" pair with a clear bullet icon and subtle value styling.
     pub fn kv(key: &str, value: &str) {
         println!("  {} {}: {}", "•".cyan(), key.bold(), value.dimmed());
+    }
+
+    /// Print a compact section header with a horizontal separator below.
+    ///
+    /// This is intended for grouping output; it prints the title in bold cyan
+    /// and a cyan horizontal line across the terminal width for readability.
+    pub fn section(title: &str) {
+        if title.is_empty() {
+            return;
+        }
+        let width: usize = terminal_size().map(|(Width(w), _)| w as usize).unwrap_or(80);
+        // We create a centered title with small decorative flower
+        let title_text = format!(" ✿ {} ✿ ", title);
+        let title_len = title_text.chars().count();
+        let left_len = if width > title_len { (width - title_len) / 2 } else { 0 };
+        let right_len = if width > title_len { width - title_len - left_len } else { 0 };
+        let left = "─".repeat(left_len);
+        let right = "─".repeat(right_len);
+        println!("");
+        println!("{}", format!("{}{}{}", left.cyan(), title_text.cyan().bold(), right.cyan()).bold());
+        println!("");
     }
 
     /// Print a generic informational line.

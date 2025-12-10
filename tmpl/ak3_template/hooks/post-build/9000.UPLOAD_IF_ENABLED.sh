@@ -213,7 +213,17 @@ if [ "${KAM_SIGN_ENABLE}" = "1" ]; then
             ASSET_ARGS+=("$a.tsr")
         fi
         if [ -f "$a.sigstore.json" ]; then
-            ASSET_ARGS+=("$a.sigstore.json")
+            # If there's no attestation JSON already, rename the sigstore bundle to the
+            # expected attestation filename so we don't end up with duplicate signature files
+            # (e.g., both .sigstore.json and .attestation.json). Prefer the attestation name.
+            if [ ! -f "${a}.attestation.json" ] && [ ! -f "${a%.zip}.attestation.json" ]; then
+                mv "$a.sigstore.json" "${a}.attestation.json"
+                log_info "Renamed $a.sigstore.json -> ${a}.attestation.json"
+                ASSET_ARGS+=("${a}.attestation.json")
+            else
+                # attestation already exists so we retain sigstore bundle as-is for trace
+                ASSET_ARGS+=("$a.sigstore.json")
+            fi
         fi
         # Support both a.attestation.json and a.zip.attestation.json
         if [ -f "${a}.attestation.json" ]; then

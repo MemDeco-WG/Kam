@@ -2,6 +2,7 @@ use crate::types::kam_toml::enums::ModuleType;
 
 use glob::Pattern;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::io::IsTerminal;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -53,9 +54,8 @@ pub fn build_project(
     })?;
     let project_path = project_root.as_path();
 
-    if !args.quiet {
-        Utils::banner("Building module...");
-    }
+    // Use a high-level progress bar for the main build phases rather than a large ASCII banner
+    // We'll create the main build progress bar after we know the module and template info.
 
     // Load kam.toml
     let kam_toml = if let Some(kt) = preloaded_kam_toml {
@@ -67,6 +67,7 @@ pub fn build_project(
     let version = &kam_toml.prop.version;
 
     if !args.quiet {
+        Utils::section(&format!("Building module: {} v{}", module_id, version));
         Utils::kv("Module", &format!("{} v{}", module_id, version));
     }
 
@@ -82,18 +83,53 @@ pub fn build_project(
     // Skip pre/post build hooks when packaging a template archive.
     let is_template_build = kam_toml.kam.module_type == ModuleType::Template;
 
+    let total_steps = if is_template_build { 1 } else { 3 };
+    let build_pb = if !args.quiet && std::io::stdout().is_terminal() {
+        let pb = ProgressBar::new(total_steps as u64);
+        let style = ProgressStyle::with_template("{spinner:.green} {msg} {pos}/{len}")
+            .unwrap_or_else(|_| ProgressStyle::default_spinner());
+        pb.set_style(style);
+        pb.set_message(format!("Building {} v{}", module_id, version));
+        Some(pb)
+    } else {
+        None
+    };
+
     // Run pre-build hooks only for non-template modules
     if !is_template_build {
+        if let Some(pb) = &build_pb {
+            pb.set_message("Running pre-build hooks");
+        }
         run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+        if let Some(pb) = &build_pb {
+            pb.inc(1);
+        }
     } else {
         if !args.quiet {
             Utils::info(&format!("Skipping build hooks for template packaging"));
         }
     }
 
-    if !args.quiet {
-        Utils::banner("Packaging artifacts...");
+    // For non-interactive environments, print a section separator for packaging; if we have a top-level build progress bar show its message
+    let show_top_build_progress = build_pb.is_some();
+    if !show_top_build_progress && !args.quiet {
+        Utils::section("Packaging artifacts...");
     }
+    if let Some(pb) = &build_pb {
+        pb.set_message("Packaging artifacts...");
+    }
+
+    let main_spinner = if !args.quiet {
+        let pb = ProgressBar::new_spinner();
+        let style = ProgressStyle::with_template("{spinner:.green} {msg}")
+            .unwrap_or_else(|_| ProgressStyle::default_spinner());
+        pb.set_style(style);
+        pb.enable_steady_tick(std::time::Duration::from_millis(80));
+        pb.set_message("Packaging artifacts...");
+        Some(pb)
+    } else {
+        None
+    };
 
     let basename = determine_basename(&kam_toml)?;
 
@@ -130,9 +166,21 @@ pub fn build_project(
         Utils::kv("Package size", &size_str);
     }
 
+    // Finish main spinner before running post-build hooks
+    if let Some(pb) = main_spinner {
+        pb.finish_and_clear();
+    }
+
     // Run post-build hooks only for non-template modules
     if !is_template_build {
+        if let Some(pb) = &build_pb {
+            pb.set_message("Running post-build hooks");
+        }
         run_post_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+        if let Some(pb) = &build_pb {
+            pb.inc(1);
+            pb.finish_with_message("Build complete");
+        }
     }
 
     Ok(())
