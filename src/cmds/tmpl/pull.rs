@@ -9,6 +9,7 @@ use crate::cmds::tmpl::import;
 use crate::cmds::config::{ConfigArgs, ConfigCommand};
 use crate::cmds::config;
 use chrono::Utc;
+use reqwest::redirect::Policy;
 
 const DEFAULT_TEMPLATES_URL: &str = "https://github.com/MemDeco-WG/Kam/releases/download/latest/templates.zip";
 
