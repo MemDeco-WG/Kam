@@ -1,7 +1,14 @@
-## Unreleased
+## 0.4.13 (2025-12-10)
 
-### Breaking Changes
-- Removed dependency management and the `dependency` section from the `kam.toml` schema. This includes removal of the `dependency` field and related types/APIs (e.g., `DEFAULT_DEPENDENCY_SOURCE`, `get_effective_source`, `resolve_dependencies`, and the `DependencyResolutionFailed` error). If you have any `dependency` entries in your `kam.toml`, please remove them as they are no longer supported.
+## 0.4.12 (2025-12-09)
+
+## 0.4.11 (2025-12-08)
+
+## 0.4.3 (2025-12-08)
+
+## 0.4.2 (2025-12-08)
+
+## 0.4.1 (2025-12-08)
 
 ## 0.3.8 (2025-12-07)
 

@@ -49,6 +49,10 @@ pub enum Commands {
 
     /// Export `kam.toml` to `module.prop`, `module.json`, `repo.json`, `track.json`, `config.json`, `update.json`
     Export(crate::cmds::export::ExportArgs),
+
+    /// Inspect and edit `kam.toml` using dot-path keys (get/set/unset/list)
+    Toml(crate::cmds::toml::TomlArgs),
+
     /// Manage per-project or global kam configuration (similar to git config)
     Config(crate::cmds::config::ConfigArgs),
 }

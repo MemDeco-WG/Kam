@@ -204,8 +204,7 @@ for a in "${ASSETS[@]}"; do
     fi
 done
 
-# If signatures were generated, include them as assets as well
-if [ "$KAM_SIGN_ENABLE" = "1" ]; then
+if [ "${KAM_SIGN_ENABLE}" = "1" ]; then
     for a in "${ASSETS[@]}"; do
         if [ -f "$a.sig" ]; then
             ASSET_ARGS+=("$a.sig")
@@ -214,31 +213,74 @@ if [ "$KAM_SIGN_ENABLE" = "1" ]; then
             ASSET_ARGS+=("$a.tsr")
         fi
         if [ -f "$a.sigstore.json" ]; then
-            ASSET_ARGS+=("$a.sigstore.json")
+            # If there's no attestation JSON already, rename the sigstore bundle to the
+            # expected attestation filename so we don't end up with duplicate signature files
+            # (e.g., both .sigstore.json and .attestation.json). Prefer the attestation name.
+            if [ ! -f "${a}.attestation.json" ] && [ ! -f "${a%.zip}.attestation.json" ]; then
+                mv "$a.sigstore.json" "${a}.attestation.json"
+                log_info "Renamed $a.sigstore.json -> ${a}.attestation.json"
+                ASSET_ARGS+=("${a}.attestation.json")
+            else
+                # attestation already exists so we retain sigstore bundle as-is for trace
+                ASSET_ARGS+=("$a.sigstore.json")
+            fi
+        fi
+        # Support both a.attestation.json and a.zip.attestation.json
+        if [ -f "${a}.attestation.json" ]; then
+            ASSET_ARGS+=("${a}.attestation.json")
+            log_info "Attestation queued: ${a}.attestation.json"
+        fi
+        if [ -f "${a%.zip}.attestation.json" ]; then
+            ASSET_ARGS+=("${a%.zip}.attestation.json")
+            log_info "Attestation queued: ${a%.zip}.attestation.json"
         fi
     done
 fi
+
 if [ "${KAM_RELEASE_GENERATE_NOTES:-1}" != "0" ]; then
     if gh release create "$KAM_MODULE_VERSION" \
         --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
         --generate-notes \
-        $PRE_RELEASE_FLAG \
-        "${ASSET_ARGS[@]}"; then
+        $PRE_RELEASE_FLAG; then
         log_success "Release created with auto-generated notes."
+        # Upload assets separately to avoid issues with the combined command
+        for asset in "${ASSET_ARGS[@]}"; do
+            if [ -f "$asset" ]; then
+                log_info "Uploading asset: $asset"
+                gh release upload "$KAM_MODULE_VERSION" "$asset" --clobber || log_warn "Failed to upload $asset"
+            fi
+        done
     else
         log_warn "Failed to generate notes, falling back to manual release notes."
-        gh release create "$KAM_MODULE_VERSION" \
+        if gh release create "$KAM_MODULE_VERSION" \
             --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
             $PRE_RELEASE_FLAG \
-            --notes "$RELEASE_NOTES" \
-            "${ASSET_ARGS[@]}"
+            --notes "$RELEASE_NOTES"; then
+            log_success "Release created with manual notes."
+            for asset in "${ASSET_ARGS[@]}"; do
+                if [ -f "$asset" ]; then
+                    log_info "Uploading asset: $asset"
+                    gh release upload "$KAM_MODULE_VERSION" "$asset" --clobber || log_warn "Failed to upload $asset"
+                fi
+            done
+        else
+            log_warn "Failed to create release with manual notes. Aborting upload."
+        fi
     fi
 else
-    gh release create "$KAM_MODULE_VERSION" \
+    if gh release create "$KAM_MODULE_VERSION" \
         --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
         $PRE_RELEASE_FLAG \
-        --notes "$RELEASE_NOTES" \
-        "${ASSET_ARGS[@]}"
+        --notes "$RELEASE_NOTES"; then
+        for asset in "${ASSET_ARGS[@]}"; do
+            if [ -f "$asset" ]; then
+                log_info "Uploading asset: $asset"
+                gh release upload "$KAM_MODULE_VERSION" "$asset" --clobber || log_warn "Failed to upload $asset"
+            fi
+        done
+    else
+        log_warn "Failed to create release. Aborting upload."
+    fi
 fi
 
 echo "Upload complete"

@@ -3,10 +3,10 @@ use std::path::PathBuf;
 
 #[derive(Args, Debug)]
 pub struct ExportArgs {
-    /// 导出格式：prop, json, update, repo, track, config
+    /// Export format: prop, json, update, repo, track, config
     #[arg(value_enum)]
     pub format: Option<ExportFormat>,
-    /// 输出文件路径（默认打印到 stdout）
+    /// Output file path (default: write to a format-specific filename in the current directory)
     pub output: Option<PathBuf>,
 }
 

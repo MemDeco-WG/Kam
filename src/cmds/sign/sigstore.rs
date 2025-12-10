@@ -64,5 +64,9 @@ pub fn write_sigstore_bundle(
     let mut f = fs::File::create(&bundle_path).map_err(KamError::Io)?;
     let v = serde_json::to_vec_pretty(&bundle).map_err(|e| KamError::CommandFailed(format!("Failed to serialize bundle JSON: {}", e)))?;
     f.write_all(&v).map_err(KamError::Io)?;
+    // Also write a release-attestation file for GitHub and similar tooling.
+    let attestation_path = out_dir.join(format!("{}.attestation.json", filename));
+    let mut f2 = fs::File::create(&attestation_path).map_err(KamError::Io)?;
+    f2.write_all(&v).map_err(KamError::Io)?;
     Ok(bundle_path)
 }

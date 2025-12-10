@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use git2::Repository;
 
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
@@ -82,7 +83,8 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     let project_name_str = args
         .project_name
         .as_deref()
-        .unwrap_or("Example Module Name");
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "Example Module Name".to_string());
     let description_str = args
         .description
         .as_deref()
@@ -90,20 +92,65 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
             ModuleType::Kam => "Describe your module here",
             ModuleType::Template => "Describe your template here",
         });
-    template_vars.insert("project_name".to_string(), project_name_str.to_string());
+    template_vars.insert("project_name".to_string(), project_name_str.clone());
     template_vars.insert("description".to_string(), description_str.to_string());
 
-    // Determine ID: use --id if provided, otherwise use folder name
+    // Discover Git metadata early so we can use it for defaults (id, author, repo URL, etc)
+    let mut git_author: Option<String> = None;
+    let mut git_repo_url: Option<String> = None;
+    // Try discovering git repository
+    if let Ok(repo) = Repository::discover(&current_dir) {
+        if let Ok(cfg) = repo.config() {
+            if let Ok(name) = cfg.get_string("user.name") {
+                git_author = Some(name);
+            }
+        }
+        if let Ok(remote) = repo.find_remote("origin") {
+            if let Some(url) = remote.url() {
+                git_repo_url = Some(url.to_string());
+            }
+        }
+        // if we didn't find origin, pick the first remote available
+        if git_repo_url.is_none() {
+            if let Ok(remotes) = repo.remotes() {
+                if let Some(name) = remotes.get(0) {
+                    if let Ok(remote) = repo.find_remote(name) {
+                        if let Some(url) = remote.url() {
+                            git_repo_url = Some(url.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Determine ID: use --id if provided, otherwise use git repo name (if repo detected and name is not '.'),
+    // otherwise use folder name
     let id = if let Some(custom_id) = &args.id {
         custom_id.clone()
     } else if args.name == "." {
-        std::env::current_dir()
-            .unwrap()
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string()
+        // if git repo identified, prefer repo name
+        if let Some(repo_url) = git_repo_url.clone() {
+            if let Some((_owner, repo_name)) = parse_git_remote_url(&repo_url) {
+                repo_name
+            } else {
+                std::env::current_dir()
+                    .unwrap()
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            }
+        } else {
+            std::env::current_dir()
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string()
+        }
     } else {
         // Extract basename from path (e.g., "/tmp/test_kam_init" -> "test_kam_init")
         std::path::Path::new(&args.name)
@@ -130,8 +177,35 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         ));
     }
 
-    // Determine author
-    let author = args.author.as_deref().unwrap_or("Your Name").to_string();
+    // determine author selection continues below using discovered metadata
+    // Also check global config for default author (~/.kam/config.toml)
+    let mut global_author: Option<String> = None;
+    if let Some(home) = dirs::home_dir() {
+        let cfg_path = home.join(".kam").join("config.toml");
+        if cfg_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&cfg_path) {
+                if let Ok(v) = toml::from_str::<toml::Value>(&content) {
+                    if let Some(prop) = v.get("prop") {
+                        if let Some(author_val) = prop.get("author") {
+                            if let Some(s) = author_val.as_str() {
+                                global_author = Some(s.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let author = if let Some(a) = args.author.as_deref() {
+        a.to_string()
+    } else if let Some(a) = git_author.clone() {
+        a
+    } else if let Some(a) = global_author {
+        a
+    } else {
+        "Your Name".to_string()
+    };
 
     let update_json_val = args
         .update_json
@@ -149,7 +223,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         None,
     );
 
-    // Set name and description
+    // Set name and description (allow git-based defaults to be overridden later)
     kam_toml.prop.name = project_name_str.to_string();
     kam_toml.prop.description = description_str.to_string();
 
@@ -162,17 +236,55 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     // Set zipUrl and changelog with proper id
     template_vars
         .entry("zipUrl".to_string())
-        .or_insert_with(|| {
-            format!(
-                "https://github.com/user/repo/releases/latest/download/{}.zip",
-                id
-            )
-        });
+        .or_insert_with(|| format!("https://github.com/user/repo/releases/latest/download/{}.zip", id));
     template_vars
         .entry("changelog".to_string())
-        .or_insert_with(|| {
-            "https://raw.githubusercontent.com/user/repo/branch/CHANGELOG.md".to_string()
-        });
+        .or_insert_with(|| "https://raw.githubusercontent.com/user/repo/branch/CHANGELOG.md".to_string());
+
+    // If we discovered a git repository remote, try to populate more intelligent defaults
+    if let Some(repo_url) = git_repo_url {
+        // Parse basic owner/repo from remote URL
+        if let Some((owner, repo_name)) = parse_git_remote_url(&repo_url) {
+            // If update_json is unset, provide a default to raw.githubusercontent
+            if kam_toml.prop.updateJson.is_none() {
+                let default_update = format!(
+                    "https://raw.githubusercontent.com/{}/{}/main/update.json",
+                    owner, repo_name
+                );
+                kam_toml.prop.updateJson = Some(default_update.clone());
+                template_vars.insert("update_json".to_string(), default_update);
+            }
+
+            // Replace zipUrl and changelog with repo-based values if they are still defaults
+            template_vars
+                .entry("zipUrl".to_string())
+                .or_insert_with(|| {
+                    format!(
+                        "https://github.com/{}/{}/releases/latest/download/{}.zip",
+                        owner, repo_name, id
+                    )
+                });
+            template_vars
+                .entry("changelog".to_string())
+                .or_insert_with(|| {
+                    format!(
+                        "https://raw.githubusercontent.com/{}/{}/main/CHANGELOG.md",
+                        owner, repo_name
+                    )
+                });
+
+            // If mmrl repo section is present or not, set repository
+            kam_toml.mmrl.get_or_insert(crate::types::kam_toml::sections::MmrlSection::default());
+            if let Some(mmrl) = &mut kam_toml.mmrl {
+                if mmrl.repo.is_none() {
+                    mmrl.repo = Some(crate::types::kam_toml::sections::RepoSection::default());
+                }
+                if let Some(repo) = &mut mmrl.repo {
+                    repo.repository = Some(repo_url.clone());
+                }
+            }
+        }
+    }
 
     Ok(PreInitData {
         path: project_path,
@@ -187,4 +299,39 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         update_json,
         kam_toml,
     })
+}
+
+fn parse_git_remote_url(remote: &str) -> Option<(String, String)> {
+    // Normalize urls like:
+    // git@github.com:owner/repo.git
+    // https://github.com/owner/repo.git
+    // We extract owner and repo
+    let s = remote.trim();
+    let s = if s.starts_with("git@") {
+        // git@github.com:owner/repo.git -> https://github.com/owner/repo.git
+        if let Some(idx) = s.find(':') {
+            let host = &s[4..idx];
+            let path = &s[idx + 1..];
+            format!("https://{}/{}", host, path)
+        } else {
+            s.to_string()
+        }
+    } else {
+        s.to_string()
+    };
+
+    // Strip scheme
+    let path_start = if let Some(idx) = s.find("//") { idx + 2 } else { 0 };
+    let path = &s[path_start..];
+    let parts: Vec<&str> = path.split('/').collect();
+    if parts.len() >= 3 {
+        let owner = parts[1].to_string();
+        let mut repo = parts[2].to_string();
+        // remove .git suffix
+        if repo.ends_with(".git") {
+            repo.truncate(repo.len() - 4);
+        }
+        return Some((owner, repo));
+    }
+    None
 }

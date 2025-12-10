@@ -28,9 +28,16 @@ for f in "$DIST"/*; do
 				log_info "Skipping $f (signature/metadata file)"
 				continue
 				;;
+			zip)
+				# Skip templates bundle from being signed
+				base="$(basename -- "$f")"
+				if [ "$base" = "templates.zip" ]; then
+					log_info "Skipping template bundle $f (no signing required)"
+					continue
+				fi
+				;;
 		esac
 
-		log_info "Signing $f"
 		# Generate sign command; default: sigstore + timestamp
 		CMD=(kam sign "$f" --sigstore --timestamp)
 

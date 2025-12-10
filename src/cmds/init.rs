@@ -44,3 +44,79 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
 
     Ok(())
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn test_init_creates_kam_toml_with_defaults() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path();
+        let orig = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir).unwrap();
+
+        let args = InitArgs {
+            name: "my_test_module".to_string(),
+            id: None,
+            project_name: None,
+            version: None,
+            author: None,
+            update_json: None,
+            description: None,
+            force: true,
+            r#impl: None,
+            var: vec![],
+            template: Some("tmpl_template".to_string()),
+            tmpl: false,
+        };
+
+        run(args).unwrap();
+
+        // Expect project directory created
+        let kt_path = dir.join("my_test_module").join("kam.toml");
+        assert!(kt_path.exists());
+        let kt = crate::types::kam_toml::KamToml::load_from_file(&kt_path).unwrap();
+        assert_eq!(kt.prop.id, "my_test_module");
+
+        std::env::set_current_dir(orig).unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn test_init_with_custom_id_and_author() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path();
+        let orig = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir).unwrap();
+
+        let args = InitArgs {
+            name: "custom_mod".to_string(),
+            id: Some("custom.id".to_string()),
+            project_name: Some("Custom Name".to_string()),
+            version: Some("0.1.2".to_string()),
+            author: Some("Jane Doe".to_string()),
+            update_json: None,
+            description: Some("A custom module".to_string()),
+            force: true,
+            r#impl: None,
+            var: vec![],
+            template: Some("tmpl_template".to_string()),
+            tmpl: false,
+        };
+
+        run(args).unwrap();
+        let kt_path = dir.join("custom_mod").join("kam.toml");
+        assert!(kt_path.exists());
+        let kt = crate::types::kam_toml::KamToml::load_from_file(&kt_path).unwrap();
+        assert_eq!(kt.prop.id, "custom.id");
+        assert_eq!(kt.prop.author, "Jane Doe");
+        assert_eq!(kt.prop.version, "0.1.2");
+
+        std::env::set_current_dir(orig).unwrap();
+    }
+}

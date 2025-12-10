@@ -544,3 +544,114 @@ pub fn create_template_archive(
     }
     Ok(source_output_file)
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cmds::build::args::BuildArgs;
+    use crate::types::kam_toml::KamToml;
+    use crate::types::kam_toml::enums::ModuleType;
+    use serial_test::serial;
+    use tempfile::tempdir;
+    use std::fs;
+    use std::io::Read;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    #[serial]
+    fn test_build_project_creates_zip_and_runs_hooks() {
+        let tmp = tempdir().unwrap();
+        let project_path = tmp.path();
+
+        // Prepare minimal kam toml
+        let kt = KamToml::new_with_current_timestamp(
+            "test.module".to_string(),
+            "Test Module".to_string(),
+            "0.1.0".to_string(),
+            "author".to_string(),
+            "desc".to_string(),
+            None,
+            Some(ModuleType::Kam),
+        );
+
+        // Write sample src files
+        let src_dir = project_path.join("src").join("test.module");
+        fs::create_dir_all(&src_dir).unwrap();
+        fs::write(src_dir.join("hello.txt"), "hello").unwrap();
+
+        // Create pre-build hook that writes module.prop into module root
+        let hooks_pre_dir = project_path.join("hooks").join("pre-build");
+        fs::create_dir_all(&hooks_pre_dir).unwrap();
+        let pre_script = hooks_pre_dir.join("01-create-prop.sh");
+        let pre_script_content = r#"#!/bin/sh
+echo id=test.module > "$KAM_MODULE_ROOT/module.prop"
+echo name=FromHook >> "$KAM_MODULE_ROOT/module.prop"
+"#;
+        fs::write(&pre_script, pre_script_content).unwrap();
+        let mut perm = fs::metadata(&pre_script).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            perm.set_mode(0o755);
+            fs::set_permissions(&pre_script, perm).unwrap();
+        }
+
+        // Create post-build hook that writes some output
+        let hooks_post_dir = project_path.join("hooks").join("post-build");
+        fs::create_dir_all(&hooks_post_dir).unwrap();
+        let post_script = hooks_post_dir.join("01-post.sh");
+        let post_script_content = r#"#!/bin/sh
+echo POST_RUN > hook_post.txt
+"#;
+        fs::write(&post_script, post_script_content).unwrap();
+        let mut perm2 = fs::metadata(&post_script).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            perm2.set_mode(0o755);
+            fs::set_permissions(&post_script, perm2).unwrap();
+        }
+
+        // Build args
+        let args = BuildArgs {
+            path: project_path.to_string_lossy().to_string(),
+            all: false,
+            output: None,
+            bump: false,
+            release: false,
+            quiet: true,
+            sign: false,
+            immutable_release: false,
+            pre_release: false,
+        };
+
+        // Run build
+        build_project(project_path, &args, Some(kt.clone())).unwrap();
+
+        // Verify a zip is created in dist
+        let dist = project_path.join("dist");
+        let entries = fs::read_dir(&dist).unwrap().collect::<Vec<_>>();
+        assert!(entries.len() >= 1);
+        let mut found_zip = false;
+        for e in entries {
+            let p = e.unwrap().path();
+            if p.extension().and_then(|s| s.to_str()).unwrap_or("") == "zip" {
+                found_zip = true;
+                // Open zip and check module.prop content
+                let file = std::fs::File::open(&p).unwrap();
+                let mut archive = zip::ZipArchive::new(file).unwrap();
+                let mut f = archive.by_name("module.prop").unwrap();
+                let mut contents = String::new();
+                f.read_to_string(&mut contents).unwrap();
+                assert!(contents.contains("name=FromHook"));
+            }
+        }
+        assert!(found_zip);
+
+        // Check post hook output
+        let post_out = project_path.join("hook_post.txt");
+        assert!(post_out.exists());
+        let post_contents = fs::read_to_string(post_out).unwrap();
+        assert!(post_contents.contains("POST_RUN"));
+    }
+}

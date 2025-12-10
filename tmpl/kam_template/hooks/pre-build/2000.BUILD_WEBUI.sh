@@ -27,7 +27,7 @@ fi
 # We change directory to ModuleWebUI because the build script might rely on relative paths (e.g. node_modules)
 (
     cd "$WEBUI_DIR" || exit 1
-    ./build.sh "$KAM_MODULE_ID"
+    ./build.sh
 )
 
 if [ $? -ne 0 ]; then

@@ -221,6 +221,24 @@ Kam is offline-first, but supports optional network-backed functionality to incr
 When possible, these features are optional and disabled by default to preserve the offline-first behavior of Kam.
 
 ### Build Options
+### TOML Manipulation
+You can inspect and modify your `kam.toml` directly from the CLI using the `toml` subcommand:
+
+```bash
+# Get a nested value by dot-separated key path
+kam toml get mmrl.repo.repository
+
+# Set a value: support both `key value` and `key=value` forms
+kam toml set prop.name "My Module"
+kam toml set prop.version=1.2.3
+
+# Remove a value
+kam toml unset prop.not_used
+
+# Dump kam.toml
+kam toml list
+```
+
 
 ```bash
 # Basic build
@@ -234,7 +252,13 @@ kam build --all
 kam build --bump
 
 # Build and create GitHub Release
+# Creates a GitHub release and uploads artifacts from `dist/` (signing and immutability optional)
 kam build --release
+#
+# Example: Create an immutable signed release (skip re-upload if the same tag exists) and upload Sigstore
+# attestation JSON (DSSE bundle copied as `*.attestation.json`) as release assets:
+#
+# kam build -r -s -i
 
 # Debug mode
 KAM_DEBUG=1 kam build

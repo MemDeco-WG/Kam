@@ -3,6 +3,8 @@
 
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
+# log_warn " comment out to enable !" && exit 0
+
 # Where to output the ZIP (KAM_DIST_DIR preferred, default to KAM_PROJECT_ROOT/dist)
 DIST="${KAM_DIST_DIR:-$KAM_PROJECT_ROOT/dist}"
 TEMPLATES_DIR="$KAM_PROJECT_ROOT/templates"

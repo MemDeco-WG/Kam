@@ -4,6 +4,7 @@ pub mod check;
 pub mod completion;
 pub mod config;
 pub mod export;
+pub mod toml;
 pub mod init;
 pub mod secret;
 pub mod secret_crypto;
