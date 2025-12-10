@@ -25,7 +25,7 @@ detect_build_tool() {
             return 1
         fi
     fi
- 
+
     echo "$BUILD_TOOL"
     return 0
 }

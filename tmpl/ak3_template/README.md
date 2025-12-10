@@ -131,4 +131,3 @@ Kam 在执行钩子时会直接调用钩子文件，由操作系统或文件本�
 | `KAM_SIGN_ENABLED` | 若为 `1` 则表示 build 时带有 `-s/--sign`，钩子可据此触发签名步骤。 |
 | `KAM_IMMUTABLE_RELEASE` | 若为 `1` 则表示 build 时带有 `-i/--immutable-release`，钩子可据此选择不可变发布相关行为。 |
 | `KAM_PRE_RELEASE` | 若为 `1` 则表示 build 时带有 `-P/--pre-release`，钩子可据此调整发布流程（例如跳过发布）。 |
-

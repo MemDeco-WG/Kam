@@ -127,4 +127,3 @@ Kam 在执行钩子时会直接调用钩子文件，由操作系统或文件本�
 | `KAM_MODULE_UPDATE_JSON` | 若设置，会包含 update JSON 的 URL。 |
 | `KAM_STAGE` | 当前构建阶段：`pre-build` 或 `post-build`。 |
 | `KAM_DEBUG` | 若设为 `1`，钩子会输出调试信息。 |
-

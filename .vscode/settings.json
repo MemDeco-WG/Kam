@@ -10,9 +10,9 @@
   "files.eol": "\n",
   "files.insertFinalNewline": true,
   "files.trimTrailingWhitespace": true,
-  "terminal.integrated.fontFamily": "Fira Code, Menlo, Monaco, 'Courier New', monospace",
-  "terminal.integrated.fontSize": 12,
   "githubPullRequests.ignoredPullRequestBranches": [
     "master"
-  ]
+  ],
+  "terminal.integrated.fontFamily": "Fira Code, Menlo, Monaco, 'Courier New', monospace",
+  "terminal.integrated.fontSize": 12
 }
