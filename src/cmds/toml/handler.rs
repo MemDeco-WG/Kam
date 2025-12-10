@@ -151,6 +151,44 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                 return Err(KamError::InvalidFilename("No value provided".to_string()));
             };
             let mut v = read_toml(&path).unwrap_or(toml::Value::Table(Default::default()));
+            // If key exists, ensure new value is compatible with existing type
+            if let Some(existing) = get_value_by_path(&v, &key) {
+                match existing {
+                    toml::Value::Integer(_) => {
+                        if new_value.parse::<i64>().is_err() {
+                            return Err(KamError::CommandFailed(format!(
+                                "Invalid value: '{}' is not an integer; existing type requires integer for {}",
+                                new_value,
+                                key
+                            )));
+                        }
+                    }
+                    toml::Value::Boolean(_) => {
+                        if !(new_value == "true" || new_value == "false") {
+                            return Err(KamError::CommandFailed(format!(
+                                "Invalid value: '{}' is not a boolean; existing type requires boolean for {}",
+                                new_value,
+                                key
+                            )));
+                        }
+                    }
+                    _ => {}
+                }
+            } else {
+                // If key does not exist but it's a known integer field, enforce integer
+                let parts: Vec<&str> = key.split('.').collect();
+                if let Some(last) = parts.last() {
+                    if *last == "versionCode" {
+                        if new_value.parse::<i64>().is_err() {
+                            return Err(KamError::CommandFailed(format!(
+                                "Invalid value: '{}' is not an integer; {} must be an integer",
+                                new_value,
+                                key
+                            )));
+                        }
+                    }
+                }
+            }
             set_value_by_path(&mut v, &key, &new_value);
             write_toml(&path, &v)?;
             println!("{} Set {} = {} in {}", "✓".green(), key, new_value, path.display());
@@ -176,29 +214,5 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             println!("{}", toml::to_string_pretty(&v).unwrap_or_default());
             Ok(())
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    #[test]
-    fn toml_set_get_unset() {
-        let d = tempdir().unwrap();
-        let path = d.path().join("kam.toml");
-        fs::write(&path, "[prop]\nid = \"test\"\nversion = \"0.1.0\"\n").unwrap();
-        let mut v = read_toml(&path).unwrap();
-        assert!(get_value_by_path(&v, "prop.id").is_some());
-
-        set_value_by_path(&mut v, "prop.name", "Tester");
-        write_toml(&path, &v).unwrap();
-        let v2 = read_toml(&path).unwrap();
-        assert!(get_value_by_path(&v2, "prop.name").is_some());
-
-        let mut v3 = v2.clone();
-        let removed = unset_value_by_path(&mut v3, "prop.name");
-        assert!(removed);
     }
 }

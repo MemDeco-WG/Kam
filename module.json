@@ -1,0 +1,11 @@
+{
+  "additionalAuthors": [
+    {
+      "name": "LightJunction",
+      "type": "add"
+    }
+  ],
+  "metamodule": false,
+  "sourceUrl": "https://github.com/MemDeco-WG/Kam",
+  "summary": "Kam： ksu/apu/magisk module builder."
+}

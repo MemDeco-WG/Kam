@@ -46,19 +46,22 @@ cargo build --release
 Using Kam template:
 
 ```bash
-kam init my_awesome_module -t kam
+kam tmpl list
+
+
+kam init my_awesome_module -t kam_template
 ```
 
 Using Meta template (meta-module):
 
 ```bash
-kam init my_meta_module -t meta
+kam init my_meta_module -t meta_template
 ```
 
 Using AnyKernel3 template (kernel module):
 
 ```bash
-kam init my_kernel_module -t ak3
+kam init my_kernel_module -t ak3_template
 ```
 
 Using Astrbot template.

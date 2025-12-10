@@ -8,6 +8,9 @@ pub struct ConfigArgs {
     /// Use the global configuration file (~/.kam/config.toml)
     #[arg(long)]
     pub global: bool,
+    /// Force use of the local configuration file (project `.kam/config.toml`)
+    #[arg(long, conflicts_with = "global")]
+    pub local: bool,
 
     #[command(subcommand)]
     pub command: ConfigCommand,
@@ -25,15 +28,15 @@ pub enum ConfigCommand {
     List,
 }
 
-fn get_config_paths(global: bool) -> Result<PathBuf, KamError> {
+fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> {
     if global {
         let home = dirs::home_dir().ok_or_else(|| {
             KamError::CommandFailed("Cannot determine home directory for global config".to_string())
         })?;
         let dir = home.join(".kam");
         Ok(dir.join("config.toml"))
-    } else {
-        // find kam.toml at cwd or upwards to locate project root; fallback to current dir
+    } else if local {
+        // force local: find kam.toml at cwd or upwards to locate project root; fallback to current dir
         let mut cwd = std::env::current_dir().map_err(KamError::Io)?;
         loop {
             if cwd.join("kam.toml").exists() {
@@ -48,6 +51,24 @@ fn get_config_paths(global: bool) -> Result<PathBuf, KamError> {
             cwd = std::env::current_dir().map_err(KamError::Io)?;
         }
         let dir = cwd.join(".kam");
+        Ok(dir.join("config.toml"))
+    } else {
+        // default behavior: if inside a project (kam.toml found upwards) use local; otherwise use global
+        let mut cwd = std::env::current_dir().map_err(KamError::Io)?;
+        loop {
+            if cwd.join("kam.toml").exists() {
+                let dir = cwd.join(".kam");
+                return Ok(dir.join("config.toml"));
+            }
+            if !cwd.pop() {
+                break;
+            }
+        }
+        // Not in a project -> use global config
+        let home = dirs::home_dir().ok_or_else(|| {
+            KamError::CommandFailed("Cannot determine home directory for global config".to_string())
+        })?;
+        let dir = home.join(".kam");
         Ok(dir.join("config.toml"))
     }
 }
@@ -145,7 +166,7 @@ fn unset_value_by_path(value: &mut toml::Value, path: &str) -> bool {
 }
 
 pub fn run(args: ConfigArgs) -> Result<(), KamError> {
-    let path = get_config_paths(args.global)?;
+    let path = get_config_paths(args.global, args.local)?;
 
     match args.command {
         ConfigCommand::Get { key } => {
@@ -215,5 +236,50 @@ mod tests {
         let mut r2 = r.clone();
         let removed = unset_value_by_path(&mut r2, "prop.name");
         assert!(removed);
+    }
+
+    #[test]
+    fn test_get_config_paths_default_global_when_not_in_project() {
+        // Simulate being in a temporary dir without kam.toml
+        let d = tempdir().unwrap();
+        let tmp = d.path().to_path_buf();
+        let oldcwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&tmp).unwrap();
+        // No project, call get_config_paths with neither global or local set
+        let p = get_config_paths(false, false).unwrap();
+        assert!(p.display().to_string().contains(".kam/config.toml"));
+        // Should be in HOME
+        let home = dirs::home_dir().unwrap();
+        assert!(p.starts_with(&home));
+        // restore
+        std::env::set_current_dir(&oldcwd).unwrap();
+    }
+
+    #[test]
+    fn test_get_config_paths_local_forced() {
+        // Simulate being in a temporary dir without kam.toml
+        let d = tempdir().unwrap();
+        let tmp = d.path().to_path_buf();
+        let oldcwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&tmp).unwrap();
+        // Force local even if no project file exists
+        let p = get_config_paths(false, true).unwrap();
+        assert!(p.display().to_string().contains(".kam/config.toml"));
+        // Should be under the temp dir
+        assert!(p.starts_with(&tmp));
+        // restore
+        std::env::set_current_dir(&oldcwd).unwrap();
+    }
+
+    #[test]
+    fn test_get_config_paths_global_flag() {
+        let d = tempdir().unwrap();
+        let tmp = d.path().to_path_buf();
+        let oldcwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&tmp).unwrap();
+        let p = get_config_paths(true, false).unwrap();
+        let home = dirs::home_dir().unwrap();
+        assert!(p.starts_with(&home));
+        std::env::set_current_dir(&oldcwd).unwrap();
     }
 }

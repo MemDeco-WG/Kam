@@ -68,6 +68,7 @@ fn set_config_value(global: bool, key: &str, value: &str) -> Result<(), KamError
     // Use the existing config run helper to set the value for us, to avoid duplicating write logic
     let args = ConfigArgs {
         global,
+        local: false,
         command: ConfigCommand::Set { key: key.to_string(), value: value.to_string() },
     };
     config::run(args)

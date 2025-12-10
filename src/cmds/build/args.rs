@@ -26,9 +26,9 @@ pub struct BuildArgs {
     #[arg(short = 's', long)]
     pub sign: bool,
 
-    /// Enable KAM_IMMUTABLE_RELEASE environment variable (set to 1)
-    #[arg(short = 'i', long = "immutable-release")]
-    pub immutable_release: bool,
+    /// Run build interactively; ask for confirmation when performing potentially destructive actions
+    #[arg(short = 'i', long = "interactive")]
+    pub interactive: bool,
 
     /// Enable KAM_PRE_RELEASE environment variable (set to 1)
     #[arg(short = 'P', long = "pre-release")]

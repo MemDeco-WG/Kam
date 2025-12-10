@@ -193,6 +193,24 @@ impl Utils {
             print_line(line);
         }
     }
+
+    /// Print a single stdout/stderr line using the same classification
+    /// rules used by `print_cmd_output`. This is useful for streaming
+    /// log consumers that read output line-by-line.
+    pub fn print_cmd_line(line: &str) {
+        let l = line.trim();
+        if l.is_empty() {
+            return;
+        }
+        let upper = l.to_ascii_uppercase();
+        if upper.contains("[WARN]") || upper.starts_with("WARN") || upper.contains("WARNING") {
+            Utils::warn(l);
+        } else if upper.contains("[ERROR]") || upper.starts_with("ERROR") || upper.contains("FAIL") || upper.contains("[ERR]") {
+            Utils::error(l);
+        } else {
+            Utils::info(l);
+        }
+    }
 }
 
 /// Ensure the parent directory for `path` exists.

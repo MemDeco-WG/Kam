@@ -54,6 +54,10 @@ cargo build --release
 使用 Kam 模板创建模块：
 
 ```bash
+kam tmpl list
+
+kam init my_kam_module -t kam_template
+
 ```
 
 使用 Meta 模板（元模块）：

@@ -17,42 +17,37 @@ if [ ! -d "$DIST" ]; then
 	exit 0
 fi
 
-log_info "Signing artifacts in $DIST"
+log_info "Signing artifacts in $DIST using 'kam sign --dist'"
 
-# Iterate artifacts and sign if they are files (skip directories)
-for f in "$DIST"/*; do
-	if [ -f "$f" ]; then
-		# Determine file extension and skip common signature files
-		case "${f##*.}" in
-			sig|tsr|json)
-				log_info "Skipping $f (signature/metadata file)"
-				continue
-				;;
-			zip)
-				# Skip templates bundle from being signed
-				base="$(basename -- "$f")"
-				if [ "$base" = "templates.zip" ]; then
-					log_info "Skipping template bundle $f (no signing required)"
-					continue
-				fi
-				;;
-		esac
+# Skip template bundle
+if [ -f "$DIST/templates.zip" ]; then
+	log_info "Skipping template bundle: $DIST/templates.zip"
+fi
 
-		# Generate sign command; default: sigstore + timestamp
-		CMD=(kam sign "$f" --sigstore --timestamp)
+# Build base command
+CMD=(kam sign --dist "$DIST" --sigstore --timestamp)
 
-		# Allow disabling sigstore via env variable
-		if [ "${KAM_SIGN_SIGSTORE:-1}" != "1" ]; then
-			CMD=(kam sign "$f" --timestamp)
-		fi
+# Respect environment overrides
+if [ -n "$KAM_SIGN_KEY_PATH" ]; then
+	CMD+=(--key-path "$KAM_SIGN_KEY_PATH")
+fi
+if [ -n "$KAM_SIGN_SECRET" ]; then
+	CMD+=(--secret "$KAM_SIGN_SECRET")
+fi
+if [ "${KAM_SIGN_SIGSTORE:-1}" != "1" ]; then
+	# Disable sigstore by not passing --sigstore; our 'kam sign' defaults timestamp true
+	CMD=(kam sign --dist "$DIST" --timestamp)
+fi
+if [ "${KAM_SIGN_ATTESTATION_ONLY:-0}" = "1" ]; then
+	CMD+=(--attestation-only)
+fi
 
-		log_info "Signing $f"
-		if "${CMD[@]}"; then
-			log_success "Signed $f"
-		else
-			log_warn "Signing failed for $f (continuing)"
-		fi
-	fi
-done
+# Execute sign command once (it will iterate inside kam sign over files)
+log_info "Running: ${CMD[*]}"
+if "${CMD[@]}"; then
+	log_success "Signed artifacts in $DIST"
+else
+	log_warn "Signing failed for some artifacts in $DIST (continuing)"
+fi
 
 exit 0

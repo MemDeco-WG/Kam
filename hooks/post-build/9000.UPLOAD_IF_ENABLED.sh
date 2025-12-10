@@ -29,6 +29,12 @@ if [ "$KAM_IMMUTABLE_RELEASE" = "1" ]; then
         exit 0
     fi
 fi
+
+# Determine whether a release already exists; this avoids gh create failing with 422
+RELEASE_EXISTS=0
+if gh release view "$KAM_MODULE_VERSION" >/dev/null 2>&1; then
+    RELEASE_EXISTS=1
+fi
 cleanup_tmp() {
     if [ -n "$TMP_CHANGELOG" ] && [ -f "$TMP_CHANGELOG" ]; then
         rm -f "$TMP_CHANGELOG"
@@ -237,50 +243,59 @@ if [ "${KAM_SIGN_ENABLE}" = "1" ]; then
     done
 fi
 
-if [ "${KAM_RELEASE_GENERATE_NOTES:-1}" != "0" ]; then
-    if gh release create "$KAM_MODULE_VERSION" \
-        --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
-        --generate-notes \
-        $PRE_RELEASE_FLAG; then
-        log_success "Release created with auto-generated notes."
-        # Upload assets separately to avoid issues with the combined command
-        for asset in "${ASSET_ARGS[@]}"; do
-            if [ -f "$asset" ]; then
-                log_info "Uploading asset: $asset"
-                gh release upload "$KAM_MODULE_VERSION" "$asset" --clobber || log_warn "Failed to upload $asset"
-            fi
-        done
-    else
-        log_warn "Failed to generate notes, falling back to manual release notes."
-        if gh release create "$KAM_MODULE_VERSION" \
+if [ "$RELEASE_EXISTS" = "1" ]; then
+    log_info "Release ${KAM_MODULE_VERSION} already exists; updating notes and uploading assets"
+    if [ "${KAM_RELEASE_GENERATE_NOTES:-1}" != "0" ]; then
+        if gh release edit "$KAM_MODULE_VERSION" \
             --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
             $PRE_RELEASE_FLAG \
             --notes "$RELEASE_NOTES"; then
-            log_success "Release created with manual notes."
-            for asset in "${ASSET_ARGS[@]}"; do
-                if [ -f "$asset" ]; then
-                    log_info "Uploading asset: $asset"
-                    gh release upload "$KAM_MODULE_VERSION" "$asset" --clobber || log_warn "Failed to upload $asset"
-                fi
-            done
+            log_success "Release notes updated for $KAM_MODULE_VERSION"
         else
-            log_warn "Failed to create release with manual notes. Aborting upload."
+            log_warn "Failed to update release notes for $KAM_MODULE_VERSION"
         fi
     fi
+    # Upload assets
+    for asset in "${ASSET_ARGS[@]}"; do
+        if [ -f "$asset" ]; then
+            log_info "Uploading asset: $asset"
+            gh release upload "$KAM_MODULE_VERSION" "$asset" --clobber || log_warn "Failed to upload $asset"
+        fi
+    done
 else
-    if gh release create "$KAM_MODULE_VERSION" \
-        --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
-        $PRE_RELEASE_FLAG \
-        --notes "$RELEASE_NOTES"; then
-        for asset in "${ASSET_ARGS[@]}"; do
-            if [ -f "$asset" ]; then
-                log_info "Uploading asset: $asset"
-                gh release upload "$KAM_MODULE_VERSION" "$asset" --clobber || log_warn "Failed to upload $asset"
+    # Create new release; prefer auto-generated notes, fall back to manual notes
+    if [ "${KAM_RELEASE_GENERATE_NOTES:-1}" != "0" ]; then
+        if gh release create "$KAM_MODULE_VERSION" \
+            --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
+            --generate-notes \
+            $PRE_RELEASE_FLAG; then
+            log_success "Release created with auto-generated notes."
+        else
+            log_warn "Failed to generate notes, falling back to manual release notes."
+            if ! gh release create "$KAM_MODULE_VERSION" \
+                --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
+                $PRE_RELEASE_FLAG \
+                --notes "$RELEASE_NOTES"; then
+                log_warn "Failed to create release with manual notes. Aborting upload."
+                exit 1
             fi
-        done
+        fi
     else
-        log_warn "Failed to create release. Aborting upload."
+        if ! gh release create "$KAM_MODULE_VERSION" \
+            --title "${KAM_MODULE_NAME} v${KAM_MODULE_VERSION}" \
+            $PRE_RELEASE_FLAG \
+            --notes "$RELEASE_NOTES"; then
+            log_warn "Failed to create release. Aborting upload."
+            exit 1
+        fi
     fi
+    # Now upload assets after successful create
+    for asset in "${ASSET_ARGS[@]}"; do
+        if [ -f "$asset" ]; then
+            log_info "Uploading asset: $asset"
+            gh release upload "$KAM_MODULE_VERSION" "$asset" --clobber || log_warn "Failed to upload $asset"
+        fi
+    done
 fi
 
 echo "Upload complete"
