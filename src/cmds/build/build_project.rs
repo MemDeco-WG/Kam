@@ -2,8 +2,8 @@ use crate::types::kam_toml::enums::ModuleType;
 
 use glob::Pattern;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::io::IsTerminal;
 use std::fs::{self, File};
+use std::io::IsTerminal;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -592,5 +592,3 @@ pub fn create_template_archive(
     }
     Ok(source_output_file)
 }
-
-

@@ -21,24 +21,24 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
         if output.to_str().map(|s| s == "-").unwrap_or(false) {
             ExportFormat::Prop
         } else {
-        if fname.eq_ignore_ascii_case("repo.json") {
-            ExportFormat::Repo
-        } else if fname.eq_ignore_ascii_case("module.json") {
-            ExportFormat::Json
-        } else if fname.eq_ignore_ascii_case("config.json") {
-            ExportFormat::Config
-        } else if fname.eq_ignore_ascii_case("update.json") {
-            ExportFormat::Update
-        } else if ext.eq_ignore_ascii_case("prop") {
-            ExportFormat::Prop
-        } else if ext.eq_ignore_ascii_case("json") {
-            ExportFormat::Json
-        } else {
-            return Err(KamError::UnsupportedFormat(format!(
-                "Cannot infer format from output: {}",
-                output.display()
-            )));
-        }
+            if fname.eq_ignore_ascii_case("repo.json") {
+                ExportFormat::Repo
+            } else if fname.eq_ignore_ascii_case("module.json") {
+                ExportFormat::Json
+            } else if fname.eq_ignore_ascii_case("config.json") {
+                ExportFormat::Config
+            } else if fname.eq_ignore_ascii_case("update.json") {
+                ExportFormat::Update
+            } else if ext.eq_ignore_ascii_case("prop") {
+                ExportFormat::Prop
+            } else if ext.eq_ignore_ascii_case("json") {
+                ExportFormat::Json
+            } else {
+                return Err(KamError::UnsupportedFormat(format!(
+                    "Cannot infer format from output: {}",
+                    output.display()
+                )));
+            }
         }
     } else {
         // Default to Prop (module.prop) if no format or output specified
@@ -147,13 +147,12 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
-    use std::fs;
     use serial_test::serial;
+    use std::fs;
+    use tempfile::tempdir;
 
     fn write_sample_kam_toml(dir: &std::path::Path) -> KamToml {
         let kt = KamToml::new_with_current_timestamp(

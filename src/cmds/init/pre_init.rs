@@ -1,6 +1,6 @@
+use git2::Repository;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use git2::Repository;
 
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
@@ -236,10 +236,17 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     // Set zipUrl and changelog with proper id
     template_vars
         .entry("zipUrl".to_string())
-        .or_insert_with(|| format!("https://github.com/user/repo/releases/latest/download/{}.zip", id));
+        .or_insert_with(|| {
+            format!(
+                "https://github.com/user/repo/releases/latest/download/{}.zip",
+                id
+            )
+        });
     template_vars
         .entry("changelog".to_string())
-        .or_insert_with(|| "https://raw.githubusercontent.com/user/repo/branch/CHANGELOG.md".to_string());
+        .or_insert_with(|| {
+            "https://raw.githubusercontent.com/user/repo/branch/CHANGELOG.md".to_string()
+        });
 
     // If we discovered a git repository remote, try to populate more intelligent defaults
     if let Some(repo_url) = git_repo_url {
@@ -274,7 +281,9 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                 });
 
             // If mmrl repo section is present or not, set repository
-            kam_toml.mmrl.get_or_insert(crate::types::kam_toml::sections::MmrlSection::default());
+            kam_toml
+                .mmrl
+                .get_or_insert(crate::types::kam_toml::sections::MmrlSection::default());
             if let Some(mmrl) = &mut kam_toml.mmrl {
                 if mmrl.repo.is_none() {
                     mmrl.repo = Some(crate::types::kam_toml::sections::RepoSection::default());
@@ -321,7 +330,11 @@ fn parse_git_remote_url(remote: &str) -> Option<(String, String)> {
     };
 
     // Strip scheme
-    let path_start = if let Some(idx) = s.find("//") { idx + 2 } else { 0 };
+    let path_start = if let Some(idx) = s.find("//") {
+        idx + 2
+    } else {
+        0
+    };
     let path = &s[path_start..];
     let parts: Vec<&str> = path.split('/').collect();
     if parts.len() >= 3 {

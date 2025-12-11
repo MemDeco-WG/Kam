@@ -20,7 +20,9 @@ fn find_kam_toml_path(file: &Option<String>) -> Result<PathBuf, KamError> {
         }
     }
     // fallback to cwd/kam.toml even if not found
-    Ok(std::env::current_dir().map_err(KamError::Io)?.join("kam.toml"))
+    Ok(std::env::current_dir()
+        .map_err(KamError::Io)?
+        .join("kam.toml"))
 }
 
 fn read_toml(path: &PathBuf) -> Result<toml::Value, KamError> {
@@ -158,8 +160,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                         if new_value.parse::<i64>().is_err() {
                             return Err(KamError::CommandFailed(format!(
                                 "Invalid value: '{}' is not an integer; existing type requires integer for {}",
-                                new_value,
-                                key
+                                new_value, key
                             )));
                         }
                     }
@@ -167,8 +168,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                         if !(new_value == "true" || new_value == "false") {
                             return Err(KamError::CommandFailed(format!(
                                 "Invalid value: '{}' is not a boolean; existing type requires boolean for {}",
-                                new_value,
-                                key
+                                new_value, key
                             )));
                         }
                     }
@@ -182,8 +182,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                         if new_value.parse::<i64>().is_err() {
                             return Err(KamError::CommandFailed(format!(
                                 "Invalid value: '{}' is not an integer; {} must be an integer",
-                                new_value,
-                                key
+                                new_value, key
                             )));
                         }
                     }
@@ -191,7 +190,13 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             }
             set_value_by_path(&mut v, &key, &new_value);
             write_toml(&path, &v)?;
-            println!("{} Set {} = {} in {}", "✓".green(), key, new_value, path.display());
+            println!(
+                "{} Set {} = {} in {}",
+                "✓".green(),
+                key,
+                new_value,
+                path.display()
+            );
             Ok(())
         }
         crate::cmds::toml::args::TomlCommand::Unset { key } => {

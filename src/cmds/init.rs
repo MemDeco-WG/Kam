@@ -45,12 +45,11 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use serial_test::serial;
+    use tempfile::tempdir;
 
     #[test]
     #[serial]

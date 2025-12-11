@@ -67,25 +67,23 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
                 fr.errors.push(format!("YAML parse error: {}", e));
             }
         },
-        "toml" => {
-            match toml::from_str::<toml::Value>(&s) {
-                Ok(v) => {
-                    if do_fix {
-                        let pretty = toml::to_string_pretty(&v).unwrap_or_default();
-                        if pretty != s {
-                            fs::OpenOptions::new()
-                                .write(true)
-                                .truncate(true)
-                                .open(path)?
-                                .write_all(pretty.as_bytes())?;
-                            fr.fixed = true;
-                        }
+        "toml" => match toml::from_str::<toml::Value>(&s) {
+            Ok(v) => {
+                if do_fix {
+                    let pretty = toml::to_string_pretty(&v).unwrap_or_default();
+                    if pretty != s {
+                        fs::OpenOptions::new()
+                            .write(true)
+                            .truncate(true)
+                            .open(path)?
+                            .write_all(pretty.as_bytes())?;
+                        fr.fixed = true;
                     }
                 }
-                Err(e) => {
-                    fr.valid = false;
-                    fr.errors.push(format!("TOML parse error: {}", e));
-                }
+            }
+            Err(e) => {
+                fr.valid = false;
+                fr.errors.push(format!("TOML parse error: {}", e));
             }
         },
         "sh" => {
@@ -106,10 +104,8 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
 
                 // Remove trailing spaces from each line
                 let lines: Vec<&str> = normalized.lines().collect();
-                let stripped: Vec<String> = lines
-                    .iter()
-                    .map(|l| l.trim_end().to_string())
-                    .collect();
+                let stripped: Vec<String> =
+                    lines.iter().map(|l| l.trim_end().to_string()).collect();
                 normalized = stripped.join("\n");
 
                 // Ensure final newline

@@ -1,8 +1,8 @@
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::io::IsTerminal;
 #[cfg(test)]
 use std::fs;
+use std::io::IsTerminal;
 #[cfg(test)]
 use std::io::Write;
 use std::path::Path;
@@ -59,9 +59,11 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     let show_progress = !args.json && std::io::stdout().is_terminal();
     let pb = if show_progress && total_files > 0 {
         let pb = ProgressBar::new(total_files as u64);
-        let style = ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap()
-            .progress_chars("#>-");
+        let style = ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+        )
+        .unwrap()
+        .progress_chars("#>-");
         pb.set_style(style);
         Some(pb)
     } else {
