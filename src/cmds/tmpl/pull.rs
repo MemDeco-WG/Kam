@@ -1,22 +1,25 @@
+use crate::cmds::config;
+use crate::cmds::config::{ConfigArgs, ConfigCommand};
+use crate::cmds::tmpl::import;
 use crate::errors::KamError;
+use chrono::Utc;
 use colored::Colorize;
+use reqwest::blocking::Client;
+use reqwest::redirect::Policy;
 use std::fs;
 use std::io::Write;
-use tempfile::Builder as TempFileBuilder;
-use reqwest::blocking::Client;
 use std::time::Duration;
-use crate::cmds::tmpl::import;
-use crate::cmds::config::{ConfigArgs, ConfigCommand};
-use crate::cmds::config;
-use chrono::Utc;
-use reqwest::redirect::Policy;
+use tempfile::Builder as TempFileBuilder;
 
-const DEFAULT_TEMPLATES_URL: &str = "https://github.com/MemDeco-WG/Kam/releases/download/latest/templates.zip";
+const DEFAULT_TEMPLATES_URL: &str =
+    "https://github.com/MemDeco-WG/Kam/releases/latest/download/templates.zip";
 
 fn get_project_or_global_config_path(global: bool) -> Result<std::path::PathBuf, KamError> {
     // Reuse logic similar to config::get_config_paths but duplicated here for read/write
     if global {
-        let home = dirs::home_dir().ok_or_else(|| KamError::CommandFailed("Cannot determine home directory for global config".to_string()))?;
+        let home = dirs::home_dir().ok_or_else(|| {
+            KamError::CommandFailed("Cannot determine home directory for global config".to_string())
+        })?;
         let dir = home.join(".kam");
         return Ok(dir.join("config.toml"));
     }
@@ -44,7 +47,8 @@ fn read_config_value(global: bool, key: &str) -> Result<Option<String>, KamError
         return Ok(None);
     }
     let s = fs::read_to_string(&path).map_err(KamError::Io)?;
-    let v: toml::Value = toml::from_str(&s).map_err(|e| KamError::CommandFailed(format!("Failed to parse config file: {}", e)))?;
+    let v: toml::Value = toml::from_str(&s)
+        .map_err(|e| KamError::CommandFailed(format!("Failed to parse config file: {}", e)))?;
     let parts: Vec<&str> = key.split('.').collect();
     let mut current = &v;
     for (i, p) in parts.iter().enumerate() {
@@ -70,7 +74,10 @@ fn set_config_value(global: bool, key: &str, value: &str) -> Result<(), KamError
     let args = ConfigArgs {
         global,
         local: false,
-        command: ConfigCommand::Set { key: key.to_string(), value: value.to_string() },
+        command: ConfigCommand::Set {
+            key: key.to_string(),
+            value: value.to_string(),
+        },
     };
     config::run(args)
 }
@@ -78,17 +85,36 @@ fn set_config_value(global: bool, key: &str, value: &str) -> Result<(), KamError
 pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
     let download_url = url.as_deref().unwrap_or(DEFAULT_TEMPLATES_URL);
 
-    println!("{} Downloading templates from: {}", "→".cyan(), download_url);
+    println!(
+        "{} Downloading templates from: {}",
+        "→".cyan(),
+        download_url
+    );
 
     // Create HTTP client with a reasonable timeout
-    let client = Client::builder().timeout(Duration::from_secs(120)).redirect(Policy::default()).build().map_err(|e| KamError::CommandFailed(format!("Failed to build HTTP client: {}", e)))?;
-    let resp = client.get(download_url).send().map_err(|e| KamError::CommandFailed(format!("Failed to download template: {}", e)))?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(120))
+        .redirect(Policy::default())
+        .build()
+        .map_err(|e| KamError::CommandFailed(format!("Failed to build HTTP client: {}", e)))?;
+    let resp = client
+        .get(download_url)
+        .send()
+        .map_err(|e| KamError::CommandFailed(format!("Failed to download template: {}", e)))?;
     if !resp.status().is_success() {
-        return Err(KamError::CommandFailed(format!("Download failed: HTTP {}", resp.status())));
+        return Err(KamError::CommandFailed(format!(
+            "Download failed: HTTP {}",
+            resp.status()
+        )));
     }
 
-    let mut tmpf = TempFileBuilder::new().suffix(".zip").tempfile().map_err(KamError::Io)?;
-    let bytes = resp.bytes().map_err(|e| KamError::CommandFailed(format!("Failed to read response body: {}", e)))?;
+    let mut tmpf = TempFileBuilder::new()
+        .suffix(".zip")
+        .tempfile()
+        .map_err(KamError::Io)?;
+    let bytes = resp
+        .bytes()
+        .map_err(|e| KamError::CommandFailed(format!("Failed to read response body: {}", e)))?;
     tmpf.write_all(&bytes).map_err(KamError::Io)?;
     // Need to persist file path for import (named tempfile is kept until drop)
     let tmp_path = tmpf.path().to_path_buf();
@@ -102,7 +128,10 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
     let now = Utc::now().to_rfc3339();
     set_config_value(true, "tmpl.pull.last_download", &now)?;
 
-    println!("{} Templates downloaded and imported successfully", "✓".green());
+    println!(
+        "{} Templates downloaded and imported successfully",
+        "✓".green()
+    );
     Ok(())
 }
 
@@ -112,6 +141,9 @@ pub fn run_update(_global: bool) -> Result<(), KamError> {
     if let Some(v) = url {
         run_pull(Some(v.clone()), true)
     } else {
-        Err(KamError::CommandFailed("No recorded tmpl.pull.url found in global config. Run `kam tmpl pull <url>` first.".to_string()))
+        Err(KamError::CommandFailed(
+            "No recorded tmpl.pull.url found in global config. Run `kam tmpl pull <url>` first."
+                .to_string(),
+        ))
     }
 }
