@@ -20,6 +20,14 @@ if ! has_command kam; then
     exit 0
 fi
 
+# If there is no interactive TTY, avoid prompting for passwords; skip by default unless forced
+# Use KAM_SIGN_ALLOW_NONINTERACTIVE=1 to force signing in non-interactive environments,
+# or KAM_SIGN_ALLOW_CI=1 to explicitly allow signing in CI contexts.
+if [ "${KAM_SIGN_ALLOW_NONINTERACTIVE:-}" != "1" ] && [ "${KAM_SIGN_ALLOW_CI:-0}" != "1" ] && [ ! -t 0 ]; then
+    log_info "No interactive TTY detected; skipping signing (set KAM_SIGN_ALLOW_NONINTERACTIVE=1 or KAM_SIGN_ALLOW_CI=1 to override)"
+    exit 0
+fi
+
 DIST=${KAM_DIST_DIR:-${KAM_PROJECT_ROOT:-$PWD}/dist}
 
 if [ ! -d "$DIST" ]; then
