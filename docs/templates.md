@@ -1,6 +1,6 @@
 # Kam Template System
 
-This document explains Kam's template system, how templates are applied when you run `kam init`, the contents and formats supported, the variable replacement system, hooks, and the behavior of binary files (skipped during application).
+This document explains Kam's template system, how templates are applied when you run `kam init`, the contents and formats supported, the variable replacement system, hooks, and the behavior of binary files (copied as-is during application).
 
 This document contains two sections: English and 中文 (Simplified Chinese).
 
@@ -37,7 +37,7 @@ Important: Kam only performs substitution and rendering on text files — binary
 
 Commands:
 
-- `kam tmpl import <path>` — import a local `.tar.gz` or `.zip` file; if `.zip`, extracts `.tar.gz` entries and installs them into the local template cache (path: `~/.kam/templates`).
+- `kam tmpl import <path>` — import a local `.tar.gz` or `.zip` file; if `.zip`, extracts `.tar.gz` entries and installs them into the local template cache (default path: `~/.kam/templates`; can be overridden by the `KAM_TEMPLATE_CACHE_DIR` environment variable or by setting `tmpl.cache_dir` in the global config `~/.kam/config.toml`).
 - `kam tmpl list` — list available builtin + cached templates
 - `kam tmpl export <name> -o out.tar.gz` — export a given template
 - `kam tmpl pull [<url>]` — download a template ZIP from a URL and import it (`--global` configuration recorded as `tmpl.pull.url`)
@@ -60,10 +60,24 @@ There are reserved variables automatically provided by Kam to templates which yo
 
 Additionally, you can use dot-separated keys for nested structure, and Kam will flatten them for templating. When writing templates, you can also use `{{prop.name}}` to reference nested values if you prefer.
 
+All `kam.toml` values are available to templates as variables (typically under the `prop` object), for example:
+- `{{ prop.id }}`
+- `{{ prop.name }}`
+- `{{ prop.version }}`
+
+When hooks are executed during builds, Kam also exposes `kam.toml` values as environment variables using a consistent mapping:
+- `prop.*` variables are exported as `KAM_PROP_*` (e.g., `prop.id` -> `KAM_PROP_ID`, `prop.name` -> `KAM_PROP_NAME`).
+- All flattened keys in `kam.toml` are exported as `KAM_<PATH>` where dots and hyphens are normalized to underscores and the key is upper-cased (e.g., `mmrl.repo.repository` -> `KAM_MMRL_REPO_REPOSITORY`, `kam.build.hooks_dir` -> `KAM_KAM_BUILD_HOOKS_DIR`).
+- Template variables defined under `[kam.tmpl.variables]` are exported as `KAM_TMPL_<NAME>` (upper-cased, `.`/`-` normalized to `_`).
+
+Examples:
+- Template usage: `{{ prop.id }}` and `{{ mmrl.repo.repository }}`
+- Hook usage: `$KAM_PROP_ID`, `$KAM_MMRL_REPO_REPOSITORY`, or `$KAM_TMPL_FEATURE_X`
+
 To specify values at `kam init` time, use `--var key=value` (multiple times). Example:
 
 ```bash
-kam init my_mod -t kam --var name="MyMod" --var id=my_mod
+kam init my_mod -t kam_template --var name="MyMod" --var id=my_mod
 ```
 
 and the template can reference `{{name}}`, `{{id}}` in text files and filenames.
@@ -72,14 +86,20 @@ To set values used inside Kam's generated `kam.toml` (not the template file itse
 
 ### Binary Files
 
-When applying templates, Kam intentionally skips binary files during substitution. This avoids corrupting binary content (images, archives, or compiled objects). The heuristic used is:
+When applying templates, Kam copies binary files as-is into the target project without performing Tera variable substitution or rendering. This preserves binary content (images, archives, or compiled objects) exactly as the template provides and avoids corruption caused by templating operations.
 
-- Detect a null byte in the first 1024 bytes of the file (if present, the file is binary)
-- Detect a known binary file extension: `png, jpg, jpeg, gif, ico, zip, tar, gz, so, a, o, bin, exe`.
+Kam detects binary files using a simple heuristic:
 
-If a file is detected as binary, Kam will skip any Tera rendering and leave the binary artifact untouched. The file will not be included in the project directory if the template author expects to produce the binary with `copy_and_replace` — instead, they should store binary assets in the template cache or install them through the template packaging system when needed.
+- Detect a null byte within the first 1024 bytes of the file (presence indicates a binary file).
+- Recognize common binary file extensions: `png, jpg, jpeg, gif, ico, zip, tar, gz, so, a, o, bin, exe`.
 
-If you need to provide binary content, the recommended approach is to place the binary in the template asset directory (not as a templated file), or copy using a separate hook that executes after the initial template rendering.
+If a file is detected as binary, Kam will not attempt to render or substitute its content; instead, it will copy the file to the specified target path, preserving the original bytes. This behavior allows templates to include binary assets directly; they will appear in the generated module as provided by the template author.
+
+If you need special handling for binary content, recommended approaches include:
+
+- Place binary assets directly in the template as raw files — Kam will copy them as-is.
+- Use `hooks` to perform additional operations or transformations after templating if required.
+- Use `kam.kam.build.include` and `kam.kam.build.exclude` lists in `kam.toml` to control which files are copied and which are excluded during the template application process.
 
 ### Templates & Hooks
 
@@ -117,7 +137,7 @@ Kam 模板系统用于初始化 Module 项目，将模板文件应用到目标�
 
 ### `kam init` 模板应用流程
 
-- 模板查找：内置 assets -> 本地 cache (`~/.kam/templates`) -> 本地路径 -> 若无则报错。
+- 模板查找：内置 assets -> 本地 cache (`~/.kam/templates`，可使用环境变量 `KAM_TEMPLATE_CACHE_DIR` 覆盖) -> 本地路径 -> 若无则报错。
 - 若检测到模板为归档文件（`.tar.gz`/`.tgz`/`.zip`），Kam 将解包到临时目录后再处理。
 - 从模板的 `kam.toml`（若存在）加载 `tmpl.variables` 中的默认值，并与 CLI `--var` 合并。
 - 最终变量集合由模板默认、CLI 提供及 `kam.toml` 推导出的内置变量（id/name/version/versionCode 等）共同构成。

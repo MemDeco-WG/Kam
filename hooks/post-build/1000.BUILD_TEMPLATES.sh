@@ -29,4 +29,7 @@ rm -f "$DIST/templates.zip"
 zip -rj "$DIST/templates.zip" $TEMPLATES_DIR || exit 1
 
 log_success "Templates packaged at $DIST/templates.zip"
+
+kam tmpl import "$DIST/templates.zip" -f
+
 exit 0

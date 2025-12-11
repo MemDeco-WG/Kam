@@ -13,17 +13,57 @@
 # ---------------------------------------------------------------------------------------
 # AVAILABLE VARIABLES
 # ---------------------------------------------------------------------------------------
-# KSU (bool):           true if running in KernelSU environment
-# KSU_VER (string):     KernelSU version string (e.g. v0.9.5)
-# KSU_VER_CODE (int):   KernelSU version code (userspace)
-# KSU_KERNEL_VER_CODE (int): KernelSU version code (kernel space)
-# BOOTMODE (bool):      always true in KernelSU
+# (KernelSU-only) KSU (bool):           true if running in KernelSU environment
+# (KernelSU-only) KSU_VER (string):     KernelSU version string (e.g. v0.9.5)
+# (KernelSU-only) KSU_VER_CODE (int):   KernelSU version code (userspace)
+# (KernelSU-only) KSU_KERNEL_VER_CODE (int): KernelSU version code (kernel space)
+# NOTE: KernelSU variables are only provided by KernelSU (not guaranteed on stock Magisk).
+# Guard usage example:
+#    if [ "$KSU" = "true" ]; then
+#        # KernelSU-only logic
+#    else
+#        # Fallback for Magisk/APatch or other environments
+#    fi
+#
+# KernelPatch/KernelSU/APatch related variables
+# (KernelPatch-only) KERNELPATCH (bool):   true if running in KernelPatch environment
+# (KernelPatch-only) KERNEL_VERSION (hex): Kernel version inherited from KernelPatch (e.g. 50a01 -> 5.10.1)
+# (KernelPatch-only) KERNELPATCH_VERSION (hex): KernelPatch version identifier (e.g. a05 -> 0.10.5)
+# (KernelPatch-only) SUPERKEY (string):    Value provided by KernelPatch for invoking kpatch/supercall
+# NOTE: The KernelPatch variables above are provided by KernelPatch and may NOT exist on a stock Magisk installation.
+#       If your module must work on both, check for their presence before using them:
+#         if [ -n "$KERNELPATCH" ] && [ "$KERNELPATCH" = "true" ]; then
+#           # KernelPatch-specific handling
+#         fi
+#
+# APatch related variables
+# (APatch-only) APATCH (bool):        true if running in APatch environment
+# (APatch-only) APATCH_VER_CODE (int): APatch current version code (e.g. 10672)
+# (APatch-only) APATCH_VER (string):  APatch version string (e.g. "10672")
+# NOTE: The APatch variables above are specific to APatch (a Magisk fork). They are NOT guaranteed to exist on stock Magisk.
+#       Guard your scripts like:
+#         if [ "$APATCH" = "true" ]; then
+#           # APatch-specific logic
+#         fi
+#
+# Common environment variables (present across environments)
+# BOOTMODE (bool):      always true in KernelSU and APatch (recovery / boot mode)
 # MODPATH (path):       Path where module files are installed (e.g. /data/adb/modules/{{prop.id}})
 # TMPDIR (path):        Path to temporary directory
 # ZIPFILE (path):       Path to the installation ZIP
 # ARCH (string):        Device architecture: arm, arm64, x86, x64
 # IS64BIT (bool):       true if ARCH is arm64 or x64
 # API (int):            Android API level (e.g. 33 for Android 13)
+#
+# WARNING:
+# - In APatch, MAGISK_VER_CODE is typically 27000 and MAGISK_VER is 27.0 (so some Magisk-related checks behave differently).
+# - Many KernelPatch/APatch features are not present on stock Magisk. When writing portable installation code,
+#   explicitly check for variable presence and provide sensible fallbacks:
+#     if [ -n "$APATCH" ] && [ "$APATCH" = "true" ]; then
+#         # APatch-only handling
+#     else
+#         # Stock Magisk fallback handling (or skip)
+#     fi
 #
 # ---------------------------------------------------------------------------------------
 # AVAILABLE FUNCTIONS
@@ -110,7 +150,7 @@ fi
 # ---------------------------------------------------------------------------------------
 # 🚨 不建议，开启后可以实现更加复杂的逻辑。
 # 比如：使用lib/verify.sh验证模块安装包
-# 
+#
 # If you want to handle extraction manually, uncomment the line below.
 # SKIPUNZIP=1
 #
@@ -153,5 +193,3 @@ fi
 # ---------------------------------------------------------------------------------
 # 🚨 中文提示：如果用nga-utils记得取消注释以下内容
 # nga_install_done # Don't write code after this line!
-
-

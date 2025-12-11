@@ -4,11 +4,15 @@ use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
 use crate::utils::Utils;
 
-use std::fs;
-use std::path::Path;
-use std::process::Command;
-use std::io::IsTerminal;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::{HashSet, VecDeque};
+use std::fs;
+use std::io::{BufRead, BufReader, IsTerminal};
+use std::path::Path;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub fn run_pre_build_hooks(
     project_root: &Path,
@@ -108,6 +112,77 @@ fn run_hooks(
         }
     }
 
+    // Load template-provided env files (written by `kam init`) to seed initial env variables.
+    // Candidate paths (order): .kam/template-vars.env (preferred) and template-vars.env (legacy).
+    let mut template_envs: Vec<(String, String)> = Vec::new();
+    let candidate_paths = [
+        project_root.join(".kam").join("template-vars.env"),
+        project_root.join("template-vars.env"),
+    ];
+    for p in candidate_paths.iter() {
+        if p.exists() {
+            if let Ok(content) = fs::read_to_string(p) {
+                for (line_num, line) in content.lines().enumerate() {
+                    let line = line.trim();
+                    // Skip empty lines and comments
+                    if line.is_empty() || line.starts_with('#') {
+                        continue;
+                    }
+
+                    // Handle 'export KEY=VALUE' format (common in shell scripts)
+                    let line = if line.starts_with("export ") {
+                        line.strip_prefix("export ").unwrap().trim()
+                    } else {
+                        line
+                    };
+
+                    // Parse KEY=VALUE
+                    if let Some((key, value)) = line.split_once('=') {
+                        let key = key.trim();
+
+                        // Validate key (must be valid identifier)
+                        if key.is_empty() || !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                            Utils::warn(&format!(
+                                "Warning: Invalid environment variable name '{}' at line {} in {}",
+                                key,
+                                line_num + 1,
+                                p.display()
+                            ));
+                            continue;
+                        }
+
+                        let value = value.trim();
+                        // Remove quotes if present (both single and double)
+                        let value = if (value.starts_with('"') && value.ends_with('"'))
+                            || (value.starts_with('\'') && value.ends_with('\''))
+                        {
+                            if value.len() >= 2 {
+                                &value[1..value.len() - 1]
+                            } else {
+                                value
+                            }
+                        } else {
+                            value
+                        };
+
+                        // Set the environment variable for the current process and remember it
+                        unsafe {
+                            std::env::set_var(key, value);
+                        }
+                        template_envs.push((key.to_string(), value.to_string()));
+                    } else if !line.is_empty() {
+                        Utils::warn(&format!(
+                            "Warning: Malformed line {} in {}: {}",
+                            line_num + 1,
+                            p.display(),
+                            line
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     let hooks_dir_name = kam_toml
         .kam
         .build
@@ -179,76 +254,153 @@ fn run_hooks(
         }
     }
 
-    let env_vars = [
-        (
-            "KAM_PROJECT_ROOT",
-            project_root.to_string_lossy().to_string(),
-        ),
-        ("KAM_HOOKS_ROOT", hooks_root.to_string_lossy().to_string()),
-        ("KAM_MODULE_ROOT", module_root.to_string_lossy().to_string()),
-        ("KAM_WEB_ROOT", web_root.to_string_lossy().to_string()),
-        ("KAM_DIST_DIR", output_dir.to_string_lossy().to_string()),
-        ("KAM_MODULE_ID", kam_toml.prop.id.clone()),
-        ("KAM_MODULE_VERSION", kam_toml.prop.version.clone()),
-        (
-            "KAM_MODULE_VERSION_CODE",
-            kam_toml.prop.versionCode.to_string(),
-        ),
-        ("KAM_MODULE_NAME", kam_toml.prop.get_name().to_string()),
-        ("KAM_MODULE_AUTHOR", kam_toml.prop.author.clone()),
-        (
-            "KAM_MODULE_DESCRIPTION",
-            kam_toml.prop.get_description().to_string(),
-        ),
-        (
-            "KAM_MODULE_UPDATE_JSON",
-            kam_toml
-                .prop
-                .updateJson
-                .as_ref()
-                .unwrap_or(&String::new())
-                .clone(),
-        ),
-        ("KAM_STAGE", stage.to_string()),
-        (
-            "KAM_BUMP_ENABLED",
-            if args.bump { "1" } else { "0" }.to_string(),
-        ),
-        (
-            "KAM_RELEASE_ENABLED",
-            if args.release { "1" } else { "0" }.to_string(),
-        ),
-        (
-            "KAM_SIGN_ENABLE",
-            if args.sign { "1" } else { "0" }.to_string(),
-        ),
-        (
-            "KAM_SIGN_ENABLED",
-            if args.sign { "1" } else { "0" }.to_string(),
-        ),
-        (
-            "KAM_PRE_RELEASE",
-            if args.pre_release { "1" } else { "0" }.to_string(),
-        ),
-        (
-            "KAM_INTERACTIVE",
-            if args.interactive { "1" } else { "0" }.to_string(),
-        ),
-        (
-            "KAM_GIT_REPO",
-            kam_toml
-                .mmrl
-                .as_ref()
-                .and_then(|m| m.repo.as_ref())
-                .and_then(|r| r.repository.as_ref())
-                .unwrap_or(&String::new())
-                .clone(),
-        ),
-            ("KAM_GITHUB_REPO", detected_repo.clone()),
-            ("KAM_REPO", detected_repo.clone()),
-            ("KAM_REPO_REF", detected_ref.clone()),
-            ("KAM_RELEASE_TAG", kam_toml.prop.version.clone()),
-    ];
+    // Build env var list and keep track of keys to avoid accidental duplicates.
+    let mut env_vars: Vec<(String, String)> = Vec::new();
+    let mut env_keys: HashSet<String> = HashSet::new();
+
+    // Helper closure to insert an env var while preserving existing keys (precedence)
+    let mut add_env = |k: &str, value: String| {
+        if !env_keys.contains(k) {
+            env_keys.insert(k.to_string());
+            env_vars.push((k.to_string(), value));
+        }
+    };
+
+    // Merge in any values read from template env files (these have precedence as initial values).
+    // These come from `.kam/template-vars.env` or `template-vars.env` generated by `kam init`.
+    for (k, v) in template_envs.iter() {
+        add_env(k.as_str(), v.clone());
+    }
+
+    // Basic environment variables
+    add_env(
+        "KAM_PROJECT_ROOT",
+        project_root.to_string_lossy().to_string(),
+    );
+    add_env("KAM_HOOKS_ROOT", hooks_root.to_string_lossy().to_string());
+    add_env("KAM_MODULE_ROOT", module_root.to_string_lossy().to_string());
+    add_env("KAM_WEB_ROOT", web_root.to_string_lossy().to_string());
+    add_env("KAM_DIST_DIR", output_dir.to_string_lossy().to_string());
+    add_env("KAM_MODULE_ID", kam_toml.prop.id.clone());
+    add_env("KAM_MODULE_VERSION", kam_toml.prop.version.clone());
+    add_env(
+        "KAM_MODULE_VERSION_CODE",
+        kam_toml.prop.versionCode.to_string(),
+    );
+    add_env("KAM_MODULE_NAME", kam_toml.prop.get_name().to_string());
+    add_env("KAM_MODULE_AUTHOR", kam_toml.prop.author.clone());
+    add_env(
+        "KAM_MODULE_DESCRIPTION",
+        kam_toml.prop.get_description().to_string(),
+    );
+    add_env(
+        "KAM_MODULE_UPDATE_JSON",
+        kam_toml
+            .prop
+            .updateJson
+            .as_ref()
+            .unwrap_or(&String::new())
+            .clone(),
+    );
+
+    // Build flags & state
+    add_env("KAM_STAGE", stage.to_string());
+    add_env(
+        "KAM_BUMP_ENABLED",
+        if args.bump {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        },
+    );
+    add_env(
+        "KAM_RELEASE_ENABLED",
+        if args.release {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        },
+    );
+    add_env(
+        "KAM_SIGN_ENABLED",
+        if args.sign {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        },
+    );
+    add_env(
+        "KAM_PRE_RELEASE",
+        if args.pre_release {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        },
+    );
+    add_env(
+        "KAM_INTERACTIVE",
+        if args.interactive {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        },
+    );
+
+    // Repo detection
+    add_env(
+        "KAM_GIT_REPO",
+        kam_toml
+            .mmrl
+            .as_ref()
+            .and_then(|m| m.repo.as_ref())
+            .and_then(|r| r.repository.as_ref())
+            .unwrap_or(&String::new())
+            .clone(),
+    );
+    add_env("KAM_GITHUB_REPO", detected_repo.clone());
+    add_env("KAM_REPO", detected_repo.clone());
+    add_env("KAM_REPO_REF", detected_ref.clone());
+    add_env("KAM_RELEASE_TAG", kam_toml.prop.version.clone());
+
+    // Add prop.* as environment variables for hooks (KAM_PROP_*)
+    add_env("KAM_PROP_ID", kam_toml.prop.id.clone());
+    add_env("KAM_PROP_NAME", kam_toml.prop.get_name().to_string());
+    add_env("KAM_PROP_VERSION", kam_toml.prop.version.clone());
+    add_env(
+        "KAM_PROP_VERSION_CODE",
+        kam_toml.prop.versionCode.to_string(),
+    );
+    add_env("KAM_PROP_AUTHOR", kam_toml.prop.author.clone());
+    add_env(
+        "KAM_PROP_DESCRIPTION",
+        kam_toml.prop.get_description().to_string(),
+    );
+
+    // Add templated variables from kam.tmpl.variables as environment variables KAM_TMPL_<NAME>
+    if let Some(tmpl_section) = &kam_toml.kam.tmpl {
+        for (var_name, var_def) in tmpl_section.variables.iter() {
+            // Upper-case and normalize var name into env var (dots and hyphens will be normalized to underscores)
+            let env_key = format!(
+                "KAM_TMPL_{}",
+                var_name
+                    .to_ascii_uppercase()
+                    .replace('.', "_")
+                    .replace('-', "_")
+            );
+            // Default value may exist in variable definition, or fallback to empty string
+            let env_val = var_def.default.clone().unwrap_or_else(|| String::new());
+            add_env(&env_key, env_val);
+        }
+    }
+
+    // Auto-generate environment variables from flattened kam.toml values:
+    // For each flattened key (e.g. "prop.id") create KAM_PROP_ID to make input consistent.
+    let kt_vars = crate::template::TemplateVariableProcessor::flatten_kam_toml(kam_toml);
+    for (k, v) in kt_vars {
+        let env_key_base = k.to_ascii_uppercase().replace('.', "_").replace('-', "_");
+        let env_key = format!("KAM_{}", env_key_base);
+        add_env(&env_key, v);
+    }
 
     // Execute hook files directly and let the OS determine execution behavior.
     // This runner intentionally avoids OS-specific wrappers or extension-based dispatch.
@@ -313,59 +465,213 @@ fn run_hooks(
                 Utils::executing(&format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
             }
 
-            // Capture stdout/stderr to provide more detailed and actionable errors when
-            // a hook fails. We intentionally avoid platform-specific interpreter selection
-            // — the hook runner invokes the file and defers to the OS to decide how to run it.
-            let output = Command::new(&path)
+            // Stream stdout/stderr so the progress bar can continue animating and we get line-by-line logs.
+            // This avoids blocking the main thread via `Command::output()` and prints output as it's produced.
+            // For error reporting we keep a tail of recent lines to include in the error message if the script fails.
+            const MAX_TAIL_LINES: usize = 200;
+            const MAX_DISPLAY_LEN: usize = 2048;
+
+            let spawn_res = Command::new(&path)
                 .current_dir(project_root)
                 .envs(env_vars.iter().cloned())
-                .output();
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn();
 
-            match output {
-                Ok(out) => {
-                    // Print structured stdout/stderr from the executed command to surface
-                    // any non-fatal messages (e.g. `[WARN] gh release create ...`) even
-                    // when the exit code is zero. This helps users quickly spot warnings.
-                    Utils::print_cmd_output(&out.stdout, &out.stderr);
+            match spawn_res {
+                Ok(mut child) => {
+                    let stdout = child.stdout.take();
+                    let stderr = child.stderr.take();
 
-                    if !out.status.success() {
-                        // Limit captured output to avoid extremely large messages
-                        let mut stdout = String::from_utf8_lossy(&out.stdout).to_string();
-                        let mut stderr = String::from_utf8_lossy(&out.stderr).to_string();
-                        const MAX_LEN: usize = 2048;
-                        if stdout.len() > MAX_LEN {
-                            stdout.truncate(MAX_LEN);
-                            stdout.push_str("... [truncated]");
+                    // Prepare buffers for last N lines to display on error
+                    let stdout_tail: Arc<Mutex<VecDeque<String>>> =
+                        Arc::new(Mutex::new(VecDeque::new()));
+                    let stderr_tail: Arc<Mutex<VecDeque<String>>> =
+                        Arc::new(Mutex::new(VecDeque::new()));
+
+                    // Clone some values needed in threads
+                    let pb_for_threads = pb.clone();
+                    let stage_for_threads = stage.to_string();
+                    let filename_for_threads = filename.to_string();
+                    let idx_for_threads = idx;
+                    let total_for_threads = total_hooks;
+
+                    // stdout reader thread
+                    let stdout_tail_clone = Arc::clone(&stdout_tail);
+                    let pb_clone_stdout = pb_for_threads.clone();
+                    let stage_clone_stdout = stage_for_threads.clone();
+                    let filename_clone_stdout = filename_for_threads.clone();
+                    let stdout_handle = if let Some(out) = stdout {
+                        Some(std::thread::spawn(move || {
+                            let reader = BufReader::new(out);
+                            for line in reader.lines() {
+                                if let Ok(l) = line {
+                                    let mut lock = stdout_tail_clone.lock().unwrap();
+                                    if lock.len() >= MAX_TAIL_LINES {
+                                        lock.pop_front();
+                                    }
+                                    lock.push_back(l.clone());
+
+                                    let formatted = Utils::format_cmd_line(&l);
+                                    if let Some(pb) = &pb_clone_stdout {
+                                        pb.println(&formatted);
+                                        // Update progress message with truncated line
+                                        let message = if l.len() > 80 {
+                                            format!("{}...", &l[..77])
+                                        } else {
+                                            l.clone()
+                                        };
+                                        pb.set_message(format!(
+                                            "[{} {}/{}] {} - {}",
+                                            stage_clone_stdout,
+                                            idx_for_threads,
+                                            total_for_threads,
+                                            filename_clone_stdout,
+                                            message
+                                        ));
+                                    } else {
+                                        Utils::print_cmd_line(&l);
+                                    }
+                                }
+                            }
+                        }))
+                    } else {
+                        None
+                    };
+
+                    // stderr reader thread
+                    let stderr_tail_clone = Arc::clone(&stderr_tail);
+                    let pb_clone_stderr = pb_for_threads.clone();
+                    let stage_clone_err = stage_for_threads.clone();
+                    let filename_clone_err = filename_for_threads.clone();
+                    let stderr_handle = if let Some(err) = stderr {
+                        Some(std::thread::spawn(move || {
+                            let reader = BufReader::new(err);
+                            for line in reader.lines() {
+                                if let Ok(l) = line {
+                                    let mut lock = stderr_tail_clone.lock().unwrap();
+                                    if lock.len() >= MAX_TAIL_LINES {
+                                        lock.pop_front();
+                                    }
+                                    lock.push_back(l.clone());
+
+                                    let formatted = Utils::format_cmd_line(&l);
+                                    if let Some(pb) = &pb_clone_stderr {
+                                        pb.println(&formatted);
+                                        let message = if l.len() > 80 {
+                                            format!("{}...", &l[..77])
+                                        } else {
+                                            l.clone()
+                                        };
+                                        pb.set_message(format!(
+                                            "[{} {}/{}] {} - {}",
+                                            stage_clone_err,
+                                            idx_for_threads,
+                                            total_for_threads,
+                                            filename_clone_err,
+                                            message
+                                        ));
+                                    } else {
+                                        Utils::print_cmd_line(&l);
+                                    }
+                                }
+                            }
+                        }))
+                    } else {
+                        None
+                    };
+
+                    // Spinner tick thread: keep pb animating while the child process runs
+                    let ticker_running = Arc::new(AtomicBool::new(true));
+                    let ticker_running_clone = ticker_running.clone();
+                    let pb_for_tick = pb_for_threads.clone();
+                    let ticker = std::thread::spawn(move || {
+                        while ticker_running_clone.load(Ordering::Relaxed) {
+                            if let Some(pb) = &pb_for_tick {
+                                pb.tick();
+                            }
+                            std::thread::sleep(Duration::from_millis(80));
                         }
-                        if stderr.len() > MAX_LEN {
-                            stderr.truncate(MAX_LEN);
-                            stderr.push_str("... [truncated]");
-                        }
+                    });
 
-                        // Build readable status string
-                        let status_code = out
-                            .status
-                            .code()
-                            .map(|c| c.to_string())
-                            .unwrap_or_else(|| out.status.to_string());
+                    // Wait for child process to exit
+                    let status_res = child.wait();
 
-                        if let Some(pb) = &pb {
-                            pb.finish_and_clear();
-                        }
-                        return Err(KamError::CommandFailed(format!(
-                            "Hook script {} failed with status: {}\nStdout:\n{}\nStderr:\n{}",
-                            filename, status_code, stdout, stderr
-                        )));
+                    // Stop ticker and join threads
+                    ticker_running.store(false, Ordering::Relaxed);
+                    let _ = ticker.join();
+
+                    if let Some(h) = stdout_handle {
+                        let _ = h.join();
                     }
-                    // For non-interactive output (no progress bar), print a success line per hook for clarity
-                    if pb.is_none() {
-                        Utils::success(&format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
+                    if let Some(h) = stderr_handle {
+                        let _ = h.join();
+                    }
+
+                    match status_res {
+                        Ok(status) => {
+                            if !status.success() {
+                                // Gather a limited tail to show in error
+                                let stdout_gathered = {
+                                    let lock = stdout_tail.lock().unwrap();
+                                    lock.iter().cloned().collect::<Vec<_>>().join("\n")
+                                };
+                                let stderr_gathered = {
+                                    let lock = stderr_tail.lock().unwrap();
+                                    lock.iter().cloned().collect::<Vec<_>>().join("\n")
+                                };
+
+                                // Truncate if too long
+                                let mut stdout_str = stdout_gathered;
+                                let mut stderr_str = stderr_gathered;
+                                if stdout_str.len() > MAX_DISPLAY_LEN {
+                                    stdout_str.truncate(MAX_DISPLAY_LEN);
+                                    stdout_str.push_str("... [truncated]");
+                                }
+                                if stderr_str.len() > MAX_DISPLAY_LEN {
+                                    stderr_str.truncate(MAX_DISPLAY_LEN);
+                                    stderr_str.push_str("... [truncated]");
+                                }
+
+                                if let Some(pb) = &pb {
+                                    pb.finish_and_clear();
+                                }
+
+                                let status_code = status
+                                    .code()
+                                    .map(|c| c.to_string())
+                                    .unwrap_or_else(|| status.to_string());
+                                return Err(KamError::CommandFailed(format!(
+                                    "Hook script {} failed with status: {}\nStdout:\n{}\nStderr:\n{}",
+                                    filename, status_code, stdout_str, stderr_str
+                                )));
+                            }
+                            // successful run - increment progress or print success line
+                            if pb.is_none() {
+                                Utils::success(&format!(
+                                    "[{} {}/{}] {}",
+                                    stage, idx, total_hooks, filename
+                                ));
+                            } else {
+                                if let Some(pb) = &pb {
+                                    pb.inc(1);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            // wait() error
+                            if let Some(pb) = &pb {
+                                pb.finish_and_clear();
+                            }
+                            return Err(KamError::CommandFailed(format!(
+                                "Failed to wait for hook {}: {}",
+                                filename, e
+                            )));
+                        }
                     }
                 }
                 Err(e) => {
-                    // Provide a cross-platform hint about permission, missing runtime, or execution issues.
-                    // We intentionally don't decide the platform; just provide helpful hints so users can
-                    // address common runtime/permission issues.
+                    // Same hints as before (permission / not found)
                     match e.kind() {
                         std::io::ErrorKind::PermissionDenied => {
                             Utils::warn(
@@ -403,4 +709,3 @@ fn run_hooks(
 
     Ok(())
 }
-

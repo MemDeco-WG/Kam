@@ -72,6 +72,29 @@ Private key password:
 
 Default post-build hook behaviors:
 
+Note: `kam init` persists the resolved template variables used to render templates into `.kam/template-vars.env` in the project root (for legacy compatibility `template-vars.env` in the project root may also be present). During `kam build`, Kam will load these files (in addition to `.env`) and inject the derived `KAM_*` and `KAM_TMPL_*` variables into hook environments. If you wish to override any value, set it in your project `.env` (or `~/.kam/...`); `.env` takes precedence.
+
+Note: Kam also exports additional environment variables derived from the generated `kam.toml` and from templates:
+
+- `KAM_PROP_*`: Canonical `prop.*` fields are exported with a `KAM_PROP_` prefix. Example variables created for most modules include:
+  - `KAM_PROP_ID`: module ID
+  - `KAM_PROP_NAME`: module name
+  - `KAM_PROP_VERSION`: module version
+  - `KAM_PROP_VERSION_CODE`: module version code
+  - `KAM_PROP_AUTHOR`: module author
+  - `KAM_PROP_DESCRIPTION`: module description
+
+- `KAM_TMPL_<NAME>`: Variables defined by a template in `[kam.tmpl.variables]` are exported as `KAM_TMPL_<NAME>` (upper-cased). The same variables are also available for template rendering as `{{ <name> }}`.
+
+- `KAM_<PATH>`: All flattened keys from the `kam.toml` are exported as environment variables using the pattern `KAM_<PATH>`, where dot (`.`) and dash (`-`) are replaced with underscores (`_`) and the key is upper-cased. For example:
+  - `prop.id` -> `KAM_PROP_ID`
+  - `mmrl.repo.repository` -> `KAM_MMRL_REPO_REPOSITORY`
+  - `kam.build.hooks_dir` -> `KAM_KAM_BUILD_HOOKS_DIR`
+
+These variables are added to each hook's environment to make information from `kam.toml` available to hooks without having to re-parse the file.
+
+Default post-build hook behaviors:
+
  - `8000.SIGN_IF_ENABLE.sh`: If `KAM_SIGN_ENABLED=1`, this hook will run `kam sign` against artifacts in the `dist/` directory. By default it uses `--sigstore --timestamp`. You can disable Sigstore with `KAM_SIGN_SIGSTORE=0` in your environment or `.env` file.
 - `9000.UPLOAD_IF_ENABLED.sh`: If `KAM_RELEASE_ENABLED=1`, this hook creates a GitHub Release using the assets in `dist/` and will include signatures (`*.sig`, `*.tsr`, `*.sigstore.json`) automatically if `KAM_SIGN_ENABLE=1` is set. Use `KAM_PRE_RELEASE=1` to create a pre-release. If `KAM_IMMUTABLE_RELEASE=1` is set and the release tag already exists, the upload will be skipped to avoid modifying an immutable release.
 
@@ -131,3 +154,4 @@ Kam 在执行钩子时会直接调用钩子文件，由操作系统或文件本�
 | `KAM_SIGN_ENABLED` | 若为 `1` 则表示 build 时带有 `-s/--sign`，钩子可据此触发签名步骤。 |
 | `KAM_IMMUTABLE_RELEASE` | 若为 `1` 则表示 build 时带有 `-i/--immutable-release`，钩子可据此选择不可变发布相关行为。 |
 | `KAM_PRE_RELEASE` | 若为 `1` 则表示 build 时带有 `-P/--pre-release`，钩子可据此调整发布流程（例如跳过发布）。 |
+

@@ -4,7 +4,7 @@ use crate::types::kam_toml::enums::ModuleType;
 use crate::types::kam_toml::sections::TmplSection;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
 
 // Helper to extract archive
@@ -173,13 +173,18 @@ pub fn init_impl(
     let kam_toml_path = path.join("kam.toml");
     let kam_toml_existed_before_copy = kam_toml_path.exists();
 
-    // Copy files
-    crate::template::TemplateManager::copy_and_replace(
+    // Copy files (respect build.include/build.exclude if present)
+    let excludes = kt.kam.build.as_ref().and_then(|b| b.exclude.clone());
+    let includes = kt.kam.build.as_ref().and_then(|b| b.include.clone());
+
+    crate::template::TemplateManager::copy_and_replace_with_rules(
         &template_path,
         path,
         template_vars,
         force,
         &archive_id,
+        excludes,
+        includes,
     )?;
 
     // If kam.toml doesn't exist (not in template), write the generated one
@@ -213,9 +218,8 @@ pub fn init_impl(
                         if let Some(ref mut build) = rendered_kt.kam.build {
                             // Reset target_dir to "dist" (template may have ../../src/assets/tmpl)
                             build.target_dir = Some("dist".to_string());
-                            // Reset output_file to use the new module ID
-                            build.output_file =
-                                Some("{{id}}-{{versionCode}}-{{version}}".to_string());
+                            // Reset output_file to use the new module ID (simple id-only default)
+                            build.output_file = Some("{{id}}".to_string());
                             // Clear template-specific exclude list
                             build.exclude = None;
                         }
@@ -232,6 +236,10 @@ pub fn init_impl(
                         let fixed_content =
                             toml::to_string_pretty(&rendered_kt).unwrap_or(rendered.clone());
                         fs::write(&kam_toml_path, fixed_content).map_err(KamError::Io)?;
+
+                        // Replace current in-memory kt with the rendered/finalized kam.toml to ensure
+                        // subsequent logic (e.g. env file writing) reflects the final state
+                        kt = rendered_kt;
                     }
                     Err(_) => {
                         // Fallback: just write the rendered content
@@ -244,6 +252,57 @@ pub fn init_impl(
             }
         }
     }
+
+    // Write resolved template variables into `template-vars.env` during `kam init`
+    // This file contains `KEY="VALUE"` lines that can be consumed or sourced by hooks.
+    // Keys are normalized into `KAM_<PATH>` uppercase; dots and dashes become underscores.
+    let env_file_path = path.join("template-vars.env");
+    let mut env_lines: Vec<String> = Vec::new();
+
+    // Basic project-level details
+    env_lines.push(format!("KAM_PROJECT_ROOT=\"{}\"", path.to_string_lossy()));
+    env_lines.push(format!("KAM_MODULE_ID=\"{}\"", kt.prop.id));
+    env_lines.push(format!("KAM_MODULE_VERSION=\"{}\"", kt.prop.version));
+    env_lines.push(format!(
+        "KAM_MODULE_VERSION_CODE=\"{}\"",
+        kt.prop.versionCode
+    ));
+    env_lines.push(format!("KAM_MODULE_NAME=\"{}\"", kt.prop.get_name()));
+    env_lines.push(format!("KAM_MODULE_AUTHOR=\"{}\"", kt.prop.author));
+    env_lines.push(format!(
+        "KAM_MODULE_DESCRIPTION=\"{}\"",
+        kt.prop.get_description()
+    ));
+
+    // Add flattened kam.toml keys (prop.* etc) as KAM_<PATH>
+    let kt_flatvars = crate::template::TemplateVariableProcessor::flatten_kam_toml(&kt);
+    for (k, v) in kt_flatvars.iter() {
+        let base = k.to_ascii_uppercase().replace('.', "_").replace('-', "_");
+        let key = format!("KAM_{}", base);
+        let v_escaped = v.replace('"', "\\\"");
+        env_lines.push(format!("{}=\"{}\"", key, v_escaped));
+    }
+
+    // Add template-defined variables (KAM_TMPL_<NAME>) using actual values in template_vars or defaults
+    if let Some(tmpl_section) = &kt.kam.tmpl {
+        for (var_name, var_def) in tmpl_section.variables.iter() {
+            let nm = var_name
+                .to_ascii_uppercase()
+                .replace('.', "_")
+                .replace('-', "_");
+            let key = format!("KAM_TMPL_{}", nm);
+            let val = template_vars
+                .get(var_name)
+                .cloned()
+                .or_else(|| var_def.default.clone())
+                .unwrap_or_default();
+            let val_escaped = val.replace('"', "\\\"");
+            env_lines.push(format!("{}=\"{}\"", key, val_escaped));
+        }
+    }
+
+    // Persist file (create/overwrite)
+    fs::write(&env_file_path, env_lines.join("\n")).map_err(KamError::Io)?;
 
     Ok(())
 }
@@ -307,7 +366,60 @@ pub fn init_template(
         );
     }
 
-    // 3. Fallback to local path
+    // 3. Project-local candidate templates:
+    //    - Direct path (relative or absolute) to dir/archive
+    //    - tmpl/<template_spec> and templates/<template_spec> directories
+    //    - common archive variants: .tar.gz, .tgz, .zip, .tar under tmpl/ and templates/ and project root
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // If the template spec looks like a local path (file/dir), prefer it first
+    let spec_path = Path::new(&template_spec);
+    if spec_path.exists() {
+        candidates.push(spec_path.to_path_buf());
+    }
+
+    // Add project-local directories (tmpl/ and templates/)
+    let project_local_dirs = vec!["tmpl", "templates"];
+    let archive_exts = vec![".tar.gz", ".tgz", ".zip", ".tar"];
+
+    for d in project_local_dirs {
+        let base = Path::new(d);
+        // Directory-based template: tmpl/<name>
+        candidates.push(base.join(&template_spec));
+
+        // Archive variants inside the local directories: tmpl/<name>.tar.gz, tmpl/<name>.zip, etc
+        for ext in &archive_exts {
+            candidates.push(base.join(format!("{}{}", template_spec, ext)));
+        }
+    }
+
+    // Also check archive variants in the project root
+    for ext in &archive_exts {
+        candidates.push(Path::new(&format!("{}{}", template_spec, ext)).to_path_buf());
+    }
+
+    // Deduplicate candidates while preserving insertion order
+    let mut seen = std::collections::HashSet::new();
+    candidates.retain(|p| seen.insert(p.clone()));
+
+    for candidate in candidates {
+        if candidate.exists() {
+            return init_impl(
+                path,
+                id,
+                name.clone(),
+                version,
+                author,
+                description.clone(),
+                &candidate,
+                &mut template_vars,
+                force,
+                Some(template_spec.as_str()),
+            );
+        }
+    }
+
+    // 4. Final fallback: literal template path from `template_spec`
     init_impl(
         path,
         id,
@@ -320,4 +432,78 @@ pub fn init_template(
         force,
         Some(template_spec.as_str()),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::env;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    #[serial]
+    fn test_init_template_find_local_tmpl_dir() {
+        // Create a temporary project root and switch current directory to it
+        let tmp = tempdir().expect("tempdir");
+        let project_root = tmp.path();
+        let tmpl_dir = project_root.join("tmpl");
+        fs::create_dir_all(&tmpl_dir).expect("create tmpl dir");
+
+        // Create a minimal template directory: tmpl/kam_template/
+        let tk_dir = tmpl_dir.join("kam_template");
+        fs::create_dir_all(&tk_dir).expect("create template dir");
+
+        // Write a minimal kam.toml inside the template dir
+        // Keep the content minimal but valid for KamToml parsing
+        let kt_content = r#"[prop]
+id = "kam_template"
+name = "{{project_name}}"
+version = "0.1.0"
+versionCode = 1
+author = "{{author}}"
+description = "Test template"
+metamodule = false
+
+[kam]
+module_type = "template"
+[kam.tmpl.variables]
+"#;
+        fs::write(tk_dir.join("kam.toml"), kt_content).expect("write kam.toml");
+
+        // Change current directory so that init_template's local search picks up tmpl/
+        let prev_cwd = env::current_dir().expect("cwd");
+        env::set_current_dir(&project_root).expect("set cwd");
+
+        // Destination for initialization
+        let dest_dir = project_root.join("my_module");
+
+        // Prepare minimal arguments for init_template
+        let vars: Vec<String> = Vec::new();
+
+        let res = init_template(
+            &dest_dir,
+            "com.example.test",
+            "Example Test".to_string(),
+            "0.1.0",
+            "Author",
+            "Description".to_string(),
+            &vars,
+            Some("kam_template".to_string()),
+            true,
+            ModuleType::Kam,
+            None,
+        );
+
+        // restore cwd
+        env::set_current_dir(prev_cwd).expect("restore cwd");
+
+        assert!(res.is_ok(), "init_template failed: {:?}", res.err());
+        assert!(dest_dir.exists(), "destination dir not created");
+        assert!(
+            dest_dir.join("kam.toml").exists(),
+            "kam.toml not created in destination dir"
+        );
+    }
 }

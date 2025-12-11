@@ -129,9 +129,9 @@ Kam 提供多种内置模板：
 
 | 模板 | 说明 | 适用场景 |
 |------|------|----------|
-| `-t kam` | 标准 Kam 模块（映射到 `kam_template`） | 通用模块开发 |
-| `-t meta` | 元模块模板（映射到 `meta_template`） | 元模块（模块的模块） |
-| `-t ak3` | AnyKernel3 模板（映射到 `ak3_template`） | 内核模块 |
+| `-t kam_template`（别名：`-t kam`） | 标准 Kam 模块 | 通用模块开发 |
+| `-t meta_template`（别名：`-t meta`） | 元模块模板 | 元模块（模块的模块） |
+| `-t ak3_template`（别名：`-t ak3`） | AnyKernel3 模板 | 内核模块 |
 | `--tmpl` | 模板开发模板（映射到 `tmpl_template`） | 创建新的模板 |
 
 ### 模板管理
@@ -315,7 +315,7 @@ members = [
 ```toml
 [kam.build]
 target_dir = "dist"              # 输出目录
-output_file = "{{id}}-{{versionCode}}-{{version}}"           # 输出文件名模板
+output_file = "{{id}}"           # 输出文件名模板
 hooks_dir = "hooks"              # 钩子目录
 source_dir = "src/{{id}}"        # 源码目录（可选）
 ```

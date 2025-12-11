@@ -3,7 +3,7 @@ use colored::{Color, Colorize};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use terminal_size::{terminal_size, Width};
+use terminal_size::{Width, terminal_size};
 
 pub struct Utils;
 
@@ -75,7 +75,9 @@ impl Utils {
     /// padding.
     pub fn banner(title: &str) {
         // Use the terminal size to render a centered banner dynamically.
-        let width: usize = terminal_size().map(|(Width(w), _)| w as usize).unwrap_or(80);
+        let width: usize = terminal_size()
+            .map(|(Width(w), _)| w as usize)
+            .unwrap_or(80);
         let title_text = format!(" ✿ {} ✿ ", title);
         let title_len = title_text.chars().count();
 
@@ -113,16 +115,35 @@ impl Utils {
         if title.is_empty() {
             return;
         }
-        let width: usize = terminal_size().map(|(Width(w), _)| w as usize).unwrap_or(80);
+        let width: usize = terminal_size()
+            .map(|(Width(w), _)| w as usize)
+            .unwrap_or(80);
         // We create a centered title with small decorative flower
         let title_text = format!(" ✿ {} ✿ ", title);
         let title_len = title_text.chars().count();
-        let left_len = if width > title_len { (width - title_len) / 2 } else { 0 };
-        let right_len = if width > title_len { width - title_len - left_len } else { 0 };
+        let left_len = if width > title_len {
+            (width - title_len) / 2
+        } else {
+            0
+        };
+        let right_len = if width > title_len {
+            width - title_len - left_len
+        } else {
+            0
+        };
         let left = "─".repeat(left_len);
         let right = "─".repeat(right_len);
         println!("");
-        println!("{}", format!("{}{}{}", left.cyan(), title_text.cyan().bold(), right.cyan()).bold());
+        println!(
+            "{}",
+            format!(
+                "{}{}{}",
+                left.cyan(),
+                title_text.cyan().bold(),
+                right.cyan()
+            )
+            .bold()
+        );
         println!("");
     }
 
@@ -205,11 +226,58 @@ impl Utils {
         let upper = l.to_ascii_uppercase();
         if upper.contains("[WARN]") || upper.starts_with("WARN") || upper.contains("WARNING") {
             Utils::warn(l);
-        } else if upper.contains("[ERROR]") || upper.starts_with("ERROR") || upper.contains("FAIL") || upper.contains("[ERR]") {
+        } else if upper.contains("[ERROR]")
+            || upper.starts_with("ERROR")
+            || upper.contains("FAIL")
+            || upper.contains("[ERR]")
+        {
             Utils::error(l);
         } else {
             Utils::info(l);
         }
+    }
+
+    /// Return a colored and formatted log line for streaming output
+    ///
+    /// This replicates the classification logic used by `print_cmd_line` but
+    /// returns a colored string rather than printing it directly. It's useful
+    /// for streaming log consumers that want to print through a progress bar
+    /// or a logging queue while still preserving the same classification and color.
+    pub fn format_cmd_line(line: &str) -> String {
+        let l = line.trim();
+        if l.is_empty() {
+            return String::new();
+        }
+        let upper = l.to_ascii_uppercase();
+
+        if upper.contains("[WARN]") || upper.starts_with("WARN") || upper.contains("WARNING") {
+            format!("  {} {}", "!".yellow(), l.yellow())
+        } else if upper.contains("[ERROR]")
+            || upper.starts_with("ERROR")
+            || upper.contains("FAIL")
+            || upper.contains("[ERR]")
+        {
+            format!("{} {}", "✗".red().bold(), l.red())
+        } else {
+            format!("  {} {}", "•".cyan(), l)
+        }
+    }
+
+    /// Normalize a key into an environment-variable-friendly string.
+    ///
+    /// - Upper-cases the input.
+    /// - Replaces '.' and '-' with underscores.
+    /// This helper centralizes the normalization logic used across the codebase
+    /// when converting kam.toml keys (e.g. `prop.id`) to environment variable fragments
+    /// (e.g. `PROP_ID`).
+    pub fn normalize_env_key(key: &str) -> String {
+        key.to_ascii_uppercase().replace('.', "_").replace('-', "_")
+    }
+
+    /// Convert a Kam-style key (e.g. `prop.id`) into a full `KAM_` environment
+    /// variable name (e.g. `KAM_PROP_ID`).
+    pub fn kam_env_var(key: &str) -> String {
+        format!("KAM_{}", Self::normalize_env_key(key))
     }
 }
 

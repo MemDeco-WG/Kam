@@ -142,9 +142,9 @@ Kam provides several built-in templates:
 
 | Template | Description | Use Case |
 |----------|-------------|----------|
-| `-t kam` | Standard Kam module (maps to `kam_template`) | General module development |
-| `-t meta` | Meta-module template (maps to `meta_template`) | Meta modules (modules of modules) |
-| `-t ak3` | AnyKernel3 template (maps to `ak3_template`) | Kernel modules |
+| `-t kam_template` (`-t kam`) | Standard Kam module | General module development |
+| `-t meta_template` (`-t meta`) | Meta-module template | Meta modules (modules of modules) |
+| `-t ak3_template` (`-t ak3`) | AnyKernel3 template | Kernel modules |
 | `--tmpl` | Template development template (maps to `tmpl_template`) | Creating new templates |
 
 ### Template Management
@@ -380,7 +380,7 @@ members = [
 ```toml
 [kam.build]
 target_dir = "dist"              # Output directory
-output_file = "{{id}}-{{versionCode}}-{{version}}"           # Output filename template
+output_file = "{{id}}"           # Output filename template
 hooks_dir = "hooks"              # Hooks directory
 source_dir = "src/{{id}}"        # Source directory (optional)
 ```
