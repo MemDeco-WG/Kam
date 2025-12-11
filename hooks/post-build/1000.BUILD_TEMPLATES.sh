@@ -1,5 +1,4 @@
 #!/bin/bash
-# 2.BUILD_TEMPLATES.sh - compress all files in templates directory into dist/templates.zip
 
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
@@ -28,8 +27,5 @@ rm -f "$DIST/templates.zip"
 
 zip -rj "$DIST/templates.zip" $TEMPLATES_DIR || exit 1
 
-log_success "Templates packaged at $DIST/templates.zip"
-
-kam tmpl import "$DIST/templates.zip" -f
-
+log_success "Templates packaged at $DIST/templates.zip "
 exit 0

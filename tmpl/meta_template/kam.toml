@@ -2,29 +2,29 @@
 id = "meta_template"
 version = "0.1.0"
 versionCode = 1  # Will be auto-generated as timestamp during initialization
-author = "{{author}}"
-name = "{{project_name}}"
-description = "{% if description %}{{description}}{% else %}A Magisk/KernelSU metamodule created with Kam{% endif %}"
-updateJson = "{{update_json}}"
+author = "LIghtJUNction"
+name = "meta_template"
+description = "template to create meta module."
+updateJson = "..."
 metamodule = true # or 1
 
 [mmrl.repo]
 license = "MIT"
 license_file = "LICENSE"
-homepage = "{% if repository %}{{repository}}{% else %}https://github.com/{{author}}/{{prop.id}}{% endif %}"
-readme = "{% if repository %}{{repository}}/blob/main/README.md{% else %}https://github.com/{{author}}/{{prop.id}}/blob/main/README.md{% endif %}"
+homepage = ""
+readme = ""
 readme_file = "README.md"
-changelog = "{% if repository %}{{repository}}/blob/main/CHANGELOG.md{% else %}https://github.com/{{author}}/{{prop.id}}/blob/main/CHANGELOG.md{% endif %}"
+changelog = ""
 changelog_file = "CHANGELOG.md"
 screenshots = []
 categories = ["tools"]
-keywords = ["kam", "module", "android", "template", "metamodule"]
-maintainers = ["{{author}}"]
-repository = "{% if repository %}{{repository}}{% else %}https://github.com/{{author}}/{{prop.id}}{% endif %}"
-documentation = "{% if repository %}{{repository}}{% else %}https://github.com/{{author}}/{{prop.id}}{% endif %}"
-issues = "{% if repository %}{{repository}}/issues{% else %}https://github.com/{{author}}/{{prop.id}}/issues{% endif %}"
-funding = "https://github.com/sponsors/{{author}}"
-support = "{% if repository %}{{repository}}/issues{% else %}https://github.com/{{author}}/{{prop.id}}/issues{% endif %}"
+keywords = ["kam", "module", "android", "template"]
+maintainers = []
+repository = ""
+documentation = ""
+issues = ""
+funding = "https://github.com/sponsors/LIghtJUNction"
+support = ""
 donate = ""
 cover = ""
 icon = "icon.png"
@@ -36,7 +36,7 @@ max_num = 0
 min_api = 21
 max_api = 35
 verified = false
-features = ["meta-module", "kam"]
+features = ["module-template", "customization"]
 
 [mmrl.repo.note]
 title = ""

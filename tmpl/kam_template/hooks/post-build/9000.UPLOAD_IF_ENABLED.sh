@@ -44,7 +44,6 @@ if [ -z "$CHANGELOG_SECTION" ]; then
     CHANGELOG_SECTION="- See CHANGELOG.md"
 fi
 
-# Minimal release notes
 RELEASE_NOTES=$(cat <<EOF
 ${KAM_MODULE_NAME:-$KAM_MODULE_ID} v${KAM_MODULE_VERSION:-unknown}
 
@@ -55,7 +54,7 @@ Author: ${KAM_MODULE_AUTHOR:-unknown}
 Changelog:
 ${CHANGELOG_SECTION}
 
-Built with Kam
+Built with [Kam](https://github.com/MemDeco-WG/Kam)
 EOF
 )
 printf "%s\n" "$RELEASE_NOTES" > "$TMP_CHANGELOG"

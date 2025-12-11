@@ -2,7 +2,7 @@
 id = "kam_template"
 version = "0.1.0"
 versionCode = 1  # Will be auto-generated as timestamp during initialization
-author = "LightJunction"
+author = "LIghtJUNction"
 name = "kam_template"
 description = "A Magisk/KernelSU module created with Kam"
 updateJson = ""
@@ -23,7 +23,7 @@ maintainers = []
 repository = ""
 documentation = ""
 issues = ""
-funding = "https://github.com/sponsors/{{author}}"
+funding = "https://github.com/sponsors/LIghtJUNction"
 support = ""
 donate = ""
 cover = ""
