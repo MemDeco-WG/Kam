@@ -70,6 +70,27 @@ Recommendations & notes
 - When pipeline hooks call `gh` commands, the `GH_TOKEN` environment variable may be required.
 - Default inputs in the example workflows help you get started quickly and are customizable.
 
+- OIDC / Sigstore (Fulcio / cosign) recommendations:
+  - To enable GitHub Actions OIDC token retrieval and Fulcio certificate issuance, add `permissions: id-token: write` to your workflow. This exposes `ACTIONS_ID_TOKEN_REQUEST_URL` and `ACTIONS_ID_TOKEN_REQUEST_TOKEN` into the job environment and allows the runner to request an OIDC token.
+  - If you want `kam` to include a Fulcio-issued certificate in its Sigstore DSSE bundle, fetch an OIDC token and export it as `SIGSTORE_ID_TOKEN` before running `kam sign --fulcio` (or set `--oidc-token-env` to point to your token variable if using a different name). Avoid logging the token.
+  - Example step to request the GitHub OIDC token and export it as `SIGSTORE_ID_TOKEN` (requires `curl` and `jq`):
+    - name: Fetch OIDC token for Sigstore (SIGSTORE_ID_TOKEN)
+      run: |
+        if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          TOKEN_JSON=$(curl -sS -X POST "$ACTIONS_ID_TOKEN_REQUEST_URL" -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+          TOKEN_VALUE=$(echo "$TOKEN_JSON" | jq -r '.value')
+          echo "SIGSTORE_ID_TOKEN=$TOKEN_VALUE" >> $GITHUB_ENV
+        fi
+  - Install `cosign` in your workflow if you want to use Cosign's keyless OIDC signing (`cosign sign --keyless`) alongside `kam sign --fulcio`. Example:
+    - name: Install cosign
+      run: |
+        curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o /tmp/cosign
+        sudo install -m 0755 /tmp/cosign /usr/local/bin/cosign
+  - Security notes:
+    - Treat `SIGSTORE_ID_TOKEN` as a secret and never print it to logs. Use `--oidc-token-env` to instruct `kam` to read the token from an environment variable (default: `SIGSTORE_ID_TOKEN`).
+    - Limit `permissions: id-token: write` and token exposure to trusted workflows and jobs only; avoid exposing tokens to third-party actions and public logs.
+
+
 Triggering workflows (quick)
 ---
 - From GitHub UI: Actions → select `exec.yml` or `init.yml` → Run workflow → provide inputs and run.

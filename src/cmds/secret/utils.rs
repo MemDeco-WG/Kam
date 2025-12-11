@@ -71,7 +71,11 @@ pub fn read_secret_plaintext(name: &str, prompt_for_password: bool) -> Result<Ve
     let blob = read_secret_blob(name)?;
     if blob.starts_with(b"KAMKEYv1") {
         // Need password to decrypt
-        let pw = if prompt_for_password {
+        // Prefer an externally-provided passphrase from the environment for non-interactive flows.
+        // This allows headless CI to provide a passphrase via a secure secret (e.g., KAM_SIGN_PASSPHRASE).
+        let pw = if let Ok(pass) = std::env::var("KAM_SIGN_PASSPHRASE") {
+            pass
+        } else if prompt_for_password {
             prompt_password("Private key password: ")
                 .map_err(|e| KamError::CommandFailed(format!("Failed to read password: {}", e)))?
         } else {

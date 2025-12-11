@@ -205,8 +205,29 @@ fn sign_single_file(src_path: &Path, args: &SignArgs, sigstore_mode: bool) -> Re
     } else {
         read_secret_plaintext(&args.secret, true)?
     };
-    let pkey = PKey::private_key_from_pem(&pem_bytes)
-        .map_err(|e| KamError::CommandFailed(format!("Failed to parse private key PEM: {}", e)))?;
+
+    // Try parsing PEM directly; if it fails and a passphrase is supplied via
+    // KAM_SIGN_PASSPHRASE, retry parsing as an encrypted PEM with the passphrase.
+    let pkey = match PKey::private_key_from_pem(&pem_bytes) {
+        Ok(pk) => pk,
+        Err(orig_err) => {
+            if let Ok(pass) = std::env::var("KAM_SIGN_PASSPHRASE") {
+                // Attempt to parse an encrypted PEM using the provided passphrase.
+                // Fallback: if parsing still fails, return a helpful error.
+                PKey::private_key_from_pem_passphrase(&pem_bytes, pass.as_bytes()).map_err(|e| {
+                    KamError::CommandFailed(format!(
+                        "Failed to parse private key PEM with passphrase: {}",
+                        e
+                    ))
+                })?
+            } else {
+                return Err(KamError::CommandFailed(format!(
+                    "Failed to parse private key PEM: {}",
+                    orig_err
+                )));
+            }
+        }
+    };
 
     // Read file
     let data = fs::read(src_path).map_err(KamError::Io)?;

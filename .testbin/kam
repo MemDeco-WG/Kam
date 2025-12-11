@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "KAMSTUB running: $@" >&2
+# Simulate failure to test hook behavior
+exit 1

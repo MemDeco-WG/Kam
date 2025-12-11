@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Feat
+
+- templates - make template cache path configurable (KAM_TEMPLATE_CACHE_DIR + tmpl.cache_dir), improve local template detection, and change default output filename to '{{id}}'; update docs and tests
+
 ### Fix
 
 - **pull**: follow redirects when downloading templates
