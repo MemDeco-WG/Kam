@@ -65,7 +65,7 @@ has_command() {
 
     if [ -z "$cmd" ]; then
         log_error "has_command: command name is required"
-        exit 1
+        return 1  # Changed to return 1 instead of exit to avoid terminating the script
     fi
 
     if command -v "$cmd" >/dev/null 2>&1; then
@@ -93,8 +93,6 @@ require_command() {
         exit 1
     fi
 }
-
-
 
 # Check if a variable is set
 require_env() {
@@ -196,15 +194,15 @@ prompt() {
         if [ "$hide" = "--hide" ] || [ "$hide" = "true" ]; then
             if command -v stty >/dev/null 2>&1; then
                 stty -echo
-                read -r value || true
+                IFS= read -r value || true  # Use IFS= to preserve leading/trailing spaces
                 stty echo
                 printf "\n"
             else
                 # Fallback if stty not available
-                read -r value || true
+                IFS= read -r value || true
             fi
         else
-            read -r value || true
+            IFS= read -r value || true  # Preserve spaces
         fi
 
         if [ -z "$value" ]; then
@@ -279,7 +277,7 @@ choice() {
         max=$((idx - 1))
 
         printf "Choose [default: %s]: " "$default_val"
-        read -r ans || true
+        IFS= read -r ans || true  # Preserve spaces
 
         if [ -z "$ans" ]; then
             ans="$default_val"
@@ -314,4 +312,6 @@ choice() {
     done
 }
 
-. /etc/os-release
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+fi

@@ -5,7 +5,6 @@ set -e
 
 # license：GPL-3.0
 
-
 # Detect build tool
 # 检测并设置Rust交叉编译工具（cross/cargo-ndk）
 
