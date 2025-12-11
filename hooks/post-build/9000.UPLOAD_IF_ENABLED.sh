@@ -66,7 +66,7 @@ if ! gh release view "$TAG" >/dev/null 2>&1; then
         PRE_FLAG="--prerelease"
     fi
     log_info "Creating GitHub release $TAG"
-    gh release create "$TAG" --title "${KAM_MODULE_ID}-${KAM_MODULE_VERSIONCODE}-${KAM_MODULE_VERSION}" --notes-file "$TMP_CHANGELOG" $PRE_FLAG || log_warn "Failed to create release $TAG"
+    gh release create "$TAG" --title "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" --notes-file "$TMP_CHANGELOG" $PRE_FLAG || log_warn "Failed to create release $TAG"
 else
     log_info "Editing GitHub release $TAG"
     gh release edit "$TAG" --title "${KAM_MODULE_ID:-$TAG}" --notes-file "$TMP_CHANGELOG" || log_warn "Failed to edit release $TAG"
