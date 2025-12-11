@@ -98,7 +98,7 @@ impl PartialEq<SupportedArch> for String {
 #[serde(rename_all = "lowercase")]
 /// 模块类型（序列化为字符串，用于 `kam.toml` 中的 `module_type` 字段）
 ///
-/// - `kam`：代表一个可发布的 Kam 模块
+/// - `kam`：代表一个可发布的 Kam 模块（这里可能有点混淆，非模板都是，不特指kam_template生成的模块）
 /// - `template`：代表一个模板（用于生成其他模块）
 pub enum ModuleType {
     Kam,

@@ -1,5 +1,9 @@
 //
-// 👀
+// keep it simple and stupid.
+// I try to keep it simple.
+// 👾
+// author/human : LIghtJUNction 
+// agents/non-human: gpt gemini grok raptor mimi claude 
 //
 use clap::Parser;
 use dotenvy::dotenv;

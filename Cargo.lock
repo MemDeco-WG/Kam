@@ -371,7 +371,6 @@ dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
- "unicode-width",
  "windows-sys 0.61.2",
 ]
 
@@ -1291,6 +1290,7 @@ dependencies = [
  "glob",
  "hex",
  "hmac",
+ "http",
  "ignore",
  "indicatif",
  "keyring",
