@@ -14,3 +14,6 @@
 	path = KamModuleX
 	url = https://github.com/MemDeco-WG/KamModuleX.git
 	branch = main
+[submodule "setup-kam"]
+	path = setup-kam
+	url = https://github.com/MemDeco-WG/setup-kam.git
