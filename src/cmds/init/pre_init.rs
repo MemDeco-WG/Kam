@@ -51,26 +51,21 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     //  1) A full template id (e.g., "kam_template" or "kam_template.tar.gz"),
     //  2) A short builtin id (e.g., "kam", "meta", "ak3") which will map to "<id>_template",
     //  3) A local path or archive (e.g., /path/to/template.tar.gz or https://.../template.tar.gz).
+    // Determine module type and template.
+    // The -t/--template option supports:
+    //  1) A full template id (e.g., "kam_template" or "kam_template.tar.gz"),
+    //  2) A short builtin id (e.g., "kam", "meta", "ak3") which will map to "<id>_template",
+    //  3) A local path or archive (e.g., /path/to/template.tar.gz or https://.../template.tar.gz).
+    //
+    // NOTE: We no longer forcefully append "_template" here. We pass the raw input
+    // to the next stage (impl_mod/template manager) which performs the smart discovery.
     let (module_type, impl_template) = if args.tmpl {
         (ModuleType::Template, "tmpl_template".to_string())
     } else if let Some(t) = &args.template {
-        // Detect likely path/archive/URL to avoid appending suffix in those cases.
-        let is_path_or_archive = t.contains('/')
-            || t.contains('\\')
-            || t.contains(':')
-            || t.ends_with(".tar.gz")
-            || t.ends_with(".tgz")
-            || t.ends_with(".zip");
-
-        let impl_spec = if t.ends_with("_template") || is_path_or_archive {
-            t.clone()
-        } else {
-            format!("{}_template", t)
-        };
-
-        (ModuleType::Kam, impl_spec)
+        // Pass raw string. Discovery logic in `impl_mod.rs` will handle suffixing if needed.
+        (ModuleType::Kam, t.clone())
     } else {
-        // default to kam module
+        // default to kam module (still explicit default)
         (ModuleType::Kam, "kam_template".to_string())
     };
 

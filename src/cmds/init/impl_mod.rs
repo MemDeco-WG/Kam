@@ -327,111 +327,124 @@ pub fn init_template(
         .unwrap_or("kam_template")
         .to_string();
 
-    // 1. Check built-in assets
-    let asset_name = format!("{}.tar.gz", template_spec);
-    if let Some(asset) = crate::assets::tmpl::TmplAssets::get(&asset_name) {
-        let temp_dir = tempfile::tempdir().map_err(KamError::Io)?;
-        let temp_path = temp_dir.path().join(format!("{}.tar.gz", template_spec));
-        fs::write(&temp_path, &asset.data).map_err(KamError::Io)?;
+    // Strategy:
+    // 1. Check if `template_spec` exists as a local file or directory (relative to CWD).
+    // 2. Check if `template_spec` exists in cache or built-in assets.
+    // 3. Check if `template_spec` exists in project-local `tmpl/` or `templates/` dirs.
+    // 4. If NOT found and `template_spec` does NOT end with `_template` or look like a file archive,
+    //    append `_template` and retry steps 2-3 (but not step 1 again, usually).
 
-        return init_impl(
-            path,
-            id,
-            name,
-            version,
-            author,
-            description,
-            &temp_path,
-            &mut template_vars,
-            force,
-            Some(template_spec.as_str()),
-        );
+    let mut potential_names = vec![template_spec.clone()];
+
+    // If it doesn't have an extension and doesn't end in _template, try appending it as a fallback
+    let is_archive_or_path = template_spec.contains('/') ||
+                            template_spec.contains('\\') ||
+                            template_spec.ends_with(".tar.gz") ||
+                            template_spec.ends_with(".zip");
+
+    if !template_spec.ends_with("_template") && !is_archive_or_path {
+        potential_names.push(format!("{}_template", template_spec));
     }
 
-    // 2. Check cache
-    if let Ok(Some(cached_path)) =
-        crate::template::TemplateCacheManager::resolve_template_path(&template_spec)
-    {
-        return init_impl(
-            path,
-            id,
-            name,
-            version,
-            author,
-            description,
-            &cached_path,
-            &mut template_vars,
-            force,
-            Some(template_spec.as_str()),
-        );
-    }
-
-    // 3. Project-local candidate templates:
-    //    - Direct path (relative or absolute) to dir/archive
-    //    - tmpl/<template_spec> and templates/<template_spec> directories
-    //    - common archive variants: .tar.gz, .tgz, .zip, .tar under tmpl/ and templates/ and project root
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
-    // If the template spec looks like a local path (file/dir), prefer it first
-    let spec_path = Path::new(&template_spec);
-    if spec_path.exists() {
-        candidates.push(spec_path.to_path_buf());
-    }
-
-    // Add project-local directories (tmpl/ and templates/)
-    let project_local_dirs = vec!["tmpl", "templates"];
-    let archive_exts = vec![".tar.gz", ".tgz", ".zip", ".tar"];
-
-    for d in project_local_dirs {
-        let base = Path::new(d);
-        // Directory-based template: tmpl/<name>
-        candidates.push(base.join(&template_spec));
-
-        // Archive variants inside the local directories: tmpl/<name>.tar.gz, tmpl/<name>.zip, etc
-        for ext in &archive_exts {
-            candidates.push(base.join(format!("{}{}", template_spec, ext)));
+    for (name_idx, spec) in potential_names.iter().enumerate() {
+        // 1. Direct local path (only for the first/raw spec, or if we really want to support 'foo_template' local dir)
+        let spec_path = Path::new(spec);
+        if spec_path.exists() {
+             return init_impl(
+                path,
+                id,
+                name,
+                version,
+                author,
+                description,
+                spec_path,
+                &mut template_vars,
+                force,
+                Some(spec.as_str()),
+            );
         }
-    }
 
-    // Also check archive variants in the project root
-    for ext in &archive_exts {
-        candidates.push(Path::new(&format!("{}{}", template_spec, ext)).to_path_buf());
-    }
+        // 2. Built-in assets
+        // We typically store built-ins as "kam_template.tar.gz" -> check spec
+        // If the spec is "kam", we might be in the second iteration where spec="kam_template"
+        let asset_name = format!("{}.tar.gz", spec);
+        if let Some(asset) = crate::assets::tmpl::TmplAssets::get(&asset_name) {
+            let temp_dir = tempfile::tempdir().map_err(KamError::Io)?;
+            let temp_path = temp_dir.path().join(format!("{}.tar.gz", spec));
+            fs::write(&temp_path, &asset.data).map_err(KamError::Io)?;
 
-    // Deduplicate candidates while preserving insertion order
-    let mut seen = std::collections::HashSet::new();
-    candidates.retain(|p| seen.insert(p.clone()));
-
-    for candidate in candidates {
-        if candidate.exists() {
             return init_impl(
                 path,
                 id,
-                name.clone(),
+                name,
                 version,
                 author,
-                description.clone(),
-                &candidate,
+                description,
+                &temp_path,
                 &mut template_vars,
                 force,
-                Some(template_spec.as_str()),
+                Some(spec.as_str()),
             );
+        }
+
+        // 3. Cache
+        if let Ok(Some(cached_path)) =
+            crate::template::TemplateCacheManager::resolve_template_path(spec)
+        {
+            return init_impl(
+                path,
+                id,
+                name,
+                version,
+                author,
+                description,
+                &cached_path,
+                &mut template_vars,
+                force,
+                Some(spec.as_str()),
+            );
+        }
+
+        // 4. Project-local folder search (tmpl/ or templates/)
+        let project_local_dirs = vec!["tmpl", "templates"];
+        let archive_exts = vec![".tar.gz", ".tgz", ".zip", ".tar"];
+        let mut candidates: Vec<PathBuf> = Vec::new();
+
+        for d in &project_local_dirs {
+            let base = Path::new(d);
+            candidates.push(base.join(spec));
+             for ext in &archive_exts {
+                candidates.push(base.join(format!("{}{}", spec, ext)));
+            }
+        }
+        // Also check project root for archives
+         for ext in &archive_exts {
+            candidates.push(Path::new(&format!("{}{}", spec, ext)).to_path_buf());
+        }
+
+        for candidate in candidates {
+            if candidate.exists() {
+                 return init_impl(
+                    path,
+                    id,
+                    name.clone(),
+                    version,
+                    author,
+                    description.clone(),
+                    &candidate,
+                    &mut template_vars,
+                    force,
+                    Some(spec.as_str()),
+                );
+            }
         }
     }
 
-    // 4. Final fallback: literal template path from `template_spec`
-    init_impl(
-        path,
-        id,
-        name,
-        version,
-        author,
-        description,
-        Path::new(&template_spec),
-        &mut template_vars,
-        force,
-        Some(template_spec.as_str()),
-    )
+    // Final failure
+    Err(KamError::TemplateNotFound(format!(
+        "Template '{}' not found in built-in assets, local path, cache, or project directories.",
+        template_spec
+    )))
 }
 
 #[cfg(test)]

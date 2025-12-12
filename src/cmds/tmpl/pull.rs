@@ -14,7 +14,7 @@ use std::time::Duration;
 use tempfile::Builder as TempFileBuilder;
 
 const DEFAULT_TEMPLATES_URL: &str =
-    "https://github.com/MemDeco-WG/Kam/releases/download/0.4.18/templates.zip";
+    "https://github.com/MemDeco-WG/Kam/releases/latest/download/templates.zip";
 
 fn get_project_or_global_config_path(global: bool) -> Result<std::path::PathBuf, KamError> {
     if global {
@@ -120,7 +120,10 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
         ).unwrap().progress_chars("#>-"));
         Some(pb)
     } else {
-        println!("{} Could not determine file size. Progress bar will be disabled.", "!".yellow());
+        println!(
+            "{} Could not determine file size. Progress bar will be disabled.",
+            "!".yellow()
+        );
         None
     };
 
@@ -145,7 +148,10 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
                 if let Some(pb) = pb.as_ref() {
                     pb.finish_with_message("download failed".red().to_string());
                 }
-                return Err(KamError::CommandFailed(format!("Failed to read response: {}", e)));
+                return Err(KamError::CommandFailed(format!(
+                    "Failed to read response: {}",
+                    e
+                )));
             }
         }
     }

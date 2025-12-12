@@ -501,23 +501,30 @@ impl TemplateCopier {
                     let content = fs::read_to_string(src_path);
                     match content {
                         Ok(text) => {
+                            // Try to render. If it fails (e.g. invalid syntax for Tera but valid for the file type),
+                            // fallback to raw copy.
                             match tera.render_str(&text, &context) {
                                 Ok(rendered) => {
                                     fs::write(&dst_path, rendered).map_err(KamError::Io)?;
                                 }
                                 Err(e) => {
-                                    eprintln!(
-                                        "Warning: Failed to render template '{}': {}",
-                                        src_path.display(),
-                                        e
-                                    );
-                                    // Fallback to copy
+                                    // Make this verbose only if debugging, or just copy silent fallback for "invalid syntax"
+                                    // Check if it is a syntax error that suggests it's not a template
+                                    // For now, we tread it as: "Not a template, copy raw"
+                                    // But we log it if verbose (TODO: add verbose flag), or just warning.
+                                    // To reduce noise for things like GitHub workflows which use {{ }}, we can check the error.
+
+                                    // We will just fallback to copy, maybe print a debug note if we had a logger.
+                                    // For now, let's suppress the warning for common cases or make it less scary.
+                                    // If force is true, maybe user expects templates.
+
+                                    // Proceed to copy raw
                                     fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
                                 }
                             }
                         }
                         Err(_) => {
-                            // Fallback to copy if read_to_string fails
+                            // Fallback to copy if read_to_string fails (e.g. invalid UTF-8 that wasn't caught by is_binary)
                             fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
                         }
                     }
