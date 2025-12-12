@@ -1,16 +1,13 @@
 # Kam - Offline-first module scaffolding, packaging, and template toolkit
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/MemDeco-WG/Kam)
-[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![Version](https://img.shields.io/badge/version-0.4.26-blue.svg)](https://github.com/MemDeco-WG/Kam)
 
 English | [中文](README.zh-CN.md)
 
 ## 📖 Overview
 
-Kam is an offline-first CLI toolkit for scaffolding, building, and distributing Android module packages and templates. It focuses on rapid project initialization, reproducible offline builds, template management, and convenient repository/metadata export for module maintainers and distribution channels. Kam still supports building modules for Magisk, KernelSU, and APatch workflows.
-
-
+Kam is an offline-first(kam tmpl pull requires a network connection.) CLI toolkit for scaffolding, building, and distributing Android module packages and templates. It focuses on rapid project initialization, reproducible offline builds, template management, and convenient repository/metadata export for module maintainers and distribution channels. Kam still supports building modules for Magisk, KernelSU, and APatch workflows.
 
 ### ✨ Key Features
 
@@ -48,6 +45,7 @@ Using Kam template:
 ```bash
 kam tmpl list
 
+kam tmpl pull # download online
 
 kam init my_awesome_module -t kam_template
 ```
