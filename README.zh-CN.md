@@ -183,7 +183,7 @@ kam tmpl path
 
 Kam 以离线为优先，但支持可选的在线特性以提升安全性和便利性：
 
- - **时间戳签名 / Sigstore** — 当启用 `kam sign` 的时间戳或 Sigstore 功能时，Kam 可能会联系时间戳服务器 (TSA) 或 Sigstore 的在线服务来生成 RFC 3161 时间戳签名或将签名记录到透明日志 (Rekor)。启用这些功能时需要网络访问。`kam sign` 默认启用时间戳（可用 `--timestamp=false` 关闭）。
+ - **时间戳签名 / Sigstore** — 当启用 `kam sign` 的时间戳或 Sigstore 功能时，Kam 可能会联系时间戳服务器 (TSA) 或 Sigstore 的在线服务来生成 RFC 3161 时间戳签名或将签名记录到透明日志 (Rekor)。启用这些功能时需要网络访问。`kam sign` 默认不启用时间戳（可用 `--timestamp` 启用）。
 - **模板下载（已实现）** — 新增 `kam tmpl pull` 命令，方便从远程仓库或模板注册表拉取并导入模板（默认为 GitHub latest release templates.zip）。
   已记录的下载链接保存在全局配置 `~/.kam/config.toml` 下的 `tmpl.pull.url`；最近一次下载时间保存在 `tmpl.pull.last_download`。
 

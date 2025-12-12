@@ -218,7 +218,7 @@ For more details on templates, see [templates/README.md](docs/templates.md).
 Kam is offline-first, but supports optional network-backed functionality to increase security and convenience. These features are not required for basic scaffolding and builds, but may be enabled by flags or in future updates:
 
 - **Timestamped signatures / Sigstore** — Using `kam sign` with Sigstore/timestamping enabled may contact a timestamp authority (TSA) or Sigstore services to generate RFC 3161 timestamped signatures or to record signatures on transparency logs (Rekor). This requires network access when enabled.
-  Note: `kam sign` now *defaults* to requesting an RFC3161 timestamp (network required). Use `--timestamp=false` to disable timestamping if you need fully offline operations.
+  Note: `kam sign` does not request an RFC3161 timestamp by default. Use `--timestamp` to enable timestamping when needed.
 - **Template downloads (planned)** — A `kam tmpl pull` command will be added to make it easy to fetch and import templates from remote repositories or template registries.
 
 When possible, these features are optional and disabled by default to preserve the offline-first behavior of Kam.

@@ -33,8 +33,8 @@ pub struct SignArgs {
     #[arg(long, default_value_t = false)]
     pub sigstore: bool,
     /// Contact a Timestamp Authority to get RFC3161 timestamp for the signed artifact.
-    /// Defaults to true to include timestamps by default.
-    #[arg(short, long, default_value_t = true)]
+    /// Disabled by default. Use `--timestamp` to enable requesting an RFC3161 timestamp (network required).
+    #[arg(short, long, default_value_t = false)]
     pub timestamp: bool,
     /// Time Stamp Authority (TSA) URL to use for RFC3161 timestamps
     /// If omitted, uses global config `sign.tsa.url` or default Sigstore TSA.
