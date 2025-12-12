@@ -15,7 +15,6 @@ Kam 是一个强大的基于模板的模块构建工具，
 
 - Anykernel3 模板
 
-- Astrbot V5 模板(计划中)
 
 Kam的核心职责
 解析模板
@@ -70,12 +69,6 @@ kam init my_meta_module -t meta_template
 
 ```bash
 kam init my_kernel_module -t ak3_template
-```
-
-使用Astrbot模块模板 (计划支持)
-
-```bash
-kam init my_astrbot_module -t astr_template
 ```
 
 

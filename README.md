@@ -64,12 +64,6 @@ Using AnyKernel3 template (kernel module):
 kam init my_kernel_module -t ak3_template
 ```
 
-Using Astrbot template.
-
-```bash
-kam init my_astrbot_module -t astr_template
-```
-
 ### Configure Your Module
 
 Edit the `kam.toml` configuration file:
