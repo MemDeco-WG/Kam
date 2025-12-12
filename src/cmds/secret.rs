@@ -1,5 +1,7 @@
 pub mod args;
+pub mod cert;
 pub mod file;
+pub mod github;
 pub mod handler;
 pub mod index;
 pub mod utils;

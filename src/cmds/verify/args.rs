@@ -23,4 +23,24 @@ pub struct VerifyArgs {
     /// Name of secret in kam keyring that holds the private key; used to derive public key for verification
     #[arg(long, default_value = "main")]
     pub secret: String,
+
+    /// Path to public key PEM for verification (overrides derived key from secret)
+    #[arg(long)]
+    pub key: Option<String>,
+
+    /// Name of cached developer certificate to use for verification
+    #[arg(long, conflicts_with = "key")]
+    pub cert_name: Option<String>,
+
+    /// Path to certificate chain PEM file for verification
+    #[arg(long, conflicts_with_all = ["key", "cert_name"])]
+    pub cert_chain: Option<String>,
+
+    /// Skip CRL (Certificate Revocation List) check
+    #[arg(long)]
+    pub skip_crl: bool,
+
+    /// Verbose output showing verification steps
+    #[arg(short, long)]
+    pub verbose: bool,
 }

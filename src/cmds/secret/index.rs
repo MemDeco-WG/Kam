@@ -16,6 +16,12 @@ pub struct SecretMeta {
     pub last_probe: i64,
     /// Stored blob size in bytes
     pub size: u64,
+    /// Cached public key PEM (if any) to allow password-less operations
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pub_key_pem: Option<String>,
+    /// Base64 encoded signature of the pub_key_pem (signed by the private key)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pub_key_signature: Option<String>,
 }
 
 impl Default for SecretMeta {
@@ -26,6 +32,8 @@ impl Default for SecretMeta {
             storage: "file".to_string(),
             last_probe: 0,
             size: 0,
+            pub_key_pem: None,
+            pub_key_signature: None,
         }
     }
 }
@@ -74,6 +82,14 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                     .to_string();
                 let last_probe = val.get("last_probe").and_then(|x| x.as_i64()).unwrap_or(0);
                 let size = val.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
+                let pub_key_pem = val
+                    .get("pub_key_pem")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string());
+                let pub_key_signature = val
+                    .get("pub_key_signature")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string());
                 new.entries.insert(
                     k.clone(),
                     SecretMeta {
@@ -82,6 +98,8 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                         storage,
                         last_probe,
                         size,
+                        pub_key_pem,
+                        pub_key_signature,
                     },
                 );
             }
@@ -105,6 +123,8 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                     storage: "file".to_string(),
                     last_probe: 0,
                     size: 0,
+                    pub_key_pem: None,
+                    pub_key_signature: None,
                 },
             );
         }
@@ -127,6 +147,14 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                     .to_string();
                 let last_probe = val.get("last_probe").and_then(|x| x.as_i64()).unwrap_or(0);
                 let size = val.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
+                let pub_key_pem = val
+                    .get("pub_key_pem")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string());
+                let pub_key_signature = val
+                    .get("pub_key_signature")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string());
                 new.entries.insert(
                     k.clone(),
                     SecretMeta {
@@ -135,6 +163,8 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                         storage,
                         last_probe,
                         size,
+                        pub_key_pem,
+                        pub_key_signature,
                     },
                 );
             }
@@ -155,6 +185,8 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                     storage: "file".to_string(),
                     last_probe: 0,
                     size: 0,
+                    pub_key_pem: None,
+                    pub_key_signature: None,
                 },
             );
         }

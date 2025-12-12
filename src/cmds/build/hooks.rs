@@ -5,14 +5,12 @@ use crate::types::kam_toml::enums::ModuleType;
 use crate::utils::Utils;
 
 use indicatif::{ProgressBar, ProgressStyle};
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fs;
-use std::io::{BufRead, BufReader, IsTerminal};
+use std::io::IsTerminal;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+
 
 pub fn run_pre_build_hooks(
     project_root: &Path,
@@ -468,182 +466,51 @@ fn run_hooks(
             // Stream stdout/stderr so the progress bar can continue animating and we get line-by-line logs.
             // This avoids blocking the main thread via `Command::output()` and prints output as it's produced.
             // For error reporting we keep a tail of recent lines to include in the error message if the script fails.
-            const MAX_TAIL_LINES: usize = 200;
-            const MAX_DISPLAY_LEN: usize = 2048;
 
-            let spawn_res = Command::new(&path)
-                .current_dir(project_root)
+
+            let mut cmd = Command::new(&path);
+            cmd.current_dir(project_root)
                 .envs(env_vars.iter().cloned())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn();
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .stdin(Stdio::inherit());
 
-            match spawn_res {
-                Ok(mut child) => {
-                    let stdout = child.stdout.take();
-                    let stderr = child.stderr.take();
+            // Run process, suspending progress bar to allow clean output
+            let status_res = if let Some(pb) = &pb {
+                pb.suspend(|| cmd.status())
+            } else {
+                cmd.status()
+            };
 
-                    // Prepare buffers for last N lines to display on error
-                    let stdout_tail: Arc<Mutex<VecDeque<String>>> =
-                        Arc::new(Mutex::new(VecDeque::new()));
-                    let stderr_tail: Arc<Mutex<VecDeque<String>>> =
-                        Arc::new(Mutex::new(VecDeque::new()));
-
-                    // Clone some values needed in threads
-                    let pb_for_threads = pb.clone();
-                    let stage_for_threads = stage.to_string();
-                    let filename_for_threads = filename.to_string();
-                    let idx_for_threads = idx;
-                    let total_for_threads = total_hooks;
-
-                    // stdout reader thread
-                    let stdout_tail_clone = Arc::clone(&stdout_tail);
-                    let pb_clone_stdout = pb_for_threads.clone();
-                    let stage_clone_stdout = stage_for_threads.clone();
-                    let filename_clone_stdout = filename_for_threads.clone();
-                    let stdout_handle = if let Some(out) = stdout {
-                        Some(std::thread::spawn(move || {
-                            let reader = BufReader::new(out);
-                            for line in reader.lines() {
-                                if let Ok(l) = line {
-                                    let mut lock = stdout_tail_clone.lock().unwrap();
-                                    if lock.len() >= MAX_TAIL_LINES {
-                                        lock.pop_front();
-                                    }
-                                    lock.push_back(l.clone());
-
-                                    let formatted = Utils::format_cmd_line(&l);
-                                    if let Some(pb) = &pb_clone_stdout {
-                                        pb.println(&formatted);
-                                        // Update progress message with truncated line
-                                        let message = if l.len() > 80 {
-                                            format!("{}...", &l[..77])
-                                        } else {
-                                            l.clone()
-                                        };
-                                        pb.set_message(format!(
-                                            "[{} {}/{}] {} - {}",
-                                            stage_clone_stdout,
-                                            idx_for_threads,
-                                            total_for_threads,
-                                            filename_clone_stdout,
-                                            message
-                                        ));
-                                    } else {
-                                        Utils::print_cmd_line(&l);
-                                    }
-                                }
-                            }
-                        }))
-                    } else {
-                        None
-                    };
-
-                    // stderr reader thread
-                    let stderr_tail_clone = Arc::clone(&stderr_tail);
-                    let pb_clone_stderr = pb_for_threads.clone();
-                    let stage_clone_err = stage_for_threads.clone();
-                    let filename_clone_err = filename_for_threads.clone();
-                    let stderr_handle = if let Some(err) = stderr {
-                        Some(std::thread::spawn(move || {
-                            let reader = BufReader::new(err);
-                            for line in reader.lines() {
-                                if let Ok(l) = line {
-                                    let mut lock = stderr_tail_clone.lock().unwrap();
-                                    if lock.len() >= MAX_TAIL_LINES {
-                                        lock.pop_front();
-                                    }
-                                    lock.push_back(l.clone());
-
-                                    let formatted = Utils::format_cmd_line(&l);
-                                    if let Some(pb) = &pb_clone_stderr {
-                                        pb.println(&formatted);
-                                        let message = if l.len() > 80 {
-                                            format!("{}...", &l[..77])
-                                        } else {
-                                            l.clone()
-                                        };
-                                        pb.set_message(format!(
-                                            "[{} {}/{}] {} - {}",
-                                            stage_clone_err,
-                                            idx_for_threads,
-                                            total_for_threads,
-                                            filename_clone_err,
-                                            message
-                                        ));
-                                    } else {
-                                        Utils::print_cmd_line(&l);
-                                    }
-                                }
-                            }
-                        }))
-                    } else {
-                        None
-                    };
-
-                    // Spinner tick thread: keep pb animating while the child process runs
-                    let ticker_running = Arc::new(AtomicBool::new(true));
-                    let ticker_running_clone = ticker_running.clone();
-                    let pb_for_tick = pb_for_threads.clone();
-                    let ticker = std::thread::spawn(move || {
-                        while ticker_running_clone.load(Ordering::Relaxed) {
-                            if let Some(pb) = &pb_for_tick {
-                                pb.tick();
-                            }
-                            std::thread::sleep(Duration::from_millis(80));
-                        }
-                    });
-
-                    // Wait for child process to exit
-                    let status_res = child.wait();
-
-                    // Stop ticker and join threads
-                    ticker_running.store(false, Ordering::Relaxed);
-                    let _ = ticker.join();
-
-                    if let Some(h) = stdout_handle {
-                        let _ = h.join();
-                    }
-                    if let Some(h) = stderr_handle {
-                        let _ = h.join();
+            // Remove all the complex buffering logic since we are inheriting stdio
+            match status_res {
+                Ok(_status) => {
+                    // Re-draw progress bar
+                    if let Some(pb) = &pb {
+                        // Force a redraw or message update
+                        pb.set_message(format!(
+                            "[{} {}/{}] {}",
+                            stage, idx, total_hooks, filename
+                        ));
                     }
 
                     match status_res {
-                        Ok(status) => {
-                            if !status.success() {
-                                // Gather a limited tail to show in error
-                                let stdout_gathered = {
-                                    let lock = stdout_tail.lock().unwrap();
-                                    lock.iter().cloned().collect::<Vec<_>>().join("\n")
-                                };
-                                let stderr_gathered = {
-                                    let lock = stderr_tail.lock().unwrap();
-                                    lock.iter().cloned().collect::<Vec<_>>().join("\n")
-                                };
-
-                                // Truncate if too long
-                                let mut stdout_str = stdout_gathered;
-                                let mut stderr_str = stderr_gathered;
-                                if stdout_str.len() > MAX_DISPLAY_LEN {
-                                    stdout_str.truncate(MAX_DISPLAY_LEN);
-                                    stdout_str.push_str("... [truncated]");
-                                }
-                                if stderr_str.len() > MAX_DISPLAY_LEN {
-                                    stderr_str.truncate(MAX_DISPLAY_LEN);
-                                    stderr_str.push_str("... [truncated]");
-                                }
+                        Ok(_status) => {
+                            if !_status.success() {
+                                // Since we inherit stdio, output is already visible to the user.
+                                // We don't need to capture and print it again.
 
                                 if let Some(pb) = &pb {
                                     pb.finish_and_clear();
                                 }
 
-                                let status_code = status
+                                let status_code = _status
                                     .code()
                                     .map(|c| c.to_string())
-                                    .unwrap_or_else(|| status.to_string());
+                                    .unwrap_or_else(|| _status.to_string());
                                 return Err(KamError::CommandFailed(format!(
-                                    "Hook script {} failed with status: {}\nStdout:\n{}\nStderr:\n{}",
-                                    filename, status_code, stdout_str, stderr_str
+                                    "Hook script {} failed with status: {}. (Output above)",
+                                    filename, status_code
                                 )));
                             }
                             // successful run - increment progress or print success line

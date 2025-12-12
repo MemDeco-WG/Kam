@@ -70,4 +70,52 @@ pub enum SecretCommands {
         #[arg(long)]
         name: Option<String>,
     },
+
+    /// Export public key from a stored private key secret
+    ExportPub {
+        /// Name of the secret
+        #[arg(default_value = "main")]
+        name: String,
+
+        /// Output file path (if omitted, prints to stdout)
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
+
+    /// Import developer certificate chain from GitHub issue or file
+    ImportCert {
+        /// GitHub repository (format: owner/repo, e.g., "kernelsu/developers")
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// GitHub issue number containing the certificate
+        #[arg(long)]
+        issue: Option<u32>,
+
+        /// Path to certificate chain PEM file
+        #[arg(long)]
+        cert_chain: Option<PathBuf>,
+
+        /// Name to store certificate under
+        name: String,
+    },
+
+    /// Manage trusted Root CAs
+    Trust {
+        /// Add Root CA from file or URL
+        #[arg(long)]
+        add_root: Option<String>,
+
+        /// Name for the Root CA
+        #[arg(long)]
+        ca_name: Option<String>,
+
+        /// List trusted Root CAs
+        #[arg(long)]
+        list: bool,
+
+        /// Remove Root CA by name
+        #[arg(long)]
+        remove: Option<String>,
+    },
 }

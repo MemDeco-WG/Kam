@@ -95,8 +95,8 @@ These variables are added to each hook's environment to make information from `k
 
 Default post-build hook behaviors:
 
- - `8000.SIGN_IF_ENABLE.sh`: If `KAM_SIGN_ENABLED=1`, this hook will run `kam sign` against artifacts in the `dist/` directory. By default it uses `--sigstore`. Use `--timestamp` to enable time-stamping. You can disable Sigstore with `KAM_SIGN_SIGSTORE=0` in your environment or `.env` file.
-- `9000.UPLOAD_IF_ENABLED.sh`: If `KAM_RELEASE_ENABLED=1`, this hook creates a GitHub Release using the assets in `dist/` and will include signatures (`*.sig`, `*.sigstore.json`) and timestamp tokens (`*.tsr`) if present when `KAM_SIGN_ENABLE=1` is set. Use `KAM_PRE_RELEASE=1` to create a pre-release. If `KAM_IMMUTABLE_RELEASE=1` is set and the release tag already exists, the upload will be skipped to avoid modifying an immutable release.
+ - `8000.SIGN_IF_ENABLE.sh`: If `KAM_SIGN_ENABLED=1`, this hook will run `kam sign` against artifacts in the `dist/` directory. By default it uses `--sigstore`. Use `--timestamp` to enable timestamping. You can disable Sigstore with `KAM_SIGN_SIGSTORE=0` in your environment or `.env` file.
+- `9000.UPLOAD_IF_ENABLED.sh`: If `KAM_RELEASE_ENABLED=1`, this hook creates a GitHub Release using the assets in `dist/` and will include signatures (`*.sig`, `*.sigstore.json`) and timestamp tokens (`*.tsr`) automatically if `KAM_SIGN_ENABLE=1` is set and those files are present in `dist/`. Use `KAM_PRE_RELEASE=1` to create a pre-release. If `KAM_IMMUTABLE_RELEASE=1` is set and the release tag already exists, the upload will be skipped to avoid modifying an immutable release.
 
 | `KAM_SIGN_ENABLED` | Set to `1` when build invoked with `-s/--sign`. Useful to trigger automatic signing in hooks. |
 | `KAM_IMMUTABLE_RELEASE` | Set to `1` when build invoked with `-i/--immutable-release`. Hooks can use this to opt into immutable release behavior. |

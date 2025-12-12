@@ -58,6 +58,8 @@ pub fn store_secret(
     blob: &[u8],
     encrypted: bool,
     _force_file: bool,
+    pub_key_pem: Option<String>,
+    pub_key_signature: Option<String>,
 ) -> Result<(), KamError> {
     let s = BASE64_ENGINE.encode(blob);
     // Store only to local secure file storage
@@ -72,6 +74,8 @@ pub fn store_secret(
         storage: storage.to_string(),
         last_probe: Utc::now().timestamp_millis(),
         size: blob.len() as u64,
+        pub_key_pem,
+        pub_key_signature,
     };
     idx.entries.insert(name.to_string(), meta);
     save_index(&idx)?;
@@ -96,7 +100,7 @@ mod tests {
         let blob = b"some-secret-data".to_vec();
 
         // Store using file fallback
-        assert!(store_secret(name, &blob, false, true).is_ok());
+        assert!(store_secret(name, &blob, false, true, None, None).is_ok());
 
         // Read back
         let read = read_secret_file(name).unwrap();
@@ -123,7 +127,7 @@ mod tests {
         let name = "baktest";
         let blob = b"secretdata".to_vec();
         // Attempt to store with backup (force_file = false, with_backup = true)
-        let res = store_secret(name, &blob, true, false);
+        let res = store_secret(name, &blob, true, false, None, None);
         assert!(res.is_ok());
         // Check index and/or file
         let idx = crate::cmds::secret::index::load_index().unwrap();

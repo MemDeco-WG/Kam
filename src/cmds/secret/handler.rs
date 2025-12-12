@@ -99,10 +99,39 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 p1
             };
             let blob = crate::cmds::secret_crypto::encrypt_with_password(&data, &pw)?;
+
+            // Attempt to derive public key and sign it
+            let mut pub_key_pem = None;
+            let mut pub_key_signature = None;
+
+            let pkey_res = openssl::pkey::PKey::private_key_from_pem(&data)
+                .or_else(|_| openssl::pkey::PKey::private_key_from_pem_passphrase(&data, pw.as_bytes()));
+
+            if let Ok(pkey) = pkey_res {
+                 if let Ok(pem) = pkey.public_key_to_pem() {
+                     let pem_s = String::from_utf8_lossy(&pem).to_string();
+                     pub_key_pem = Some(pem_s.clone());
+
+                     // Sign the PEM string
+                     use openssl::sign::Signer;
+                     use openssl::hash::MessageDigest;
+                     use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
+                     use base64::engine::Engine as _;
+
+                     if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey) {
+                         if signer.update(pem_s.as_bytes()).is_ok() {
+                             if let Ok(sig) = signer.sign_to_vec() {
+                                 pub_key_signature = Some(BASE64_ENGINE.encode(&sig));
+                             }
+                         }
+                     }
+                 }
+            }
+
             // Determine effective with_backup: CLI flag overrides global default
             let _default_with_backup = global_with_backup_default();
             // Always store to local file (no keyring)
-            super::file::store_secret(&name, &blob, true, force_file)?;
+            super::file::store_secret(&name, &blob, true, force_file, pub_key_pem, pub_key_signature)?;
             println!("{} Secret '{}' saved.", "✓".green(), name);
         }
         SecretCommands::Get {
@@ -198,7 +227,10 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             };
             // If the file looks like encrypted blob (has magic header), store as-is; else encrypt before storing
             if data.starts_with(b"KAMKEYv1") {
-                super::file::store_secret(&final_name, &data, true, false)?;
+                // If importing an already encrypted blob, we can't easily derive the public key without the password.
+                // We'll skip caching for now, or we could prompt for password to verify/cache (but user might not know it if just moving blobs).
+                // Let's stick to storing as-is. Public key won't be cached until re-added or we add a 'refresh' command.
+                super::file::store_secret(&final_name, &data, true, false, None, None)?;
             } else {
                 let pw = prompt_password("Encryption password for import: ").map_err(|e| {
                     KamError::CommandFailed(format!("Failed to read password: {}", e))
@@ -213,9 +245,158 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                     ));
                 }
                 let blob = crate::cmds::secret_crypto::encrypt_with_password(&data, &pw)?;
-                super::file::store_secret(&final_name, &blob, true, false)?;
+
+                // Attempt to derive public key
+                let mut pub_key_pem = None;
+                let mut pub_key_signature = None;
+
+                let pkey_res = openssl::pkey::PKey::private_key_from_pem(&data)
+                    .or_else(|_| openssl::pkey::PKey::private_key_from_pem_passphrase(&data, pw.as_bytes()));
+
+                if let Ok(pkey) = pkey_res {
+                     if let Ok(pem) = pkey.public_key_to_pem() {
+                         let pem_s = String::from_utf8_lossy(&pem).to_string();
+                         pub_key_pem = Some(pem_s.clone());
+
+                         // Sign the PEM string
+                         use openssl::sign::Signer;
+                         use openssl::hash::MessageDigest;
+                         use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
+                         use base64::engine::Engine as _;
+
+                         if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey) {
+                             if signer.update(pem_s.as_bytes()).is_ok() {
+                                 if let Ok(sig) = signer.sign_to_vec() {
+                                     pub_key_signature = Some(BASE64_ENGINE.encode(&sig));
+                                 }
+                             }
+                         }
+                     }
+                }
+
+                super::file::store_secret(&final_name, &blob, true, false, pub_key_pem, pub_key_signature)?;
             }
             println!("{} Secret '{}' imported.", "✓".green(), final_name);
+        }
+        SecretCommands::ExportPub { name, out } => {
+
+
+            // Use helper to get/refresh public key (handles caching and fallback)
+            let pkey = match crate::cmds::secret::utils::get_or_refresh_public_key(&name, true) {
+                Ok(pk) => pk,
+                Err(e) => {
+                     return Err(KamError::CommandFailed(format!("Failed to retrieve public key for secret '{}': {}", name, e)));
+                }
+            };
+
+            // 4. Derive Public Key PEM
+            let pub_pem = pkey.public_key_to_pem().map_err(|e| KamError::CommandFailed(format!("Failed to derive public key: {}", e)))?;
+
+            // 5. Output
+            if let Some(path) = out {
+                fs::write(&path, &pub_pem).map_err(KamError::Io)?;
+                 println!(
+                    "{} Public key for secret '{}' exported to {}",
+                    "✓".green(),
+                    name,
+                    path.display()
+                );
+            } else {
+                let s = String::from_utf8_lossy(&pub_pem);
+                print!("{}", s);
+            }
+        }
+        SecretCommands::ImportCert {
+            repo,
+            issue,
+            cert_chain,
+            name,
+        } => {
+            let chain_pem = if let Some(chain_path) = cert_chain {
+                // Load from file
+                fs::read_to_string(&chain_path).map_err(KamError::Io)?
+            } else if let (Some(repo_str), Some(issue_num)) = (repo, issue) {
+                // Fetch from GitHub
+                let parts: Vec<&str> = repo_str.split('/').collect();
+                if parts.len() != 2 {
+                    return Err(KamError::CommandFailed(
+                        "Repository must be in format 'owner/repo'".to_string(),
+                    ));
+                }
+                let owner = parts[0];
+                let repo_name = parts[1];
+
+                println!("Fetching certificate from GitHub issue {}...", issue_num);
+                super::github::fetch_cert_from_issue(owner, repo_name, issue_num)?
+            } else {
+                return Err(KamError::CommandFailed(
+                    "Must provide either --cert-chain or both --repo and --issue".to_string(),
+                ));
+            };
+
+            // Store the certificate chain
+            super::cert::store_cert_chain(&name, &chain_pem)?;
+            println!(
+                "{} Certificate chain '{}' imported successfully.",
+                "✓".green(),
+                name
+            );
+        }
+        SecretCommands::Trust {
+            add_root,
+            ca_name,
+            list,
+            remove,
+        } => {
+            if list {
+                // List trusted CAs
+                let cas = super::cert::list_trusted_cas()?;
+                if cas.is_empty() {
+                    println!("No trusted Root CAs.");
+                } else {
+                    println!("Trusted Root CAs:");
+                    for (name, fingerprint) in cas {
+                        println!("  {} {} ({})", "•".cyan(), name, &fingerprint[..16]);
+                    }
+                }
+            } else if let Some(ca_path_or_url) = add_root {
+                let ca_name = ca_name.ok_or_else(|| {
+                    KamError::CommandFailed("--ca-name is required when adding a Root CA".to_string())
+                })?;
+
+                // Load CA certificate
+                let ca_pem = if ca_path_or_url.starts_with("http://") || ca_path_or_url.starts_with("https://") {
+                    // Fetch from URL
+                    println!("Fetching Root CA from {}...", ca_path_or_url);
+                    reqwest::blocking::get(&ca_path_or_url)
+                        .map_err(|e| KamError::CommandFailed(format!("Failed to fetch CA: {}", e)))?
+                        .text()
+                        .map_err(|e| KamError::CommandFailed(format!("Failed to read CA: {}", e)))?
+                } else {
+                    // Load from file
+                    fs::read_to_string(&ca_path_or_url).map_err(KamError::Io)?
+                };
+
+                // Add to trust store
+                super::cert::add_trusted_ca(&ca_pem, &ca_name)?;
+                println!(
+                    "{} Root CA '{}' added to trust store.",
+                    "✓".green(),
+                    ca_name
+                );
+            } else if let Some(ca_name) = remove {
+                // Remove CA
+                super::cert::remove_trusted_ca(&ca_name)?;
+                println!(
+                    "{} Root CA '{}' removed from trust store.",
+                    "✓".green(),
+                    ca_name
+                );
+            } else {
+                return Err(KamError::CommandFailed(
+                    "Must provide --list, --add-root, or --remove".to_string(),
+                ));
+            }
         }
     }
     Ok(())
