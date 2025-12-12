@@ -189,10 +189,10 @@ pub fn verify_cert_chain(chain_pem: &str, trusted_cas_pem: &[String]) -> Result<
         match parse_x509_pem(remaining) {
             Ok((rest, pem_cert)) => {
                 // Copy the DER contents into an owned buffer and keep it alive via Arc
+                // Convert to owned DER bytes and store so its heap buffer remains stable
                 let der_vec = pem_cert.contents.to_vec();
-                let der_arc = Arc::new(der_vec);
-                // Store the Arc so the owned DER bytes outlive this scope
-                der_blobs.push(der_arc);
+                // Store the DER bytes so they outlive this scope
+                der_blobs.push(der_vec);
 
                 if rest.is_empty() {
                     break;
