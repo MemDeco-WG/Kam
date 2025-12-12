@@ -346,7 +346,7 @@ pub fn init_template(
         potential_names.push(format!("{}_template", template_spec));
     }
 
-    for (name_idx, spec) in potential_names.iter().enumerate() {
+    for (_name_idx, spec) in potential_names.iter().enumerate() {
         // 1. Direct local path (only for the first/raw spec, or if we really want to support 'foo_template' local dir)
         let spec_path = Path::new(spec);
         if spec_path.exists() {

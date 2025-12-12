@@ -507,7 +507,7 @@ impl TemplateCopier {
                                 Ok(rendered) => {
                                     fs::write(&dst_path, rendered).map_err(KamError::Io)?;
                                 }
-                                Err(e) => {
+                                Err(_e) => {
                                     // Make this verbose only if debugging, or just copy silent fallback for "invalid syntax"
                                     // Check if it is a syntax error that suggests it's not a template
                                     // For now, we tread it as: "Not a template, copy raw"
