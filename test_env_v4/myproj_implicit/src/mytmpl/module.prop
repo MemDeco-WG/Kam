@@ -1,7 +1,0 @@
-id=mytmpl
-name=Example Module Name
-version=0.1.0
-versionCode=1
-author=LIghtJUNction
-description=Describe your template here
-updateJson=https://raw.githubusercontent.com/user/repo/branch/update.json

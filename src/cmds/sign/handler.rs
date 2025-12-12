@@ -202,6 +202,13 @@ fn sign_single_file(src_path: &Path, args: &SignArgs, sigstore_mode: bool) -> Re
     // Read private key: prefer --key-path if provided, otherwise use secret in keyring
     let pem_bytes = if let Some(kp) = args.key_path.as_ref() {
         fs::read(kp).map_err(KamError::Io)?
+    } else if let Ok(env_key) = env::var("KAM_SIGN_KEY") {
+        if env_key.trim().is_empty() {
+            // treat empty as not present, fall through to secret
+             read_secret_plaintext(&args.secret, true)?
+        } else {
+             env_key.into_bytes()
+        }
     } else {
         read_secret_plaintext(&args.secret, true)?
     };

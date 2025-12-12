@@ -17,3 +17,4 @@
 [submodule "setup-kam"]
 	path = setup-kam
 	url = https://github.com/MemDeco-WG/setup-kam.git
+	branch = main
