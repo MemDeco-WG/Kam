@@ -1,6 +1,5 @@
 use crate::types::kam_toml::enums::ModuleType;
 
-use glob::Pattern;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{self, File};
 use std::io::IsTerminal;
@@ -282,13 +281,10 @@ pub fn create_kam_module_zip(
 
     // Add source files (module dir: src/<module_id>) flattened to root
     if src_dir.exists() {
-        // Compile exclude and include patterns
-        let exclude_patterns: Vec<Pattern> = if let Some(build) = kam_toml.kam.build.as_ref() {
+        // Compile exclude and include patterns as raw strings and use central matcher at runtime
+        let exclude_patterns: Vec<String> = if let Some(build) = kam_toml.kam.build.as_ref() {
             if let Some(excludes) = &build.exclude {
-                excludes
-                    .iter()
-                    .filter_map(|p| Pattern::new(p).ok())
-                    .collect()
+                excludes.clone()
             } else {
                 Vec::new()
             }
@@ -296,12 +292,9 @@ pub fn create_kam_module_zip(
             Vec::new()
         };
 
-        let include_patterns: Vec<Pattern> = if let Some(build) = kam_toml.kam.build.as_ref() {
+        let include_patterns: Vec<String> = if let Some(build) = kam_toml.kam.build.as_ref() {
             if let Some(includes) = &build.include {
-                includes
-                    .iter()
-                    .filter_map(|p| Pattern::new(p).ok())
-                    .collect()
+                includes.clone()
             } else {
                 Vec::new()
             }
@@ -343,10 +336,12 @@ pub fn create_kam_module_zip(
 
             let rel_str = rel_path.to_string_lossy();
 
-            // Check patterns
+            // Check patterns using central matcher
+            let file_name_opt = path.file_name().and_then(|s| s.to_str());
+
             let mut should_exclude = false;
             for pat in &exclude_patterns {
-                if pat.matches(&rel_str) {
+                if crate::utils::pattern_matches(pat, &rel_str, file_name_opt) {
                     should_exclude = true;
                     break;
                 }
@@ -354,7 +349,7 @@ pub fn create_kam_module_zip(
             if should_exclude {
                 let mut should_include = false;
                 for pat in &include_patterns {
-                    if pat.matches(&rel_str) {
+                    if crate::utils::pattern_matches(pat, &rel_str, file_name_opt) {
                         should_include = true;
                         break;
                     }
@@ -463,29 +458,15 @@ pub fn create_template_archive(
     let enc = flate2::write::GzEncoder::new(tar_gz, flate2::Compression::default());
     let mut tar = TarBuilder::new(enc);
 
-    // Compile exclude and include patterns
-    let exclude_patterns: Vec<Pattern> = if let Some(build) = _kam_toml.kam.build.as_ref() {
-        if let Some(excludes) = &build.exclude {
-            excludes
-                .iter()
-                .filter_map(|p| Pattern::new(p).ok())
-                .collect()
-        } else {
-            Vec::new()
-        }
+    // Compile exclude and include patterns as raw strings and use the central matcher at runtime
+    let exclude_patterns: Vec<String> = if let Some(build) = _kam_toml.kam.build.as_ref() {
+        build.exclude.clone().unwrap_or_else(|| Vec::new())
     } else {
         Vec::new()
     };
 
-    let include_patterns: Vec<Pattern> = if let Some(build) = _kam_toml.kam.build.as_ref() {
-        if let Some(includes) = &build.include {
-            includes
-                .iter()
-                .filter_map(|p| Pattern::new(p).ok())
-                .collect()
-        } else {
-            Vec::new()
-        }
+    let include_patterns: Vec<String> = if let Some(build) = _kam_toml.kam.build.as_ref() {
+        build.include.clone().unwrap_or_else(|| Vec::new())
     } else {
         Vec::new()
     };
@@ -493,13 +474,15 @@ pub fn create_template_archive(
     // Use ignore::WalkBuilder to traverse all files, respecting .gitignore
     // For templates, we generally want to include hidden files (like .gitignore itself if needed, though ignore crate handles it)
     // But we should probably include everything that is not ignored by git.
+    let exclude_dir_names = crate::utils::default_exclude_dir_names();
+
     let walker = ignore::WalkBuilder::new(project_root)
         .git_ignore(true)
         .hidden(false) // Templates might have hidden files
-        .filter_entry(|entry| {
+        .filter_entry(move |entry| {
             let name = entry.file_name().to_string_lossy();
-            // Explicitly exclude heavy directories that shouldn't be in templates
-            name != ".git" && name != "node_modules" && name != "target" && name != ".kam"
+            // Derived excluded directory names (from BuildSection defaults). Skip those.
+            !exclude_dir_names.iter().any(|d| d == name.as_ref())
         })
         .build();
 
@@ -535,11 +518,12 @@ pub fn create_template_archive(
             continue;
         }
 
-        // Check custom exclude/include
+        // Check custom exclude/include using the central matcher
         let rel_str = rel_path.to_string_lossy();
+        let file_name_opt = entry.file_name().to_str();
         let mut should_exclude = false;
         for pat in &exclude_patterns {
-            if pat.matches(&rel_str) {
+            if crate::utils::pattern_matches(pat, &rel_str, file_name_opt) {
                 should_exclude = true;
                 break;
             }
@@ -547,7 +531,7 @@ pub fn create_template_archive(
         if should_exclude {
             let mut should_include = false;
             for pat in &include_patterns {
-                if pat.matches(&rel_str) {
+                if crate::utils::pattern_matches(pat, &rel_str, file_name_opt) {
                     should_include = true;
                     break;
                 }

@@ -337,10 +337,10 @@ pub fn init_template(
     let mut potential_names = vec![template_spec.clone()];
 
     // If it doesn't have an extension and doesn't end in _template, try appending it as a fallback
-    let is_archive_or_path = template_spec.contains('/') ||
-                            template_spec.contains('\\') ||
-                            template_spec.ends_with(".tar.gz") ||
-                            template_spec.ends_with(".zip");
+    let is_archive_or_path = template_spec.contains('/')
+        || template_spec.contains('\\')
+        || template_spec.ends_with(".tar.gz")
+        || template_spec.ends_with(".zip");
 
     if !template_spec.ends_with("_template") && !is_archive_or_path {
         potential_names.push(format!("{}_template", template_spec));
@@ -350,7 +350,7 @@ pub fn init_template(
         // 1. Direct local path (only for the first/raw spec, or if we really want to support 'foo_template' local dir)
         let spec_path = Path::new(spec);
         if spec_path.exists() {
-             return init_impl(
+            return init_impl(
                 path,
                 id,
                 name,
@@ -406,25 +406,25 @@ pub fn init_template(
         }
 
         // 4. Project-local folder search (tmpl/ or templates/)
-        let project_local_dirs = vec!["tmpl", "templates"];
-        let archive_exts = vec![".tar.gz", ".tgz", ".zip", ".tar"];
+        let project_local_dirs: &[&str] = crate::utils::PROJECT_TEMPLATE_DIRS;
+        let archive_exts: &[&str] = crate::utils::DEFAULT_ARCHIVE_EXTS;
         let mut candidates: Vec<PathBuf> = Vec::new();
 
-        for d in &project_local_dirs {
+        for d in project_local_dirs {
             let base = Path::new(d);
             candidates.push(base.join(spec));
-             for ext in &archive_exts {
+            for ext in archive_exts {
                 candidates.push(base.join(format!("{}{}", spec, ext)));
             }
         }
         // Also check project root for archives
-         for ext in &archive_exts {
+        for ext in archive_exts {
             candidates.push(Path::new(&format!("{}{}", spec, ext)).to_path_buf());
         }
 
         for candidate in candidates {
             if candidate.exists() {
-                 return init_impl(
+                return init_impl(
                     path,
                     id,
                     name.clone(),

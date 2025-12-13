@@ -34,5 +34,21 @@ if [ "${KAM_DEBUG:-}" = "1" ]; then
     fi
     export PS1="[KAM_DEBUG:${KAM_MODULE_ID}] $PS1"
 fi
+# KAM_INTERACTIVE EXAMPLE
+# #!/bin/bash
+
+# . "$KAM_HOOKS_ROOT/lib/utils.sh"
+
+# if [ "$KAM_INTERACTIVE" = "1" ]; then
+#     log_info "Interactive mode enabled"
+#     prompt password "type password: (TEST)" "PASSWORD" --hide
+#     log_info "Password entered : $password"
+#     choice VAR "Prompt message" DEFAULT CHOICE1 CHOICE2 CHOICE3
+#     log_info "VAR value: $VAR"
+
+# elif [ "$KAM_INTERACTIVE" = "false" ]; then
+#     log_info "kam build -i to enable interactive mode"
+# fi
+
 
 # Add your pre-build logic here (e.g., downloading assets, checking environment)

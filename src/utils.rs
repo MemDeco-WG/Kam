@@ -1,11 +1,117 @@
 use super::errors::KamError;
 use colored::{Color, Colorize};
+use regex::Regex;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use terminal_size::{Width, terminal_size};
 
 pub struct Utils;
+
+/// Default project template directories used across the repository.
+pub const PROJECT_TEMPLATE_DIRS: &[&str] = &["tmpl", "templates"];
+
+/// Default archive extensions supported for template/zip/tar detection.
+pub const DEFAULT_ARCHIVE_EXTS: &[&str] = &[".tar.gz", ".tgz", ".zip", ".tar"];
+
+/// Return default directory names derived from the build section defaults.
+/// This normalizes the default exclude patterns that may contain trailing `/`
+/// or nested paths and produces top-level directory names for checks like skip-lists.
+pub fn default_exclude_dir_names() -> Vec<String> {
+    // BuildSection::default() is the canonical place the default exclude patterns are specified.
+    // We iterate them, normalize and extract the top-level path components so they can be used
+    // to quickly check a directory name without needing full glob matching here.
+    let exclude_list = crate::types::kam_toml::sections::build::BuildSection::default()
+        .exclude
+        .unwrap_or_default();
+
+    let mut names: Vec<String> = Vec::new();
+    for pattern in exclude_list.into_iter() {
+        let s_trim = pattern.trim_end_matches('/');
+        if s_trim.is_empty() {
+            continue;
+        }
+        let first = s_trim.split('/').next().unwrap().to_string();
+        if !names.contains(&first) {
+            names.push(first);
+        }
+    }
+
+    // Add common project directories which are often skipped during checks/packaging,
+    // and are not always present in the build section defaults (e.g., `templates` / `tmpl`).
+    for common in ["dist", "templates", "tmpl"].iter() {
+        if !names.iter().any(|n| n == common) {
+            names.push(common.to_string());
+        }
+    }
+
+    names
+}
+
+/// Public helper to test include/exclude string patterns.
+///
+/// This function accepts the same pattern syntax previously used in template.rs:
+/// - patterns ending with '/' are treated as directory prefixes (match only on exact directory or under it)
+/// - glob-style patterns containing '*' or '?' are converted into a regex and matched against the rel or filename
+/// - suffix patterns like '*.ext' are detected and matched against file name suffix
+pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -> bool {
+    // Normalize pattern and rel_path for comparison
+    let patt = pattern.trim();
+    let rel = rel_path.trim();
+
+    // Directory prefix e.g., "foo/" or "foo/bar/"
+    if patt.ends_with('/') {
+        let prefix = patt.trim_end_matches('/');
+        // Normalize leading "./" in rel when checking so we can match both "a/b" and "./a/b"
+        let rel_norm = if rel.starts_with("./") {
+            &rel[2..]
+        } else {
+            rel
+        };
+        // Match only whole directory names:
+        // - "foo/" matches "foo" or "foo/bar"
+        // - it MUST NOT match "foobar" or ".github" when prefix == ".git"
+        if rel_norm == prefix || rel_norm.starts_with(&format!("{}/", prefix)) {
+            return true;
+        }
+    }
+
+    // Simple suffix wildcard '/*.ext' or '*.ext'
+    if patt.starts_with("*.") {
+        if let Some(fname) = file_name {
+            return fname.ends_with(&patt[1..]);
+        }
+    }
+
+    // If pattern contains wildcard characters, convert to regex
+    if patt.contains('*') || patt.contains('?') {
+        // Convert glob to a simple regex:
+        let mut regex_str = regex::escape(patt);
+        regex_str = regex_str.replace("\\*", ".*").replace("\\?", ".");
+        let final_regex = format!("^{}$", regex_str);
+        if let Ok(re) = Regex::new(&final_regex) {
+            if re.is_match(rel) {
+                return true;
+            }
+            if let Some(fname) = file_name {
+                if re.is_match(fname) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Exact match against rel path or file name
+    if rel == patt {
+        return true;
+    }
+    if let Some(fname) = file_name {
+        if fname == patt {
+            return true;
+        }
+    }
+    false
+}
 
 /// File system and printing operations used by commands.
 ///

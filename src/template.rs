@@ -1,6 +1,6 @@
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
-use regex::Regex;
+
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -118,7 +118,7 @@ impl TemplateCacheManager {
 
         // 3. Project-local templates (e.g., tmpl/ and templates/ directories in the project)
         //    Support both directory-based templates and archive files such as .tar.gz, .tgz, .zip, .tar
-        let project_local_dirs = vec!["tmpl", "templates"];
+        let project_local_dirs = crate::utils::PROJECT_TEMPLATE_DIRS;
         for dir in project_local_dirs {
             let dir_path = Path::new(dir);
             if dir_path.exists() && dir_path.is_dir() {
@@ -547,61 +547,6 @@ impl TemplateCopier {
     }
 }
 
-fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -> bool {
-    // Normalize pattern and rel_path for comparison
-    let patt = pattern.trim();
-    let rel = rel_path.trim();
-
-    // Directory prefix e.g., "foo/" or "foo/bar/"
-    if patt.ends_with('/') {
-        let prefix = patt.trim_end_matches('/');
-        if rel.starts_with(prefix) {
-            return true;
-        }
-        // Also check with a leading "./"
-        if rel.starts_with(&format!("./{}", prefix)) {
-            return true;
-        }
-    }
-
-    // Simple suffix wildcard '/*.ext' or '*.ext'
-    if patt.starts_with("*.") {
-        if let Some(fname) = file_name {
-            return fname.ends_with(&patt[1..]);
-        }
-    }
-
-    // If pattern contains wildcard characters, convert to regex
-    if patt.contains('*') || patt.contains('?') {
-        // Convert glob to a simple regex:
-        let mut regex_str = regex::escape(patt);
-        regex_str = regex_str.replace("\\*", ".*").replace("\\?", ".");
-        let final_regex = format!("^{}$", regex_str);
-        if let Ok(re) = Regex::new(&final_regex) {
-            if re.is_match(rel) {
-                return true;
-            }
-            if let Some(fname) = file_name {
-                if re.is_match(fname) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // Exact match against rel path or file name
-    if rel == patt {
-        return true;
-    }
-    if let Some(fname) = file_name {
-        if fname == patt {
-            return true;
-        }
-    }
-
-    false
-}
-
 fn should_skip(
     rel_path: &str,
     file_name: Option<&str>,
@@ -611,7 +556,7 @@ fn should_skip(
     // If includes exist and any of them matches, do NOT skip (force include).
     if let Some(includes_vec) = includes {
         for inc in includes_vec {
-            if pattern_matches(inc, rel_path, file_name) {
+            if crate::utils::pattern_matches(inc, rel_path, file_name) {
                 return false;
             }
         }
@@ -620,7 +565,7 @@ fn should_skip(
     // If excludes exist and any matches, we skip unless included above.
     if let Some(excludes_vec) = excludes {
         for exc in excludes_vec {
-            if pattern_matches(exc, rel_path, file_name) {
+            if crate::utils::pattern_matches(exc, rel_path, file_name) {
                 return true;
             }
         }
@@ -966,6 +911,25 @@ cache_dir = "~/my_config_cache_dir"
                 .join("important.txt")
                 .exists()
         );
+    }
+
+    #[test]
+    fn test_pattern_matches_dotgit_no_dotgithub() {
+        // .git/ should match ".git" and its subpaths, but should NOT match ".github" or ".github/*"
+        assert!(crate::utils::pattern_matches(".git/", ".git", None));
+        assert!(crate::utils::pattern_matches(".git/", ".git/hooks", None));
+        assert!(crate::utils::pattern_matches(".git/", "./.git/hooks", None));
+        assert!(!crate::utils::pattern_matches(".git/", ".github", None));
+        assert!(!crate::utils::pattern_matches(
+            ".git/",
+            ".github/workflows",
+            None
+        ));
+        assert!(!crate::utils::pattern_matches(
+            ".git/",
+            "./.github/workflows",
+            None
+        ));
     }
 }
 

@@ -22,14 +22,12 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
 
     let mut results: Vec<FileResult> = Vec::new();
 
-    let skip_dirs = [
-        "target",
-        ".git",
-        "dist",
-        "node_modules",
-        "templates",
-        "tmpl",
-    ];
+    let mut skip_dirs = crate::utils::default_exclude_dir_names();
+    for d in ["dist", "templates", "tmpl"].iter() {
+        if !skip_dirs.iter().any(|s| s == d) {
+            skip_dirs.push(d.to_string());
+        }
+    }
     // First pass: count total files matching supported extensions
     let mut total_files: usize = 0;
     for entry in walkdir::WalkDir::new(project_path)
@@ -40,7 +38,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             }
             if e.file_type().is_dir() {
                 let name = e.file_name().to_string_lossy();
-                return !skip_dirs.contains(&name.as_ref());
+                return !skip_dirs.iter().any(|s| s == name.as_ref());
             }
             true
         })
@@ -78,7 +76,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             }
             if e.file_type().is_dir() {
                 let name = e.file_name().to_string_lossy();
-                return !skip_dirs.contains(&name.as_ref());
+                return !skip_dirs.iter().any(|s| s == name.as_ref());
             }
             true
         })
