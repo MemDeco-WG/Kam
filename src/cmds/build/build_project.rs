@@ -95,7 +95,7 @@ pub fn build_project(
     let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
 
     if !args.quiet {
-        Utils::section(&trf!("Building module: {} v{}", module_id, version));
+        Utils::section(&trf!("build.building_module_version", module_id, version));
 
         // Use a beautiful table to display build information
         let mut info_table = Table::new();
@@ -299,7 +299,7 @@ pub fn create_kam_module_zip(
 
     if !src_dir.exists() {
         if !args.quiet {
-            Utils::warn(&trf!("Source directory not found: {}", src_dir.display()));
+            Utils::warn(&trf!("packaging.source_directory_not_found", src_dir.display()));
         }
         // We allow building even if src dir is missing, but it might be empty
     }
