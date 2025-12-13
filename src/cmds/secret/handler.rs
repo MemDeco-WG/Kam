@@ -48,10 +48,10 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             let idx = load_index()?;
             if idx.entries.is_empty() {
                 use crate::utils::Utils;
-                Utils::info(&trf!("No secrets stored."));
+                Utils::info(&trf!("secret.no_secrets_stored"));
             } else {
                 use crate::utils::Utils;
-                Utils::section(crate::i18n::tr_key("Stored Secrets"));
+                Utils::section(crate::i18n::tr_key("secret.stored_secrets"));
                 let mut names: Vec<_> = idx.entries.keys().cloned().collect();
                 names.sort();
                 for n in names {
@@ -172,7 +172,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             // Always store to local file (no keyring)
             super::file::store_secret(&name, &blob, true, force_file, pub_key_pem, pub_key_signature)?;
             use crate::utils::Utils;
-            Utils::success(&trf!("Secret '{}' saved", name));
+            Utils::success(&trf!("secret.saved", name));
         }
         SecretCommands::Get {
             name,
@@ -204,7 +204,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                     .map_err(KamError::Io)?;
                 f.write_all(&plaintext).map_err(KamError::Io)?;
                 use crate::utils::Utils;
-                Utils::success(&trf!("Secret '{}' written to {}", name, path.display()));
+                Utils::success(&trf!("secret.written_to", name, path.display()));
             } else {
                 // Write to stdout
                 let s = String::from_utf8_lossy(&plaintext);
@@ -222,7 +222,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             idx.entries.remove(&name);
             save_index(&idx)?;
             use crate::utils::Utils;
-            Utils::success(&trf!("Secret '{}' removed", name));
+            Utils::success(&trf!("secret.removed", name));
         }
         SecretCommands::Export {
             name,
@@ -246,7 +246,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 }
             }
             use crate::utils::Utils;
-            Utils::success(&trf!("Secret '{}' exported to {}", name, path.display()));
+            Utils::success(&trf!("secret.exported", name, path.display()));
         }
         SecretCommands::Import { path, name } => {
             let data = fs::read(&path).map_err(KamError::Io)?;
@@ -286,7 +286,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 super::file::store_secret(&final_name, &blob, true, false, pub_key_pem, pub_key_signature)?;
             }
             use crate::utils::Utils;
-            Utils::success(&trf!("Secret '{}' imported", final_name));
+            Utils::success(&trf!("secret.imported", final_name));
         }
         SecretCommands::ExportPub { name, out } => {
 
@@ -295,7 +295,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             let pkey = match crate::cmds::secret::utils::get_or_refresh_public_key(&name, true) {
                 Ok(pk) => pk,
                 Err(e) => {
-                    return Err(KamError::CommandFailed(trf!("Failed to retrieve public key for secret '{}': {}", name, e)));
+                    return Err(KamError::CommandFailed(trf!("secret.failed_retrieve_public_key", name, e)));
                 }
             };
 
@@ -306,7 +306,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             if let Some(path) = out {
                 fs::write(&path, &pub_pem).map_err(KamError::Io)?;
                  use crate::utils::Utils;
-                 Utils::success(&trf!("Public key for secret '{}' exported to {}", name, path.display()));
+                 Utils::success(&trf!("secret.public_key_exported", name, path.display()));
             } else {
                 let s = String::from_utf8_lossy(&pub_pem);
                 print!("{}", s);
@@ -333,7 +333,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 let repo_name = parts[1];
 
                 use crate::utils::Utils;
-                Utils::executing(&trf!("Fetching certificate from GitHub issue {}...", issue_num));
+                Utils::executing(&trf!("secret.fetching_cert_from_github", issue_num));
                 super::github::fetch_cert_from_issue(owner, repo_name, issue_num)?
             } else {
                 return Err(KamError::CommandFailed(
@@ -344,7 +344,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             // Store the certificate chain
             super::cert::store_cert_chain(&name, &chain_pem)?;
             use crate::utils::Utils;
-            Utils::success(&trf!("Certificate chain '{}' imported successfully", name));
+            Utils::success(&trf!("secret.cert_chain_imported", name));
         }
         SecretCommands::Trust {
             add_root,
@@ -374,11 +374,11 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 let ca_pem = if ca_path_or_url.starts_with("http://") || ca_path_or_url.starts_with("https://") {
                     // Fetch from URL
                     use crate::utils::Utils;
-                    Utils::executing(&trf!("Fetching Root CA from {}...", ca_path_or_url));
+                    Utils::executing(&trf!("secret.fetching_root_ca", ca_path_or_url));
                     reqwest::blocking::get(&ca_path_or_url)
-                        .map_err(|e| KamError::CommandFailed(trf!("Failed to fetch CA: {}", e)))?
+                        .map_err(|e| KamError::CommandFailed(trf!("secret.failed_fetch_ca", e)))?
                         .text()
-                        .map_err(|e| KamError::CommandFailed(trf!("Failed to read CA: {}", e)))?
+                        .map_err(|e| KamError::CommandFailed(trf!("secret.failed_read_ca", e)))?
                 } else {
                     // Load from file
                     fs::read_to_string(&ca_path_or_url).map_err(KamError::Io)?
@@ -387,12 +387,12 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 // Add to trust store
                 super::cert::add_trusted_ca(&ca_pem, &ca_name)?;
                 use crate::utils::Utils;
-                Utils::success(&trf!("Root CA '{}' added to trust store", ca_name));
+                Utils::success(&trf!("secret.root_ca_added", ca_name));
             } else if let Some(ca_name) = remove {
                 // Remove CA
                 super::cert::remove_trusted_ca(&ca_name)?;
                 use crate::utils::Utils;
-                Utils::success(&trf!("Root CA '{}' removed from trust store", ca_name));
+                Utils::success(&trf!("secret.root_ca_removed", ca_name));
             } else {
                 return Err(KamError::CommandFailed(
                     "Must provide --list, --add-root, or --remove".to_string(),

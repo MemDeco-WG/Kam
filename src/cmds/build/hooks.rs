@@ -51,8 +51,7 @@ fn run_hooks(
 
     // Read .env file into a local map instead of mutating process environment.
     // This keeps builds thread-safe and ensures parallel builds don't interfere with each other.
-    let env_path = project_root.join(".env");
-    let mut parsed_env: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let env_path = project_root.join(".env");    let mut parsed_env: HashMap<String, String> = HashMap::new();
     if env_path.exists() {
         // 手动解析 .env 文件并放入 parsed_env（不会修改进程级环境）
         if let Ok(content) = fs::read_to_string(&env_path) {
@@ -120,9 +119,6 @@ fn run_hooks(
     //
     // 如果需要为hooks预加载env变量，写到项目根的`.env`文件
     // 或者在CI/自定义工作流中在调用`kam`之前显式export
-    //
-    // （之前解析`template-vars.env`的代码已故意移除）
-    // 虽然可能有点不方便，但至少行为更可预测
 
     let hooks_dir_name = kam_toml
         .kam

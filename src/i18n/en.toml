@@ -1,0 +1,142 @@
+# English translation file for Kam CLI
+# Keys are dotted to represent namespaces and nested tables.
+# Keep values as literal strings. Use {} as a placeholder for simple formatting.
+#
+# Example usage:
+#   crate::i18n::tr_key("workspace.summary.title")
+#   crate::i18n::tr_fmt("status.failed", &[&"reason"])
+
+# Workspace summary / table headers
+workspace.summary.title = "✿ Workspace Build Summary ✿"
+table.header.module = "Module"
+table.header.status = "Status"
+table.header.stat = "Statistic"
+table.header.value = "Value"
+common.file_fixed = "{} (fixed)"
+
+# Status strings
+status.success = "✓ Success"
+status.failed = "✗ Failed: {}"
+
+# Table stats
+table.stat.total = "Total"
+table.stat.succeeded = "Succeeded"
+table.stat.failed = "Failed"
+table.stat.total_duration = "Total Duration"
+
+# Build and packaging
+build.packaging_artifacts = "Packaging artifacts..."
+build.complete = "Build complete"
+build.building_module_version = "Building module: {} v{}"
+
+# Build / workspace messages
+build.invalid_glob_pattern = "Invalid glob pattern '{}': {}"
+build.workspace_member_not_found = "workspace member {} not found"
+build.skipping_no_kam_toml = "Skipping {}: no kam.toml found"
+build.building_workspace_member = "Building workspace member: {}"
+build.failed_to_build = "Failed to build {}: {}"
+build.skipping_failed_load_kam_toml = "Skipping {}: failed to load kam.toml: {}"
+build.failed_workspace_members = "{} workspace member(s) failed to build"
+packaging.source_directory_not_found = "Source directory not found: {}"
+
+# Hooks
+hooks.running_pre = "Running pre-build hooks"
+hooks.running_post = "Running post-build hooks"
+hooks.skipping_template_packaging = "Skipping build hooks for template packaging"
+
+# Packaging / module files
+packaging.files = "Packaging files..."
+packaging.generating_module_prop = "Generating module.prop"
+packaging.using_existing_module_prop_from_hook = "Using existing module.prop (from pre-build hook)"
+packaging.packaging = "Packaging"
+packaging.success_module_built = "✓ Successfully built module: {}"
+packaging.success_template_built = "✓ Successfully built template: {}"
+project.output_directory = "Output Directory"
+project.header = "Project"
+project.build_time = "Build Time"
+project.package_size = "Package Size"
+project.output_file = "Output File"
+
+# Cache / templates
+cache.no_templates = "No templates found in local cache."
+cache.local_cached_templates = "Local Cached Templates"
+cache.cleaned_successfully = "Cache cleaned successfully"
+cache.directory_empty_or_not_exists = "Cache directory is already empty or does not exist."
+
+# Secret command keys
+secret.stored_secrets = "Stored Secrets"
+secret.trusted_root_cas = "Trusted Root CAs"
+secret.no_trusted_root_cas = "No trusted Root CAs."
+secret.no_secrets_stored = "No secrets stored."
+secret.saved = "Secret '{}' saved"
+secret.written_to = "Secret '{}' written to {}"
+secret.removed = "Secret '{}' removed"
+secret.exported = "Secret '{}' exported to {}"
+secret.imported = "Secret '{}' imported"
+secret.public_key_exported = "Public key for secret '{}' exported to {}"
+secret.cert_chain_imported = "Certificate chain '{}' imported successfully"
+secret.encrypted = "(encrypted)"
+secret.plain = "(plain)"
+
+# Secret command keys (additional)
+secret.failed_retrieve_public_key = "Failed to retrieve public key for secret '{}': {}"
+secret.fetching_cert_from_github = "Fetching certificate from GitHub issue {}..."
+secret.failed_fetch_ca = "Failed to fetch CA: {}"
+secret.failed_read_ca = "Failed to read CA: {}"
+secret.root_ca_added = "Root CA '{}' added to trust store"
+secret.root_ca_removed = "Root CA '{}' removed from trust store"
+
+# Secret command keys
+secret.stored_secrets = "Stored Secrets"
+secret.trusted_root_cas = "Trusted Root CAs"
+secret.no_trusted_root_cas = "No trusted Root CAs."
+
+# Check command keys
+check.no_issues_found = "No issues found."
+check.some_issues_found = "Some issues found."
+check.errors.header = "Errors:"
+check.warnings.header = "Warnings:"
+
+# Validate command keys
+validate.prop.id_required = "[prop] id is required"
+validate.prop.id_invalid_characters = "[prop] id contains invalid characters (allowed: a-z, A-Z, 0-9, _, -, .)"
+validate.prop.name_required = "[prop] name is required"
+validate.prop.version_required = "[prop] version is required"
+validate.prop.version_code_should_be_positive = "[prop] versionCode must be a positive integer"
+validate.prop.description_required = "[prop] description is required"
+validate.prop.author_empty_recommended = "[prop] author is empty (recommended to fill)"
+validate.mmrl.repo.license_recommended = "[mmrl.repo] license is recommended"
+validate.mmrl.repo.license_file = "[mmrl.repo] license_file"
+validate.mmrl.repo.readme_file = "[mmrl.repo] readme_file"
+validate.mmrl.repo.changelog_file = "[mmrl.repo] changelog_file"
+validate.no_issues_kam_toml_valid = "No issues found. kam.toml is valid."
+validate.errors.header = "Errors:"
+validate.warnings.header = "Warnings:"
+validate.failed = "Validation failed. Please fix the errors above."
+validate.passed_with_warnings = "Validation passed with warnings."
+
+# Config command keys
+config.set_success = "Set {} = {} in {}"
+config.unset_success = "Unset {} in {}"
+config.builtin_keys = "Built-in configuration keys:"
+config.example = "Example:"
+config.note_custom_keys = "Note: You can also set custom keys. Use 'kam config list' to see all configured values."
+
+# About command keys
+about.author = "Author"
+init.interactive.title = "Interactive Kam Init"
+init.interactive.press_enter = "You may press Enter to accept a default value shown in brackets"
+init.interactive.completed_successfully = "Interactive initialization completed successfully."
+init.interactive.next_steps = "Next steps:"
+
+# About command keys
+about.author = "Author"
+about.email = "Email"
+about.developer = "Developer"
+about.description = "Description"
+about.repository = "Repository"
+about.info.command_informational = "This command is informational only; it doesn't modify files or the registry."
+about.info.use_other_commands = "Use other commands (e.g., `kam init`, `kam build`) to perform actions."
+about.thanks = "Thanks for using Kam"
+about.enjoy = "Enjoy your module tooling experience!"
+about.powered = "Powered by the Kam CLI — Happy building!"

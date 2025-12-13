@@ -63,7 +63,7 @@ fn expand_member_pattern(
             }
             Err(e) => {
                 // glob 模式无效，警告一下但继续
-                Utils::warn(&trf!("Invalid glob pattern '{}': {}", pattern, e));
+                Utils::warn(&trf!("build.invalid_glob_pattern", pattern, e));
             }
         }
     } else {
@@ -79,7 +79,7 @@ fn expand_member_pattern(
 fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -> BuildResult {
     let member_path = project_path.join(member);
     if !member_path.exists() {
-        Utils::warn(&trf!("workspace member {} not found", member));
+        Utils::warn(&trf!("build.workspace_member_not_found", member));
         return BuildResult {
             member: member.to_string(),
             success: false,
@@ -89,7 +89,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
     // 检查有没有kam.toml，没有就跳过
     if !member_path.join("kam.toml").exists() {
         if !args.quiet {
-            Utils::info(&trf!("Skipping {}: no kam.toml found", member));
+            Utils::info(&trf!("build.skipping_no_kam_toml", member));
         }
         return BuildResult {
             member: member.to_string(),
@@ -98,7 +98,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
         };
     }
     if !args.quiet {
-        Utils::banner(&trf!("Building workspace member: {}", member));
+        Utils::banner(&trf!("build.building_workspace_member", member));
     }
 
     // 注：不要切换全局 CWD（在并发环境下会导致竞态）。
@@ -111,7 +111,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
                 error: None,
             },
             Err(e) => {
-                Utils::error(&trf!("Failed to build {}: {}", member, e));
+                Utils::error(&trf!("build.failed_to_build", member, e));
                 BuildResult {
                     member: member.to_string(),
                     success: false,
@@ -120,7 +120,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
             }
         },
         Err(e) => {
-            Utils::warn(&trf!("Skipping {}: failed to load kam.toml: {}", member, e));
+            Utils::warn(&trf!("build.skipping_failed_load_kam_toml", member, e));
             BuildResult {
                 member: member.to_string(),
                 success: false,
@@ -305,7 +305,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     // 打印总结，让用户知道哪些成功了哪些失败了
     if !args.quiet {
         println!();
-        Utils::section(crate::i18n::tr_key("✿ Workspace Build Summary ✿"));
+        Utils::section(crate::i18n::tr_key("workspace.summary.title"));
     }
 
     // 统计成功和失败的数量
@@ -314,13 +314,13 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
 
     if !args.quiet {
         let mut summary_table = Table::new();
-        summary_table.set_header(vec![crate::i18n::tr_key("模块"), crate::i18n::tr_key("状态")]);
+        summary_table.set_header(vec![crate::i18n::tr_key("table.header.module"), crate::i18n::tr_key("table.header.status")]);
 
         for result in &results {
             if result.success {
                 summary_table.add_row(vec![
                     Cell::new(&result.member).fg(comfy_table::Color::White),
-                    Cell::new(crate::i18n::tr_key("✓ 成功")).fg(comfy_table::Color::Green),
+                    Cell::new(crate::i18n::tr_key("status.success")).fg(comfy_table::Color::Green),
                 ]);
             } else {
                 let default_error = "unknown error".to_string();
@@ -330,7 +330,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
                     .unwrap_or(&default_error);
                 summary_table.add_row(vec![
                     Cell::new(&result.member).fg(comfy_table::Color::White),
-                    Cell::new(trf!("✗ 失败: {}", error_msg)).fg(comfy_table::Color::Red),
+                    Cell::new(trf!("status.failed", error_msg)).fg(comfy_table::Color::Red),
                 ]);
             }
         }
@@ -342,21 +342,21 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
         println!();
         let mut stats_table = Table::new();
         stats_table
-            .set_header(vec![crate::i18n::tr_key("统计项"), crate::i18n::tr_key("值")])
+            .set_header(vec![crate::i18n::tr_key("table.header.stat"), crate::i18n::tr_key("table.header.value")])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("总计")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("table.stat.total")).fg(comfy_table::Color::Cyan),
                 Cell::new(results.len().to_string()).fg(comfy_table::Color::White),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("成功")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("table.stat.succeeded")).fg(comfy_table::Color::Cyan),
                 Cell::new(success_count.to_string()).fg(comfy_table::Color::Green),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("失败")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("table.stat.failed")).fg(comfy_table::Color::Cyan),
                 Cell::new(failed_count.to_string()).fg(comfy_table::Color::Red),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("总耗时")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("table.stat.total_duration")).fg(comfy_table::Color::Cyan),
                 Cell::new(&format!("{:.2}s", total_duration.as_secs_f64())).fg(comfy_table::Color::White),
             ]);
 
@@ -366,9 +366,189 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     // 如果有失败的，就返回错误
     // 虽然可以继续构建其他的，但通常用户希望所有都成功
     if failed_count > 0 {
-        return Err(KamError::CommandFailed(trf!("{} workspace member(s) failed to build", failed_count)));
+        return Err(KamError::CommandFailed(trf!("build.failed_workspace_members", failed_count)));
     }
 
     Ok(())
     // 全部成功！虽然可能花了点时间，但至少都构建完了
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use tempfile::tempdir;
+    use std::fs;
+    use crate::types::kam_toml::KamToml;
+    use crate::types::kam_toml::sections::WorkspaceSection;
+    use super::super::args::BuildArgs;
+
+    #[test]
+    #[serial]
+    fn test_workspace_concurrent_hooks_isolated() {
+        // Prepare a temporary workspace root
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+
+        // Create a root kam.toml with workspace members [a] and [b] (concurrent group)
+        let mut root_kt = KamToml::new_with_current_timestamp(
+            "workspace-root".to_string(),
+            "workspace".to_string(),
+            "0.1.0".to_string(),
+            Some("Tester".to_string()),
+            "description".to_string(),
+            None,
+            None,
+        );
+        root_kt.kam.workspace = Some(WorkspaceSection {
+            members: Some(vec!["[a]".to_string(), "[b]".to_string()]),
+            exclude: None,
+        });
+        root_kt.write_to_dir(&root).unwrap();
+
+        // Create two modules (a, b) with pre-build hooks which will write per-module files
+        let modules = vec!["a", "b"];
+        for m in &modules {
+            let module_dir = root.join(m);
+            fs::create_dir_all(module_dir.join("hooks").join("pre-build")).unwrap();
+
+            // Create module kam.toml
+            let kt = KamToml::new_with_current_timestamp(
+                m.to_string(),
+                format!("Module {}", m),
+                "0.1.0".to_string(),
+                Some("Tester".to_string()),
+                "module description".to_string(),
+                None,
+                None,
+            );
+            kt.write_to_dir(&module_dir).unwrap();
+            // ensure module src path exists so KAM_MODULE_ROOT is writable
+            fs::create_dir_all(module_dir.join("src").join(m)).unwrap();
+
+            // Hook script content: write KAM_MODULE_ID and pwd to module root; sleep a bit to encourage overlap
+            let script = r#"#!/usr/bin/env sh
+echo "$KAM_MODULE_ID" > "$KAM_MODULE_ROOT/hook_env_id.txt"
+pwd > "$KAM_MODULE_ROOT/hook_pwd.txt"
+echo "ok" > "$KAM_MODULE_ROOT/hook_marker.txt"
+sleep 1
+"#;
+            let hook_path = module_dir.join("hooks").join("pre-build").join("01_concurrent_test.sh");
+            fs::write(&hook_path, script).unwrap();
+
+            // Make sure the hook is executable on unix systems (tests run on linux CI)
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&hook_path).unwrap().permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&hook_path, perms).unwrap();
+            }
+        }
+
+        // Build the workspace concurrently (use jobs=2)
+        let args = BuildArgs {
+            path: root.to_string_lossy().to_string(),
+            all: true,
+            output: None,
+            bump: false,
+            release: false,
+            sign: false,
+            interactive: false,
+            pre_release: false,
+            quiet: true,
+            jobs: Some(2),
+        };
+
+        run_build_all(root.as_path(), &args).expect("run_build_all failed");
+
+        // Check that each module had its hook executed and wrote expected files in its own module root
+        for m in &modules {
+            let env_id = fs::read_to_string(root.join(m).join("src").join(m).join("hook_env_id.txt")).unwrap();
+            assert_eq!(env_id.trim(), *m, "expected KAM_MODULE_ID to be '{}'", m);
+
+            let pwd = fs::read_to_string(root.join(m).join("src").join(m).join("hook_pwd.txt")).unwrap();
+            let last_component = std::path::Path::new(pwd.trim()).file_name().unwrap().to_str().unwrap();
+            assert_eq!(last_component, *m, "expected pwd to end with module name '{}'", m);
+
+            assert!(root.join(m).join("src").join(m).join("hook_marker.txt").exists(), "hook marker not found for module {}", m);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_env_precedence_over_kam_toml_in_hooks() {
+        // Validate that a module-local `.env` entry takes precedence over kam.toml values
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+
+        // Root workspace with a single bracketed member `a`
+        let mut root_kt = KamToml::new_with_current_timestamp(
+            "workspace-root".to_string(),
+            "workspace".to_string(),
+            "0.1.0".to_string(),
+            Some("Tester".to_string()),
+            "description".to_string(),
+            None,
+            None,
+        );
+        root_kt.kam.workspace = Some(WorkspaceSection {
+            members: Some(vec!["[a]".to_string()]),
+            exclude: None,
+        });
+        root_kt.write_to_dir(&root).unwrap();
+
+        // Create module `a` and its `src` dir (so KAM_MODULE_ROOT is writable)
+        fs::create_dir_all(root.join("a").join("hooks").join("pre-build")).unwrap();
+        let kt = KamToml::new_with_current_timestamp(
+            "a".to_string(),
+            "a".to_string(),
+            "0.1.0".to_string(),
+            None,
+            "module a".to_string(),
+            None,
+            None,
+        );
+        kt.write_to_dir(root.join("a")).unwrap();
+        fs::create_dir_all(root.join("a").join("src").join("a")).unwrap();
+
+        // Create project-local `.env` that overrides KAM_MODULE_ID
+        fs::write(root.join("a").join(".env"), "KAM_MODULE_ID=override_module_a\n").unwrap();
+
+        // Hook script writes KAM_MODULE_ID into a file under the module's src dir
+        let script = r#"#!/usr/bin/env sh
+echo "$KAM_MODULE_ID" > "$KAM_MODULE_ROOT/hook_env_override.txt"
+"#;
+        let hook_path = root.join("a").join("hooks").join("pre-build").join("01_env_override.sh");
+        fs::write(&hook_path, script).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&hook_path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&hook_path, perms).unwrap();
+        }
+
+        // Run workspace build ( 1 job is enough here )
+        let args = BuildArgs {
+            path: root.to_string_lossy().to_string(),
+            all: true,
+            output: None,
+            bump: false,
+            release: false,
+            sign: false,
+            interactive: false,
+            pre_release: false,
+            quiet: true,
+            jobs: Some(1),
+        };
+
+        run_build_all(root.as_path(), &args).expect("run_build_all failed");
+
+        // The hook should have written the `.env` override value into the module's src path,
+        // showing that parsed `.env` took precedence over kam.toml (KAM_MODULE_ID)
+        let env_override = fs::read_to_string(root.join("a").join("src").join("a").join("hook_env_override.txt")).unwrap();
+        assert_eq!(env_override.trim(), "override_module_a");
+    }
 }

@@ -25,15 +25,15 @@ fn should_skip_file(
     include_patterns: &[String],
 ) -> bool {
     // Check if file matches any exclude pattern
-    let is_excluded = exclude_patterns.iter().any(|pat| {
-        crate::utils::pattern_matches(pat, rel_path, file_name)
-    });
+    let is_excluded = exclude_patterns
+        .iter()
+        .any(|pat| crate::utils::pattern_matches(pat, rel_path, file_name));
 
     if is_excluded {
         // If excluded, check if it's also included (include overrides exclude)
-        let is_included = include_patterns.iter().any(|pat| {
-            crate::utils::pattern_matches(pat, rel_path, file_name)
-        });
+        let is_included = include_patterns
+            .iter()
+            .any(|pat| crate::utils::pattern_matches(pat, rel_path, file_name));
         // Skip if excluded and not included
         !is_included
     } else {
@@ -103,15 +103,20 @@ pub fn build_project(
             .load_preset(comfy_table::presets::UTF8_FULL)
             .set_content_arrangement(comfy_table::ContentArrangement::Dynamic)
             .set_header(vec![
-                Cell::new(crate::i18n::tr_key("配置项")).fg(comfy_table::Color::Cyan).add_attribute(comfy_table::Attribute::Bold),
-                Cell::new(crate::i18n::tr_key("值")).fg(comfy_table::Color::Cyan).add_attribute(comfy_table::Attribute::Bold),
+                Cell::new(crate::i18n::tr_key("table.header.stat"))
+                    .fg(comfy_table::Color::Cyan)
+                    .add_attribute(comfy_table::Attribute::Bold),
+                Cell::new(crate::i18n::tr_key("table.header.value"))
+                    .fg(comfy_table::Color::Cyan)
+                    .add_attribute(comfy_table::Attribute::Bold),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("模块")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("table.header.module")).fg(comfy_table::Color::Cyan),
                 Cell::new(&format!("{} v{}", module_id, version)).fg(comfy_table::Color::Green),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("输出目录")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("project.output_directory"))
+                    .fg(comfy_table::Color::Cyan),
                 Cell::new(output_dir.display().to_string()).fg(comfy_table::Color::White),
             ]);
 
@@ -127,13 +132,13 @@ pub fn build_project(
     let build_pb = if !args.quiet && std::io::stdout().is_terminal() {
         let pb = ProgressBar::new(total_steps as u64);
         let style = ProgressStyle::with_template(
-            "{spinner:.green.bold} {msg:.bold} [{bar:40.cyan/blue}] {pos}/{len} {elapsed_precise}"
+            "{spinner:.green.bold} {msg:.bold} [{bar:40.cyan/blue}] {pos}/{len} {elapsed_precise}",
         )
         .unwrap_or_else(|_| ProgressStyle::default_spinner())
         .progress_chars("█▉▊▋▌▍▎▏  ")
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
         pb.set_style(style);
-        pb.set_message(trf!("Building {} v{}", module_id, version));
+        pb.set_message(trf!("build.building_module_version", module_id, version));
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
         Some(pb)
     } else {
@@ -143,7 +148,7 @@ pub fn build_project(
     // Run pre-build hooks only for non-template modules
     if !is_template_build {
         if let Some(pb) = &build_pb {
-            pb.set_message(crate::i18n::tr_key("Running pre-build hooks"));
+            pb.set_message(crate::i18n::tr_key("hooks.running_pre"));
         }
         run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
         if let Some(pb) = &build_pb {
@@ -151,17 +156,17 @@ pub fn build_project(
         }
     } else {
         if !args.quiet {
-            Utils::info(crate::i18n::tr_key("Skipping build hooks for template packaging"));
+            Utils::info(crate::i18n::tr_key("hooks.skipping_template_packaging"));
         }
     }
 
     // For non-interactive environments, print a section separator for packaging; if we have a top-level build progress bar show its message
     let show_top_build_progress = build_pb.is_some();
     if !show_top_build_progress && !args.quiet {
-        Utils::section(crate::i18n::tr_key("Packaging artifacts..."));
+        Utils::section(crate::i18n::tr_key("build.packaging_artifacts"));
     }
     if let Some(pb) = &build_pb {
-        pb.set_message(crate::i18n::tr_key("Packaging artifacts..."));
+        pb.set_message(crate::i18n::tr_key("build.packaging_artifacts"));
     }
 
     // Remove the redundant spinner - we already have the main progress bar
@@ -201,19 +206,30 @@ pub fn build_project(
                 .load_preset(comfy_table::presets::UTF8_FULL)
                 .set_content_arrangement(comfy_table::ContentArrangement::Dynamic)
                 .set_header(vec![
-                    Cell::new(crate::i18n::tr_key("项目")).fg(comfy_table::Color::Cyan).add_attribute(comfy_table::Attribute::Bold),
-                    Cell::new(crate::i18n::tr_key("值")).fg(comfy_table::Color::Cyan).add_attribute(comfy_table::Attribute::Bold),
+                    Cell::new(crate::i18n::tr_key("project.header"))
+                        .fg(comfy_table::Color::Cyan)
+                        .add_attribute(comfy_table::Attribute::Bold),
+                    Cell::new(crate::i18n::tr_key("table.header.value"))
+                        .fg(comfy_table::Color::Cyan)
+                        .add_attribute(comfy_table::Attribute::Bold),
                 ])
                 .add_row(vec![
-                    Cell::new(crate::i18n::tr_key("构建时间")).fg(comfy_table::Color::Cyan),
-                    Cell::new(&format!("{:.2}s", build_duration.as_secs_f64())).fg(comfy_table::Color::Green).add_attribute(comfy_table::Attribute::Bold),
+                    Cell::new(crate::i18n::tr_key("project.build_time"))
+                        .fg(comfy_table::Color::Cyan),
+                    Cell::new(&format!("{:.2}s", build_duration.as_secs_f64()))
+                        .fg(comfy_table::Color::Green)
+                        .add_attribute(comfy_table::Attribute::Bold),
                 ])
                 .add_row(vec![
-                    Cell::new(crate::i18n::tr_key("包大小")).fg(comfy_table::Color::Cyan),
-                    Cell::new(&size_str).fg(comfy_table::Color::Green).add_attribute(comfy_table::Attribute::Bold),
+                    Cell::new(crate::i18n::tr_key("project.package_size"))
+                        .fg(comfy_table::Color::Cyan),
+                    Cell::new(&size_str)
+                        .fg(comfy_table::Color::Green)
+                        .add_attribute(comfy_table::Attribute::Bold),
                 ])
                 .add_row(vec![
-                    Cell::new(crate::i18n::tr_key("输出文件")).fg(comfy_table::Color::Cyan),
+                    Cell::new(crate::i18n::tr_key("project.output_file"))
+                        .fg(comfy_table::Color::Cyan),
                     Cell::new(output_file.display().to_string()).fg(comfy_table::Color::White),
                 ]);
             println!("{}", table);
@@ -229,12 +245,12 @@ pub fn build_project(
     // Run post-build hooks only for non-template modules
     if !is_template_build {
         if let Some(pb) = &build_pb {
-            pb.set_message(crate::i18n::tr_key("Running post-build hooks"));
+            pb.set_message(crate::i18n::tr_key("hooks.running_post"));
         }
         run_post_build_hooks(project_path, &kam_toml, &output_dir, args)?;
         if let Some(pb) = &build_pb {
             pb.inc(1);
-            pb.finish_with_message(crate::i18n::tr_key("Build complete"));
+            pb.finish_with_message(crate::i18n::tr_key("build.complete"));
         }
     }
 
@@ -310,7 +326,7 @@ pub fn create_kam_module_zip(
     if !module_prop_exists {
         // Generate module.prop if it doesn't exist
         if !args.quiet {
-            Utils::info(crate::i18n::tr_key("Generating module.prop"));
+            Utils::info(crate::i18n::tr_key("packaging.generating_module_prop"));
         }
         let mut prop_content = String::new();
         prop_content.push_str(&format!("id={}\n", kam_toml.prop.id));
@@ -332,7 +348,9 @@ pub fn create_kam_module_zip(
         zip.start_file("module.prop", options)?;
         zip.write_all(prop_content.as_bytes())?;
     } else if !args.quiet {
-        Utils::info(crate::i18n::tr_key("Using existing module.prop (from pre-build hook)"));
+        Utils::info(crate::i18n::tr_key(
+            "packaging.using_existing_module_prop_from_hook",
+        ));
     }
 
     // Add source files (module dir: src/<module_id>) flattened to root
@@ -377,7 +395,12 @@ pub fn create_kam_module_zip(
                     };
                     let rel_str = rel_path.to_string_lossy();
                     let file_name_opt = path.file_name().and_then(|s| s.to_str());
-                    !should_skip_file(&rel_str, file_name_opt, &exclude_patterns, &include_patterns)
+                    !should_skip_file(
+                        &rel_str,
+                        file_name_opt,
+                        &exclude_patterns,
+                        &include_patterns,
+                    )
                 })
                 .count()
         };
@@ -403,15 +426,13 @@ pub fn create_kam_module_zip(
                 .progress_chars("█▉▊▋▌▍▎▏  ")
                 .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
             } else {
-                ProgressStyle::with_template(
-                    "  {spinner:.cyan.bold} {msg:.dim}"
-                )
-                .unwrap_or_else(|_| ProgressStyle::default_spinner())
-                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+                ProgressStyle::with_template("  {spinner:.cyan.bold} {msg:.dim}")
+                    .unwrap_or_else(|_| ProgressStyle::default_spinner())
+                    .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
             };
             pb.set_style(style);
             pb.enable_steady_tick(std::time::Duration::from_millis(100));
-            pb.set_message(crate::i18n::tr_key("Packaging files..."));
+            pb.set_message(crate::i18n::tr_key("packaging.files"));
             Some(pb)
         };
         // Progress bar created only if not quiet
@@ -434,7 +455,12 @@ pub fn create_kam_module_zip(
             // Check patterns using central matcher
             let file_name_opt = path.file_name().and_then(|s| s.to_str());
 
-            if should_skip_file(&rel_str, file_name_opt, &exclude_patterns, &include_patterns) {
+            if should_skip_file(
+                &rel_str,
+                file_name_opt,
+                &exclude_patterns,
+                &include_patterns,
+            ) {
                 continue;
             }
 
@@ -448,7 +474,11 @@ pub fn create_kam_module_zip(
                     rel_str.to_string()
                 };
                 if let Some(p) = &pb {
-                    p.set_message(format!("{} {}", crate::i18n::tr_key("Packaging"), display_name));
+                    p.set_message(format!(
+                        "{} {}",
+                        crate::i18n::tr_key("packaging.packaging"),
+                        display_name
+                    ));
                 }
 
                 zip.start_file(rel_str.to_string(), options)?;
@@ -521,7 +551,10 @@ pub fn create_kam_module_zip(
 
     if !args.quiet {
         println!();
-        Utils::success(&trf!("✓ 成功构建模块: {}", module_output_file.display()));
+        Utils::success(&trf!(
+            "packaging.success_module_built",
+            module_output_file.display()
+        ));
     }
     Ok(module_output_file)
 }
@@ -584,7 +617,12 @@ pub fn create_template_archive(
                 }
                 let rel_str = rel_path.to_string_lossy();
                 let file_name_opt = e.file_name().to_str();
-                !should_skip_file(&rel_str, file_name_opt, &exclude_patterns, &include_patterns)
+                !should_skip_file(
+                    &rel_str,
+                    file_name_opt,
+                    &exclude_patterns,
+                    &include_patterns,
+                )
             })
             .count()
     };
@@ -608,21 +646,19 @@ pub fn create_template_archive(
         };
         let style = if file_count > 0 {
             ProgressStyle::with_template(
-                "  {spinner:.cyan.bold} {msg:.dim} [{bar:40.cyan/blue}] {pos}/{len} ({percent}%)"
+                "  {spinner:.cyan.bold} {msg:.dim} [{bar:40.cyan/blue}] {pos}/{len} ({percent}%)",
             )
             .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("█▉▊▋▌▍▎▏  ")
             .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
         } else {
-            ProgressStyle::with_template(
-                "  {spinner:.cyan.bold} {msg:.dim}"
-            )
-            .unwrap_or_else(|_| ProgressStyle::default_spinner())
-            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+            ProgressStyle::with_template("  {spinner:.cyan.bold} {msg:.dim}")
+                .unwrap_or_else(|_| ProgressStyle::default_spinner())
+                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
         };
         pb.set_style(style);
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
-        pb.set_message(crate::i18n::tr_key("Packaging files..."));
+        pb.set_message(crate::i18n::tr_key("packaging.files"));
         Some(pb)
     };
 
@@ -648,7 +684,12 @@ pub fn create_template_archive(
         // Check custom exclude/include using the central matcher
         let rel_str = rel_path.to_string_lossy();
         let file_name_opt = entry.file_name().to_str();
-        if should_skip_file(&rel_str, file_name_opt, &exclude_patterns, &include_patterns) {
+        if should_skip_file(
+            &rel_str,
+            file_name_opt,
+            &exclude_patterns,
+            &include_patterns,
+        ) {
             continue;
         }
 
@@ -662,7 +703,11 @@ pub fn create_template_archive(
                 rel_str.to_string()
             };
             if let Some(p) = &pb {
-                p.set_message(format!("{} {}", crate::i18n::tr_key("Packaging"), display_name));
+                p.set_message(format!(
+                    "{} {}",
+                    crate::i18n::tr_key("packaging.packaging"),
+                    display_name
+                ));
             }
 
             tar.append_path_with_name(path, rel_path)?;
@@ -685,7 +730,10 @@ pub fn create_template_archive(
 
     if !args.quiet {
         println!();
-        Utils::success(&trf!("✓ 成功构建模板: {}", source_output_file.display()));
+        Utils::success(&trf!(
+            "packaging.success_template_built",
+            source_output_file.display()
+        ));
     }
     Ok(source_output_file)
 }

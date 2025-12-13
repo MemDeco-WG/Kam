@@ -177,13 +177,13 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         }
 
         if !r.errors.is_empty() {
-            println!("  {} {}", "✗".red().bold(), crate::i18n::tr_key("Errors:").red().bold());
+            println!("  {} {}", "✗".red().bold(), crate::i18n::tr_key("check.errors.header").red().bold());
             for e in &r.errors {
                 println!("    {} {}", "→".red().dimmed(), e.red());
             }
         }
         if !r.warnings.is_empty() {
-            println!("  {} {}", "!".yellow().bold(), crate::i18n::tr_key("Warnings:").yellow().bold());
+            println!("  {} {}", "!".yellow().bold(), crate::i18n::tr_key("check.warnings.header").yellow().bold());
             for w in &r.warnings {
                 println!("    {} {}", "→".yellow().dimmed(), w.yellow());
             }
@@ -191,9 +191,9 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     }
 
     if any_errors {
-        println!("\n{} {}", "✕".red().bold(), crate::i18n::tr_key("Some issues found.").red());
+        println!("\n{} {}", "✕".red().bold(), crate::i18n::tr_key("check.some_issues_found").red());
     } else {
-        println!("\n{} {}", "✓".green().bold(), crate::i18n::tr_key("No issues found.").green());
+        println!("\n{} {}", "✓".green().bold(), crate::i18n::tr_key("check.no_issues_found").green());
     }
 
     Ok(())

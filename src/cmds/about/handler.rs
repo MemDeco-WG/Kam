@@ -126,25 +126,25 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
 
     // Rows:
     table.add_row(Row::from(vec![
-        Cell::new(crate::i18n::tr_key("Author")).add_attribute(Attribute::Bold),
+        Cell::new(crate::i18n::tr_key("about.author")).add_attribute(Attribute::Bold),
         Cell::new(author_raw.clone()),
     ]));
 
     if let Some(email) = email {
         table.add_row(Row::from(vec![
-            Cell::new(crate::i18n::tr_key("Email")).add_attribute(Attribute::Bold),
+            Cell::new(crate::i18n::tr_key("about.email")).add_attribute(Attribute::Bold),
             Cell::new(email),
         ]));
     }
 
     table.add_row(Row::from(vec![
-        Cell::new(crate::i18n::tr_key("Developer")).add_attribute(Attribute::Bold),
+        Cell::new(crate::i18n::tr_key("about.developer")).add_attribute(Attribute::Bold),
         Cell::new(dev_site),
     ]));
 
     if !description.is_empty() {
         table.add_row(Row::from(vec![
-            Cell::new(crate::i18n::tr_key("Description")).add_attribute(Attribute::Bold),
+            Cell::new(crate::i18n::tr_key("about.description")).add_attribute(Attribute::Bold),
             Cell::new(description),
         ]));
     }
@@ -153,7 +153,7 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     if let Some(repo) = option_env!("CARGO_PKG_REPOSITORY") {
         if !repo.trim().is_empty() {
             table.add_row(Row::from(vec![
-                Cell::new(crate::i18n::tr_key("Repository")).add_attribute(Attribute::Bold),
+                Cell::new(crate::i18n::tr_key("about.repository")).add_attribute(Attribute::Bold),
                 Cell::new(repo),
             ]));
         }
@@ -164,13 +164,13 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     println!("{}", table);
     println!(); // 空行，视觉上舒服点
 
-    Utils::info(crate::i18n::tr_key("This command is informational only; it doesn't modify files or the registry."));
-    Utils::info(crate::i18n::tr_key("Use other commands (e.g., `kam init`, `kam build`) to perform actions."));
+    Utils::info(crate::i18n::tr_key("about.info.command_informational"));
+    Utils::info(crate::i18n::tr_key("about.info.use_other_commands"));
     println!();
 
-    Utils::section(crate::i18n::tr_key("Thanks for using Kam"));
-    Utils::info(crate::i18n::tr_key("Enjoy your module tooling experience!"));
-    Utils::success(crate::i18n::tr_key("Powered by the Kam CLI — Happy building!"));  // 这句有点中二，但留着吧
+    Utils::section(crate::i18n::tr_key("about.thanks"));
+    Utils::info(crate::i18n::tr_key("about.enjoy"));
+    Utils::success(crate::i18n::tr_key("about.powered"));  // 这句有点中二，但留着吧
     // 其实这个命令没啥用，就是显示个信息，但至少看起来比较专业（？）
 
     Ok(())

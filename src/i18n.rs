@@ -30,7 +30,8 @@
 //! let formatted = trf!("Building module: {} v{}", &module_id, &version);
 //! ```
 use std::fmt::Display;
-use std::sync::RwLock;
+use std::sync::{RwLock, OnceLock};
+use std::collections::HashMap;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Language {
@@ -48,6 +49,9 @@ impl Default for Language {
 // We default to English and allow changing it at runtime via `set_language`.
 static CURRENT_LANGUAGE: RwLock<Language> = RwLock::new(Language::En);
 
+static KEYED_EN: OnceLock<HashMap<String, String>> = OnceLock::new();
+static KEYED_ZH: OnceLock<HashMap<String, String>> = OnceLock::new();
+
 /// Initialize i18n subsystem.
 ///
 /// This should be called once at program start (e.g. in `main()`).
@@ -55,6 +59,10 @@ static CURRENT_LANGUAGE: RwLock<Language> = RwLock::new(Language::En);
 /// otherwise it will fall back to system locale detection (via `sys-locale`)
 /// and finally environment variable `LANG`.
 pub fn init() {
+    // Try to load runtime i18n overrides (KAM_I18N_DIR or ./i18n/) before other initialization.
+    // This lets local deployments or packaging override translations without a rebuild.
+    try_load_runtime_i18n();
+
     // 0. Environment variables take highest precedence. This allows quick one-off
     // overrides without changing config files.
     // Supported keys:
@@ -156,21 +164,65 @@ fn detect_language_system() -> Option<String> {
 /// If no translation mapping exists for the given string, it returns the
 /// original string.
 pub fn tr_key<'a>(key: &'a str) -> &'a str {
+    // Helper that tries a simple, deterministic normalization: ascii <-> full-width colon.
+    // The goal is to try the most-likely variant keys only (avoids overly aggressive normalization).
+    fn tr_try_with_colon_variants<F>(key: &str, lookup: F) -> Option<&'static str>
+    where
+        F: Fn(&str) -> Option<&'static str>,
+    {
+        // Try exact match first.
+        if let Some(v) = lookup(key) {
+            return Some(v);
+        }
+        // If key contains full-width colon, try ASCII colon variant.
+        if key.contains('：') {
+            let alt = key.replace('：', ":");
+            if let Some(v) = lookup(&alt) {
+                return Some(v);
+            }
+        }
+        // If key contains ASCII colon, try full-width colon variant.
+        if key.contains(':') {
+            let alt = key.replace(':', "：");
+            if let Some(v) = lookup(&alt) {
+                return Some(v);
+            }
+        }
+        // Last defensive attempt: try trim
+        let trimmed = key.trim();
+        if trimmed != key {
+            if let Some(v) = lookup(trimmed) {
+                return Some(v);
+            }
+        }
+        None
+    }
+
     match current_language() {
         Language::En => {
-            // if input is in Chinese and we have mapping -> return English
-            if let Some(en) = zh_to_en(key) {
-                en
+            // Prefer keyed translations first (key-based system)
+            if let Some(kv) = keyed_en(key) {
+                kv
             } else {
-                key
+                // Fallback: try literal mappings (legacy behavior with colon variants)
+                if let Some(en) = tr_try_with_colon_variants(key, |k| zh_to_en(k)) {
+                    en
+                } else {
+                    key
+                }
             }
         }
         Language::Zh => {
-            // if input is in English and we have mapping -> return Chinese
-            if let Some(zh) = en_to_zh(key) {
-                zh
+            // Prefer keyed translations first (key-based system)
+            if let Some(kv) = keyed_zh(key) {
+                kv
             } else {
-                key
+                // Fallback: try literal mappings (legacy behavior with colon variants)
+                if let Some(zh) = tr_try_with_colon_variants(key, |k| en_to_zh(k)) {
+                    zh
+                } else {
+                    key
+                }
             }
         }
     }
@@ -213,9 +265,165 @@ pub fn tr_fmt_single<T: Display>(template_key: &str, arg: T) -> String {
     tr_fmt(template_key, &[&arg])
 }
 
-// A tiny translation map implemented as match arms.
-// We implement EN -> ZH and ZH -> EN maps as functions returning Option<&'static str>.
-// Expand the mapping for the most common phrases used by the CLI.
+/// A map-backed keyed translation system with a minimal fallback to the previous
+/// literal match-based behavior (for backwards compatibility).
+///
+/// The translation file loader reads TOML resources embedded at compile time
+/// (`src/i18n/en.toml` and `src/i18n/zh.toml`) and flattens them into a simple
+/// string map (keys like `workspace.summary.title`). Maps are cached in static
+/// `OnceLock` containers so lookups are fast and thread-safe.
+fn parse_toml_string_to_map(inp: &str) -> HashMap<String, String> {
+    // We parse a toml::value::Table and recursively flatten into dotted keys.
+    let table = toml::from_str::<toml::value::Table>(inp).unwrap_or_default();
+    let mut out = HashMap::new();
+
+    fn flatten(prefix: &str, tbl: &toml::value::Table, out: &mut HashMap<String, String>) {
+        for (k, v) in tbl {
+            let key = if prefix.is_empty() { k.clone() } else { format!("{}.{}", prefix, k) };
+            match v {
+                toml::Value::String(s) => {
+                    out.insert(key, s.clone());
+                }
+                toml::Value::Table(t) => {
+                    flatten(&key, t, out);
+                }
+                other => {
+                    out.insert(key, other.to_string());
+                }
+            }
+        }
+    }
+
+    flatten("", &table, &mut out);
+    out
+}
+
+fn try_load_runtime_i18n() {
+    // Attempt to override compile-time translations by reading runtime i18n tOML files.
+    // 1. Prefer directory pointed to by KAM_I18N_DIR
+    // 2. Fallback to ./i18n folder within the current working dir
+    // Only attempts to set a map once. Failures (I/O / parse) are ignored silently to keep init robust.
+    if let Ok(dir_str) = std::env::var("KAM_I18N_DIR") {
+        let dir = std::path::PathBuf::from(dir_str);
+        if dir.is_dir() {
+            let en_path = dir.join("en.toml");
+            if en_path.exists() {
+                if let Ok(s) = std::fs::read_to_string(&en_path) {
+                    let map = parse_toml_string_to_map(&s);
+                    // Ignoring set result; it may already be initialized.
+                    let _ = KEYED_EN.set(map);
+                }
+            }
+            let zh_path = dir.join("zh.toml");
+            if zh_path.exists() {
+                if let Ok(s) = std::fs::read_to_string(&zh_path) {
+                    let map = parse_toml_string_to_map(&s);
+                    let _ = KEYED_ZH.set(map);
+                }
+            }
+            // If KAM_I18N_DIR was used, do not attempt other fallback paths.
+            return;
+        }
+    }
+
+    // Fallback: check ./i18n in current working dir
+    if let Ok(cwd) = std::env::current_dir() {
+        let dir = cwd.join("i18n");
+        if dir.is_dir() {
+            let en_path = dir.join("en.toml");
+            if en_path.exists() {
+                if let Ok(s) = std::fs::read_to_string(&en_path) {
+                    let map = parse_toml_string_to_map(&s);
+                    let _ = KEYED_EN.set(map);
+                }
+            }
+            let zh_path = dir.join("zh.toml");
+            if zh_path.exists() {
+                if let Ok(s) = std::fs::read_to_string(&zh_path) {
+                    let map = parse_toml_string_to_map(&s);
+                    let _ = KEYED_ZH.set(map);
+                }
+            }
+        }
+    }
+}
+
+fn keyed_en_map() -> &'static HashMap<String, String> {
+    KEYED_EN.get_or_init(|| parse_toml_string_to_map(include_str!("i18n/en.toml")))
+}
+
+fn keyed_zh_map() -> &'static HashMap<String, String> {
+    KEYED_ZH.get_or_init(|| parse_toml_string_to_map(include_str!("i18n/zh.toml")))
+}
+
+fn keyed_en(key: &str) -> Option<&'static str> {
+    // Prefer keyed translations from the TOML file.
+    if let Some(v) = keyed_en_map().get(key) {
+        return Some(v.as_str());
+    }
+    // Fallback: existing inline match-based translation table.
+    match key {
+        "workspace.summary.title" => Some("✿ Workspace Build Summary ✿"),
+        "table.header.module" => Some("Module"),
+        "table.header.status" => Some("Status"),
+        "status.success" => Some("✓ Success"),
+        "status.failed" => Some("✗ Failed: {}"),
+        "table.header.stat" => Some("Statistic"),
+        "table.header.value" => Some("Value"),
+        "table.stat.total" => Some("Total"),
+        "table.stat.succeeded" => Some("Succeeded"),
+        "table.stat.failed" => Some("Failed"),
+        "table.stat.total_duration" => Some("Total Duration"),
+        "build.packaging_artifacts" => Some("Packaging artifacts..."),
+        // About command keys (legacy fallback)
+        "about.author" => Some("Author"),
+        "about.email" => Some("Email"),
+        "about.developer" => Some("Developer"),
+        "about.description" => Some("Description"),
+        "about.repository" => Some("Repository"),
+        "about.info.command_informational" => Some("This command is informational only; it doesn't modify files or the registry."),
+        "about.info.use_other_commands" => Some("Use other commands (e.g., `kam init`, `kam build`) to perform actions."),
+        "about.thanks" => Some("Thanks for using Kam"),
+        "about.enjoy" => Some("Enjoy your module tooling experience!"),
+        "about.powered" => Some("Powered by the Kam CLI — Happy building!"),
+        _ => None,
+    }
+}
+
+fn keyed_zh(key: &str) -> Option<&'static str> {
+    // Prefer keyed translations from the TOML file.
+    if let Some(v) = keyed_zh_map().get(key) {
+        return Some(v.as_str());
+    }
+    // Fallback: existing inline match-based translations
+    match key {
+        "workspace.summary.title" => Some("✿ 工作区构建摘要 ✿"),
+        "table.header.module" => Some("模块"),
+        "table.header.status" => Some("状态"),
+        "status.success" => Some("✓ 成功"),
+        "status.failed" => Some("✗ 失败: {}"),
+        "table.header.stat" => Some("统计项"),
+        "table.header.value" => Some("值"),
+        "table.stat.total" => Some("总计"),
+        "table.stat.succeeded" => Some("成功"),
+        "table.stat.failed" => Some("失败"),
+        "table.stat.total_duration" => Some("总耗时"),
+        "build.packaging_artifacts" => Some("正在打包制品..."),
+        // About command keys (legacy fallback)
+        "about.author" => Some("作者"),
+        "about.email" => Some("邮箱"),
+        "about.developer" => Some("开发者"),
+        "about.description" => Some("描述"),
+        "about.repository" => Some("仓库"),
+        "about.info.command_informational" => Some("此命令仅供参考，不会修改文件或注册表。"),
+        "about.info.use_other_commands" => Some("请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。"),
+        "about.thanks" => Some("感谢使用 Kam"),
+        "about.enjoy" => Some("祝您使用愉快！"),
+        "about.powered" => Some("由 Kam CLI 提供支持 — 祝构建顺利！"),
+        _ => None,
+    }
+}
+
 fn en_to_zh(s: &str) -> Option<&'static str> {
     match s {
         "This command is informational only; it doesn't modify files or the registry." =>
@@ -313,7 +521,7 @@ fn en_to_zh(s: &str) -> Option<&'static str> {
         // Validate related
         "kam.toml not found at {}" => Some("在 {} 未找到 kam.toml"),
         "Validating {}..." => Some("正在验证 {}..."),
-        "Failed to parse kam.toml: {}" => Some("解析 kam.toml 失败: {}"),
+        "Failed to parse kam.toml: {}" => Some("解析 kam.toml 失败：{}"),
         "No issues found. kam.toml is valid." => Some("未发现问题。kam.toml 有效。"),
         "Errors:" => Some("错误："),
         "Warnings:" => Some("警告："),
@@ -621,24 +829,264 @@ pub fn tr<'a>(s: &'a str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use std::env;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn mk_temp_dir(prefix: &str) -> PathBuf {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let dir = env::temp_dir().join(format!("kam_test_{}_{}", prefix, now));
+        // create dir (ignore error if already exists)
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
     #[test]
+    #[serial]
     fn test_translate_en_to_zh() {
         set_language(Language::Zh);
         assert_eq!(tr_key("Thanks for using Kam"), "感谢使用 Kam");
     }
 
     #[test]
+    #[serial]
     fn test_translate_zh_to_en() {
         set_language(Language::En);
         assert_eq!(tr_key("配置项"), "Item");
     }
 
     #[test]
+    #[serial]
     fn test_trf_macro_behaviour() {
         set_language(Language::Zh);
         // Using the macro, with English key
         let s = trf!("Building module: {} v{}", "mod", "1.0");
         assert!(s.contains("构建模块") || s.contains("构建模块："));
+    }
+
+
+
+
+
+
+
+    #[test]
+    #[serial]
+    fn test_init_env_var_precedence() {
+        // Save environment variables to restore later
+        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
+        let orig_kam_lang = env::var("KAM_LANG").ok();
+        let orig_lang = env::var("LANG").ok();
+        let orig_cwd = env::current_dir().unwrap();
+
+        // Ensure no config overrides
+        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        unsafe { env::remove_var("KAM_LANG"); }
+        // set KAM_UI_LANGUAGE to zh
+        unsafe { env::set_var("KAM_UI_LANGUAGE", "zh"); }
+
+        // start from a known language
+        set_language(Language::En);
+        // initialize i18n
+        init();
+
+        // env override should take precedence
+        assert_eq!(current_language(), Language::Zh);
+
+        // restore environment
+        if let Some(k) = orig_kam_ui {
+            unsafe { env::set_var("KAM_UI_LANGUAGE", k); }
+        } else {
+            unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        }
+        if let Some(k2) = orig_kam_lang {
+            unsafe { env::set_var("KAM_LANG", k2); }
+        } else {
+            unsafe { env::remove_var("KAM_LANG"); }
+        }
+        if let Some(l) = orig_lang {
+            unsafe { env::set_var("LANG", l); }
+        } else {
+            unsafe { env::remove_var("LANG"); }
+        }
+        let _ = env::set_current_dir(orig_cwd);
+
+        // reset global language
+        set_language(Language::En);
+    }
+
+    #[test]
+    #[serial]
+    fn test_init_local_config_precedence() {
+        let orig_home = env::var("HOME").ok();
+        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
+        let orig_kam_lang = env::var("KAM_LANG").ok();
+        let orig_lang = env::var("LANG").ok();
+        let orig_cwd = env::current_dir().unwrap();
+
+        // Create a temporary project with a local .kam/config.toml that sets zh
+        let tmp = mk_temp_dir("i18n_local");
+        fs::create_dir_all(tmp.join(".kam")).unwrap();
+        fs::write(tmp.join(".kam").join("config.toml"), r#"ui.language = "zh""#).unwrap();
+        fs::write(tmp.join("kam.toml"), "name = \"i18n-test\"").unwrap();
+
+        // ensure env overrides won't take precedence
+        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        unsafe { env::remove_var("KAM_LANG"); }
+
+        // jump to project dir so local config is used
+        env::set_current_dir(&tmp).unwrap();
+        // start with a different language
+        set_language(Language::En);
+        init();
+
+        // local should be preferred over global (if any)
+        assert_eq!(current_language(), Language::Zh);
+
+        // restore environment
+        if let Some(h) = orig_home {
+            unsafe { env::set_var("HOME", h); }
+        } else {
+            unsafe { env::remove_var("HOME"); }
+        }
+        if let Some(k) = orig_kam_ui {
+            unsafe { env::set_var("KAM_UI_LANGUAGE", k); }
+        } else {
+            unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        }
+        if let Some(k2) = orig_kam_lang {
+            unsafe { env::set_var("KAM_LANG", k2); }
+        } else {
+            unsafe { env::remove_var("KAM_LANG"); }
+        }
+        if let Some(l) = orig_lang {
+            unsafe { env::set_var("LANG", l); }
+        } else {
+            unsafe { env::remove_var("LANG"); }
+        }
+        let _ = env::set_current_dir(orig_cwd);
+
+        // cleanup
+        let _ = fs::remove_dir_all(tmp);
+
+        // reset global language
+        set_language(Language::En);
+    }
+
+    #[test]
+    #[serial]
+    fn test_init_global_config_fallback() {
+        let orig_home = env::var("HOME").ok();
+        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
+        let orig_kam_lang = env::var("KAM_LANG").ok();
+        let orig_lang = env::var("LANG").ok();
+        let orig_cwd = env::current_dir().unwrap();
+
+        // Create a fake HOME with global config
+        let htmp = mk_temp_dir("i18n_home");
+        fs::create_dir_all(htmp.join(".kam")).unwrap();
+        fs::write(htmp.join(".kam").join("config.toml"), r#"ui.language = "en""#).unwrap();
+
+        // ensure env overrides won't take precedence
+        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        unsafe { env::remove_var("KAM_LANG"); }
+        // attempt to set HOME
+        unsafe { env::set_var("HOME", htmp.to_str().unwrap()); }
+
+        // Because `dirs` may cache the home directory at process startup, confirm it changed.
+        // If not, skip to avoid mutating the real user's home directory.
+        if dirs::home_dir().as_ref().map(|p| p.as_path()) != Some(htmp.as_path()) {
+            // restore and cleanup, then skip by returning early
+            if let Some(h) = orig_home {
+                unsafe { env::set_var("HOME", h); }
+            } else {
+                unsafe { env::remove_var("HOME"); }
+            }
+            if let Some(k) = orig_kam_ui {
+                unsafe { env::set_var("KAM_UI_LANGUAGE", k); }
+            } else {
+                unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+            }
+            if let Some(k2) = orig_kam_lang {
+                unsafe { env::set_var("KAM_LANG", k2); }
+            } else {
+                unsafe { env::remove_var("KAM_LANG"); }
+            }
+            if let Some(l) = orig_lang {
+                unsafe { env::set_var("LANG", l); }
+            } else {
+                unsafe { env::remove_var("LANG"); }
+            }
+            let _ = env::set_current_dir(orig_cwd);
+            let _ = fs::remove_dir_all(&htmp);
+            return;
+        }
+
+        // ensure we're not inside a project (so local won't override)
+        env::set_current_dir(env::temp_dir()).unwrap();
+        // start with a different language
+        set_language(Language::Zh);
+        init();
+
+        // global should be used
+        assert_eq!(current_language(), Language::En);
+
+        // restore environment and cleanup
+        if let Some(h) = orig_home {
+            unsafe { env::set_var("HOME", h); }
+        } else {
+            unsafe { env::remove_var("HOME"); }
+        }
+        if let Some(k) = orig_kam_ui {
+            unsafe { env::set_var("KAM_UI_LANGUAGE", k); }
+        } else {
+            unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        }
+        if let Some(k2) = orig_kam_lang {
+            unsafe { env::set_var("KAM_LANG", k2); }
+        } else {
+            unsafe { env::remove_var("KAM_LANG"); }
+        }
+        if let Some(l) = orig_lang {
+            unsafe { env::set_var("LANG", l); }
+        } else {
+            unsafe { env::remove_var("LANG"); }
+        }
+        let _ = env::set_current_dir(orig_cwd);
+        let _ = fs::remove_dir_all(&htmp);
+
+        // reset global language
+        set_language(Language::En);
+    }
+
+    #[test]
+    #[serial]
+    fn test_keyed_translations_work() {
+        // Validate keyed translations (basic)
+        // Ensure English mapping returns the English phrase
+        set_language(Language::En);
+        assert_eq!(tr_key("workspace.summary.title"), "✿ Workspace Build Summary ✿");
+        // English authorship: check a table header key
+        assert_eq!(tr_key("table.header.module"), "Module");
+
+        // Keys added from the external TOML file should also be visible:
+        assert_eq!(tr_key("about.author"), "Author");
+        assert_eq!(tr_key("build.packaging_artifacts"), "Packaging artifacts...");
+
+        // Validate Chinese mapping returns the Chinese phrase
+        set_language(Language::Zh);
+        assert_eq!(tr_key("workspace.summary.title"), "✿ 工作区构建摘要 ✿");
+        assert_eq!(tr_key("table.header.module"), "模块");
+
+        // Validate keys from the TOML file in Chinese
+        assert_eq!(tr_key("about.author"), "作者");
+        assert_eq!(tr_key("build.packaging_artifacts"), "正在打包制品...");
+
+        // Reset
+        set_language(Language::En);
     }
 }

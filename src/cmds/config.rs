@@ -93,28 +93,43 @@ pub fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> 
 // 读取TOML配置文件
 // 文件不存在就返回空表（这样不会报错）
 pub fn read_language_from_config() -> Option<String> {
-    // Use the default behavior for config location (local if in project, otherwise global)
-    let path = match get_config_paths(false, false) {
-        Ok(p) => p,
-        Err(_) => return None,
-    };
+    // Prefer local config's language first, then fallback to global if not set locally.
+    // This explicitly checks both local and global config files so a missing language
+    // in the project's config will still allow a global preference to be used.
 
-    let toml_v = match read_toml(&path) {
-        Ok(v) => v,
-        Err(_) => return None,
-    };
-
-    // First check ui.language (preferred)
-    if let Some(val) = get_value_by_path(&toml_v, "ui.language") {
-        if let Some(s) = val.as_str() {
-            return Some(s.to_string());
+    // 1) Try forced local config (prefer a project-local setting)
+    if let Ok(local_path) = get_config_paths(false, true) {
+        if let Ok(local_toml) = read_toml(&local_path) {
+            // First check ui.language (preferred)
+            if let Some(val) = get_value_by_path(&local_toml, "ui.language") {
+                if let Some(s) = val.as_str() {
+                    return Some(s.to_string());
+                }
+            }
+            // Fallback to `language`
+            if let Some(val) = get_value_by_path(&local_toml, "language") {
+                if let Some(s) = val.as_str() {
+                    return Some(s.to_string());
+                }
+            }
         }
     }
 
-    // Fallback to `language`
-    if let Some(val) = get_value_by_path(&toml_v, "language") {
-        if let Some(s) = val.as_str() {
-            return Some(s.to_string());
+    // 2) Fallback to global config if local didn't provide a language
+    if let Ok(global_path) = get_config_paths(true, false) {
+        if let Ok(global_toml) = read_toml(&global_path) {
+            // First check ui.language (preferred)
+            if let Some(val) = get_value_by_path(&global_toml, "ui.language") {
+                if let Some(s) = val.as_str() {
+                    return Some(s.to_string());
+                }
+            }
+            // Fallback to `language`
+            if let Some(val) = get_value_by_path(&global_toml, "language") {
+                if let Some(s) = val.as_str() {
+                    return Some(s.to_string());
+                }
+            }
         }
     }
 
@@ -253,17 +268,17 @@ const BUILTIN_KEYS: &[BuiltinConfigKey] = &[
 fn show_builtin_keys() {
     use crate::i18n::tr_key;
 
-    println!("{}", tr_key("Built-in configuration keys:"));
+    println!("{}", tr_key("config.builtin_keys"));
     println!();
 
     for key_info in BUILTIN_KEYS {
         println!("  {}", key_info.key);
         println!("    {}", tr_key(key_info.description_key));
-        println!("    {} {}", tr_key("Example:"), key_info.example);
+        println!("    {} {}", tr_key("config.example"), key_info.example);
         println!();
     }
 
-    println!("{}", tr_key("Note: You can also set custom keys. Use 'kam config list' to see all configured values."));
+    println!("{}", tr_key("config.note_custom_keys"));
 }
 
 // 处理config命令（get/set/unset/list/show）
@@ -327,9 +342,14 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
 
                         // 如果 key 使用了 key=value 的简写，我们就将其拆分出来作为要写入的 key/value
                         if final_key.contains('=') {
-                            let parts: Vec<&str> = final_key.splitn(2, '=').collect();
-                            final_key = parts[0].to_string();
-                            final_value = parts[1].to_string();
+                            // Convert to owned Strings to avoid borrowing `final_key` while mutating it.
+                            let parts: Vec<String> = final_key.splitn(2, '=').map(|s| s.to_string()).collect();
+                            if parts.len() >= 2 {
+                                final_key = parts[0].clone();
+                                final_value = parts[1].clone();
+                            } else {
+                                return Err(KamError::CommandFailed("Invalid key=value shorthand".to_string()));
+                            }
                         } else {
                             // 没有 '=' 且第二个参数是一个选项：说明用户写法错误
                             return Err(KamError::CommandFailed(
@@ -339,16 +359,17 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                     } else {
                         // final_value 不是 option（常规情况）
                         if final_key.contains('=') {
-                            // 支持 key=value 简写。如果用户同时也传了 value（非 option），优先使用用户显式传入的 value（value 参数）；
-                            // 否则使用 key 中指定的 value。
-                            let parts: Vec<&str> = final_key.splitn(2, '=').collect();
-                            let shorthand_key = parts[0];
-                            let shorthand_val = parts[1];
-                            final_key = shorthand_key.to_string();
+                            // Convert to owned Strings to avoid borrowing `final_key` while mutating it.
+                            let parts: Vec<String> = final_key.splitn(2, '=').map(|s| s.to_string()).collect();
+                            if parts.len() >= 2 {
+                                let shorthand_key = parts[0].clone();
+                                let shorthand_val = parts[1].clone();
+                                final_key = shorthand_key;
 
-                            if final_value.is_empty() {
-                                final_value = shorthand_val.to_string();
-                            } // else 用户显式提供了第二个位置参数 value，我们优先保留 final_value
+                                if final_value.is_empty() {
+                                    final_value = shorthand_val;
+                                } // else 用户显式提供了第二个位置参数 value，我们优先保留 final_value
+                            }
                         }
                     }
 
@@ -358,7 +379,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                     set_value_by_path(&mut toml_v, &final_key, &final_value);
                     write_toml(&target_path, &toml_v)?;
                     use crate::utils::Utils;
-                    Utils::success(&crate::trf!("Set {} = {} in {}", final_key, final_value, target_path.display()));
+                    Utils::success(&crate::trf!("config.set_success", final_key, final_value, target_path.display()));
                     Ok(())
                 }
                 ConfigCommand::Unset { key } => {
@@ -368,7 +389,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                     if removed {
                         write_toml(&path, &v)?;
                         use crate::utils::Utils;
-                        Utils::success(&crate::trf!("Unset {} in {}", key, path.display()));
+                        Utils::success(&crate::trf!("config.unset_success", key, path.display()));
                         Ok(())
                     } else {
                         Err(KamError::CommandFailed(format!(
@@ -387,5 +408,208 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                 ConfigCommand::Show => unreachable!(),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use serial_test::serial;
+
+    fn mk_temp_dir(prefix: &str) -> PathBuf {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let dir = env::temp_dir().join(format!("kam_test_{}_{}", prefix, now));
+        // Ignore failure here; callers will handle creation explicitly if needed.
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    fn restore_env(orig_home: Option<String>, orig_kam_ui: Option<String>, orig_kam_lang: Option<String>, orig_cwd: PathBuf) {
+        if let Some(h) = orig_home {
+            unsafe { env::set_var("HOME", h) };
+        } else {
+            unsafe { env::remove_var("HOME") };
+        }
+        if let Some(k) = orig_kam_ui {
+            unsafe { env::set_var("KAM_UI_LANGUAGE", k) };
+        } else {
+            unsafe { env::remove_var("KAM_UI_LANGUAGE") };
+        }
+        if let Some(k2) = orig_kam_lang {
+            unsafe { env::set_var("KAM_LANG", k2) };
+        } else {
+            unsafe { env::remove_var("KAM_LANG") };
+        }
+        let _ = env::set_current_dir(orig_cwd);
+    }
+
+    #[test]
+    #[serial]
+    fn test_read_language_from_local_config_priority() {
+        // Save environment / working dir
+        let orig_home = env::var("HOME").ok();
+        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
+        let orig_kam_lang = env::var("KAM_LANG").ok();
+        let orig_cwd = env::current_dir().unwrap();
+
+        // Prepare a project directory with a local `.kam/config.toml`
+        let tmp = mk_temp_dir("local");
+        fs::create_dir_all(tmp.join(".kam")).unwrap();
+        fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
+        fs::write(tmp.join(".kam").join("config.toml"), r#"ui.language = "zh""#).unwrap();
+
+        // Make sure no env overrides interfere
+        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        unsafe { env::remove_var("KAM_LANG"); }
+        // Do not override HOME for this local-only test; rely on the project directory detection.
+        // (Setting HOME in-process is brittle because `dirs` may cache the home directory.)
+        // Switch to our project dir (so get_config_paths(false, true) resolves to local)
+        env::set_current_dir(&tmp).unwrap();
+
+        let lang = read_language_from_config();
+        assert_eq!(lang.as_deref(), Some("zh"));
+
+        // Cleanup / restore
+        restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
+        let _ = fs::remove_dir_all(tmp);
+    }
+
+    #[test]
+    #[serial]
+    fn test_read_language_from_global_config_fallback() {
+        // Save environment / working dir
+        let orig_home = env::var("HOME").ok();
+        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
+        let orig_kam_lang = env::var("KAM_LANG").ok();
+        let orig_cwd = env::current_dir().unwrap();
+
+        // Prepare a HOME with `.kam/config.toml`
+        let htmp = mk_temp_dir("home");
+        fs::create_dir_all(htmp.join(".kam")).unwrap();
+        fs::write(htmp.join(".kam").join("config.toml"), r#"ui.language = "en""#).unwrap();
+
+        // Make sure no env overrides interfere
+        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        unsafe { env::remove_var("KAM_LANG"); }
+        // Set HOME to our fake home
+        unsafe { env::set_var("HOME", htmp.to_str().unwrap()); }
+        // Because the `dirs` crate may cache the first-observed home path for the process,
+        // confirm that it actually returned our new home value; if it didn't, skip the test
+        // to avoid writing into the real user's home directory during testing.
+        if dirs::home_dir().as_ref().map(|p| p.as_path()) != Some(htmp.as_path()) {
+            // restore environment & perform cleanup, then skip the test
+            restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
+            let _ = fs::remove_dir_all(&htmp);
+            return;
+        }
+        // Ensure current dir is not a project containing kam.toml
+        env::set_current_dir(env::temp_dir()).unwrap();
+
+        let lang = read_language_from_config();
+        assert_eq!(lang.as_deref(), Some("en"));
+
+        // Cleanup / restore
+        restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
+        let _ = fs::remove_dir_all(htmp);
+    }
+
+    #[test]
+    #[serial]
+    fn test_local_over_global_preference() {
+        // Save environment / working dir
+        let orig_home = env::var("HOME").ok();
+        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
+        let orig_kam_lang = env::var("KAM_LANG").ok();
+        let orig_cwd = env::current_dir().unwrap();
+
+        // Prepare a project directory with local config
+        let tmp = mk_temp_dir("both");
+        fs::create_dir_all(tmp.join(".kam")).unwrap();
+        fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
+        fs::write(tmp.join(".kam").join("config.toml"), r#"ui.language = "zh""#).unwrap();
+
+        // Prepare a global HOME with a different value
+        let htmp = mk_temp_dir("home2");
+        fs::create_dir_all(htmp.join(".kam")).unwrap();
+        fs::write(htmp.join(".kam").join("config.toml"), r#"ui.language = "en""#).unwrap();
+
+        // Remove env overrides
+        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        unsafe { env::remove_var("KAM_LANG"); }
+        // Point HOME to the global config with `en`
+        unsafe { env::set_var("HOME", htmp.to_str().unwrap()); }
+        // Ensure `dirs::home_dir()` reflects this change — otherwise skip to avoid mutating real home
+        if dirs::home_dir().as_ref().map(|p| p.as_path()) != Some(htmp.as_path()) {
+            restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
+            let _ = fs::remove_dir_all(&tmp);
+            let _ = fs::remove_dir_all(&htmp);
+            return;
+        }
+        // Set current dir into our project containing `kam.toml`
+        env::set_current_dir(&tmp).unwrap();
+
+        // Local (zh) should be preferred over global (en)
+        let lang = read_language_from_config();
+        assert_eq!(lang.as_deref(), Some("zh"));
+
+        // Cleanup / restore
+        restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
+        let _ = fs::remove_dir_all(tmp);
+        let _ = fs::remove_dir_all(htmp);
+    }
+
+    #[test]
+    #[serial]
+    fn test_config_set_shorthand_with_misplaced_local_flag_parsed_correctly() {
+        // Save environment / working dir
+        let orig_home = env::var("HOME").ok();
+        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
+        let orig_kam_lang = env::var("KAM_LANG").ok();
+        let orig_cwd = env::current_dir().unwrap();
+
+        // Prepare a temporary project directory with a kam.toml so get_config_paths uses local paths
+        let tmp = mk_temp_dir("cfg_set_misuse");
+        fs::create_dir_all(tmp.join(".kam")).unwrap();
+        fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
+
+        // Ensure no env override is in place
+        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+        unsafe { env::remove_var("KAM_LANG"); }
+
+        // Switch to our project dir so get_config_paths(false, false) resolves to local
+        env::set_current_dir(&tmp).unwrap();
+
+        // Simulate: `kam config set language=en -- --local`
+        let args = ConfigArgs {
+            global: false,
+            local: false,
+            command: ConfigCommand::Set {
+                key: "language=en".to_string(),
+                value: "--local".to_string(),
+            },
+        };
+
+        // Execute command; this should write the "language = \"en\"" into the local config
+        super::run(args).unwrap();
+
+        // Verify the local config file contains language = "en"
+        let config_path = get_config_paths(false, true).unwrap();
+        let toml_v = read_toml(&config_path).unwrap();
+        assert_eq!(
+            get_value_by_path(&toml_v, "language")
+                .and_then(|v| v.as_str().map(|s| s.to_string())),
+            Some("en".to_string())
+        );
+
+        // Cleanup / restore
+        restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
+        let _ = fs::remove_dir_all(tmp);
     }
 }

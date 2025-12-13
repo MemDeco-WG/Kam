@@ -2,6 +2,7 @@
 
 ### Feat
 
+- Introduce internationalization (i18n) support and enhance CLI output with improved tables and progress bars.
 - Introduce `about` command, implement interactive `init` flow, and improve CI workflows with package manager caching.
 
 ### Refactor

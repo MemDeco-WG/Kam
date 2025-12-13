@@ -11,9 +11,9 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
             let templates = TemplateCacheManager::list_local_templates()?;
             use crate::utils::Utils;
             if templates.is_empty() {
-                Utils::info(crate::i18n::tr_key("No templates found in local cache."));
+                Utils::info(crate::i18n::tr_key("cache.no_templates"));
             } else {
-                Utils::section(crate::i18n::tr_key("Local Cached Templates"));
+                Utils::section(crate::i18n::tr_key("cache.local_cached_templates"));
                 for tmpl in templates {
                     Utils::info(&tmpl);
                 }
@@ -27,10 +27,10 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                 std::fs::remove_dir_all(&cache_dir).map_err(KamError::Io)?;
                 std::fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
                 use crate::utils::Utils;
-                Utils::success(crate::i18n::tr_key("Cache cleaned successfully"));
+                Utils::success(crate::i18n::tr_key("cache.cleaned_successfully"));
             } else {
                 use crate::utils::Utils;
-                Utils::info(crate::i18n::tr_key("Cache directory is already empty or does not exist."));
+                Utils::info(crate::i18n::tr_key("cache.directory_empty_or_not_exists"));
             }
         }
         CacheCommands::Add { name, path } => {

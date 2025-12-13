@@ -1,0 +1,107 @@
+# Chinese translation file for Kam CLI
+# Keys are dotted to represent namespaces and nested tables.
+# 保留 {} 作为简单格式化占位符
+
+# Workspace summary / table headers
+workspace.summary.title = "✿ 工作区构建摘要 ✿"
+table.header.module = "模块"
+table.header.status = "状态"
+table.header.stat = "统计项"
+table.header.value = "值"
+common.file_fixed = "{}（已修复）"
+
+# Status strings
+status.success = "✓ 成功"
+status.failed = "✗ 失败: {}"
+
+# Table stats
+table.stat.total = "总计"
+table.stat.succeeded = "成功"
+table.stat.failed = "失败"
+table.stat.total_duration = "总耗时"
+
+# Build and packaging
+build.packaging_artifacts = "正在打包制品..."
+build.complete = "构建完成"
+build.building_module_version = "构建模块：{} v{}"
+build.invalid_glob_pattern = "无效的 glob 模式 '{}': {}"
+build.workspace_member_not_found = "工作区成员 {} 未找到"
+build.skipping_no_kam_toml = "跳过 {}：未找到 kam.toml"
+build.building_workspace_member = "构建工作区成员：{}"
+build.failed_to_build = "构建 {} 失败: {}"
+build.skipping_failed_load_kam_toml = "跳过 {}：无法加载 kam.toml: {}"
+build.failed_workspace_members = "{} 个工作区成员构建失败"
+build.source_directory_not_found = "源目录未找到: {}"
+
+# Hooks
+hooks.running_pre = "正在运行预构建钩子"
+hooks.running_post = "正在运行后构建钩子"
+hooks.skipping_template_packaging = "跳过用于模板打包的构建钩子"
+
+# Packaging / module files
+packaging.files = "正在打包文件..."
+packaging.generating_module_prop = "正在生成 module.prop"
+packaging.using_existing_module_prop_from_hook = "使用已有的 module.prop（来自 pre-build 钩子）"
+packaging.packaging = "打包"
+project.output_directory = "输出目录"
+project.header = "项目"
+project.build_time = "构建时间"
+project.package_size = "包大小"
+project.output_file = "输出文件"
+packaging.packaging_of = "打包中"
+
+# Cache / templates
+cache.no_templates = "本地缓存中未找到模板。"
+cache.local_cached_templates = "本地缓存模板"
+cache.cleaned_successfully = "缓存已成功清理"
+cache.directory_empty_or_not_exists = "缓存目录已为空或不存在。"
+
+# Secret command keys
+secret.stored_secrets = "存储的 Secrets"
+secret.trusted_root_cas = "受信任的根 CA"
+secret.no_trusted_root_cas = "未找到受信任的根 CA。"
+secret.encrypted = "（已加密）"
+secret.plain = "（未加密）"
+
+
+# Check command keys
+check.no_issues_found = "未发现问题。"
+check.some_issues_found = "发现问题。"
+check.errors.header = "错误："
+check.warnings.header = "警告："
+
+# Init command keys
+init.interactive.title = "交互式 Kam 初始化"
+init.interactive.press_enter = "你可以按回车以接受括号中显示的默认值"
+init.interactive.completed_successfully = "交互式初始化已成功完成。"
+init.interactive.next_steps = "下一步："
+
+# Validate command keys
+validate.prop.id_required = "[prop] id 是必填项"
+validate.prop.id_invalid_characters = "[prop] id 包含非法字符（允许：a-z、A-Z、0-9、_, -, .）"
+validate.prop.name_required = "[prop] name 是必填项"
+validate.prop.version_required = "[prop] version 是必填项"
+validate.prop.version_code_should_be_positive = "[prop] versionCode 必须是正整数"
+validate.prop.description_required = "[prop] description 是必填项"
+validate.prop.author_empty_recommended = "[prop] author 为空（建议填写）"
+validate.mmrl.repo.license_recommended = "[mmrl.repo] 建议设置 license"
+validate.mmrl.repo.license_file = "[mmrl.repo] license_file"
+validate.mmrl.repo.readme_file = "[mmrl.repo] readme_file"
+validate.mmrl.repo.changelog_file = "[mmrl.repo] changelog_file"
+validate.no_issues_kam_toml_valid = "未发现问题，kam.toml 有效。"
+validate.errors.header = "错误："
+validate.warnings.header = "警告："
+validate.failed = "验证失败。请修复上面的错误。"
+validate.passed_with_warnings = "验证通过，但存在警告。"
+
+# About command keys
+about.author = "作者"
+about.email = "邮箱"
+about.developer = "开发者"
+about.description = "描述"
+about.repository = "仓库"
+about.info.command_informational = "此命令仅供参考，不会修改文件或注册表。"
+about.info.use_other_commands = "请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。"
+about.thanks = "感谢使用 Kam"
+about.enjoy = "祝您使用愉快！"
+about.powered = "由 Kam CLI 提供支持 — 祝构建顺利！"

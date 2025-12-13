@@ -806,8 +806,8 @@ fn save_global_config(
 
 pub fn run(args: InitArgs) -> Result<(), KamError> {
     use crate::utils::Utils;
-    Utils::banner(crate::i18n::tr_key("Interactive Kam Init"));
-    Utils::info(crate::i18n::tr_key("You may press Enter to accept a default value shown in brackets"));
+    Utils::banner(crate::i18n::tr_key("init.interactive.title"));
+    Utils::info(crate::i18n::tr_key("init.interactive.press_enter"));
     println!();
 
     // Prepare defaults (non-interactive sanity pass)
@@ -1055,9 +1055,9 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // Post-process
     post_init::post_process(&data.path)?;
 
-    Utils::success(crate::i18n::tr_key("Interactive initialization completed successfully."));
+    Utils::success(crate::i18n::tr_key("init.interactive.completed_successfully"));
     println!();
-    Utils::info(crate::i18n::tr_key("Next steps:"));
+    Utils::info(crate::i18n::tr_key("init.interactive.next_steps"));
     println!("  {} cd {}", "→".blue(), data.path.display());
     println!("  {} kam build", "→".blue());
     Ok(())
