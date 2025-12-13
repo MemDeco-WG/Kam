@@ -253,10 +253,12 @@ pub fn init_impl(
         }
     }
 
-    // Write resolved template variables into `template-vars.env` during `kam init`
-    // This file contains `KEY="VALUE"` lines that can be consumed or sourced by hooks.
+    // Write resolved template variables into `.kam/template-vars.env.init` during `kam init`.
+    // This file contains `KEY="VALUE"` lines that can be consumed or sourced by hooks during initialization.
     // Keys are normalized into `KAM_<PATH>` uppercase; dots and dashes become underscores.
-    let env_file_path = path.join("template-vars.env");
+    let env_dir = path.join(".kam");
+    fs::create_dir_all(&env_dir).map_err(KamError::Io)?;
+    let env_file_path = env_dir.join("template-vars.env.init");
     let mut env_lines: Vec<String> = Vec::new();
 
     // Basic project-level details
