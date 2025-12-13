@@ -3,30 +3,28 @@ use crate::errors::KamError;
 use super::args::InitArgs;
 use super::{impl_mod, interactive, post_init, pre_init};
 
-/// Run the init command
+// 初始化命令的主入口
 pub fn run(args: InitArgs) -> Result<(), KamError> {
-    // If interactive flag is set, delegate to the interactive prompt flow
+    // 如果是交互模式，直接丢给交互式流程处理
     if args.interactive {
         return interactive::run(args);
     }
 
-    // Prepare initialization data
-    // Make `data` mutable because we'll pass a mutable reference to the template vars later
+    // 准备初始化数据
+    // TODO: 这里可能可以优化一下，但先这样吧
     let data = pre_init::prepare_init(&args)?;
 
-    // Merge default template variables from `pre_init` with any CLI-provided vars.
-    // `pre_init` already parsed CLI `--var` into `template_vars` and merged defaults,
-    // so simply convert the resulting `HashMap` into `key=value` strings to feed the
-    // `init_template` function which expects `&[String]`.
+    // 合并模板变量，把HashMap转成key=value的字符串数组
+    // 因为init_template函数需要这种格式（历史遗留，懒得改了）
     let mut merged_var_vec: Vec<String> = data
         .template_vars
         .iter()
         .map(|(k, v)| format!("{}={}", k, v))
         .collect();
-    // Keep ordering deterministic for reproducibility
+    // 排序一下，保证输出顺序一致（虽然其实没啥用，但看着舒服）
     merged_var_vec.sort();
 
-    // Initialize using template with merged variables (pass clones to avoid moving `data`)
+    // 用模板初始化项目，传clone避免move（Rust的ownership真是...）
     impl_mod::init_template(
         &data.path,
         &data.id,
@@ -41,7 +39,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         data.update_json.clone(),
     )?;
 
-    // Post-process
+    // 后处理，比如生成一些额外的文件啥的
     post_init::post_process(&data.path)?;
 
     Ok(())
@@ -119,7 +117,8 @@ mod tests {
         assert!(kt_path.exists());
         let kt = crate::types::kam_toml::KamToml::load_from_file(&kt_path).unwrap();
         assert_eq!(kt.prop.id, "custom.id");
-        assert_eq!(kt.prop.author, "LIghtJUNction");
+        // author现在是Option了，需要匹配Some(...)
+        assert_eq!(kt.prop.author, Some("LIghtJUNction".to_string()));
         assert_eq!(kt.prop.version, "0.1.2");
 
         std::env::set_current_dir(orig).unwrap();

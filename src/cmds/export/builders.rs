@@ -1,12 +1,17 @@
 use crate::types::kam_toml::KamToml;
 
+// 构建module.prop文件内容
+// 就是简单的key=value格式，一行一行拼起来
 pub fn build_prop(kt: &KamToml) -> String {
     let mut content = String::new();
     content.push_str(&format!("id={}\n", kt.prop.id));
     content.push_str(&format!("name={}\n", kt.prop.name));
     content.push_str(&format!("version={}\n", kt.prop.version));
     content.push_str(&format!("versionCode={}\n", kt.prop.versionCode));
-    content.push_str(&format!("author={}\n", kt.prop.author));
+    // author是可选的，有的话才写
+    if let Some(author) = &kt.prop.author {
+        content.push_str(&format!("author={}\n", author));
+    }
     content.push_str(&format!("description={}\n", kt.prop.description));
     if let Some(uj) = &kt.prop.updateJson {
         content.push_str(&format!("updateJson={}\n", uj));
@@ -14,9 +19,12 @@ pub fn build_prop(kt: &KamToml) -> String {
     content
 }
 
+// 构建module.json内容（MMRL格式）
+// 这个函数有点复杂，主要是处理各种可选字段和嵌套结构
 pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
     let metamodule = kt.prop.metamodule;
     let summary = kt.prop.description.clone();
+    // 优先用repository，没有就用homepage，都没有就空字符串
     let source_url = kt
         .mmrl
         .as_ref()
@@ -30,25 +38,31 @@ pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
         })
         .unwrap_or_else(|| "".to_string());
 
+    // 收集作者列表，从prop.author和mmrl.repo.maintainers里找
     let mut authors: Vec<serde_json::Value> = vec![];
-    if !kt.prop.author.trim().is_empty() {
-        let mut author_obj = serde_json::Map::new();
-        author_obj.insert(
-            "type".to_string(),
-            serde_json::Value::String("add".to_string()),
-        );
-        author_obj.insert(
-            "name".to_string(),
-            serde_json::Value::String(kt.prop.author.clone()),
-        );
-        authors.push(serde_json::Value::Object(author_obj));
+    if let Some(author) = &kt.prop.author {
+        if !author.trim().is_empty() {
+            let mut author_obj = serde_json::Map::new();
+            author_obj.insert(
+                "type".to_string(),
+                serde_json::Value::String("add".to_string()),
+            );
+            author_obj.insert(
+                "name".to_string(),
+                serde_json::Value::String(author.clone()),
+            );
+            authors.push(serde_json::Value::Object(author_obj));
+        }
     }
+    // 从mmrl.repo.maintainers里也收集作者
+    // maintainers可以是字符串或对象，需要分别处理
     if let Some(mmrl) = &kt.mmrl {
         if let Some(repo) = &mmrl.repo {
             if let Some(maintainers) = &repo.maintainers {
                 for maint in maintainers {
                     match maint {
                         crate::types::kam_toml::sections::repo::MaintainerEntry::Name(s) => {
+                            // 简单字符串格式，直接转成对象
                             let mut obj = serde_json::Map::new();
                             obj.insert(
                                 "type".to_string(),
@@ -58,6 +72,7 @@ pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
                             authors.push(serde_json::Value::Object(obj));
                         }
                         crate::types::kam_toml::sections::repo::MaintainerEntry::Object(m) => {
+                            // 对象格式，可能有type、name、link等字段
                             let mut obj = serde_json::Map::new();
                             let t = m.r#type.clone().unwrap_or_else(|| "add".to_string());
                             obj.insert("type".to_string(), serde_json::Value::String(t));
@@ -529,7 +544,7 @@ mod tests {
             "example_module_id".to_string(),
             "Example Module Name".to_string(),
             "1.0.0".to_string(),
-            "Your Name".to_string(),
+            Some("Your Name".to_string()),
             "A description".to_string(),
             None,
             None,

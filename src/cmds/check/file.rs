@@ -1,4 +1,6 @@
 use crate::errors::KamError;
+use crate::types::kam_toml::KamToml;
+use regex::Regex;
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
@@ -14,6 +16,49 @@ pub struct FileResult {
     pub fixed: bool,
 }
 
+// 检查并可选地修复结构化数据文件（JSON、YAML、TOML）的辅助函数
+// 统一了解析和重新格式化的逻辑，避免重复代码
+fn check_structured_format<F, G>(
+    content: &str,
+    path: &Path,
+    do_fix: bool,
+    parse_fn: F,
+    format_fn: G,
+    format_name: &str,
+) -> Result<(bool, bool), String>
+where
+    F: Fn(&str) -> Result<(), String>,
+    G: Fn(&str) -> Result<String, String>,
+{
+    match parse_fn(content) {
+        Ok(_) => {
+            // 解析成功，如果要求修复就重新格式化
+            if do_fix {
+                match format_fn(content) {
+                    Ok(pretty) => {
+                        // 如果格式化后的内容和原内容不同，就写回去
+                        if pretty != content {
+                            fs::OpenOptions::new()
+                                .write(true)
+                                .truncate(true)
+                                .open(path)
+                                .map_err(|e| format!("Failed to open file: {}", e))?
+                                .write_all(pretty.as_bytes())
+                                .map_err(|e| format!("Failed to write file: {}", e))?;
+                            return Ok((true, true));  // 有效且已修复
+                        }
+                    }
+                    Err(e) => {
+                        return Err(format!("Failed to format {}: {}", format_name, e));
+                    }
+                }
+            }
+            Ok((true, false))  // 有效但未修复
+        }
+        Err(e) => Err(format!("{} parse error: {}", format_name, e)),
+    }
+}
+
 pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, KamError> {
     let s = fs::read_to_string(path)?;
     let mut fr = FileResult {
@@ -27,63 +72,78 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
 
     match kind {
         "json" => {
-            match serde_json::from_str::<serde_json::Value>(&s) {
-                Ok(v) => {
-                    // If fix, reformat
-                    if do_fix {
-                        let pretty = serde_json::to_string_pretty(&v).unwrap_or_default();
-                        if pretty != s {
-                            fs::OpenOptions::new()
-                                .write(true)
-                                .truncate(true)
-                                .open(path)?
-                                .write_all(pretty.as_bytes())?;
-                            fr.fixed = true;
-                        }
-                    }
+            let parse_fn = |s: &str| -> Result<(), String> {
+                serde_json::from_str::<serde_json::Value>(s)
+                    .map_err(|e| e.to_string())
+                    .map(|_| ())
+            };
+            let format_fn = |s: &str| -> Result<String, String> {
+                let v = serde_json::from_str::<serde_json::Value>(s)
+                    .map_err(|e| e.to_string())?;
+                serde_json::to_string_pretty(&v).map_err(|e| e.to_string())
+            };
+            match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "JSON") {
+                Ok((valid, fixed)) => {
+                    fr.valid = valid;
+                    fr.fixed = fixed;
                 }
                 Err(e) => {
                     fr.valid = false;
-                    fr.errors.push(format!("JSON parse error: {}", e));
+                    fr.errors.push(e);
                 }
             }
         }
-        "yaml" => match serde_yaml::from_str::<serde_yaml::Value>(&s) {
-            Ok(v) => {
-                if do_fix {
-                    let pretty = serde_yaml::to_string(&v).unwrap_or_default();
-                    if pretty != s {
-                        fs::OpenOptions::new()
-                            .write(true)
-                            .truncate(true)
-                            .open(path)?
-                            .write_all(pretty.as_bytes())?;
-                        fr.fixed = true;
-                    }
+        "yaml" => {
+            let parse_fn = |s: &str| -> Result<(), String> {
+                serde_yaml::from_str::<serde_yaml::Value>(s)
+                    .map_err(|e| e.to_string())
+                    .map(|_| ())
+            };
+            let format_fn = |s: &str| -> Result<String, String> {
+                let v = serde_yaml::from_str::<serde_yaml::Value>(s)
+                    .map_err(|e| e.to_string())?;
+                serde_yaml::to_string(&v).map_err(|e| e.to_string())
+            };
+            match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "YAML") {
+                Ok((valid, fixed)) => {
+                    fr.valid = valid;
+                    fr.fixed = fixed;
+                }
+                Err(e) => {
+                    fr.valid = false;
+                    fr.errors.push(e);
                 }
             }
-            Err(e) => {
-                fr.valid = false;
-                fr.errors.push(format!("YAML parse error: {}", e));
-            }
-        },
-        "toml" => match toml::from_str::<toml::Value>(&s) {
-            Ok(v) => {
-                if do_fix {
-                    let pretty = toml::to_string_pretty(&v).unwrap_or_default();
-                    if pretty != s {
-                        fs::OpenOptions::new()
-                            .write(true)
-                            .truncate(true)
-                            .open(path)?
-                            .write_all(pretty.as_bytes())?;
-                        fr.fixed = true;
-                    }
+        }
+        "toml" => {
+            let content_for_extract = s.clone();
+            let parse_fn = |s: &str| -> Result<(), String> {
+                toml::from_str::<toml::Value>(s)
+                    .map_err(|e| {
+                        // 尝试提取行号信息
+                        extract_line_number(&e.to_string(), s)
+                    })
+                    .map(|_| ())
+            };
+            let format_fn = |s: &str| -> Result<String, String> {
+                let v = toml::from_str::<toml::Value>(s).map_err(|e| {
+                    extract_line_number(&e.to_string(), s)
+                })?;
+                toml::to_string_pretty(&v).map_err(|e| e.to_string())
+            };
+            match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "TOML") {
+                Ok((valid, fixed)) => {
+                    fr.valid = valid;
+                    fr.fixed = fixed;
+                }
+                Err(e) => {
+                    fr.valid = false;
+                    fr.errors.push(e);
                 }
             }
-            Err(e) => {
-                fr.valid = false;
-                fr.errors.push(format!("TOML parse error: {}", e));
+            // 如果是 kam.toml 文件，进行深度检查
+            if path.file_name().and_then(|n| n.to_str()) == Some("kam.toml") {
+                check_kam_toml_deep(path, &mut fr);
             }
         },
         "sh" => {
@@ -96,7 +156,8 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
             }
         }
         "markdown" => {
-            // Normalize CRLF to LF, remove trailing spaces on each line and ensure file ends with a single newline
+            // markdown文件：规范化换行符、去除行尾空格、确保文件末尾有换行
+            // 主要是为了统一格式，避免git diff时出现不必要的变更
             if do_fix {
                 let mut normalized = s.replace("\r\n", "\n");
                 // Replace remaining CR if any
@@ -127,4 +188,249 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
     }
 
     Ok(fr)
+}
+
+/// 对 kam.toml 文件进行深度检查
+/// 包括：字段验证、文件引用检查、版本号格式验证等
+fn check_kam_toml_deep(path: &Path, fr: &mut FileResult) {
+    let project_dir = path.parent().unwrap_or_else(|| Path::new("."));
+
+    // 尝试加载 kam.toml
+    match KamToml::load_from_file(path) {
+        Ok(kam_toml) => {
+            // 1. 检查必需字段
+            check_required_fields(&kam_toml, fr);
+
+            // 2. 检查版本号格式
+            check_version_format(&kam_toml.prop.version, fr);
+
+            // 3. 检查文件引用
+            check_file_references(&kam_toml, project_dir, fr);
+
+            // 4. 检查配置一致性
+            check_config_consistency(&kam_toml, project_dir, fr);
+        }
+        Err(e) => {
+            // 如果解析失败，错误已经在基本检查中报告了
+            // 这里只添加一个提示
+            fr.warnings.push(format!(
+                "Cannot perform deep validation: {}",
+                e
+            ));
+        }
+    }
+}
+
+/// 检查必需字段
+fn check_required_fields(kam_toml: &KamToml, fr: &mut FileResult) {
+    if kam_toml.prop.id.trim().is_empty() {
+        fr.valid = false;
+        fr.errors.push("[prop] id is required".to_string());
+    } else if !kam_toml
+        .prop
+        .id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+    {
+        fr.valid = false;
+        fr.errors.push(
+            "[prop] id contains invalid characters (allowed: a-z, A-Z, 0-9, _, -, .)".to_string(),
+        );
+    }
+
+    if kam_toml.prop.name.trim().is_empty() {
+        fr.valid = false;
+        fr.errors.push("[prop] name is required".to_string());
+    }
+
+    if kam_toml.prop.version.trim().is_empty() {
+        fr.valid = false;
+        fr.errors.push("[prop] version is required".to_string());
+    }
+
+    if kam_toml.prop.versionCode <= 0 {
+        fr.valid = false;
+        fr.errors.push("[prop] versionCode must be a positive integer".to_string());
+    }
+
+    if kam_toml.prop.description.trim().is_empty() {
+        fr.valid = false;
+        fr.errors.push("[prop] description is required".to_string());
+    }
+
+    // author 是可选的，但建议填写
+    if kam_toml
+        .prop
+        .author
+        .as_ref()
+        .map(|a| a.trim().is_empty())
+        .unwrap_or(true)
+    {
+        fr.warnings.push("[prop] author is empty (recommended to fill)".to_string());
+    }
+}
+
+/// 检查版本号格式（语义化版本规范）
+fn check_version_format(version: &str, fr: &mut FileResult) {
+    if version.trim().is_empty() {
+        return; // 已经在必需字段检查中处理
+    }
+
+    // 基本格式检查：应该包含至少一个点号（如 1.0 或 1.0.0）
+    let parts: Vec<&str> = version.split('.').collect();
+
+    if parts.is_empty() {
+        fr.warnings.push(format!(
+            "[prop] version '{}' does not follow semantic versioning (recommended: x.y.z)",
+            version
+        ));
+        return;
+    }
+
+    // 检查每个部分
+    let mut has_invalid_chars = false;
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            fr.warnings.push(format!(
+                "[prop] version '{}' has empty part at position {}",
+                version, i + 1
+            ));
+            return;
+        }
+
+        // 允许数字、字母和横线（支持预发布版本如 1.0.0-beta1）
+        if !part.chars().all(|c| c.is_alphanumeric() || c == '-') {
+            has_invalid_chars = true;
+        }
+    }
+
+    if has_invalid_chars {
+        fr.warnings.push(format!(
+            "[prop] version '{}' contains invalid characters (allowed: alphanumeric and '-')",
+            version
+        ));
+    }
+
+    // 建议使用语义化版本（x.y.z）
+    if parts.len() < 2 {
+        fr.warnings.push(format!(
+            "[prop] version '{}' is not semantic (recommended: x.y.z format)",
+            version
+        ));
+    }
+}
+
+/// 检查文件引用是否存在
+fn check_file_references(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileResult) {
+    // 检查 [mmrl.repo] 中的文件引用
+    if let Some(mmrl) = &kam_toml.mmrl {
+        if let Some(repo) = &mmrl.repo {
+            check_file_exists(project_dir, &repo.license_file, "[mmrl.repo] license_file", fr);
+            check_file_exists(project_dir, &repo.readme_file, "[mmrl.repo] readme_file", fr);
+            check_file_exists(project_dir, &repo.changelog_file, "[mmrl.repo] changelog_file", fr);
+
+            // 检查图标文件
+            if let Some(icon) = &repo.icon {
+                if !icon.is_empty() && !project_dir.join(icon).exists() {
+                    fr.warnings.push(format!(
+                        "[mmrl.repo] icon file '{}' not found",
+                        icon
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// 检查单个文件是否存在
+fn check_file_exists(
+    base: &Path,
+    file: &Option<String>,
+    name: &str,
+    fr: &mut FileResult,
+) {
+    if let Some(f) = file {
+        if !f.is_empty() {
+            let file_path = base.join(f);
+            if !file_path.exists() {
+                fr.valid = false;
+                fr.errors.push(format!("{} '{}' not found", name, f));
+            } else if file_path.metadata().map(|m| m.len() == 0).unwrap_or(false) {
+                fr.warnings.push(format!("{} '{}' is empty", name, f));
+            }
+        }
+    }
+}
+
+/// 检查配置一致性
+fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileResult) {
+    // 检查源码目录
+    if let Some(build) = &kam_toml.kam.build {
+        if let Some(source_dir) = &build.source_dir {
+            let src_path = project_dir.join(source_dir);
+            if !src_path.exists() {
+                fr.warnings.push(format!(
+                    "[kam.build] source_dir '{}' does not exist",
+                    source_dir
+                ));
+            }
+        } else {
+            // 使用默认路径
+            let default_src = project_dir.join("src").join(&kam_toml.prop.id);
+            if !default_src.exists() {
+                fr.warnings.push(format!(
+                    "[kam.build] default source directory '{}' does not exist",
+                    default_src.display()
+                ));
+            }
+        }
+
+        // 检查 hooks 目录
+        if let Some(hooks_dir) = &build.hooks_dir {
+            if hooks_dir != "hooks" {
+                let hooks_path = project_dir.join(hooks_dir);
+                if !hooks_path.exists() {
+                    fr.warnings.push(format!(
+                        "[kam.build] hooks_dir '{}' does not exist",
+                        hooks_dir
+                    ));
+                }
+            }
+        }
+    } else {
+        // 没有 build 配置，检查默认源码目录
+        let default_src = project_dir.join("src").join(&kam_toml.prop.id);
+        if !default_src.exists() {
+            fr.warnings.push(format!(
+                "Default source directory '{}' does not exist",
+                default_src.display()
+            ));
+        }
+    }
+
+    // 检查 [mmrl.repo] 中的 license 字段
+    if let Some(mmrl) = &kam_toml.mmrl {
+        if let Some(repo) = &mmrl.repo {
+            if repo.license.as_deref().unwrap_or("").is_empty() {
+                fr.warnings.push("[mmrl.repo] license is recommended".to_string());
+            }
+        }
+    }
+}
+
+/// 从错误消息中提取行号信息，使错误信息更友好
+fn extract_line_number(err_msg: &str, content: &str) -> String {
+    // TOML 错误通常包含 "line X" 或 "at line X"
+    let line_re = Regex::new(r"(?i)(?:at\s+)?line\s+(\d+)").unwrap();
+    if let Some(cap) = line_re.captures(err_msg) {
+        if let Ok(line_num) = cap[1].parse::<usize>() {
+            // 尝试获取该行的内容
+            if let Some(line_content) = content.lines().nth(line_num.saturating_sub(1)) {
+                return format!("{} (line {}: {})", err_msg, line_num, line_content.trim());
+            }
+            return format!("{} (line {})", err_msg, line_num);
+        }
+    }
+    err_msg.to_string()
+}
 }

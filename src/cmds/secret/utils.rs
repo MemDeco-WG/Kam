@@ -94,9 +94,10 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::sign::{Signer, Verifier};
 
-/// Retrieve public key, verify signature, or fall back to decryption and re-cache.
+// 获取或刷新公钥
+// 先从索引里加载，如果有缓存就验证签名，不行就解密私钥重新计算
 pub fn get_or_refresh_public_key(name: &str, verbose: bool) -> Result<PKey<openssl::pkey::Public>, KamError> {
-    // 1. Try Load from Index
+    // 1. 先从索引里加载
     let idx = load_index().map_err(|e| KamError::CommandFailed(format!("Failed to load secret index: {}", e)))?;
 
     // Check if we have both pem and signature

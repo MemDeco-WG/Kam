@@ -10,16 +10,16 @@ use std::path::PathBuf;
 pub struct SecretMeta {
     pub encrypted: bool,
     pub created_at: i64,
-    /// Storage backend used: "keyring" or "file" (we keep field for backward compatibility)
+    // 存储后端："keyring"或"file"（保留字段用于向后兼容）
     pub storage: String,
-    /// Last probe timestamp in milliseconds since epoch (UTC)
+    // 最后探测时间戳（毫秒，UTC）
     pub last_probe: i64,
-    /// Stored blob size in bytes
+    // 存储的blob大小（字节）
     pub size: u64,
-    /// Cached public key PEM (if any) to allow password-less operations
+    // 缓存的公钥PEM（如果有的话），用于免密码操作
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pub_key_pem: Option<String>,
-    /// Base64 encoded signature of the pub_key_pem (signed by the private key)
+    // 公钥PEM的base64编码签名（用私钥签名）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pub_key_signature: Option<String>,
 }
@@ -38,12 +38,14 @@ impl Default for SecretMeta {
     }
 }
 
+// 密钥索引，存储所有密钥的元数据
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct SecretIndex {
-    // map of name => meta
+    // 名字到元数据的映射
     pub entries: HashMap<String, SecretMeta>,
 }
 
+// 获取索引文件路径（~/.kam/secrets.json）
 fn index_path() -> Result<PathBuf, KamError> {
     let home = dirs::home_dir().ok_or_else(|| {
         KamError::InvalidDirectory("Could not determine home directory".to_string())
@@ -55,13 +57,16 @@ fn index_path() -> Result<PathBuf, KamError> {
     Ok(dir.join("secrets.json"))
 }
 
+// 加载密钥索引
+// 支持新格式（map）和旧格式（names数组），向后兼容
 pub fn load_index() -> Result<SecretIndex, KamError> {
     let p = index_path()?;
     if !p.exists() {
-        return Ok(SecretIndex::default());
+        return Ok(SecretIndex::default());  // 文件不存在就返回空的
     }
     let s = fs::read_to_string(&p).map_err(KamError::Io)?;
-    // Support both new index format (map) and old legacy format (names: [..])
+    // 支持新索引格式（map）和旧遗留格式（names: [...]）
+    // 这样旧版本的索引文件也能正常加载
     let v: serde_json::Value = serde_json::from_str(&s)
         .map_err(|e| KamError::JsonError(format!("Failed to parse secret index JSON: {}", e)))?;
     let mut idx = if v.get("entries").is_some() {

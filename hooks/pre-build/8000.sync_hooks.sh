@@ -24,8 +24,8 @@ log_info "Syncing hooks..."
 KAM_HOOKS_SRC="${KAM_HOOKS_SRC:-$KAM_PROJECT_ROOT/KamHooks}"
 KAM_TMPL_ROOT="${KAM_TMPL_ROOT:-$KAM_PROJECT_ROOT/tmpl}"
 
-cd $KAM_HOOKS_SRC && git pull origin main
-cd -
+cd "$KAM_HOOKS_SRC" && git pull origin main
+cd - || exit
 
 # Basic sanity checks
 if [ -z "$KAM_PROJECT_ROOT" ]; then
@@ -56,10 +56,10 @@ copy_if_exists() {
     # Only overwrite when the destination file exists — do not create new files in templates
     if [ -f "$dst" ]; then
         if cp -f "$src" "$dst"; then
-            log_info "Copied: $(basename \"$src\") -> $dst"
+            log_info "Copied: $(basename "$src") -> $dst"
 
             # Ensure shell scripts stay executable
-            case "$(basename \"$dst\")" in
+            case "$(basename "$dst")" in
                 *.sh)
                     chmod +x "$dst" 2>/dev/null || true
                     ;;
@@ -167,7 +167,7 @@ if [ -n "$KAM_PROJECT_HOOKS" ] && [ "$KAM_PROJECT_HOOKS" != "$KAM_HOOKS_SRC" ]; 
             [ -e "$libitem" ] || continue
             dest="$KAM_PROJECT_HOOKS/lib/$(basename "$libitem")"
             if cp -a "$libitem" "$dest"; then
-                log_info "Synced project lib: $(basename \"$libitem\") -> $dest"
+                log_info "Synced project lib: $(basename "$libitem") -> $dest"
                 chmod +x "$dest" 2>/dev/null || true
             else
                 log_warn "Failed to copy: $libitem -> $dest"
@@ -186,7 +186,7 @@ if [ -n "$KAM_PROJECT_HOOKS" ] && [ "$KAM_PROJECT_HOOKS" != "$KAM_HOOKS_SRC" ]; 
                 [ -f "$srcfile" ] || continue
                 dest="$proj_stage_dir/$(basename "$srcfile")"
                 if cp -a "$srcfile" "$dest"; then
-                    log_info "Synced project hook: $(basename \"$srcfile\") -> $dest"
+                    log_info "Synced project hook: $(basename "$srcfile") -> $dest"
                     case "$(basename "$dest")" in
                         *.sh)
                             chmod +x "$dest" 2>/dev/null || true

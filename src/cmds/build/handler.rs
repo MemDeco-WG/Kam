@@ -4,7 +4,8 @@ use std::path::Path;
 use super::args::BuildArgs;
 use super::{build_all, build_project};
 
-/// Run the build command
+// 执行构建命令
+// 如果 --all 就构建所有，否则只构建当前项目
 pub fn run(args: BuildArgs) -> Result<(), KamError> {
     let project_path = Path::new(&args.path);
 

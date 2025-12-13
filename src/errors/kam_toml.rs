@@ -22,16 +22,8 @@ pub enum KamTomlError {
     MissingName,
     #[error("Missing required field: version")]
     MissingVersion,
-    #[error("Missing required field: author")]
-    MissingAuthor,
     #[error("Missing required field: description")]
     MissingDescription,
-    #[error("Missing required section: [mmrl]")]
-    MissingMmrl,
-    #[error("Missing required field: zip_url")]
-    MissingZipUrl,
-    #[error("Missing required field: changelog")]
-    MissingChangelog,
     #[error("Invalid id: {0}")]
     InvalidId(String),
     #[error("Version must be in format x.y.z")]

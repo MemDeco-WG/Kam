@@ -8,19 +8,17 @@ use terminal_size::{Width, terminal_size};
 
 pub struct Utils;
 
-/// Default project template directories used across the repository.
+// 默认的模板目录，到处都用这个
 pub const PROJECT_TEMPLATE_DIRS: &[&str] = &["tmpl", "templates"];
 
-/// Default archive extensions supported for template/zip/tar detection.
+// 支持的压缩包格式
 pub const DEFAULT_ARCHIVE_EXTS: &[&str] = &[".tar.gz", ".tgz", ".zip", ".tar"];
 
-/// Return default directory names derived from the build section defaults.
-/// This normalizes the default exclude patterns that may contain trailing `/`
-/// or nested paths and produces top-level directory names for checks like skip-lists.
+// 返回默认的排除目录名列表
+// 就是把那些带斜杠的路径模式转换成顶层目录名，方便检查
 pub fn default_exclude_dir_names() -> Vec<String> {
-    // BuildSection::default() is the canonical place the default exclude patterns are specified.
-    // We iterate them, normalize and extract the top-level path components so they can be used
-    // to quickly check a directory name without needing full glob matching here.
+    // 从BuildSection的默认值里拿排除列表
+    // 这里主要是为了性能，避免每次都做完整的glob匹配
     let exclude_list = crate::types::kam_toml::sections::build::BuildSection::default()
         .exclude
         .unwrap_or_default();
@@ -37,8 +35,8 @@ pub fn default_exclude_dir_names() -> Vec<String> {
         }
     }
 
-    // Add common project directories which are often skipped during checks/packaging,
-    // and are not always present in the build section defaults (e.g., `templates` / `tmpl`).
+    // 再加几个常见的目录，这些通常也不应该被打包
+    // 虽然理论上应该在build section里配置，但很多人会忘记
     for common in ["dist", "templates", "tmpl"].iter() {
         if !names.iter().any(|n| n == common) {
             names.push(common.to_string());
@@ -48,44 +46,43 @@ pub fn default_exclude_dir_names() -> Vec<String> {
     names
 }
 
-/// Public helper to test include/exclude string patterns.
-///
-/// This function accepts the same pattern syntax previously used in template.rs:
-/// - patterns ending with '/' are treated as directory prefixes (match only on exact directory or under it)
-/// - glob-style patterns containing '*' or '?' are converted into a regex and matched against the rel or filename
-/// - suffix patterns like '*.ext' are detected and matched against file name suffix
+// 匹配include/exclude模式
+// 支持的格式：
+// - 以'/'结尾的当作目录前缀匹配
+// - 包含'*'或'?'的转成正则表达式
+// - '*.ext'这种后缀模式直接匹配文件名后缀
+// FIXME: 这个函数有点复杂，可能可以重构一下
 pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -> bool {
     // Normalize pattern and rel_path for comparison
     let patt = pattern.trim();
     let rel = rel_path.trim();
 
-    // Directory prefix e.g., "foo/" or "foo/bar/"
+    // 目录前缀匹配，比如 "foo/" 或 "foo/bar/"
     if patt.ends_with('/') {
         let prefix = patt.trim_end_matches('/');
-        // Normalize leading "./" in rel when checking so we can match both "a/b" and "./a/b"
+        // 去掉开头的"./"，这样"a/b"和"./a/b"都能匹配
         let rel_norm = if rel.starts_with("./") {
             &rel[2..]
         } else {
             rel
         };
-        // Match only whole directory names:
-        // - "foo/" matches "foo" or "foo/bar"
-        // - it MUST NOT match "foobar" or ".github" when prefix == ".git"
+        // 只匹配完整的目录名，不能部分匹配
+        // 比如"foo/"不能匹配"foobar"，".git"不能匹配".github"
         if rel_norm == prefix || rel_norm.starts_with(&format!("{}/", prefix)) {
             return true;
         }
     }
 
-    // Simple suffix wildcard '/*.ext' or '*.ext'
+    // 简单的后缀通配符，比如 "*.ext"
     if patt.starts_with("*.") {
         if let Some(fname) = file_name {
             return fname.ends_with(&patt[1..]);
         }
     }
 
-    // If pattern contains wildcard characters, convert to regex
+    // 如果有通配符，转成正则表达式
+    // 这里用了一个简单的转换，可能不够完善，但大部分情况够用了
     if patt.contains('*') || patt.contains('?') {
-        // Convert glob to a simple regex:
         let mut regex_str = regex::escape(patt);
         regex_str = regex_str.replace("\\*", ".*").replace("\\?", ".");
         let final_regex = format!("^{}$", regex_str);
@@ -101,7 +98,7 @@ pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -
         }
     }
 
-    // Exact match against rel path or file name
+    // 精确匹配
     if rel == patt {
         return true;
     }
@@ -110,13 +107,13 @@ pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -
             return true;
         }
     }
-    false
+    false  // 都不匹配就返回false
+    // 这个函数逻辑有点复杂，但暂时够用了
+    // TODO: 也许可以优化一下性能？不过现在还没遇到性能问题
 }
 
-/// File system and printing operations used by commands.
-///
-/// The functions in this module aim to be small and single-purpose so other
-/// modules can reuse them (reduces duplication across the repository).
+// 文件操作和打印相关的枚举
+// 设计成小函数是为了复用，避免到处重复代码
 #[derive(Debug)]
 pub enum PrintOp {
     Create { is_dir: bool },
@@ -133,11 +130,17 @@ pub enum LinkType {
     Hard,
 }
 
+/// Internal enum for log line classification
+enum LogLevel<'a> {
+    Warn(&'a str),
+    Error(&'a str),
+    Info(&'a str),
+    Empty,
+}
+
 impl Utils {
-    /// Print a human-friendly status line for file operations.
-    ///
-    /// This is presentation-only and intentionally has no side effects other
-    /// than printing. It's single-purpose so callers can reuse it consistently.
+    // 打印文件操作的状态信息
+    // 纯展示用的，没有副作用，就是打印一下
     pub fn print_status(_path: &Path, rel: &str, op: PrintOp, _force: bool) {
         match op {
             PrintOp::Skip => {
@@ -173,14 +176,9 @@ impl Utils {
         }
     }
 
-    /// Print a bold, centered banner to visually separate a logical operation.
-    ///
-    /// Uses a flower "✿" as a visual accent (梅花) and draws a simple separator.
-    /// The banner attempt to center the title within an 80-column width; if the
-    /// title is longer than the width it'll simply be printed without additional
-    /// padding.
-    pub fn banner(title: &str) {
-        // Use the terminal size to render a centered banner dynamically.
+    /// Helper function to format a centered title with decorative separators.
+    /// Returns the formatted string and terminal width.
+    fn format_centered_title(title: &str) -> (String, usize) {
         let width: usize = terminal_size()
             .map(|(Width(w), _)| w as usize)
             .unwrap_or(80);
@@ -200,11 +198,19 @@ impl Utils {
 
         let left = "─".repeat(left_len);
         let right = "─".repeat(right_len);
+        let formatted = format!("{}{}{}", left, title_text, right);
+        (formatted, width)
+    }
 
-        println!(
-            "{}",
-            format!("{}{}{}", left, title_text, right).cyan().bold()
-        );
+    /// Print a bold, centered banner to visually separate a logical operation.
+    ///
+    /// Uses a flower "✿" as a visual accent (梅花) and draws a simple separator.
+    /// The banner attempt to center the title within an 80-column width; if the
+    /// title is longer than the width it'll simply be printed without additional
+    /// padding.
+    pub fn banner(title: &str) {
+        let (formatted, _) = Self::format_centered_title(title);
+        println!("{}", formatted.cyan().bold());
         println!();
     }
 
@@ -221,36 +227,10 @@ impl Utils {
         if title.is_empty() {
             return;
         }
-        let width: usize = terminal_size()
-            .map(|(Width(w), _)| w as usize)
-            .unwrap_or(80);
-        // We create a centered title with small decorative flower
-        let title_text = format!(" ✿ {} ✿ ", title);
-        let title_len = title_text.chars().count();
-        let left_len = if width > title_len {
-            (width - title_len) / 2
-        } else {
-            0
-        };
-        let right_len = if width > title_len {
-            width - title_len - left_len
-        } else {
-            0
-        };
-        let left = "─".repeat(left_len);
-        let right = "─".repeat(right_len);
-        println!("");
-        println!(
-            "{}",
-            format!(
-                "{}{}{}",
-                left.cyan(),
-                title_text.cyan().bold(),
-                right.cyan()
-            )
-            .bold()
-        );
-        println!("");
+        let (formatted, _) = Self::format_centered_title(title);
+        println!();
+        println!("{}", formatted.cyan().bold());
+        println!();
     }
 
     /// Print a generic informational line.
@@ -279,6 +259,27 @@ impl Utils {
         eprintln!("{} {}", "✗".red().bold(), msg.red());
     }
 
+    /// Classify a log line and return its log level type.
+    /// This centralizes the classification logic used across multiple functions.
+    fn classify_log_line(line: &str) -> LogLevel {
+        let l = line.trim();
+        if l.is_empty() {
+            return LogLevel::Empty;
+        }
+        let upper = l.to_ascii_uppercase();
+        if upper.contains("[WARN]") || upper.starts_with("WARN") || upper.contains("WARNING") {
+            LogLevel::Warn(l)
+        } else if upper.contains("[ERROR]")
+            || upper.starts_with("ERROR")
+            || upper.contains("FAIL")
+            || upper.contains("[ERR]")
+        {
+            LogLevel::Error(l)
+        } else {
+            LogLevel::Info(l)
+        }
+    }
+
     /// Print stdout/stderr from a command execution in a readable form.
     ///
     /// Both `stdout` and `stderr` are accepted as byte slices to match the types
@@ -289,35 +290,24 @@ impl Utils {
         let s_out = String::from_utf8_lossy(stdout);
         let s_err = String::from_utf8_lossy(stderr);
 
-        // Helper to classify and print a single line
-        fn print_line<S: AsRef<str>>(line: S) {
-            let l = line.as_ref().trim();
-            if l.is_empty() {
-                return;
-            }
-            let upper = l.to_ascii_uppercase();
-            // Prefer mapping to structured prints: WARN -> warn, ERROR/FAIL -> error, otherwise info.
-            if upper.contains("[WARN]") || upper.starts_with("WARN") || upper.contains("WARNING") {
-                Utils::warn(l);
-            } else if upper.contains("[ERROR]")
-                || upper.starts_with("ERROR")
-                || upper.contains("FAIL")
-                || upper.contains("[ERR]")
-            {
-                Utils::error(l);
-            } else {
-                Utils::info(l);
-            }
-        }
-
         // Print stdout lines (map common prefixes to structured outputs)
         for line in s_out.lines() {
-            print_line(line);
+            match Self::classify_log_line(line) {
+                LogLevel::Warn(msg) => Utils::warn(msg),
+                LogLevel::Error(msg) => Utils::error(msg),
+                LogLevel::Info(msg) => Utils::info(msg),
+                LogLevel::Empty => {}
+            }
         }
 
         // Print stderr lines (treat as warnings/errors when applicable)
         for line in s_err.lines() {
-            print_line(line);
+            match Self::classify_log_line(line) {
+                LogLevel::Warn(msg) => Utils::warn(msg),
+                LogLevel::Error(msg) => Utils::error(msg),
+                LogLevel::Info(msg) => Utils::info(msg),
+                LogLevel::Empty => {}
+            }
         }
     }
 
@@ -325,21 +315,11 @@ impl Utils {
     /// rules used by `print_cmd_output`. This is useful for streaming
     /// log consumers that read output line-by-line.
     pub fn print_cmd_line(line: &str) {
-        let l = line.trim();
-        if l.is_empty() {
-            return;
-        }
-        let upper = l.to_ascii_uppercase();
-        if upper.contains("[WARN]") || upper.starts_with("WARN") || upper.contains("WARNING") {
-            Utils::warn(l);
-        } else if upper.contains("[ERROR]")
-            || upper.starts_with("ERROR")
-            || upper.contains("FAIL")
-            || upper.contains("[ERR]")
-        {
-            Utils::error(l);
-        } else {
-            Utils::info(l);
+        match Self::classify_log_line(line) {
+            LogLevel::Warn(msg) => Utils::warn(msg),
+            LogLevel::Error(msg) => Utils::error(msg),
+            LogLevel::Info(msg) => Utils::info(msg),
+            LogLevel::Empty => {}
         }
     }
 
@@ -350,22 +330,11 @@ impl Utils {
     /// for streaming log consumers that want to print through a progress bar
     /// or a logging queue while still preserving the same classification and color.
     pub fn format_cmd_line(line: &str) -> String {
-        let l = line.trim();
-        if l.is_empty() {
-            return String::new();
-        }
-        let upper = l.to_ascii_uppercase();
-
-        if upper.contains("[WARN]") || upper.starts_with("WARN") || upper.contains("WARNING") {
-            format!("  {} {}", "!".yellow(), l.yellow())
-        } else if upper.contains("[ERROR]")
-            || upper.starts_with("ERROR")
-            || upper.contains("FAIL")
-            || upper.contains("[ERR]")
-        {
-            format!("{} {}", "✗".red().bold(), l.red())
-        } else {
-            format!("  {} {}", "•".cyan(), l)
+        match Self::classify_log_line(line) {
+            LogLevel::Warn(msg) => format!("  {} {}", "!".yellow(), msg.yellow()),
+            LogLevel::Error(msg) => format!("{} {}", "✗".red().bold(), msg.red()),
+            LogLevel::Info(msg) => format!("  {} {}", "•".cyan(), msg),
+            LogLevel::Empty => String::new(),
         }
     }
 
@@ -387,9 +356,8 @@ impl Utils {
     }
 }
 
-/// Ensure the parent directory for `path` exists.
-///
-/// If `path` has no parent (e.g., root), this is a no-op.
+// 确保path的父目录存在
+// 如果path没有父目录（比如是根目录），就什么都不做
 pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         if !parent.exists() {
@@ -399,17 +367,13 @@ pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Atomically write `data` to `path`.
-///
-/// Implementation writes to a temporary file in the same directory and renames
-/// it into place. This reduces the chance of partial writes when the process
-/// is interrupted.
+// 原子性地写入数据到path
+// 先写到临时文件，然后rename，这样即使进程被中断也不会留下部分写入的文件
 pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    // Use a simple tmp extension; if absolute uniqueness is required, callers
-    // should provide further guarantees.
+    // 用简单的tmp扩展名，如果需要绝对唯一性，调用者应该自己保证
     let tmp = path.with_extension("kamtmp");
     let mut f = fs::File::create(&tmp)?;
     f.write_all(data)?;
@@ -418,16 +382,11 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-/// Recursively copy a directory from `src` -> `dst`.
-///
-/// - Directories are created as needed
-/// - Regular files are copied
-/// - For symlinks we attempt to follow the link and copy the target content
-///   where possible; if the target doesn't exist we try to recreate the
-///   symlink on platforms where that's possible.
-///
-/// This implementation mirrors the copy semantics used in other modules, but
-/// centralizes the logic to avoid repeated re-implementations.
+// 递归复制目录（从src到dst）
+// - 目录会按需创建
+// - 普通文件直接复制
+// - 符号链接会尝试跟随并复制目标内容，如果目标不存在就尝试重新创建链接
+//   这个函数主要是为了统一复制逻辑，避免到处重复实现
 pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
@@ -442,15 +401,15 @@ pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
         } else if file_type.is_file() {
             fs::copy(&src_path, &dst_path)?;
         } else if file_type.is_symlink() {
-            // Try to follow the symlink and copy target contents.
+            // 尝试跟随符号链接并复制目标内容
             if let Ok(target) = fs::read_link(&src_path) {
                 if target.is_dir() {
                     copy_dir_all(&target, &dst_path)?;
                 } else if target.is_file() {
                     fs::copy(&target, &dst_path)?;
                 } else {
-                    // Fallback: try to recreate the symlink. On many systems this
-                    // requires privileges (especially on Windows).
+                    // 回退方案：尝试重新创建符号链接
+                    // 在很多系统上这需要权限（特别是Windows）
                     #[cfg(unix)]
                     {
                         std::os::unix::fs::symlink(&target, &dst_path)?;
@@ -465,19 +424,20 @@ pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
                     }
                 }
             } else {
-                // If we can't read the link target, fallback to copying the item
-                // as regular file to preserve content where possible.
+                // 如果读不到链接目标，就当作普通文件复制
+                // 至少能保留一些内容
                 fs::copy(&src_path, &dst_path)?;
             }
         } else {
-            // Unknown type -> attempt to copy
+            // 未知类型，尝试复制（虽然可能失败）
             fs::copy(&src_path, &dst_path)?;
         }
     }
     Ok(())
 }
 
-/// Compute index path based on module name (similar to cargo's index structure)
+// 根据模块名计算索引路径（类似cargo的索引结构）
+// 这个函数主要是为了分散文件，避免单个目录里文件太多
 pub fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
     let name_lower = module_name.to_lowercase();
     let chars: Vec<char> = name_lower.chars().collect();
@@ -498,7 +458,8 @@ pub fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
     }
 }
 
-/// Extract package archive (zip or tar.gz)
+// 解压包（zip或tar.gz）
+// 根据文件扩展名判断格式
 pub fn extract_package(source: &Path, dest: &Path) -> Result<(), crate::errors::kam::KamError> {
     let s = source.to_string_lossy().to_lowercase();
 
@@ -521,12 +482,9 @@ pub fn extract_package(source: &Path, dest: &Path) -> Result<(), crate::errors::
     Ok(())
 }
 
-/// Install library artifacts to cache (lib, lib64, bin)
-///
-
-/// Create symlinks for all files in `src` inside `dst` recursively (where
-/// supported). On platforms where creating symlinks is not permitted, the
-/// function will fall back to copying files into place.
+// 为src目录里的所有文件在dst里创建符号链接（递归）
+// 如果不支持创建符号链接，就回退到复制文件
+// 这个函数主要是用来安装库文件到缓存（lib, lib64, bin等）
 pub fn symlink_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {

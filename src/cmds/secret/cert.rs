@@ -4,7 +4,8 @@ use std::path::PathBuf;
 
 use x509_parser::prelude::*;
 
-/// Get the directory for trusted Root CAs
+// 获取信任的根CA证书目录
+// 在 ~/.kam/trusted-cas 下
 fn trusted_cas_dir() -> Result<PathBuf, KamError> {
     let home = dirs::home_dir().ok_or_else(|| {
         KamError::InvalidDirectory("Could not determine home directory".to_string())
@@ -16,7 +17,7 @@ fn trusted_cas_dir() -> Result<PathBuf, KamError> {
     Ok(dir)
 }
 
-/// Get the directory for cached certificates
+// 获取缓存的证书目录
 fn certs_dir() -> Result<PathBuf, KamError> {
     let home = dirs::home_dir().ok_or_else(|| {
         KamError::InvalidDirectory("Could not determine home directory".to_string())
@@ -28,7 +29,7 @@ fn certs_dir() -> Result<PathBuf, KamError> {
     Ok(dir)
 }
 
-/// Load all trusted Root CAs as PEM strings
+// 加载所有信任的根CA证书（PEM格式字符串）
 pub fn load_trusted_cas() -> Result<Vec<String>, KamError> {
     let dir = trusted_cas_dir()?;
     let mut cas = Vec::new();
@@ -39,7 +40,7 @@ pub fn load_trusted_cas() -> Result<Vec<String>, KamError> {
 
         if path.extension().and_then(|s| s.to_str()) == Some("pem") {
             let pem_data = fs::read_to_string(&path).map_err(KamError::Io)?;
-            // Validate it's a valid certificate
+            // 验证一下确实是有效的证书（虽然可能有点慢，但安全第一）
             parse_x509_pem_certificate(&pem_data)?;
             cas.push(pem_data);
         }
@@ -48,14 +49,16 @@ pub fn load_trusted_cas() -> Result<Vec<String>, KamError> {
     Ok(cas)
 }
 
-/// Add a Root CA to the trust store
+// 添加一个根CA到信任列表
+// 会验证证书格式，然后保存为 {name}.pem
+// TODO: 也许应该检查一下名字是否合法？不过暂时先这样
 pub fn add_trusted_ca(pem: &str, name: &str) -> Result<(), KamError> {
     let dir = trusted_cas_dir()?;
 
-    // Validate it's a valid certificate
+    // 先验证证书格式（不然存个无效的证书也没用）
     parse_x509_pem_certificate(pem)?;
 
-    // Save to file
+    // 保存到文件，简单粗暴
     let filename = format!("{}.pem", name);
     let path = dir.join(filename);
     fs::write(&path, pem).map_err(KamError::Io)?;
@@ -63,7 +66,7 @@ pub fn add_trusted_ca(pem: &str, name: &str) -> Result<(), KamError> {
     Ok(())
 }
 
-/// List all trusted Root CAs with their fingerprints
+// 列出所有信任的根CA及其指纹
 pub fn list_trusted_cas() -> Result<Vec<(String, String)>, KamError> {
     let dir = trusted_cas_dir()?;
     let mut cas = Vec::new();
@@ -89,7 +92,7 @@ pub fn list_trusted_cas() -> Result<Vec<(String, String)>, KamError> {
     Ok(cas)
 }
 
-/// Remove a trusted Root CA by name
+// 从信任列表里删除一个根CA（根据名字）
 pub fn remove_trusted_ca(name: &str) -> Result<(), KamError> {
     let dir = trusted_cas_dir()?;
     let filename = format!("{}.pem", name);
@@ -106,7 +109,7 @@ pub fn remove_trusted_ca(name: &str) -> Result<(), KamError> {
     }
 }
 
-/// Load a cached certificate chain by name
+// 从缓存加载证书链（根据名字）
 pub fn load_cert_chain(name: &str) -> Result<String, KamError> {
     let dir = certs_dir()?;
     let filename = format!("{}.pem", name);
@@ -122,11 +125,11 @@ pub fn load_cert_chain(name: &str) -> Result<String, KamError> {
     fs::read_to_string(&path).map_err(KamError::Io)
 }
 
-/// Store a certificate chain in the cache
+// 把证书链存到缓存里
 pub fn store_cert_chain(name: &str, chain_pem: &str) -> Result<(), KamError> {
     let dir = certs_dir()?;
 
-    // Validate the chain
+    // 先验证一下证书链格式
     parse_x509_pem_chain(chain_pem)?;
 
     let filename = format!("{}.pem", name);
@@ -136,7 +139,7 @@ pub fn store_cert_chain(name: &str, chain_pem: &str) -> Result<(), KamError> {
     Ok(())
 }
 
-/// Parse a single X.509 certificate from PEM (for validation)
+// 解析单个X.509证书（PEM格式），主要是为了验证格式
 fn parse_x509_pem_certificate(pem: &str) -> Result<(), KamError> {
     let (_, pem_cert) = parse_x509_pem(pem.as_bytes())
         .map_err(|e| KamError::CommandFailed(format!("Failed to parse PEM: {}", e)))?;
@@ -148,7 +151,8 @@ fn parse_x509_pem_certificate(pem: &str) -> Result<(), KamError> {
     Ok(())
 }
 
-/// Parse a certificate chain from PEM (for validation)
+// 解析证书链（PEM格式），返回证书列表
+// 会验证每个证书的格式
 fn parse_x509_pem_chain(pem: &str) -> Result<(), KamError> {
     let mut remaining = pem.as_bytes();
     let mut count = 0;
@@ -179,19 +183,19 @@ fn parse_x509_pem_chain(pem: &str) -> Result<(), KamError> {
     Ok(())
 }
 
-/// Verify a certificate chain against trusted CAs and extract public key
+// 验证证书链（对信任的CA）并提取公钥
+// 这个函数有点复杂，主要是处理证书链的验证逻辑
 pub fn verify_cert_chain(chain_pem: &str, trusted_cas_pem: &[String]) -> Result<String, KamError> {
-    // Parse the chain
+    // 先解析证书链，转成DER格式
     let mut der_blobs: Vec<Vec<u8>> = Vec::new();
     let mut remaining = chain_pem.as_bytes();
 
     loop {
         match parse_x509_pem(remaining) {
             Ok((rest, pem_cert)) => {
-                // Copy the DER contents into an owned buffer and keep it alive via Arc
-                // Convert to owned DER bytes and store so its heap buffer remains stable
+                // 把DER内容复制到owned buffer，避免生命周期问题
+                // Rust的ownership真是...不过这样更安全
                 let der_vec = pem_cert.contents.to_vec();
-                // Store the DER bytes so they outlive this scope
                 der_blobs.push(der_vec);
 
                 if rest.is_empty() {
@@ -209,9 +213,10 @@ pub fn verify_cert_chain(chain_pem: &str, trusted_cas_pem: &[String]) -> Result<
         ));
     }
 
-    // Basic verification: check issuer-subject relationships
+    // 基本验证：检查issuer-subject关系
+    // 每个证书的issuer应该等于下一个证书的subject
     for i in 0..der_blobs.len() - 1 {
-        // parse the two certs on demand so their borrows are local to this iteration
+        // 按需解析证书，避免borrow checker抱怨
         let (_, cert) = x509_parser::parse_x509_certificate(&der_blobs[i][..]).map_err(|e| {
             KamError::CommandFailed(format!("Failed to parse X.509 certificate: {}", e))
         })?;
@@ -229,13 +234,15 @@ pub fn verify_cert_chain(chain_pem: &str, trusted_cas_pem: &[String]) -> Result<
         }
     }
 
-    // Verify the root is trusted
+    // 验证根证书是否在信任列表里
+    // 根证书是链的最后一个
     let (_, root_cert) = x509_parser::parse_x509_certificate(&der_blobs[der_blobs.len() - 1][..])
         .map_err(|e| {
         KamError::CommandFailed(format!("Failed to parse X.509 certificate: {}", e))
     })?;
     let mut trusted = false;
 
+    // 遍历所有信任的CA，看看有没有匹配的
     for ca_pem in trusted_cas_pem {
         let (_, ca_pem_cert) = parse_x509_pem(ca_pem.as_bytes())
             .map_err(|e| KamError::CommandFailed(format!("Failed to parse trusted CA: {}", e)))?;
@@ -255,26 +262,27 @@ pub fn verify_cert_chain(chain_pem: &str, trusted_cas_pem: &[String]) -> Result<
         ));
     }
 
-    // Extract public key from end-entity certificate (first in chain)
+    // 从终端实体证书（链的第一个）提取公钥
     let (_, end_entity) = x509_parser::parse_x509_certificate(&der_blobs[0][..]).map_err(|e| {
         KamError::CommandFailed(format!("Failed to parse X.509 certificate: {}", e))
     })?;
     extract_public_key_pem_from_cert(&end_entity)
 }
 
-/// Extract public key from certificate as PEM
+// 从证书提取公钥，转成PEM格式
+// 就是DER转base64，然后加上PEM的header/footer
 fn extract_public_key_pem_from_cert(cert: &X509Certificate) -> Result<String, KamError> {
     let public_key = cert.public_key();
     let key_der = public_key.raw;
 
-    // Convert DER to PEM using base64
+    // DER转base64
     use base64::engine::Engine as _;
     use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
 
     let b64 = BASE64_ENGINE.encode(key_der);
     let mut pem = String::from("-----BEGIN PUBLIC KEY-----\n");
 
-    // Split into 64-character lines
+    // 每64个字符一行（PEM标准）
     for chunk in b64.as_bytes().chunks(64) {
         pem.push_str(std::str::from_utf8(chunk).unwrap());
         pem.push('\n');
@@ -285,7 +293,8 @@ fn extract_public_key_pem_from_cert(cert: &X509Certificate) -> Result<String, Ka
     Ok(pem)
 }
 
-/// Calculate SHA-256 fingerprint from PEM
+// 计算PEM证书的SHA-256指纹
+// 就是算个hash，用来标识证书
 fn calculate_fingerprint_from_pem(pem: &str) -> Result<String, KamError> {
     use sha2::{Digest, Sha256};
 

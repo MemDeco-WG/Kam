@@ -14,14 +14,12 @@ struct Comment {
     body: String,
 }
 
-/// Fetch certificate chain from a GitHub issue
-///
-/// This looks for certificate chains in both the issue body and comments.
-/// Certificate chains should be in PEM format between markers.
+// 从GitHub issue里扒证书，有时候用户会把证书贴到issue里
+// 这玩意儿会在issue正文和评论里都找一遍
 pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<String, KamError> {
     let client = Client::new();
 
-    // Fetch the issue
+    // 先抓issue看看
     let issue_url = format!("https://api.github.com/repos/{}/{}/issues/{}", user, repo, issue_num);
     let issue: Issue = client
         .get(&issue_url)
@@ -32,14 +30,14 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
         .json()
         .map_err(|e| KamError::CommandFailed(format!("Failed to parse issue JSON: {}", e)))?;
 
-    // Try to extract certificate from issue body
+    // 先看看正文里有没有，没有的话再去评论里翻
     if let Some(body) = &issue.body {
         if let Some(cert) = extract_cert_chain(body) {
             return Ok(cert);
         }
     }
 
-    // If not found in body, check comments
+    // 正文没有？那去评论里找找，说不定有人回复了
     if issue.comments > 0 {
         let comments: Vec<Comment> = client
             .get(&issue.comments_url)
@@ -60,15 +58,15 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
     Err(KamError::CommandFailed("No certificate chain found in issue or comments".to_string()))
 }
 
-/// Extract certificate chain from markdown text
-///
-/// Looks for PEM-formatted certificates between -----BEGIN CERTIFICATE----- and -----END CERTIFICATE----- markers.
-/// Can handle multiple certificates in a chain.
+// 从markdown文本里抠出证书链
+// 就是找那些 -----BEGIN CERTIFICATE----- 和 -----END CERTIFICATE----- 之间的内容
+// 能处理多个证书（链式的那种）
 pub fn extract_cert_chain(text: &str) -> Option<String> {
     let mut chain = String::new();
     let mut in_cert = false;
     let mut current_cert = String::new();
 
+    // 逐行扫描，找到证书的开始和结束标记
     for line in text.lines() {
         let trimmed = line.trim();
 

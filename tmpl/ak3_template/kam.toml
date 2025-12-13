@@ -1,10 +1,10 @@
 [prop]
 id = "ak3_template"
-name = "ak3_template"
+name = "AnyKernel3 Template"
 version = "0.1.0"
 versionCode = 1  # Will be auto-generated as timestamp during initialization
 author = "LightJunction"
-description = "An AnyKernel3 flashable zip created with Kam"
+description = "A Kam template for creating AnyKernel3 flashable zip modules"
 updateJson = ""
 metamodule = false
 
@@ -78,11 +78,13 @@ target_dir = "../../templates/"
 output_file = "ak3_template"
 hooks_dir = "hooks"
 
-[kam.tmpl.variables]
 [kam.tmpl.variables.repository]
 var_type = "string"
 required = false
 default = ""
+note = "GitHub repository URL (optional)"
+help = "The GitHub repository URL where your module source code is hosted"
+example = "https://github.com/user/repo"
 
 [kam.workspace]
 members = ["."]

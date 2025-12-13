@@ -7,20 +7,24 @@ use crate::types::kam_toml::KamToml;
 use super::args::{ExportArgs, ExportFormat};
 use super::builders::*;
 
+// 导出命令，把kam.toml转成各种格式
+// 支持module.prop、module.json、repo.json等格式
 pub fn run(args: ExportArgs) -> Result<(), KamError> {
     let cwd = std::env::current_dir().map_err(KamError::Io)?;
     let kt = KamToml::load_from_dir(&cwd)?;
 
-    // Determine format
+    // 确定导出格式
+    // 优先级：--format参数 > 从输出文件名推断 > 默认Prop
     let format = if let Some(f) = args.format.clone() {
         f
     } else if let Some(output) = &args.output {
         let fname = output.file_name().and_then(|s| s.to_str()).unwrap_or("");
         let ext = output.extension().and_then(|s| s.to_str()).unwrap_or("");
-        // If output explicitly asks for stdout, default to Prop
+        // 如果输出是"-"（stdout），默认用Prop格式
         if output.to_str().map(|s| s == "-").unwrap_or(false) {
             ExportFormat::Prop
         } else {
+            // 根据文件名或扩展名推断格式
             if fname.eq_ignore_ascii_case("repo.json") {
                 ExportFormat::Repo
             } else if fname.eq_ignore_ascii_case("module.json") {
@@ -34,6 +38,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
             } else if ext.eq_ignore_ascii_case("json") {
                 ExportFormat::Json
             } else {
+                // 推断不出来，报错
                 return Err(KamError::UnsupportedFormat(format!(
                     "Cannot infer format from output: {}",
                     output.display()
@@ -41,18 +46,19 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
             }
         }
     } else {
-        // Default to Prop (module.prop) if no format or output specified
+        // 没指定格式和输出，默认用Prop（module.prop）
         ExportFormat::Prop
     };
 
-    // Determine output path. If args.output provided and equals "-", print to stdout.
+    // 确定输出路径
+    // 如果输出是"-"就打印到stdout，否则写到文件
     let output_path: Option<std::path::PathBuf> = if let Some(p) = &args.output {
         match p.to_str() {
-            Some("-") => None,
+            Some("-") => None,  // stdout
             _ => Some(p.clone()),
         }
     } else {
-        // Default filename based on format
+        // 没指定输出，用默认文件名（根据格式）
         let filename = match format {
             ExportFormat::Prop => "module.prop",
             ExportFormat::Json => "module.json",
@@ -64,8 +70,10 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
         Some(cwd.join(filename))
     };
 
+    // 根据格式导出
     match format {
         ExportFormat::Prop => {
+            // 导出module.prop格式
             let content = build_prop(&kt);
             if let Some(path) = &output_path {
                 if let Some(parent) = path.parent() {
@@ -74,10 +82,12 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                 std::fs::write(path, content).map_err(KamError::Io)?;
                 println!("{} Exported module.prop to {}", "✓".green(), path.display());
             } else {
+                // 输出到stdout
                 println!("{}", content);
             }
         }
         ExportFormat::Json => {
+            // 导出module.json格式（MMRL格式）
             let json_val = build_module_json(&kt);
             let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
             if let Some(path) = &output_path {
@@ -91,6 +101,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
             }
         }
         ExportFormat::Repo => {
+            // 导出repo.json格式
             let json_val = build_repo_json(&kt);
             let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
             if let Some(path) = &output_path {
@@ -104,6 +115,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
             }
         }
         ExportFormat::Track => {
+            // 导出track.json格式
             let json_val = build_track_json(&kt);
             let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
             if let Some(path) = &output_path {
@@ -117,6 +129,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
             }
         }
         ExportFormat::Config => {
+            // 导出config.json格式
             let json_val = build_config_json(&kt);
             let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
             if let Some(path) = &output_path {
@@ -130,6 +143,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
             }
         }
         ExportFormat::Update => {
+            // 导出update.json格式
             let json_val = build_update_json(&kt);
             let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
             if let Some(path) = &output_path {
@@ -159,7 +173,7 @@ mod tests {
             "example.mod".to_string(),
             "Example".to_string(),
             "1.2.3".to_string(),
-            "Tester".to_string(),
+            Some("Tester".to_string()),
             "desc".to_string(),
             None,
             None,

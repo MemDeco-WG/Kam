@@ -1,6 +1,5 @@
 use crate::errors::KamError;
 use crate::template::TemplateCacheManager;
-use colored::Colorize;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use std::fs::{self, File};
@@ -11,13 +10,14 @@ use walkdir::WalkDir;
 use zip::ZipWriter;
 use zip::write::FileOptions;
 
-/// Export a single template to a .tar.gz file
+// 导出单个模板到.tar.gz文件
+// 如果模板是目录就打包，如果是文件就直接复制
 pub fn export_single_template(
     template_name: &str,
     output_path: &Path,
     force: bool,
 ) -> Result<(), KamError> {
-    // Check if output file exists
+    // 检查输出文件是否已存在
     if output_path.exists() && !force {
         return Err(KamError::CommandFailed(format!(
             "Output file already exists: {}. Use --force to overwrite.",
@@ -25,13 +25,13 @@ pub fn export_single_template(
         )));
     }
 
-    // Find template in cache
+    // 在缓存里找模板
     let template_path =
         TemplateCacheManager::resolve_template_path(template_name)?.ok_or_else(|| {
             KamError::TemplateNotFound(format!("Template '{}' not found in cache", template_name))
         })?;
 
-    // Create parent directory if needed
+    // 创建父目录（如果需要的话）
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(KamError::Io)?;
     }
@@ -41,7 +41,7 @@ pub fn export_single_template(
     let mut archive = Builder::new(encoder);
 
     if template_path.is_dir() {
-        // Archive directory
+        // 打包目录，递归遍历所有文件
         for entry in WalkDir::new(&template_path) {
             let entry = entry.map_err(|e| KamError::Io(e.into()))?;
             let path = entry.path();
@@ -66,30 +66,31 @@ pub fn export_single_template(
             }
         }
     } else if template_path.is_file() {
-        // If it's already an archive, just copy it
+        // 如果已经是压缩包了，直接复制就行（不用再打包）
         fs::copy(&template_path, output_path).map_err(KamError::Io)?;
-        println!(
-            "{} Template '{}' exported to {}",
-            "✓".green(),
-            template_name.bold(),
+        use crate::utils::Utils;
+        Utils::success(&format!(
+            "Template '{}' exported to {}",
+            template_name,
             output_path.display()
-        );
+        ));
         return Ok(());
     }
 
     archive.finish().map_err(KamError::Io)?;
 
-    println!(
-        "{} Template '{}' exported to {}",
-        "✓".green(),
-        template_name.bold(),
+    use crate::utils::Utils;
+    Utils::success(&format!(
+        "Template '{}' exported to {}",
+        template_name,
         output_path.display()
-    );
+    ));
 
     Ok(())
 }
 
-/// Export multiple templates to a .zip file
+// 导出多个模板到一个.zip文件
+// 把多个模板打包成一个ZIP，方便分发
 pub fn export_multiple_templates(
     template_names: &[String],
     output_path: &Path,
@@ -122,11 +123,8 @@ pub fn export_multiple_templates(
         let template_path = match TemplateCacheManager::resolve_template_path(template_name)? {
             Some(path) => path,
             None => {
-                eprintln!(
-                    "{} Template '{}' not found, skipping",
-                    "⊘".yellow(),
-                    template_name
-                );
+                use crate::utils::Utils;
+                Utils::warn(&format!("Template '{}' not found, skipping", template_name));
                 continue;
             }
         };
@@ -176,24 +174,22 @@ pub fn export_multiple_templates(
         let mut temp_file = File::open(&temp_archive_path).map_err(KamError::Io)?;
         std::io::copy(&mut temp_file, &mut zip).map_err(KamError::Io)?;
 
-        println!(
-            "{} Template '{}' added to archive",
-            "✓".green(),
-            template_name
-        );
+        use crate::utils::Utils;
+        Utils::success(&format!("Template '{}' added to archive", template_name));
         exported_count += 1;
     }
 
     zip.finish()
         .map_err(|e| KamError::CommandFailed(format!("Failed to finalize ZIP: {}", e)))?;
 
+    use crate::utils::Utils;
     if exported_count > 0 {
-        println!(
-            "\n{} Successfully exported {} template(s) to {}",
-            "✓".green(),
+        println!();
+        Utils::success(&format!(
+            "Successfully exported {} template(s) to {}",
             exported_count,
             output_path.display()
-        );
+        ));
     } else {
         return Err(KamError::CommandFailed(
             "No templates were exported".to_string(),
@@ -203,7 +199,8 @@ pub fn export_multiple_templates(
     Ok(())
 }
 
-/// Main export function that detects output format and calls appropriate handler
+// 主导出函数，检测输出格式然后调用相应的处理函数
+// 根据输出文件扩展名判断是单个还是多个模板
 pub fn export_template(
     template_names: &[String],
     output_path: &Path,

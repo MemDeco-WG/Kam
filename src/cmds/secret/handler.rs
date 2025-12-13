@@ -9,15 +9,49 @@ use super::utils::{global_with_backup_default, read_secret_blob};
 use crate::errors::KamError;
 use chrono::TimeZone;
 use rpassword::prompt_password;
+use openssl::sign::Signer;
+use openssl::hash::MessageDigest;
+use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
+use base64::engine::Engine as _;
+
+/// Extract public key and signature from private key data.
+/// Returns (pub_key_pem, pub_key_signature) if successful.
+fn extract_public_key_and_signature(
+    data: &[u8],
+    password: &str,
+) -> Result<(Option<String>, Option<String>), KamError> {
+    // Try to parse private key, first without password, then with password
+    let pkey = openssl::pkey::PKey::private_key_from_pem(data)
+        .or_else(|_| openssl::pkey::PKey::private_key_from_pem_passphrase(data, password.as_bytes()))
+        .map_err(|e| KamError::CommandFailed(format!("Failed to parse private key: {}", e)))?;
+
+    // Extract public key PEM
+    let pem_bytes = pkey.public_key_to_pem()
+        .map_err(|e| KamError::CommandFailed(format!("Failed to extract public key: {}", e)))?;
+    let pem_s = String::from_utf8_lossy(&pem_bytes).to_string();
+
+    // Sign the PEM string
+    let mut signer = Signer::new(MessageDigest::sha256(), &pkey)
+        .map_err(|e| KamError::CommandFailed(format!("Failed to create signer: {}", e)))?;
+    signer.update(pem_s.as_bytes())
+        .map_err(|e| KamError::CommandFailed(format!("Failed to update signer: {}", e)))?;
+    let sig = signer.sign_to_vec()
+        .map_err(|e| KamError::CommandFailed(format!("Failed to sign: {}", e)))?;
+    let signature = BASE64_ENGINE.encode(&sig);
+
+    Ok((Some(pem_s), Some(signature)))
+}
 
 pub fn run(args: SecretArgs) -> Result<(), KamError> {
     match args.command {
         SecretCommands::List => {
             let idx = load_index()?;
             if idx.entries.is_empty() {
-                println!("No secrets stored.");
+                use crate::utils::Utils;
+                Utils::info("No secrets stored.");
             } else {
-                println!("Stored secrets:");
+                use crate::utils::Utils;
+                Utils::section("Stored Secrets");
                 let mut names: Vec<_> = idx.entries.keys().cloned().collect();
                 names.sort();
                 for n in names {
@@ -81,10 +115,12 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 s.into_bytes()
             };
 
-            // Enforce encryption: always require password and store encrypted blob
+            // 强制加密：总是需要密码并存储加密的blob
+            // 虽然可能有点麻烦，但安全第一
             let pw = if let Some(pw) = password {
                 pw
             } else {
+                // 交互式输入密码，要确认两次
                 let p1 = prompt_password("Encryption password: ").map_err(|e| {
                     KamError::CommandFailed(format!("Failed to read password: {}", e))
                 })?;
@@ -100,10 +136,13 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             };
             let blob = crate::cmds::secret_crypto::encrypt_with_password(&data, &pw)?;
 
-            // Attempt to derive public key and sign it
+            // 尝试从私钥推导公钥并签名
+            // 如果数据是私钥，就提取公钥并签名（用于验证）
             let mut pub_key_pem = None;
             let mut pub_key_signature = None;
 
+            // 尝试解析私钥，先试试无密码的，不行再试有密码的
+            // 虽然可能有点慢，但至少能兼容两种情况
             let pkey_res = openssl::pkey::PKey::private_key_from_pem(&data)
                 .or_else(|_| openssl::pkey::PKey::private_key_from_pem_passphrase(&data, pw.as_bytes()));
 
@@ -132,7 +171,8 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             let _default_with_backup = global_with_backup_default();
             // Always store to local file (no keyring)
             super::file::store_secret(&name, &blob, true, force_file, pub_key_pem, pub_key_signature)?;
-            println!("{} Secret '{}' saved.", "✓".green(), name);
+            use crate::utils::Utils;
+            Utils::success(&format!("Secret '{}' saved", name));
         }
         SecretCommands::Get {
             name,
@@ -163,12 +203,12 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                     .open(&path)
                     .map_err(KamError::Io)?;
                 f.write_all(&plaintext).map_err(KamError::Io)?;
-                println!(
-                    "{} Secret '{}' written to {}",
-                    "✓".green(),
+                use crate::utils::Utils;
+                Utils::success(&format!(
+                    "Secret '{}' written to {}",
                     name,
                     path.display()
-                );
+                ));
             } else {
                 // Write to stdout
                 let s = String::from_utf8_lossy(&plaintext);
@@ -185,7 +225,8 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             let mut idx = load_index()?;
             idx.entries.remove(&name);
             save_index(&idx)?;
-            println!("{} Secret '{}' removed.", "✓".green(), name);
+            use crate::utils::Utils;
+            Utils::success(&format!("Secret '{}' removed", name));
         }
         SecretCommands::Export {
             name,
@@ -208,12 +249,12 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                     fs::write(&path, &blob).map_err(KamError::Io)?;
                 }
             }
-            println!(
-                "{} Secret '{}' exported to {}",
-                "✓".green(),
+            use crate::utils::Utils;
+            Utils::success(&format!(
+                "Secret '{}' exported to {}",
                 name,
                 path.display()
-            );
+            ));
         }
         SecretCommands::Import { path, name } => {
             let data = fs::read(&path).map_err(KamError::Io)?;
@@ -247,36 +288,13 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 let blob = crate::cmds::secret_crypto::encrypt_with_password(&data, &pw)?;
 
                 // Attempt to derive public key
-                let mut pub_key_pem = None;
-                let mut pub_key_signature = None;
-
-                let pkey_res = openssl::pkey::PKey::private_key_from_pem(&data)
-                    .or_else(|_| openssl::pkey::PKey::private_key_from_pem_passphrase(&data, pw.as_bytes()));
-
-                if let Ok(pkey) = pkey_res {
-                     if let Ok(pem) = pkey.public_key_to_pem() {
-                         let pem_s = String::from_utf8_lossy(&pem).to_string();
-                         pub_key_pem = Some(pem_s.clone());
-
-                         // Sign the PEM string
-                         use openssl::sign::Signer;
-                         use openssl::hash::MessageDigest;
-                         use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
-                         use base64::engine::Engine as _;
-
-                         if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey) {
-                             if signer.update(pem_s.as_bytes()).is_ok() {
-                                 if let Ok(sig) = signer.sign_to_vec() {
-                                     pub_key_signature = Some(BASE64_ENGINE.encode(&sig));
-                                 }
-                             }
-                         }
-                     }
-                }
+                let (pub_key_pem, pub_key_signature) = extract_public_key_and_signature(&data, &pw)
+                    .unwrap_or((None, None));
 
                 super::file::store_secret(&final_name, &blob, true, false, pub_key_pem, pub_key_signature)?;
             }
-            println!("{} Secret '{}' imported.", "✓".green(), final_name);
+            use crate::utils::Utils;
+            Utils::success(&format!("Secret '{}' imported", final_name));
         }
         SecretCommands::ExportPub { name, out } => {
 
@@ -295,12 +313,12 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             // 5. Output
             if let Some(path) = out {
                 fs::write(&path, &pub_pem).map_err(KamError::Io)?;
-                 println!(
-                    "{} Public key for secret '{}' exported to {}",
-                    "✓".green(),
+                 use crate::utils::Utils;
+                 Utils::success(&format!(
+                    "Public key for secret '{}' exported to {}",
                     name,
                     path.display()
-                );
+                ));
             } else {
                 let s = String::from_utf8_lossy(&pub_pem);
                 print!("{}", s);
@@ -326,7 +344,8 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 let owner = parts[0];
                 let repo_name = parts[1];
 
-                println!("Fetching certificate from GitHub issue {}...", issue_num);
+                use crate::utils::Utils;
+                Utils::executing(&format!("Fetching certificate from GitHub issue {}...", issue_num));
                 super::github::fetch_cert_from_issue(owner, repo_name, issue_num)?
             } else {
                 return Err(KamError::CommandFailed(
@@ -336,11 +355,8 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
 
             // Store the certificate chain
             super::cert::store_cert_chain(&name, &chain_pem)?;
-            println!(
-                "{} Certificate chain '{}' imported successfully.",
-                "✓".green(),
-                name
-            );
+            use crate::utils::Utils;
+            Utils::success(&format!("Certificate chain '{}' imported successfully", name));
         }
         SecretCommands::Trust {
             add_root,
@@ -352,11 +368,13 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 // List trusted CAs
                 let cas = super::cert::list_trusted_cas()?;
                 if cas.is_empty() {
-                    println!("No trusted Root CAs.");
+                    use crate::utils::Utils;
+                    Utils::info("No trusted Root CAs.");
                 } else {
-                    println!("Trusted Root CAs:");
+                    use crate::utils::Utils;
+                    Utils::section("Trusted Root CAs");
                     for (name, fingerprint) in cas {
-                        println!("  {} {} ({})", "•".cyan(), name, &fingerprint[..16]);
+                        Utils::kv(&name, &fingerprint[..16]);
                     }
                 }
             } else if let Some(ca_path_or_url) = add_root {
@@ -367,7 +385,8 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 // Load CA certificate
                 let ca_pem = if ca_path_or_url.starts_with("http://") || ca_path_or_url.starts_with("https://") {
                     // Fetch from URL
-                    println!("Fetching Root CA from {}...", ca_path_or_url);
+                    use crate::utils::Utils;
+                    Utils::executing(&format!("Fetching Root CA from {}...", ca_path_or_url));
                     reqwest::blocking::get(&ca_path_or_url)
                         .map_err(|e| KamError::CommandFailed(format!("Failed to fetch CA: {}", e)))?
                         .text()
@@ -379,19 +398,13 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
 
                 // Add to trust store
                 super::cert::add_trusted_ca(&ca_pem, &ca_name)?;
-                println!(
-                    "{} Root CA '{}' added to trust store.",
-                    "✓".green(),
-                    ca_name
-                );
+                use crate::utils::Utils;
+                Utils::success(&format!("Root CA '{}' added to trust store", ca_name));
             } else if let Some(ca_name) = remove {
                 // Remove CA
                 super::cert::remove_trusted_ca(&ca_name)?;
-                println!(
-                    "{} Root CA '{}' removed from trust store.",
-                    "✓".green(),
-                    ca_name
-                );
+                use crate::utils::Utils;
+                Utils::success(&format!("Root CA '{}' removed from trust store", ca_name));
             } else {
                 return Err(KamError::CommandFailed(
                     "Must provide --list, --add-root, or --remove".to_string(),

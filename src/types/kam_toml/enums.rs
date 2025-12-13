@@ -2,7 +2,7 @@ use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
-/// 支持的 CPU 架构枚举（序列化为字符串，例如 "arm", "arm64", "x86_64"）
+// 支持的CPU架构枚举（序列化为字符串，例如 "arm", "arm64", "x86_64"）
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum SupportedArch {
@@ -79,8 +79,7 @@ impl fmt::Display for SupportedArch {
     }
 }
 
-// Allow comparing SupportedArch and String bidirectionally so existing code
-// that works with `String` (e.g. `Vec<String>::contains`) keeps working.
+// 允许SupportedArch和String双向比较，这样现有代码（比如Vec<String>::contains）还能用
 impl PartialEq<String> for SupportedArch {
     fn eq(&self, other: &String) -> bool {
         self.to_string() == *other
@@ -96,10 +95,9 @@ impl PartialEq<SupportedArch> for String {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
 #[serde(rename_all = "lowercase")]
-/// 模块类型（序列化为字符串，用于 `kam.toml` 中的 `module_type` 字段）
-///
-/// - `kam`：代表一个可发布的 Kam 模块（这里可能有点混淆，非模板都是，不特指kam_template生成的模块）
-/// - `template`：代表一个模板（用于生成其他模块）
+// 模块类型（序列化为字符串，用于kam.toml中的module_type字段）
+// - kam：代表一个可发布的Kam模块（这里可能有点混淆，非模板都是，不特指kam_template生成的模块）
+// - template：代表一个模板（用于生成其他模块）
 pub enum ModuleType {
     Kam,
     Template,

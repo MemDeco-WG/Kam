@@ -205,6 +205,379 @@ kam tmpl path
 
 For more details on templates, see [templates/README.md](docs/templates.md).
 
+## 📖 Commands Reference
+
+### `kam init` - Initialize a New Project
+
+Initialize a new Kam project from templates (supports meta and kernel templates).
+
+```bash
+kam init [OPTIONS] [PATH]
+```
+
+**Arguments:**
+- `[PATH]` - Path to initialize the project. When running interactively (`-i`/`--interactive`), this PATH may be omitted; the interactive flow will prompt for it instead.
+
+**Options:**
+- `--id <ID>` - Project ID (default: folder name)
+- `--project-name <PROJECT_NAME>` - Project name (default: "Example Module Name")
+- `--version <VERSION>` - Project version (default: "1.0.0")
+- `--author <AUTHOR>` - Author name (default: "Your Name")
+- `--update-json <UPDATE_JSON>` - Update JSON URL (default: auto-generated from git)
+- `--description <DESCRIPTION>` - Description (default: "Describe your module here")
+- `-f, --force` - Force overwrite existing files
+- `-i, --interactive` - Run the init interactively; ask for required values
+- `--var <VAR>` - Template variables in key=value format
+- `-t, --template <TEMPLATE>` - Template to use (built-in ID or local path)
+- `--tmpl` - Create a template project (Template id: "tmpl_template")
+
+**Examples:**
+```bash
+kam init my_module -t kam_template
+kam init my_module -t meta_template --interactive
+kam init my_module --tmpl
+```
+
+### `kam build` - Build and Package Module
+
+Build and package a module into a deployable ZIP artifact.
+
+```bash
+kam build [OPTIONS] [PATH]
+```
+
+**Arguments:**
+- `[PATH]` - Path to the project (default: current directory)
+
+**Options:**
+- `-a, --all` - Build all workspace members
+- `-o, --output <OUTPUT>` - Output directory (default: dist)
+- `-b, --bump` - Enable KAM_BUMP_ENABLED environment variable (set to 1)
+- `-r, --release` - Enable KAM_RELEASE_ENABLED environment variable (set to 1)
+- `-s, --sign` - Enable KAM_SIGN_ENABLE environment variable (set to 1)
+- `-i, --interactive` - Run build interactively; ask for confirmation when performing potentially destructive actions
+- `-P, --pre-release` - Enable KAM_PRE_RELEASE environment variable (set to 1)
+- `-q, --quiet` - Suppress most output; show only warnings and errors
+
+**Examples:**
+```bash
+kam build
+kam build --all
+kam build --bump
+kam build --release --sign
+kam build --interactive
+```
+
+### `kam version` - Manage Module Versions
+
+Manage module versions and bump policies.
+
+```bash
+kam version [VERSION]
+```
+
+**Arguments:**
+- `[VERSION]` - The new version (e.g. 1.0.1) or bump type (major, minor, patch)
+
+**Examples:**
+```bash
+kam version 1.0.1
+kam version patch
+kam version minor
+kam version major
+```
+
+### `kam tmpl` - Template Management
+
+Manage templates: import, export, package, and list.
+
+```bash
+kam tmpl <COMMAND>
+```
+
+**Subcommands:**
+
+#### `kam tmpl list` - List Available Templates
+```bash
+kam tmpl list
+```
+
+#### `kam tmpl import` - Import Template(s)
+```bash
+kam tmpl import [OPTIONS] <PATH>
+```
+- `<PATH>` - Path to template archive (.tar.gz for single template, .zip for multiple templates)
+- `-n, --name <NAME>` - Template name (optional, will use filename if not provided)
+- `-f, --force` - Force overwrite if template already exists
+
+#### `kam tmpl export` - Export Template(s)
+```bash
+kam tmpl export [OPTIONS] --output <OUTPUT> [TEMPLATES]...
+```
+- `[TEMPLATES]...` - Template name(s) to export (can specify multiple)
+- `-o, --output <OUTPUT>` - Output file path (.tar.gz for single template, .zip for multiple templates)
+- `-f, --force` - Force overwrite if output file already exists
+
+#### `kam tmpl pull` - Download Templates
+```bash
+kam tmpl pull [OPTIONS] [URL]
+```
+- `[URL]` - Download URL (defaults to GitHub latest release templates ZIP)
+- `--global` - (NOTE: URLs are always recorded in global config: `~/.kam/config.toml`) The `--global` flag is accepted for CLI consistency but has no effect
+
+#### `kam tmpl update` - Update Templates
+Re-download based on recorded URL in config and import.
+
+```bash
+kam tmpl update
+```
+
+#### `kam tmpl remove` - Remove Template
+```bash
+kam tmpl remove <TEMPLATE>
+```
+
+#### `kam tmpl path` - Show Template Cache Directory
+```bash
+kam tmpl path
+```
+
+### `kam cache` - Manage Local Cache
+
+Manage local template and artifact cache.
+
+```bash
+kam cache <COMMAND>
+```
+
+**Subcommands:**
+- `kam cache list` - List cached templates
+- `kam cache clean` - Clean all cached templates
+- `kam cache add` - Add a template to cache from a local directory or archive
+- `kam cache remove` - Remove a template from cache
+- `kam cache path` - Show cache directory path
+
+### `kam validate` - Validate Configuration
+
+Validate `kam.toml` configuration and templates.
+
+```bash
+kam validate [PATH]
+```
+
+**Arguments:**
+- `[PATH]` - Path to the project directory (default: current directory)
+
+### `kam check` - Check Project Files
+
+Check project JSON/YAML/Markdown files (lint/format/parse).
+
+```bash
+kam check [OPTIONS] [PATH]
+```
+
+**Arguments:**
+- `[PATH]` - Path to the project directory (default: current directory)
+
+**Options:**
+- `--json` - Output results as JSON
+- `--fix` - Try to automatically fix/format files
+
+**Examples:**
+```bash
+kam check
+kam check --json
+kam check --fix
+```
+
+### `kam export` - Export Configuration
+
+Export `kam.toml` to `module.prop`, `module.json`, `repo.json`, `track.json`, `config.json`, `update.json`.
+
+```bash
+kam export [FORMAT] [OUTPUT]
+```
+
+**Arguments:**
+- `[FORMAT]` - Export format: prop, json, update, repo, track, config
+- `[OUTPUT]` - Output file path (default: write to a format-specific filename in the current directory)
+
+**Examples:**
+```bash
+kam export prop
+kam export json module.json
+kam export update
+kam export repo
+```
+
+### `kam toml` - TOML Manipulation
+
+Inspect and edit `kam.toml` using dot-path keys (get/set/unset/list).
+
+```bash
+kam toml [OPTIONS] <COMMAND>
+```
+
+**Options:**
+- `--file <FILE>` - Operate on the project's kam.toml (default), or specify file using --file
+
+**Subcommands:**
+- `kam toml get <KEY>` - Get a value by dot-separated key path
+- `kam toml set <KEY> <VALUE>` - Set a value by key (usage: `kam toml set prop.name=value` or `kam toml set prop.name value`)
+- `kam toml unset <KEY>` - Unset/remove a key
+- `kam toml list` - Dump the full toml
+
+**Examples:**
+```bash
+kam toml get mmrl.repo.repository
+kam toml set prop.name "My Module"
+kam toml set prop.version=1.2.3
+kam toml unset prop.not_used
+kam toml list
+```
+
+### `kam config` - Configuration Management
+
+Manage per-project or global kam configuration (similar to git config).
+
+```bash
+kam config [OPTIONS] <COMMAND>
+```
+
+**Options:**
+- `--global` - Use the global configuration file (`~/.kam/config.toml`)
+- `--local` - Force use of the local configuration file (project `.kam/config.toml`)
+
+**Subcommands:**
+- `kam config get <KEY>` - Get a configuration value by key (dot-separated path)
+- `kam config set <KEY> <VALUE>` - Set a configuration value by key
+- `kam config unset <KEY>` - Unset (remove) a configuration value by key
+- `kam config list` - List all config values in the target file
+
+**Examples:**
+```bash
+kam config set prop.author "YourName"
+kam config --global set prop.author "YourName"
+kam config get prop.author
+kam config list
+```
+
+### `kam secret` - Secret Keyring Management
+
+Secret keyring management (used by sign/verify tasks).
+
+```bash
+kam secret <COMMAND>
+```
+
+**Subcommands:**
+- `kam secret list` - List saved secrets
+- `kam secret add <NAME> [FILE]` - Add a secret from a value or file
+  - `-f, --file <FILE>` - Path to a file to read the secret from
+  - `-v, --value <VALUE>` - Provide value directly
+  - `--force-file` - Force storing to local file instead of system keyring
+  - `--password <PASSWORD>` - Pass the password on the CLI (not recommended); password will be prompted if not set
+  - `--with-backup` - Also create a local fallback file under ~/.kam/secrets
+- `kam secret get <NAME>` - Get a secret and print it to stdout (or --out file)
+- `kam secret remove <NAME>` - Remove a secret
+- `kam secret export <NAME>` - Export secret to a file (by default decrypted). Use --encrypted to export encrypted blob
+- `kam secret import <NAME> <FILE>` - Import secret from a file. If file is an encrypted KAM blob, it will be stored as-is
+- `kam secret export-pub <NAME>` - Export public key from a stored private key secret
+- `kam secret import-cert` - Import developer certificate chain from GitHub issue or file
+- `kam secret trust` - Manage trusted Root CAs
+
+**Examples:**
+```bash
+kam secret add main --file private_key.pem
+kam secret list
+kam secret export-pub main
+```
+
+### `kam sign` - Sign Artifacts
+
+Sign an artifact using a key from the keyring or a PEM file.
+
+```bash
+kam sign [OPTIONS] [SRC]
+```
+
+**Arguments:**
+- `[SRC]` - The artifact to sign (zip). If omitted, use --dist or --all to sign multiple files
+
+**Options:**
+- `--secret <SECRET>` - Name of the secret in kam keyring that holds the private key [default: main]
+- `--out <OUT>` - Output directory (default: dist)
+- `--dist <DIR>` - Sign all artifacts in given directory (instead of specifying single src file)
+- `--all` - Sign all artifacts inside dist (alias of --dist <dir> with default dist)
+- `--cert <CERT>` - Certificate PEM chain path to include in signature metadata
+- `--key-path <KEY_PATH>` - Optional path to a private key PEM file to use instead of the keyring secret
+
+**Examples:**
+```bash
+kam sign module.zip
+kam sign --all
+kam sign --dist dist --cert cert.pem
+```
+
+### `kam verify` - Verify Signatures
+
+Verify an artifact signature (.sig) or a sigstore bundle (DSSE).
+
+```bash
+kam verify [OPTIONS] [SRC]
+```
+
+**Arguments:**
+- `[SRC]` - Path to the artifact to verify (required for .sig verification)
+
+**Options:**
+- `--sig <SIG>` - Path to signature file (base64 .sig). If omitted, defaults to <src>.sig
+- `--bundle <BUNDLE>` - Path to .sigstore.json bundle containing DSSE envelope and certs
+- `--cert <CERT>` - Optional certificate PEM to use for verification (overrides bundle cert)
+- `--root <ROOT>` - Optional root CA PEM to verify a certificate chain (trusted anchor)
+- `--secret <SECRET>` - Name of secret in kam keyring that holds the private key; used to derive public key for verification [default: main]
+- `--key <KEY>` - Path to public key PEM for verification (overrides derived key from secret)
+- `--cert-name <CERT_NAME>` - Name of cached developer certificate to use for verification
+- `--cert-chain <CERT_CHAIN>` - Path to certificate chain PEM file for verification
+- `--skip-crl` - Skip CRL (Certificate Revocation List) check
+- `-v, --verbose` - Verbose output showing verification steps
+
+**Examples:**
+```bash
+kam verify module.zip
+kam verify module.zip --sig module.zip.sig
+kam verify module.zip --bundle module.zip.sigstore.json
+kam verify module.zip --cert cert.pem --root root.pem
+```
+
+### `kam completions` - Generate Shell Completions
+
+Generate shell completion scripts for common shells.
+
+```bash
+kam completions [OPTIONS] <SHELL>
+```
+
+**Arguments:**
+- `<SHELL>` - Shell type for completion (bash, zsh, fish, powershell, elvish)
+
+**Options:**
+- `-o, --out <OUT>` - Output file. If omitted, prints to STDOUT
+
+**Examples:**
+```bash
+kam completions bash > /etc/bash_completion.d/kam
+kam completions fish -o ~/.config/fish/completions/kam.fish
+```
+
+### `kam about` - Display About Information
+
+Display about information for Kam and credits.
+
+```bash
+kam about
+```
+
 ### ⚠️ Network & Optional Online Features
 
 Kam supports optional network-backed functionality to increase security and convenience. These features are not required for basic scaffolding and builds, but may be enabled by flags or in future updates:

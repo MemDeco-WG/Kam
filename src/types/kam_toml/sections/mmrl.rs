@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// MMRL 顶层节：包含仓库/发布相关的子配置
+// MMRL顶层节：包含仓库/发布相关的子配置
 pub struct MmrlSection {
-    /// 仓库相关元数据，包含许可、主页、屏幕截图等信息
+    // 仓库相关元数据，包含许可、主页、屏幕截图等信息
     pub repo: Option<RepoSection>,
 }
 

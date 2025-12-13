@@ -2,15 +2,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 管理器平台的配置（例如 magisk、kernelsu、apatch）
+// 管理器平台的配置（例如magisk、kernelsu、apatch）
 pub struct ManagerConfig {
-    /// 最低兼容版本（数字）
+    // 最低兼容版本（数字）
     pub min: Option<i64>,
-    /// 支持的设备列表（可用于过滤）
+    // 支持的设备列表（可用于过滤）
     pub devices: Option<Vec<String>>,
-    /// 支持的架构列表
+    // 支持的架构列表
     pub arch: Option<Vec<String>>,
-    /// 依赖的其它模块/组件标识
+    // 依赖的其它模块/组件标识
     pub require: Option<Vec<String>>,
 }
 
@@ -27,13 +27,13 @@ impl Default for ManagerConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 不同包管理器或平台的配置组合
+// 不同包管理器或平台的配置组合
 pub struct ManagerSection {
-    /// Magisk 相关配置
+    // Magisk相关配置
     pub magisk: Option<ManagerConfig>,
-    /// kernelsu 相关配置
+    // kernelsu相关配置
     pub kernelsu: Option<ManagerConfig>,
-    /// apatch 相关配置
+    // apatch相关配置
     pub apatch: Option<ManagerConfig>,
 }
 

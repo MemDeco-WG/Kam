@@ -1,12 +1,12 @@
 [prop]
 id = "meta_template"
+name = "Meta Module Template"
 version = "0.1.0"
 versionCode = 1  # Will be auto-generated as timestamp during initialization
-author = "LIghtJUNction"
-name = "meta_template"
-description = "template to create meta module."
-updateJson = "..."
-metamodule = true # or 1
+author = "LightJunction"
+description = "A Kam template for creating meta modules that manage other modules"
+updateJson = ""
+metamodule = true
 
 [mmrl.repo]
 license = "MIT"
@@ -23,7 +23,7 @@ maintainers = []
 repository = ""
 documentation = ""
 issues = ""
-funding = "https://github.com/sponsors/LIghtJUNction"
+funding = "https://github.com/sponsors/LightJunction"
 support = ""
 donate = ""
 cover = ""
@@ -73,11 +73,13 @@ output_file = "meta_template"
 hooks_dir = "hooks"
 exclude = ["src/meta_template/"]
 
-[kam.tmpl.variables]
 [kam.tmpl.variables.repository]
 var_type = "string"
 required = false
 default = ""
+note = "GitHub repository URL (optional)"
+help = "The GitHub repository URL where your module source code is hosted"
+example = "https://github.com/user/repo"
 
 [kam.workspace]
 members = ["."]

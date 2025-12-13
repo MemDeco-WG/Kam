@@ -7,4 +7,4 @@ log_warn " comment out to enable build crates!" && exit 0
 
 # Build crates
 
-build_multi_arch $(detect_build_tool)
+build_multi_arch "$(detect_build_tool)"

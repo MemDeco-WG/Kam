@@ -1,3 +1,4 @@
+#!/system/bin/sh
 #
 # This file is part of LSPosed.
 #
@@ -36,11 +37,11 @@ extract() {
   junk_paths=$4
   [ -z "$junk_paths" ] && junk_paths=false
   opts="-o"
-  [ $junk_paths = true ] && opts="-oj"
+  [ "$junk_paths" = true ] && opts="-oj"
 
   file_path=""
   hash_path=""
-  if [ $junk_paths = true ]; then
+  if [ "$junk_paths" = true ]; then
     file_path="$dir/$(basename "$file")"
     hash_path="$TMPDIR_FOR_VERIFY/$(basename "$file").sha256"
   else

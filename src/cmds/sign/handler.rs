@@ -3,7 +3,6 @@ use crate::cmds::sign::args::SignArgs;
 use crate::errors::KamError;
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
-use colored::*;
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
@@ -11,19 +10,21 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+// 签名单个文件
+// 支持多种私钥来源：文件、环境变量、keyring
 fn sign_single_file(src_path: &Path, args: &SignArgs) -> Result<(), KamError> {
-    // Ensure out dir exists
+    // 确保输出目录存在
     let out_dir = Path::new(&args.out);
     if !out_dir.exists() {
         fs::create_dir_all(out_dir).map_err(KamError::Io)?;
     }
 
-    // Read private key: prefer --key-path if provided, otherwise use secret in keyring
+    // 读取私钥：优先级 --key-path > 环境变量 KAM_SIGN_KEY > keyring里的secret
     let pem_bytes = if let Some(kp) = args.key_path.as_ref() {
         fs::read(kp).map_err(KamError::Io)?
     } else if let Ok(env_key) = env::var("KAM_SIGN_KEY") {
         if env_key.trim().is_empty() {
-            // treat empty as not present, fall through to secret
+            // 环境变量是空的，当作不存在，继续用secret
              read_secret_plaintext(&args.secret, true)?
         } else {
              env_key.into_bytes()
@@ -32,14 +33,13 @@ fn sign_single_file(src_path: &Path, args: &SignArgs) -> Result<(), KamError> {
         read_secret_plaintext(&args.secret, true)?
     };
 
-    // Try parsing PEM directly; if it fails and a passphrase is supplied via
-    // KAM_SIGN_PASSPHRASE, retry parsing as an encrypted PEM with the passphrase.
+    // 尝试解析PEM，如果失败且提供了密码，就用密码再试一次
+    // 这样支持加密的私钥
     let pkey = match PKey::private_key_from_pem(&pem_bytes) {
         Ok(pk) => pk,
         Err(orig_err) => {
             if let Ok(pass) = std::env::var("KAM_SIGN_PASSPHRASE") {
-                // Attempt to parse an encrypted PEM using the provided passphrase.
-                // Fallback: if parsing still fails, return a helpful error.
+                // 用密码尝试解析加密的PEM
                 PKey::private_key_from_pem_passphrase(&pem_bytes, pass.as_bytes()).map_err(|e| {
                     KamError::CommandFailed(format!(
                         "Failed to parse private key PEM with passphrase: {}",
@@ -55,10 +55,10 @@ fn sign_single_file(src_path: &Path, args: &SignArgs) -> Result<(), KamError> {
         }
     };
 
-    // Read file
+    // 读取要签名的文件
     let data = fs::read(src_path).map_err(KamError::Io)?;
 
-    // Sign digest
+    // 签名（用SHA-256哈希）
     let mut signer = Signer::new(MessageDigest::sha256(), &pkey)
         .map_err(|e| KamError::CommandFailed(format!("Failed to create signer: {}", e)))?;
     signer
@@ -73,29 +73,27 @@ fn sign_single_file(src_path: &Path, args: &SignArgs) -> Result<(), KamError> {
         .and_then(|s| s.to_str())
         .ok_or_else(|| KamError::InvalidFilename("Invalid source filename".to_string()))?;
 
-    // Optionally include cert chain; if provided, write a .cert.pem next to signature
+    // 可选：包含证书链（如果提供了的话）
+    // 会写一个.cert.pem文件，和签名文件放在一起
     if let Some(cert_path) = args.cert.as_ref() {
         let cert_data = fs::read_to_string(cert_path).map_err(KamError::Io)?;
         let cert_file = out_dir.join(format!("{}.cert.pem", filename));
         fs::write(&cert_file, cert_data).map_err(KamError::Io)?;
     }
 
-    // Write .sig
+    // 写签名文件（.sig），base64编码
     let path = out_dir.join(format!("{}.sig", filename));
     let sig_b64 = BASE64_ENGINE.encode(&sig_der);
     fs::write(&path, sig_b64.as_bytes()).map_err(KamError::Io)?;
-    println!(
-        "{} Signed '{}' -> {}",
-        "✓".green(),
-        filename,
-        path.display()
-    );
+    use crate::utils::Utils;
+    Utils::success(&format!("Signed '{}' -> {}", filename, path.display()));
 
     Ok(())
 }
 
+// 签名命令的主入口
 pub fn run(args: SignArgs) -> Result<(), KamError> {
-    // If src provided, sign single file
+    // 如果指定了src，就签名单个文件
     if let Some(src_str) = args.src.as_ref() {
         let src_path = Path::new(src_str);
         return sign_single_file(src_path, &args);
@@ -124,7 +122,8 @@ pub fn run(args: SignArgs) -> Result<(), KamError> {
             }
         }
         if let Err(e) = sign_single_file(&p, &args) {
-            eprintln!("{} Signing failed for {}: {}", "!".yellow(), p.display(), e);
+            use crate::utils::Utils;
+            Utils::error(&format!("Signing failed for {}: {}", p.display(), e));
         }
     }
     Ok(())

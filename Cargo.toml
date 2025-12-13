@@ -1,6 +1,6 @@
 [dependencies]
 base64 = "0.22.1"
-clap_complete = "4.2.4"
+clap_complete = "4.5.61"
 colored = "3.0.0"
 dirs = "6.0.0"
 dotenvy = "0.15.7"
@@ -39,11 +39,11 @@ comfy-table = "7.2.1"
 
 [dependencies.chrono]
 features = ["serde"]
-version = "0.4"
+version = "0.4.42"
 
 [dependencies.clap]
 features = ["derive"]
-version = "4.5.51"
+version = "4.5.53"
 
 [dependencies.openssl]
 features = ["vendored"]
@@ -66,11 +66,11 @@ features = [
     "rt",
     "macros",
 ]
-version = "1.39"
+version = "1.48"
 
 [dependencies.toml_edit]
 features = ["serde"]
-version = "0.23.7"
+version = "0.23.9"
 
 [dependencies.indicatif]
 version = "0.18.3"

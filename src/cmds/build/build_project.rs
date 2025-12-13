@@ -1,5 +1,6 @@
 use crate::types::kam_toml::enums::ModuleType;
 
+use comfy_table::{Cell, Table};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{self, File};
 use std::io::IsTerminal;
@@ -14,6 +15,31 @@ use super::hooks::{run_post_build_hooks, run_pre_build_hooks};
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::utils::Utils;
+
+/// Check if a file should be skipped based on exclude/include patterns.
+/// Returns true if the file should be skipped (excluded and not included).
+fn should_skip_file(
+    rel_path: &str,
+    file_name: Option<&str>,
+    exclude_patterns: &[String],
+    include_patterns: &[String],
+) -> bool {
+    // Check if file matches any exclude pattern
+    let is_excluded = exclude_patterns.iter().any(|pat| {
+        crate::utils::pattern_matches(pat, rel_path, file_name)
+    });
+
+    if is_excluded {
+        // If excluded, check if it's also included (include overrides exclude)
+        let is_included = include_patterns.iter().any(|pat| {
+            crate::utils::pattern_matches(pat, rel_path, file_name)
+        });
+        // Skip if excluded and not included
+        !is_included
+    } else {
+        false
+    }
+}
 
 pub fn determine_output_dir(
     project_root: &Path,
@@ -53,8 +79,9 @@ pub fn build_project(
     })?;
     let project_path = project_root.as_path();
 
-    // Use a high-level progress bar for the main build phases rather than a large ASCII banner
-    // We'll create the main build progress bar after we know the module and template info.
+    // 用进度条显示构建过程，比打印一堆ASCII字符好看多了
+    // 等拿到模块和模板信息后再创建进度条
+    // 虽然进度条有时候会卡住，但至少看起来专业一点（笑）
 
     // Load kam.toml
     let kam_toml = if let Some(kt) = preloaded_kam_toml {
@@ -65,21 +92,30 @@ pub fn build_project(
     let module_id = &kam_toml.prop.id;
     let version = &kam_toml.prop.version;
 
+    let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
+
     if !args.quiet {
         Utils::section(&format!("Building module: {} v{}", module_id, version));
-        Utils::kv("Module", &format!("{} v{}", module_id, version));
-    }
 
-    let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
-    if !args.quiet {
-        Utils::kv("Output", &output_dir.display().to_string());
-    }
-    if !args.quiet {
+        // Use a table to display build information
+        let mut info_table = Table::new();
+        info_table
+            .set_header(vec!["配置项", "值"])
+            .add_row(vec![
+                Cell::new("模块").fg(comfy_table::Color::Cyan),
+                Cell::new(&format!("{} v{}", module_id, version)).fg(comfy_table::Color::White),
+            ])
+            .add_row(vec![
+                Cell::new("输出目录").fg(comfy_table::Color::Cyan),
+                Cell::new(output_dir.display().to_string()).fg(comfy_table::Color::White),
+            ]);
+
+        println!("{}", info_table);
         println!();
     }
 
-    // Templates are exported as tar.gz and normally do not require build hooks executed.
-    // Skip pre/post build hooks when packaging a template archive.
+    // 模板打包成tar.gz，通常不需要执行构建钩子
+    // 所以如果是模板类型，就跳过pre/post build hooks
     let is_template_build = kam_toml.kam.module_type == ModuleType::Template;
 
     let total_steps = if is_template_build { 1 } else { 3 };
@@ -148,7 +184,7 @@ pub fn build_project(
     };
     let build_duration = start_time.elapsed();
 
-    // Display build statistics
+    // Display build statistics in a beautiful table
     if let Ok(metadata) = fs::metadata(&output_file) {
         let size_kb = metadata.len() as f64 / 1024.0;
         let size_str = if size_kb < 1024.0 {
@@ -158,11 +194,22 @@ pub fn build_project(
         };
 
         println!();
-        Utils::kv(
-            "Build time",
-            &format!("{:.2}s", build_duration.as_secs_f64()),
-        );
-        Utils::kv("Package size", &size_str);
+        let mut table = Table::new();
+        table
+            .set_header(vec!["项目", "值"])
+            .add_row(vec![
+                Cell::new("构建时间").fg(comfy_table::Color::Cyan),
+                Cell::new(&format!("{:.2}s", build_duration.as_secs_f64())).fg(comfy_table::Color::Green),
+            ])
+            .add_row(vec![
+                Cell::new("包大小").fg(comfy_table::Color::Cyan),
+                Cell::new(&size_str).fg(comfy_table::Color::Green),
+            ])
+            .add_row(vec![
+                Cell::new("输出文件").fg(comfy_table::Color::Cyan),
+                Cell::new(output_file.display().to_string()).fg(comfy_table::Color::White),
+            ]);
+        println!("{}", table);
     }
 
     // Finish main spinner before running post-build hooks
@@ -264,7 +311,10 @@ pub fn create_kam_module_zip(
         prop_content.push_str(&format!("name={}\n", kam_toml.prop.get_name()));
         prop_content.push_str(&format!("version={}\n", kam_toml.prop.version));
         prop_content.push_str(&format!("versionCode={}\n", kam_toml.prop.versionCode));
-        prop_content.push_str(&format!("author={}\n", kam_toml.prop.author));
+        // author是可选的，有的话才写进去
+        if let Some(author) = &kam_toml.prop.author {
+            prop_content.push_str(&format!("author={}\n", author));
+        }
         prop_content.push_str(&format!(
             "description={}\n",
             kam_toml.prop.get_description()
@@ -339,24 +389,8 @@ pub fn create_kam_module_zip(
             // Check patterns using central matcher
             let file_name_opt = path.file_name().and_then(|s| s.to_str());
 
-            let mut should_exclude = false;
-            for pat in &exclude_patterns {
-                if crate::utils::pattern_matches(pat, &rel_str, file_name_opt) {
-                    should_exclude = true;
-                    break;
-                }
-            }
-            if should_exclude {
-                let mut should_include = false;
-                for pat in &include_patterns {
-                    if crate::utils::pattern_matches(pat, &rel_str, file_name_opt) {
-                        should_include = true;
-                        break;
-                    }
-                }
-                if !should_include {
-                    continue;
-                }
+            if should_skip_file(&rel_str, file_name_opt, &exclude_patterns, &include_patterns) {
+                continue;
             }
 
             if path.is_dir() {
@@ -437,8 +471,9 @@ pub fn create_kam_module_zip(
     zip.finish()?;
 
     if !args.quiet {
+        println!();
         Utils::success(&format!(
-            "Built Kam module: {}",
+            "✓ 成功构建模块: {}",
             module_output_file.display()
         ));
     }
@@ -521,24 +556,8 @@ pub fn create_template_archive(
         // Check custom exclude/include using the central matcher
         let rel_str = rel_path.to_string_lossy();
         let file_name_opt = entry.file_name().to_str();
-        let mut should_exclude = false;
-        for pat in &exclude_patterns {
-            if crate::utils::pattern_matches(pat, &rel_str, file_name_opt) {
-                should_exclude = true;
-                break;
-            }
-        }
-        if should_exclude {
-            let mut should_include = false;
-            for pat in &include_patterns {
-                if crate::utils::pattern_matches(pat, &rel_str, file_name_opt) {
-                    should_include = true;
-                    break;
-                }
-            }
-            if !should_include {
-                continue;
-            }
+        if should_skip_file(&rel_str, file_name_opt, &exclude_patterns, &include_patterns) {
+            continue;
         }
 
         if path.is_dir() {
@@ -569,8 +588,9 @@ pub fn create_template_archive(
     tar.finish()?;
 
     if !args.quiet {
+        println!();
         Utils::success(&format!(
-            "Built template archive: {}",
+            "✓ 成功构建模板: {}",
             source_output_file.display()
         ));
     }

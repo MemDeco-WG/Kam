@@ -28,15 +28,19 @@ pub enum ConfigCommand {
     List,
 }
 
+// 获取配置文件路径
+// 支持全局配置（~/.kam/config.toml）和本地配置（项目/.kam/config.toml）
 fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> {
     if global {
+        // 强制使用全局配置
         let home = dirs::home_dir().ok_or_else(|| {
             KamError::CommandFailed("Cannot determine home directory for global config".to_string())
         })?;
         let dir = home.join(".kam");
         Ok(dir.join("config.toml"))
     } else if local {
-        // force local: find kam.toml at cwd or upwards to locate project root; fallback to current dir
+        // 强制使用本地配置
+        // 向上查找kam.toml找到项目根目录，找不到就用当前目录
         let mut cwd = std::env::current_dir().map_err(KamError::Io)?;
         loop {
             if cwd.join("kam.toml").exists() {
@@ -46,14 +50,14 @@ fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> {
                 break;
             }
         }
-        // If no kam.toml found, use current dir
+        // 如果找不到kam.toml，就用当前目录（虽然可能不太对）
         if !cwd.join("kam.toml").exists() {
             cwd = std::env::current_dir().map_err(KamError::Io)?;
         }
         let dir = cwd.join(".kam");
         Ok(dir.join("config.toml"))
     } else {
-        // default behavior: if inside a project (kam.toml found upwards) use local; otherwise use global
+        // 默认行为：如果在项目里就用本地配置，否则用全局配置
         let mut cwd = std::env::current_dir().map_err(KamError::Io)?;
         loop {
             if cwd.join("kam.toml").exists() {
@@ -64,7 +68,7 @@ fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> {
                 break;
             }
         }
-        // Not in a project -> use global config
+        // 不在项目里，用全局配置
         let home = dirs::home_dir().ok_or_else(|| {
             KamError::CommandFailed("Cannot determine home directory for global config".to_string())
         })?;
@@ -73,6 +77,8 @@ fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> {
     }
 }
 
+// 读取TOML配置文件
+// 文件不存在就返回空表（这样不会报错）
 fn read_toml(path: &Path) -> Result<toml::Value, KamError> {
     if !path.exists() {
         return Ok(toml::Value::Table(Default::default()));
@@ -83,6 +89,8 @@ fn read_toml(path: &Path) -> Result<toml::Value, KamError> {
     Ok(v)
 }
 
+// 写入TOML配置文件
+// 用pretty格式，这样看起来比较好看
 fn write_toml(path: &Path, v: &toml::Value) -> Result<(), KamError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(KamError::Io)?;
@@ -165,11 +173,14 @@ fn unset_value_by_path(value: &mut toml::Value, path: &str) -> bool {
     false
 }
 
+// 处理config命令（get/set/unset/list）
+// 和toml命令类似，但操作的是配置文件而不是kam.toml
 pub fn run(args: ConfigArgs) -> Result<(), KamError> {
     let path = get_config_paths(args.global, args.local)?;
 
     match args.command {
         ConfigCommand::Get { key } => {
+            // 获取配置值
             let v = read_toml(&path)?;
             if let Some(val) = get_value_by_path(&v, &key) {
                 println!("{}", val);
@@ -183,18 +194,22 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
             }
         }
         ConfigCommand::Set { key, value } => {
+            // 设置配置值
             let mut v = read_toml(&path)?;
             set_value_by_path(&mut v, &key, &value);
             write_toml(&path, &v)?;
-            println!("Set {} = {} in {}", key, value, path.display());
+            use crate::utils::Utils;
+            Utils::success(&format!("Set {} = {} in {}", key, value, path.display()));
             Ok(())
         }
         ConfigCommand::Unset { key } => {
+            // 删除配置值
             let mut v = read_toml(&path)?;
             let removed = unset_value_by_path(&mut v, &key);
             if removed {
                 write_toml(&path, &v)?;
-                println!("Unset {} in {}", key, path.display());
+                use crate::utils::Utils;
+                Utils::success(&format!("Unset {} in {}", key, path.display()));
                 Ok(())
             } else {
                 Err(KamError::CommandFailed(format!(
@@ -205,6 +220,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
             }
         }
         ConfigCommand::List => {
+            // 列出所有配置
             let v = read_toml(&path)?;
             println!("{}", toml::to_string_pretty(&v).unwrap_or_default());
             Ok(())

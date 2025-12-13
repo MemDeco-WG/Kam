@@ -13,29 +13,31 @@ require_new_ksu() {
 }
 
 umount_mirrors() {
-  [ -d $ORIGDIR ] || return 0
-  for i in $ORIGDIR/*; do
-    umount -l $i 2>/dev/null
+  [ -d "$ORIGDIR" ] || return 0
+  for i in "$ORIGDIR"/*; do
+    umount -l "$i" 2>/dev/null
   done
-  rm -rf $ORIGDIR 2>/dev/null
-  $KSU && mount -o ro,remount $MAGISKTMP
+  rm -rf "$ORIGDIR" 2>/dev/null
+  $KSU && mount -o ro,remount "$MAGISKTMP"
 }
 
 cleanup() {
-  if $KSU || [ $MAGISK_VER_CODE -ge 27000 ]; then umount_mirrors; fi
-  rm -rf $MODPATH/common $MODPATH/install.zip 2>/dev/null
+  if $KSU || [ "$MAGISK_VER_CODE" -ge 27000 ]; then umount_mirrors; fi
+  rm -rf "$MODPATH"/common "$MODPATH"/install.zip 2>/dev/null
 }
 
 abort() {
   ui_print "$1"
-  rm -rf $MODPATH 2>/dev/null
+  rm -rf "$MODPATH" 2>/dev/null
   cleanup
-  rm -rf $TMPDIR 2>/dev/null
+  rm -rf "$TMPDIR" 2>/dev/null
   exit 1
 }
 
 device_check() {
-  local opt=`getopt -o dm -- "$@"` type=device
+  local opt
+  opt=$(getopt -o dm -- "$@")
+  local type=device
   eval set -- "$opt"
   while true; do
     case "$1" in
@@ -45,20 +47,23 @@ device_check() {
       *) abort "Invalid device_check argument $1! Aborting!";;
     esac
   done
-  local prop=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+  local prop
+  prop=$(echo "$1" | tr '[:upper:]' '[:lower:]')
   for i in /system /vendor /odm /product; do
-    if [ -f $i/build.prop ]; then
+    if [ -f "$i/build.prop" ]; then
       for j in "ro.product.$type" "ro.build.$type" "ro.product.vendor.$type" "ro.vendor.product.$type"; do
-        [ "$(sed -n "s/^$j=//p" $i/build.prop 2>/dev/null | head -n 1 | tr '[:upper:]' '[:lower:]')" == "$prop" ] && return 0
+        [ "$(sed -n "s/^$j=//p" "$i/build.prop" 2>/dev/null | head -n 1 | tr '[:upper:]' '[:lower:]')" == "$prop" ] && return 0
       done
-      [ "$type" == "device" ] && [ "$(sed -n "s/^"ro.build.product"=//p" $i/build.prop 2>/dev/null | head -n 1 | tr '[:upper:]' '[:lower:]')" == "$prop" ] && return 0
+      [ "$type" == "device" ] && [ "$(sed -n "s/^ro.build.product=//p" "$i/build.prop" 2>/dev/null | head -n 1 | tr '[:upper:]' '[:lower:]')" == "$prop" ] && return 0
     fi
   done
   return 1
 }
 
 cp_ch() {
-  local opt=`getopt -o nr -- "$@"` BAK=true UBAK=true FOL=false
+  local opt
+  opt=$(getopt -o nr -- "$@")
+  local BAK=true UBAK=true FOL=false
   eval set -- "$opt"
   while true; do
     case "$1" in
@@ -69,56 +74,79 @@ cp_ch() {
     esac
   done
   local SRC="$1" DEST="$2" OFILES="$1"
-  $FOL && local OFILES=$(find $SRC -type f 2>/dev/null)
-  [ -z $3 ] && PERM=0644 || PERM=$3
+  local PERM
+  if $FOL; then
+    OFILES=$(find "$SRC" -type f 2>/dev/null)
+  fi
+  [ -z "$3" ] && PERM=0644 || PERM=$3
   case "$DEST" in
     $TMPDIR/*|$MODULEROOT/*|$NVBASE/modules/$MODID/*) BAK=false;;
   esac
   for OFILE in ${OFILES}; do
+    local FILE
     if $FOL; then
-      if [ "$(basename $SRC)" == "$(basename $DEST)" ]; then
-        local FILE=$(echo $OFILE | sed "s|$SRC|$DEST|")
+      if [ "$(basename "$SRC")" == "$(basename "$DEST")" ]; then
+        FILE=$(echo "$OFILE" | sed "s|$SRC|$DEST|")
       else
-        local FILE=$(echo $OFILE | sed "s|$SRC|$DEST/$(basename $SRC)|")
+        FILE=$(echo "$OFILE" | sed "s|$SRC|$DEST/$(basename "$SRC")|")
       fi
     else
-      [ -d "$DEST" ] && local FILE="$DEST/$(basename $SRC)" || local FILE="$DEST"
+      if [ -d "$DEST" ]; then
+        FILE="$DEST/$(basename "$SRC")"
+      else
+        FILE="$DEST"
+      fi
     fi
     if $BAK && $UBAK; then
-      [ ! "$(grep "$FILE$" $INFO 2>/dev/null)" ] && echo "$FILE" >> $INFO
-      [ -f "$FILE" -a ! -f "$FILE~" ] && { mv -f $FILE $FILE~; echo "$FILE~" >> $INFO; }
+      if ! grep -q "$FILE$" "$INFO" 2>/dev/null; then
+        echo "$FILE" >> "$INFO"
+      fi
+      if [ -f "$FILE" ] && [ ! -f "$FILE~" ]; then
+        mv -f "$FILE" "$FILE~"
+        echo "$FILE~" >> "$INFO"
+      fi
     elif $BAK; then
-      [ ! "$(grep "$FILE$" $INFO 2>/dev/null)" ] && echo "$FILE" >> $INFO
+      if ! grep -q "$FILE$" "$INFO" 2>/dev/null; then
+        echo "$FILE" >> "$INFO"
+      fi
     fi
-    install -D -m $PERM "$OFILE" "$FILE"
+    install -D -m "$PERM" "$OFILE" "$FILE"
   done
 }
 
 install_script() {
   case "$1" in
     -b) shift;
+        local INPATH
         if $KSU; then
-          local INPATH=$NVBASE/boot-completed.d
+          INPATH=$NVBASE/boot-completed.d
         else
-          local INPATH=$SERVICED
-          sed -i -e '1i (\nwhile [ "$(getprop sys.boot_completed)" != "1" ]; do\n  sleep 1\ndone\nsleep 3\n' -e '$a)&' $1
+          INPATH=$SERVICED
+          sed -i -e '1i (\nwhile [ "$(getprop sys.boot_completed)" != "1" ]; do\n  sleep 1\ndone\nsleep 3\n' -e '$a)&' "$1"
         fi;;
     -l) shift; local INPATH=$SERVICED;;
     -p) shift; local INPATH=$POSTFSDATAD;;
     *) local INPATH=$SERVICED;;
   esac
-  [ "$(grep "#!/system/bin/sh" $1)" ] || sed -i "1i #!/system/bin/sh" $1
+  if ! grep -q "#!/system/bin/sh" "$1"; then
+    sed -i "1i #!/system/bin/sh" "$1"
+  fi
   local i; for i in "MODPATH" "LIBDIR" "MODID" "INFO" "MODDIR"; do
     case $i in
-      "MODPATH") sed -i "1a $i=$NVBASE/modules/$MODID" $1;;
-      "MODDIR") sed -i "1a $i=\${0%/*}" $1;;
-      *) sed -i "1a $i=$(eval echo \$$i)" $1;;
+      "MODPATH") sed -i "1a $i=$NVBASE/modules/$MODID" "$1";;
+      "MODDIR") sed -i "1a $i=\${0%/*}" "$1";;
+      *) sed -i "1a $i=$(eval echo \$$i)" "$1";;
     esac
   done
-  case $1 in
-    "$MODPATH/post-fs-data.sh"|"$MODPATH/service.sh"|"$MODPATH/uninstall.sh") sed -i "s|^MODPATH=.*|MODPATH=\$MODDIR|" $1;; # MODPATH=MODDIR for these scripts (located in module directory)
-    "$MODPATH/boot-completed.sh") $KSU && sed -i "s|^MODPATH=.*|MODPATH=\$MODDIR|" $1 || { cp_ch -n $1 $INPATH/$MODID-$(basename $1) 0755; rm -f $MODPATH/boot-completed.sh; };;
-    *) cp_ch -n $1 $INPATH/$(basename $1) 0755;;
+  case "$1" in
+    "$MODPATH/post-fs-data.sh"|"$MODPATH/service.sh"|"$MODPATH/uninstall.sh") sed -i "s|^MODPATH=.*|MODPATH=\$MODDIR|" "$1";; # MODPATH=MODDIR for these scripts (located in module directory)
+    "$MODPATH/boot-completed.sh") if $KSU; then
+        sed -i "s|^MODPATH=.*|MODPATH=\$MODDIR|" "$1"
+      else
+        cp_ch -n "$1" "$INPATH/$MODID-$(basename "$1")" 0755
+        rm -f "$MODPATH/boot-completed.sh"
+      fi;;
+    *) cp_ch -n "$1" "$INPATH/$(basename "$1")" 0755;;
   esac
 }
 

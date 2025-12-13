@@ -1,7 +1,7 @@
 use super::{ManagerSection, NoteSection, OptionsSection};
 use serde::{Deserialize, Serialize};
 
-/// A maintainer entry can be a simple string (name) or an object with name, link and type
+// 维护者条目可以是简单字符串（名字）或对象（包含name、link、type）
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum MaintainerEntry {
@@ -20,33 +20,33 @@ pub struct Maintainer {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 仓库/发布信息节，包含展示与分发相关的元数据（匹配 repo.json 规范）
+// 仓库/发布信息节，包含展示与分发相关的元数据（匹配repo.json规范）
 pub struct RepoSection {
-    /// SPDX 许可证标识符（例如 "MIT"），见 https://spdx.org/licenses/
+    // SPDX许可证标识符（例如 "MIT"），见 https://spdx.org/licenses/
     pub license: Option<String>,
-    /// 许可证文件名（相对路径），例如 `LICENSE`
+    // 许可证文件名（相对路径），例如 LICENSE
     pub license_file: Option<String>,
-    /// 项目主页 URL
+    // 项目主页URL
     pub homepage: Option<String>,
-    /// README URL（例如 GitHub README 链接）
+    // README URL（例如GitHub README链接）
     pub readme: Option<String>,
-    /// README 文件名（相对路径），例如 `README.md`
+    // README文件名（相对路径），例如 README.md
     pub readme_file: Option<String>,
-    /// Changelog URL
+    // Changelog URL
     pub changelog: Option<String>,
-    /// Changelog 文件名（相对路径），例如 `CHANGELOG.md`
+    // Changelog文件名（相对路径），例如 CHANGELOG.md
     pub changelog_file: Option<String>,
-    /// 屏幕截图 URL 列表
+    // 屏幕截图URL列表
     pub screenshots: Option<Vec<String>>,
-    /// 类别标签列表
+    // 类别标签列表
     pub categories: Option<Vec<String>>,
-    /// 关键字标签列表，便于搜索或索引
+    // 关键字标签列表，便于搜索或索引
     pub keywords: Option<Vec<String>>,
-    /// 维护者列表（可支持字符串或对象形式）
+    // 维护者列表（可支持字符串或对象形式）
     pub maintainers: Option<Vec<MaintainerEntry>>,
-    /// 源代码仓库地址（例如 GitHub 仓库 URL）
+    // 源代码仓库地址（例如GitHub仓库URL）
     pub repository: Option<String>,
-    /// 文档链接（外部文档或站点）
+    // 文档链接（外部文档或站点）
     pub documentation: Option<String>,
     /// 问题跟踪（issues）链接
     pub issues: Option<String>,

@@ -15,10 +15,11 @@ use crate::utils::{PrintOp, Utils};
 pub struct TemplateCacheManager;
 
 impl TemplateCacheManager {
+    // 获取模板缓存目录
+    // 优先级：环境变量 > 全局配置 > 默认值
     pub fn get_cache_dir() -> Result<PathBuf, KamError> {
-        // 1) Environment variable override (highest precedence).
-        //    Allows temporary or test-specific overrides:
-        //    KAM_TEMPLATE_CACHE_DIR=/tmp/kam_templates
+        // 1) 环境变量覆盖（最高优先级）
+        //    允许临时或测试时覆盖，比如 KAM_TEMPLATE_CACHE_DIR=/tmp/kam_templates
         if let Ok(dir_str) = std::env::var("KAM_TEMPLATE_CACHE_DIR") {
             if !dir_str.trim().is_empty() {
                 let cache_dir = if dir_str.starts_with("~/") {
@@ -39,11 +40,11 @@ impl TemplateCacheManager {
             }
         }
 
-        // 2) Global configuration override in `~/.kam/config.toml`:
-        //    If the config contains:
+        // 2) 全局配置覆盖（~/.kam/config.toml）
+        //    如果配置里有：
         //      [tmpl]
-        //      cache_dir = "/some/path" (or "~/somepath")
-        //    then use that as the template cache directory.
+        //      cache_dir = "/some/path" (或 "~/somepath")
+        //    就用那个作为模板缓存目录
         if let Some(home) = dirs::home_dir() {
             let cfg_path = home.join(".kam").join("config.toml");
             if cfg_path.exists() {
@@ -69,7 +70,8 @@ impl TemplateCacheManager {
             }
         }
 
-        // 3) Default fallback to `~/.kam/templates`
+        // 3) 默认回退到 ~/.kam/templates
+        //    如果前面都没找到，就用这个
         let home = dirs::home_dir().ok_or_else(|| {
             KamError::InvalidDirectory("Could not determine home directory".to_string())
         })?;
@@ -80,11 +82,12 @@ impl TemplateCacheManager {
         Ok(cache_dir)
     }
 
-    /// List all available templates (built-in + cached)
+    // 列出所有可用的模板（内置的 + 缓存的）
+    // 用HashSet去重，避免重复
     pub fn list_templates() -> Vec<String> {
         let mut templates = HashSet::new();
 
-        // 1. Built-in templates from assets
+        // 1. 从assets里找内置模板
         for file in TmplAssets::iter() {
             let filename = file.as_ref();
             if filename.ends_with(".tar.gz") {
@@ -98,13 +101,15 @@ impl TemplateCacheManager {
             }
         }
 
-        // 2. Local cache templates
+        // 2. 本地缓存的模板
+        //    遍历缓存目录，找出所有模板文件
         if let Ok(cache_dir) = Self::get_cache_dir() {
             if let Ok(entries) = fs::read_dir(cache_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        // Handle .tar.gz special case for stem
+                        // 处理.tar.gz的特殊情况，file_stem会返回"template.tar"
+                        // 需要再去掉.tar后缀
                         let name = if path.to_string_lossy().ends_with(".tar.gz") {
                             stem.strip_suffix(".tar").unwrap_or(stem)
                         } else {
@@ -307,7 +312,15 @@ impl TemplateVariableProcessor {
             "versionCode".to_string(),
             kam_toml.prop.versionCode.to_string(),
         );
-        vars.insert("author".to_string(), kam_toml.prop.author.clone());
+        vars.insert(
+            "author".to_string(),
+            kam_toml
+                .prop
+                .author
+                .as_ref()
+                .unwrap_or(&String::new())
+                .clone(),
+        );
         vars.insert(
             "description".to_string(),
             kam_toml.prop.get_description().to_string(),
@@ -328,7 +341,15 @@ impl TemplateVariableProcessor {
             "prop.versionCode".to_string(),
             kam_toml.prop.versionCode.to_string(),
         );
-        vars.insert("prop.author".to_string(), kam_toml.prop.author.clone());
+        vars.insert(
+            "prop.author".to_string(),
+            kam_toml
+                .prop
+                .author
+                .as_ref()
+                .unwrap_or(&String::new())
+                .clone(),
+        );
         vars.insert(
             "prop.description".to_string(),
             kam_toml.prop.get_description().to_string(),
@@ -358,7 +379,8 @@ impl TemplateVariableProcessor {
             }
         }
 
-        // kam.build.* fields (target & hooks directories, optional)
+        // kam.build.*字段（target和hooks目录，可选）
+        // 这些主要是给模板用的，让模板知道构建配置
         if let Some(build) = &kam_toml.kam.build {
             if let Some(source_dir) = &build.source_dir {
                 vars.insert("kam.build.source_dir".to_string(), source_dir.clone());
@@ -374,7 +396,8 @@ impl TemplateVariableProcessor {
             }
         }
 
-        // expose module_type (kam/template) for templates
+        // 暴露module_type（kam/template）给模板
+        // 虽然可能不太常用，但留着总没错
         vars.insert(
             "kam.module_type".to_string(),
             format!("{:?}", kam_toml.kam.module_type).to_ascii_lowercase(),
@@ -383,12 +406,16 @@ impl TemplateVariableProcessor {
         vars
     }
 
+    // 解析模板变量，格式是key=value
+    // 如果没有=号，就当作key，value是空字符串
+    // 这个函数很简单，但够用了
     pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, KamError> {
         let mut map = HashMap::new();
         for var in vars {
             if let Some((k, v)) = var.split_once('=') {
                 map.insert(k.to_string(), v.to_string());
             } else {
+                // 没有=号，就当key用，value是空
                 map.insert(var.to_string(), "".to_string());
             }
         }
@@ -399,7 +426,8 @@ impl TemplateVariableProcessor {
 pub struct TemplateCopier;
 
 impl TemplateCopier {
-    /// Backward-compatible wrapper that uses rule-based copy but with no include/exclude rules
+    // 向后兼容的包装函数，用rule-based copy但没有include/exclude规则
+    // 主要是为了保持API兼容性，虽然可能有点多余
     pub fn copy_and_replace(
         src: &Path,
         dst: &Path,
@@ -410,7 +438,8 @@ impl TemplateCopier {
         TemplateCopier::copy_and_replace_with_rules(src, dst, vars, force, template_id, None, None)
     }
 
-    /// Core copy function that supports `include` and `exclude` rules.
+    // 核心复制函数，支持include和exclude规则
+    // 这个函数有点长，但逻辑还算清晰
     pub fn copy_and_replace_with_rules(
         src: &Path,
         dst: &Path,
@@ -427,7 +456,8 @@ impl TemplateCopier {
             )));
         }
 
-        // Build Tera context by unflattening the variables
+        // 构建Tera上下文，把扁平化的变量展开成嵌套结构
+        // 这样模板里可以用prop.id这种点号路径访问
         let context_value = unflatten_vars(vars);
         let context = Context::from_serialize(&context_value).map_err(|e| {
             KamError::CommandFailed(format!("Failed to build template context: {}", e))
@@ -493,33 +523,31 @@ impl TemplateCopier {
                 // Check if file exists before writing to determine correct status
                 let file_existed = dst_path.exists();
 
-                // Binary files are copied as-is without templating
+                // 二进制文件直接复制，不做模板替换（不然会损坏）
                 if is_binary(src_path) {
                     fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
                 } else {
-                    // Text file - perform substitution
+                    // 文本文件，尝试做模板替换
                     let content = fs::read_to_string(src_path);
                     match content {
                         Ok(text) => {
-                            // Try to render. If it fails (e.g. invalid syntax for Tera but valid for the file type),
-                            // fallback to raw copy.
+                            // 尝试渲染，如果失败（比如Tera语法错误但文件本身是合法的）
+                            // 就回退到直接复制
+                            // 这样GitHub workflows那种用{{ }}的文件也能正常处理
                             match tera.render_str(&text, &context) {
                                 Ok(rendered) => {
                                     fs::write(&dst_path, rendered).map_err(KamError::Io)?;
                                 }
                                 Err(_e) => {
-                                    // Make this verbose only if debugging, or just copy silent fallback for "invalid syntax"
-                                    // Check if it is a syntax error that suggests it's not a template
-                                    // For now, we tread it as: "Not a template, copy raw"
-                                    // But we log it if verbose (TODO: add verbose flag), or just warning.
-                                    // To reduce noise for things like GitHub workflows which use {{ }}, we can check the error.
+                            // 渲染失败，可能是语法错误，也可能不是模板文件
+                            // 直接复制原始内容，不报错（减少噪音）
+                            // 比如GitHub workflows那种用{{ }}的文件，虽然看起来像模板
+                            // 但实际上不是Tera模板，直接复制就行
+                            // TODO: 也许可以加个verbose标志来显示警告？
+                            // 不过现在先这样，大部分情况够用了
 
-                                    // We will just fallback to copy, maybe print a debug note if we had a logger.
-                                    // For now, let's suppress the warning for common cases or make it less scary.
-                                    // If force is true, maybe user expects templates.
-
-                                    // Proceed to copy raw
-                                    fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
+                            // 直接复制原始文件（就当它不是模板）
+                            fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
                                 }
                             }
                         }
@@ -804,7 +832,7 @@ cache_dir = "~/my_config_cache_dir"
             "com.example.test".to_string(),
             "Example Test".to_string(),
             "0.1.0".to_string(),
-            "Author".to_string(),
+            Some("Author".to_string()),
             "Desc".to_string(),
             None,
             None,

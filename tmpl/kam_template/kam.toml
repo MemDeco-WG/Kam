@@ -1,10 +1,10 @@
 [prop]
 id = "kam_template"
+name = "Kam Module Template"
 version = "0.1.0"
 versionCode = 1  # Will be auto-generated as timestamp during initialization
-author = "LIghtJUNction"
-name = "kam_template"
-description = "A Magisk/KernelSU module created with Kam"
+author = "LightJunction"
+description = "A Kam template for creating Magisk/KernelSU/APatch modules"
 updateJson = ""
 metamodule = false
 
@@ -23,7 +23,7 @@ maintainers = []
 repository = ""
 documentation = ""
 issues = ""
-funding = "https://github.com/sponsors/LIghtJUNction"
+funding = "https://github.com/sponsors/LightJunction"
 support = ""
 donate = ""
 cover = ""
@@ -73,11 +73,13 @@ output_file = "kam_template"
 hooks_dir = "hooks"
 exclude = ["src/kam_template/"]
 
-[kam.tmpl.variables]
 [kam.tmpl.variables.repository]
 var_type = "string"
 required = false
 default = ""
+note = "GitHub repository URL (optional)"
+help = "The GitHub repository URL where your module source code is hosted"
+example = "https://github.com/user/repo"
 
 [kam.workspace]
 members = ["."]

@@ -1,3 +1,4 @@
+#!/system/bin/sh
 # copy from：
 # https://github.com/osm0sis/PlayIntegrityFork/blob/main/module%2Fcommon_func.sh
 
@@ -18,13 +19,14 @@ SKIPPERSISTPROP=false
 persistprop() {
     local NAME="$1"
     local NEWVALUE="$2"
-    local CURVALUE="$(resetprop "$NAME")"
+    local CURVALUE
+    CURVALUE="$(resetprop "$NAME")"
 
-    if ! grep -q "$NAME" $MODPATH/uninstall.sh 2>/dev/null; then
+    if ! grep -q "$NAME" "$MODPATH"/uninstall.sh 2>/dev/null; then
         if [ "$CURVALUE" ]; then
-            [ "$NEWVALUE" = "$CURVALUE" ] || echo "resetprop -n -p \"$NAME\" \"$CURVALUE\"" >> $MODPATH/uninstall.sh
+            [ "$NEWVALUE" = "$CURVALUE" ] || echo "resetprop -n -p \"$NAME\" \"$CURVALUE\"" >> "$MODPATH"/uninstall.sh
         else
-            echo "resetprop -p --delete \"$NAME\"" >> $MODPATH/uninstall.sh
+            echo "resetprop -p --delete \"$NAME\"" >> "$MODPATH"/uninstall.sh
         fi
     fi
     resetprop -n -p "$NAME" "$NEWVALUE"
@@ -37,32 +39,40 @@ RESETPROP="resetprop -n"
 resetprop_hexpatch() {
     case "$1" in
         -f|--force) local FORCE=1; shift;;
-    esac 
+    esac
 
     local NAME="$1"
     local NEWVALUE="$2"
-    local CURVALUE="$(resetprop "$NAME")"
+    local CURVALUE
+    CURVALUE="$(resetprop "$NAME")"
 
-    [ ! "$NEWVALUE" -o ! "$CURVALUE" ] && return 1
-    [ "$NEWVALUE" = "$CURVALUE" -a ! "$FORCE" ] && return 2
+    [ ! "$NEWVALUE" ] || [ ! "$CURVALUE" ] && return 1
+    [ "$NEWVALUE" = "$CURVALUE" ] && [ ! "$FORCE" ] && return 2
 
     local NEWLEN=${#NEWVALUE}
+    local PROPFILE
     if [ -f /dev/__properties__ ]; then
-        local PROPFILE=/dev/__properties__
+        PROPFILE=/dev/__properties__
     else
-        local PROPFILE="/dev/__properties__/$(resetprop -Z "$NAME")"
+        PROPFILE="/dev/__properties__/$(resetprop -Z "$NAME")"
     fi
     [ ! -f "$PROPFILE" ] && return 3
-    local NAMEOFFSET=$(echo $(strings -t d "$PROPFILE" | grep "$NAME") | cut -d\  -f1)
+    local NAMEOFFSET
+    NAMEOFFSET="$(strings -t d "$PROPFILE" | grep "$NAME" | cut -d\  -f1)"
 
     #<hex 2-byte change counter><flags byte><hex length of prop value><prop value + nul padding to 92 bytes><prop name>
-    local NEWHEX="$(printf '%02x' "$NEWLEN")$(printf "$NEWVALUE" | od -A n -t x1 -v | tr -d ' \n')$(printf "%$((92-NEWLEN))s" | sed 's/ /00/g')"
+    local NEWHEX
+    local padding
+    padding="$(printf "%$((92-NEWLEN))s" | sed 's/ /00/g')"
+    NEWHEX="$(printf '%02x' "$NEWLEN")$(printf '%s' "$NEWVALUE" | od -A n -t x1 -v | tr -d ' \n')$padding"
 
     printf "Patch '$NAME' to '$NEWVALUE' in '$PROPFILE' @ 0x%08x -> \n[0000??$NEWHEX]\n" $((NAMEOFFSET-96))
 
     echo -ne "\x00\x00" \
         | dd obs=1 count=2 seek=$((NAMEOFFSET-96)) conv=notrunc of="$PROPFILE"
-    echo -ne "$(printf "$NEWHEX" | sed -e 's/.\{2\}/&\\x/g' -e 's/^/\\x/' -e 's/\\x$//')" \
+    local hex_escaped
+    hex_escaped="$(printf '%s' "$NEWHEX" | sed -e 's/.\{2\}/&\\x/g' -e 's/^/\\x/' -e 's/\\x$//')"
+    echo -ne "$hex_escaped" \
         | dd obs=1 count=93 seek=$((NAMEOFFSET-93)) conv=notrunc of="$PROPFILE"
 }
 
@@ -70,7 +80,8 @@ resetprop_hexpatch() {
 resetprop_if_diff() {
     local NAME="$1"
     local EXPECTED="$2"
-    local CURRENT="$(resetprop "$NAME")"
+    local CURRENT
+    CURRENT="$(resetprop "$NAME")"
 
     [ -z "$CURRENT" ] || [ "$CURRENT" = "$EXPECTED" ] || $RESETPROP "$NAME" "$EXPECTED"
 }

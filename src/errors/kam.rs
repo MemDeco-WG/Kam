@@ -1,6 +1,7 @@
 use thiserror::Error;
 use toml;
-/// Kam-wide error type to avoid `Box<dyn Error>` in public APIs.
+// Kam的错误类型，避免在公共API里用Box<dyn Error>
+// 用thiserror自动生成Error trait实现
 #[derive(Error, Debug)]
 pub enum KamError {
     #[error("IO error: {0}")]

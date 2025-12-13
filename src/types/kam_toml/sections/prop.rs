@@ -42,7 +42,7 @@ pub struct PropSection {
     pub name: String,
     pub version: String,
     pub versionCode: i64,
-    pub author: String,
+    pub author: Option<String>,
     pub description: String,
     pub updateJson: Option<String>,
     #[serde(default, deserialize_with = "deserialize_metamodule")]
@@ -66,7 +66,7 @@ impl Default for PropSection {
             name: "Example Module Name".to_string(),
             version: "1.0.0".to_string(),
             versionCode: 1,
-            author: "Your Name".to_string(),
+            author: Some("Your Name".to_string()),
             description: "Describe your module here".to_string(),
             updateJson: Some(
                 "https://raw.githubusercontent.com/user/repo/branch/update.json".to_string(),

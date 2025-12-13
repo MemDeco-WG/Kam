@@ -1,12 +1,12 @@
 use crate::errors::KamError;
 use crate::template::TemplateCacheManager;
-use colored::Colorize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use zip::ZipArchive;
 
-/// Import a single template from a .tar.gz file
+// 从.tar.gz文件导入单个模板
+// 如果指定了name就用指定的，否则从文件名提取
 pub fn import_single_template(
     archive_path: &Path,
     name: Option<String>,
@@ -19,11 +19,12 @@ pub fn import_single_template(
         )));
     }
 
-    // Determine template name
+    // 确定模板名字
+    // 如果用户指定了就用指定的，否则从文件名提取
     let template_name = if let Some(n) = name {
         n
     } else {
-        // Extract name from filename
+        // 从文件名提取（去掉扩展名）
         let filename = archive_path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -31,7 +32,8 @@ pub fn import_single_template(
                 KamError::InvalidDirectory("Could not determine template name".to_string())
             })?;
 
-        // Handle .tar.gz case where file_stem gives us "template.tar"
+        // 处理.tar.gz的情况，file_stem会返回"template.tar"
+        // 需要再去掉.tar后缀
         let clean_name = if filename.ends_with(".tar") {
             filename.strip_suffix(".tar").unwrap_or(filename)
         } else {
@@ -44,7 +46,7 @@ pub fn import_single_template(
     let cache_dir = TemplateCacheManager::get_cache_dir()?;
     let dest_path = cache_dir.join(format!("{}.tar.gz", template_name));
 
-    // Check if template already exists
+    // 检查模板是否已存在
     if dest_path.exists() && !force {
         return Err(KamError::CommandFailed(format!(
             "Template '{}' already exists. Use --force to overwrite.",
@@ -52,19 +54,17 @@ pub fn import_single_template(
         )));
     }
 
-    // Copy the archive to cache directory
+    // 直接复制到缓存目录（简单粗暴）
     fs::copy(archive_path, &dest_path).map_err(KamError::Io)?;
 
-    println!(
-        "{} Template '{}' imported successfully",
-        "✓".green(),
-        template_name.bold()
-    );
+    use crate::utils::Utils;
+    Utils::success(&format!("Template '{}' imported successfully", template_name));
 
     Ok(())
 }
 
-/// Import multiple templates from a .zip file
+// 从.zip文件导入多个模板
+// ZIP里可能包含多个.tar.gz文件，也可能包含目录结构的模板
 pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), KamError> {
     if !zip_path.exists() {
         return Err(KamError::InvalidDirectory(format!(
@@ -81,8 +81,8 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
     let mut imported_count = 0;
     let mut skipped_count = 0;
 
-    // Extract .tar.gz files and also handle directory-based templates in the zip
-    // We will collect top-level directories' entries and later extract them into the template cache
+    // 提取.tar.gz文件，也处理ZIP里的目录结构模板
+    // 先收集顶层目录的条目，后面再提取到模板缓存
     let mut dir_groups: HashMap<String, Vec<usize>> = HashMap::new();
 
     for i in 0..archive.len() {
@@ -97,7 +97,7 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
 
         let outpath_str = outpath.to_string_lossy();
 
-        // If the entry is a .tar.gz file, treat as a single template archive
+        // 如果是.tar.gz文件，当作单个模板压缩包处理
         if outpath_str.ends_with(".tar.gz") {
             let filename = outpath
                 .file_name()
@@ -108,11 +108,11 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
 
             // Check if exists
             if dest_path.exists() && !force {
-                println!(
-                    "{} Template '{}' already exists, skipping",
-                    "⊘".yellow(),
+                use crate::utils::Utils;
+                Utils::warn(&format!(
+                    "Template '{}' already exists, skipping",
                     filename.strip_suffix(".tar.gz").unwrap_or(filename)
-                );
+                ));
                 skipped_count += 1;
                 continue;
             }
@@ -121,11 +121,11 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
             let mut outfile = fs::File::create(&dest_path).map_err(KamError::Io)?;
             std::io::copy(&mut file, &mut outfile).map_err(KamError::Io)?;
 
-            println!(
-                "{} Template '{}' imported",
-                "✓".green(),
+            use crate::utils::Utils;
+            Utils::success(&format!(
+                "Template '{}' imported",
                 filename.strip_suffix(".tar.gz").unwrap_or(filename)
-            );
+            ));
             imported_count += 1;
         } else {
             // Non .tar.gz entry - consider grouping by top-level directory name
@@ -148,11 +148,8 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
 
         // If template exists in cache and force is not set, skip
         if dest_dir.exists() && !force {
-            println!(
-                "{} Template '{}' already exists, skipping",
-                "⊘".yellow(),
-                top
-            );
+            use crate::utils::Utils;
+            Utils::warn(&format!("Template '{}' already exists, skipping", top));
             skipped_count += 1;
             continue;
         }
@@ -194,34 +191,30 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
         }
         crate::utils::copy_dir_all(temp_dir.path(), &dest_dir).map_err(KamError::Io)?;
 
-        println!("{} Template '{}' imported", "✓".green(), top);
+        use crate::utils::Utils;
+        Utils::success(&format!("Template '{}' imported", top));
         imported_count += 1;
     }
 
+    use crate::utils::Utils;
     if imported_count > 0 {
-        println!(
-            "\n{} Successfully imported {} template(s)",
-            "✓".green(),
-            imported_count
-        );
+        println!();
+        Utils::success(&format!("Successfully imported {} template(s)", imported_count));
     }
 
     if skipped_count > 0 {
-        println!(
-            "{} Skipped {} template(s) (already exist)",
-            "⊘".yellow(),
-            skipped_count
-        );
+        Utils::warn(&format!("Skipped {} template(s) (already exist)", skipped_count));
     }
 
     if imported_count == 0 && skipped_count == 0 {
-        println!("{} No .tar.gz templates found in ZIP file", "!".yellow());
+        Utils::warn("No .tar.gz templates found in ZIP file");
     }
 
     Ok(())
 }
 
-/// Main import function that detects file type and calls appropriate handler
+// 主导入函数，检测文件类型然后调用相应的处理函数
+// 支持.tar.gz和.zip两种格式
 pub fn import_template(path: &Path, name: Option<String>, force: bool) -> Result<(), KamError> {
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
@@ -233,10 +226,8 @@ pub fn import_template(path: &Path, name: Option<String>, force: bool) -> Result
     } else if extension == "zip" {
         // Multiple templates import
         if name.is_some() {
-            println!(
-                "{} Note: --name is ignored when importing from ZIP (contains multiple templates)",
-                "!".yellow()
-            );
+            use crate::utils::Utils;
+            Utils::warn("Note: --name is ignored when importing from ZIP (contains multiple templates)");
         }
         import_multiple_templates(path, force)
     } else {

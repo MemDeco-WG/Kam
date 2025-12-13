@@ -52,7 +52,7 @@ pub enum TmplCommands {
     Pull {
         /// Download URL (defaults to GitHub latest release templates ZIP)
         url: Option<String>,
-        /// (NOTE: URLs are always recorded in global config: `~/.kam/config.toml`)
+        // 注意：URL总是记录在全局配置里（~/.kam/config.toml）
         /// The `--global` flag is accepted for CLI consistency but has no effect.
         #[arg(long)]
         global: bool,
@@ -60,7 +60,7 @@ pub enum TmplCommands {
 
     /// Re-download based on recorded URL in config and import
     Update {
-        /// (NOTE: URLs are always read from global config: `~/.kam/config.toml`)
+        // 注意：URL总是从全局配置读取（~/.kam/config.toml）
         /// The `--global` flag is accepted for CLI consistency but has no effect.
         #[arg(long)]
         global: bool,

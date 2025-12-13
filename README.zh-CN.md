@@ -2,34 +2,25 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/MemDeco-WG/Kam)
+[![Version](https://img.shields.io/badge/version-0.4.26-blue.svg)](https://github.com/MemDeco-WG/Kam)
 
 [English](README.md) | 简体中文
 
 ## 📖 简介
 
-Kam 是一个强大的基于模板的模块构建工具，
-
-目前支持的模板：
-- Magisk/Apu/Ksu 模块
-
-- Anykernel3 模板
-
-
-Kam的核心职责
-解析模板
-初始化
-构建_版本控制
-
+Kam 是一个用于搭建、构建和分发 ksu/APU/Magisk/AnyTemplate 模块的 CLI 工具包。它专注于快速项目初始化、可重现构建、模板管理以及为模块维护者和分发渠道提供便捷的仓库/元数据导出。
 
 ### ✨ 主要特性
 
 - 🚀 **快速初始化** - 使用多种模板快速创建新模块项目
 - 🔧 **自动化构建** - 一键构建模块 ZIP 包
+- 🔒 **网络可选** - Kam 支持大多数命令的离线操作，但某些功能可能依赖网络服务以获得额外功能（见下文）
 - 🎯 **智能同步** - 自动同步 `kam.toml` 配置到 `module.prop` 和 `update.json`
+- ⚙️ **配置管理** - `kam config` 管理全局（`~/.kam/config.toml`）和项目级（`./.kam/config.toml`）设置，避免重复编辑
+- 🗂️ **仓库和元数据导出** - 将 `kam.toml` 导出为 repo.json、module.json、track.json、config.json，用于市场或注册表
 - 🪝 **钩子系统** - 支持构建前后的自定义脚本钩子
 - 📦 **模板管理** - 导入、导出和共享模块模板
-- 🌐 **WebUI 支持** - 内置 WebUI 构建和集成
+- 🌐 **WebUI 集成** - 内置 WebUI 构建和集成（注意：Kam 不提供运行时模块管理）
 - 🔄 **版本管理** - 自动化版本号管理和发布
 
 ## 🚀 快速开始
@@ -74,7 +65,7 @@ kam init my_kernel_module -t ak3_template
 
 ### 配置模块
 
-编辑 `kam.toml` 配置文件：
+编辑 `kam.toml` 配置文件，或使用 `kam config` 命令管理配置：
 
 ```toml
 [prop]
@@ -90,6 +81,28 @@ updateJson = "https://example.com/update.json"
 repository = "https://github.com/username/my_awesome_module"
 changelog = "https://github.com/username/my_awesome_module/blob/main/CHANGELOG.md"
 ```
+
+### 管理 Kam 配置
+
+Kam 提供了 `kam config` 命令来管理每个项目和全局配置，类似于 `git config`：
+
+示例：
+
+```bash
+# 设置项目级配置（存储在 `./.kam/config.toml`）
+kam config set prop.author "你的名字"
+
+# 获取项目级配置
+kam config get prop.author
+
+# 设置全局配置（存储在 `~/.kam/config.toml`）
+kam config --global set prop.author "你的名字"
+
+# 列出当前目标（项目或全局）的配置
+kam config list
+```
+
+这样可以避免频繁手动编辑 `kam.toml` 中应该是全局或跨项目通用的值。
 
 ### 添加模块文件
 
@@ -161,7 +174,6 @@ kam tmpl export kam_template ak3_template -o my_templates.zip
 
 有关模板系统的详细使用说明、模板开发建议与 `kam init` 的行为（包括二进制文件跳过策略），请参阅：`docs/templates.md`。
 
-
 #### 其他模板命令
 
 ```bash
@@ -170,6 +182,379 @@ kam tmpl remove template_name
 
 # 显示模板缓存目录
 kam tmpl path
+```
+
+## 📖 命令参考
+
+### `kam init` - 初始化新项目
+
+从模板初始化一个新的 Kam 项目（支持元模块和内核模块模板）。
+
+```bash
+kam init [OPTIONS] [PATH]
+```
+
+**参数：**
+- `[PATH]` - 初始化项目的路径。在交互模式下（`-i`/`--interactive`），可以省略此路径；交互流程会提示输入。
+
+**选项：**
+- `--id <ID>` - 项目 ID（默认：文件夹名称）
+- `--project-name <PROJECT_NAME>` - 项目名称（默认："Example Module Name"）
+- `--version <VERSION>` - 项目版本（默认："1.0.0"）
+- `--author <AUTHOR>` - 作者名称（默认："Your Name"）
+- `--update-json <UPDATE_JSON>` - 更新 JSON URL（默认：从 git 自动生成）
+- `--description <DESCRIPTION>` - 描述（默认："Describe your module here"）
+- `-f, --force` - 强制覆盖现有文件
+- `-i, --interactive` - 交互式运行初始化；询问必需的值
+- `--var <VAR>` - 模板变量，格式为 key=value
+- `-t, --template <TEMPLATE>` - 要使用的模板（内置 ID 或本地路径）
+- `--tmpl` - 创建模板项目（模板 ID："tmpl_template"）
+
+**示例：**
+```bash
+kam init my_module -t kam_template
+kam init my_module -t meta_template --interactive
+kam init my_module --tmpl
+```
+
+### `kam build` - 构建和打包模块
+
+构建并打包模块为可部署的 ZIP 文件。
+
+```bash
+kam build [OPTIONS] [PATH]
+```
+
+**参数：**
+- `[PATH]` - 项目路径（默认：当前目录）
+
+**选项：**
+- `-a, --all` - 构建所有工作空间成员
+- `-o, --output <OUTPUT>` - 输出目录（默认：dist）
+- `-b, --bump` - 启用 KAM_BUMP_ENABLED 环境变量（设置为 1）
+- `-r, --release` - 启用 KAM_RELEASE_ENABLED 环境变量（设置为 1）
+- `-s, --sign` - 启用 KAM_SIGN_ENABLE 环境变量（设置为 1）
+- `-i, --interactive` - 交互式运行构建；在执行可能破坏性操作时询问确认
+- `-P, --pre-release` - 启用 KAM_PRE_RELEASE 环境变量（设置为 1）
+- `-q, --quiet` - 抑制大部分输出；仅显示警告和错误
+
+**示例：**
+```bash
+kam build
+kam build --all
+kam build --bump
+kam build --release --sign
+kam build --interactive
+```
+
+### `kam version` - 管理模块版本
+
+管理模块版本和版本号升级策略。
+
+```bash
+kam version [VERSION]
+```
+
+**参数：**
+- `[VERSION]` - 新版本（例如 1.0.1）或升级类型（major, minor, patch）
+
+**示例：**
+```bash
+kam version 1.0.1
+kam version patch
+kam version minor
+kam version major
+```
+
+### `kam tmpl` - 模板管理
+
+管理模板：导入、导出、打包和列出。
+
+```bash
+kam tmpl <COMMAND>
+```
+
+**子命令：**
+
+#### `kam tmpl list` - 列出可用模板
+```bash
+kam tmpl list
+```
+
+#### `kam tmpl import` - 导入模板
+```bash
+kam tmpl import [OPTIONS] <PATH>
+```
+- `<PATH>` - 模板归档文件路径（单个模板为 .tar.gz，多个模板为 .zip）
+- `-n, --name <NAME>` - 模板名称（可选，如未提供则使用文件名）
+- `-f, --force` - 如果模板已存在则强制覆盖
+
+#### `kam tmpl export` - 导出模板
+```bash
+kam tmpl export [OPTIONS] --output <OUTPUT> [TEMPLATES]...
+```
+- `[TEMPLATES]...` - 要导出的模板名称（可指定多个）
+- `-o, --output <OUTPUT>` - 输出文件路径（单个模板为 .tar.gz，多个模板为 .zip）
+- `-f, --force` - 如果输出文件已存在则强制覆盖
+
+#### `kam tmpl pull` - 下载模板
+```bash
+kam tmpl pull [OPTIONS] [URL]
+```
+- `[URL]` - 下载 URL（默认为 GitHub 最新发布的 templates ZIP）
+- `--global` - （注意：URL 始终记录在全局配置中：`~/.kam/config.toml`）`--global` 标志为 CLI 一致性而接受，但无实际效果
+
+#### `kam tmpl update` - 更新模板
+根据配置中记录的 URL 重新下载并导入。
+
+```bash
+kam tmpl update
+```
+
+#### `kam tmpl remove` - 删除模板
+```bash
+kam tmpl remove <TEMPLATE>
+```
+
+#### `kam tmpl path` - 显示模板缓存目录
+```bash
+kam tmpl path
+```
+
+### `kam cache` - 管理本地缓存
+
+管理本地模板和构建产物缓存。
+
+```bash
+kam cache <COMMAND>
+```
+
+**子命令：**
+- `kam cache list` - 列出缓存的模板
+- `kam cache clean` - 清理所有缓存的模板
+- `kam cache add` - 从本地目录或归档文件添加模板到缓存
+- `kam cache remove` - 从缓存中删除模板
+- `kam cache path` - 显示缓存目录路径
+
+### `kam validate` - 验证配置
+
+验证 `kam.toml` 配置和模板。
+
+```bash
+kam validate [PATH]
+```
+
+**参数：**
+- `[PATH]` - 项目目录路径（默认：当前目录）
+
+### `kam check` - 检查项目文件
+
+检查项目中的 JSON/YAML/Markdown 文件（检查/格式化/解析）。
+
+```bash
+kam check [OPTIONS] [PATH]
+```
+
+**参数：**
+- `[PATH]` - 项目目录路径（默认：当前目录）
+
+**选项：**
+- `--json` - 以 JSON 格式输出结果
+- `--fix` - 尝试自动修复/格式化文件
+
+**示例：**
+```bash
+kam check
+kam check --json
+kam check --fix
+```
+
+### `kam export` - 导出配置
+
+将 `kam.toml` 导出为 `module.prop`、`module.json`、`repo.json`、`track.json`、`config.json`、`update.json`。
+
+```bash
+kam export [FORMAT] [OUTPUT]
+```
+
+**参数：**
+- `[FORMAT]` - 导出格式：prop, json, update, repo, track, config
+- `[OUTPUT]` - 输出文件路径（默认：写入当前目录中格式特定的文件名）
+
+**示例：**
+```bash
+kam export prop
+kam export json module.json
+kam export update
+kam export repo
+```
+
+### `kam toml` - TOML 操作
+
+使用点分隔的键路径检查和编辑 `kam.toml`（get/set/unset/list）。
+
+```bash
+kam toml [OPTIONS] <COMMAND>
+```
+
+**选项：**
+- `--file <FILE>` - 操作项目的 kam.toml（默认），或使用 --file 指定文件
+
+**子命令：**
+- `kam toml get <KEY>` - 通过点分隔的键路径获取值
+- `kam toml set <KEY> <VALUE>` - 通过键设置值（用法：`kam toml set prop.name=value` 或 `kam toml set prop.name value`）
+- `kam toml unset <KEY>` - 取消设置/删除键
+- `kam toml list` - 转储完整的 toml
+
+**示例：**
+```bash
+kam toml get mmrl.repo.repository
+kam toml set prop.name "我的模块"
+kam toml set prop.version=1.2.3
+kam toml unset prop.not_used
+kam toml list
+```
+
+### `kam config` - 配置管理
+
+管理每个项目或全局的 kam 配置（类似于 git config）。
+
+```bash
+kam config [OPTIONS] <COMMAND>
+```
+
+**选项：**
+- `--global` - 使用全局配置文件（`~/.kam/config.toml`）
+- `--local` - 强制使用本地配置文件（项目 `.kam/config.toml`）
+
+**子命令：**
+- `kam config get <KEY>` - 通过键（点分隔路径）获取配置值
+- `kam config set <KEY> <VALUE>` - 通过键设置配置值
+- `kam config unset <KEY>` - 取消设置（删除）配置值
+- `kam config list` - 列出目标文件中的所有配置值
+
+**示例：**
+```bash
+kam config set prop.author "你的名字"
+kam config --global set prop.author "你的名字"
+kam config get prop.author
+kam config list
+```
+
+### `kam secret` - 密钥管理
+
+密钥管理（用于签名/验证任务）。
+
+```bash
+kam secret <COMMAND>
+```
+
+**子命令：**
+- `kam secret list` - 列出已保存的密钥
+- `kam secret add <NAME> [FILE]` - 从值或文件添加密钥
+  - `-f, --file <FILE>` - 读取密钥的文件路径
+  - `-v, --value <VALUE>` - 直接提供值
+  - `--force-file` - 强制存储到本地文件而不是系统密钥环
+  - `--password <PASSWORD>` - 在 CLI 上传递密码（不推荐）；如果未设置，将提示输入密码
+  - `--with-backup` - 同时在 ~/.kam/secrets 下创建本地备用文件
+- `kam secret get <NAME>` - 获取密钥并打印到 stdout（或 --out 文件）
+- `kam secret remove <NAME>` - 删除密钥
+- `kam secret export <NAME>` - 导出密钥到文件（默认解密）。使用 --encrypted 导出加密的 blob
+- `kam secret import <NAME> <FILE>` - 从文件导入密钥。如果文件是加密的 KAM blob，将按原样存储
+- `kam secret export-pub <NAME>` - 从存储的私钥密钥导出公钥
+- `kam secret import-cert` - 从 GitHub issue 或文件导入开发者证书链
+- `kam secret trust` - 管理受信任的根 CA
+
+**示例：**
+```bash
+kam secret add main --file private_key.pem
+kam secret list
+kam secret export-pub main
+```
+
+### `kam sign` - 签名构建产物
+
+使用密钥环中的密钥或 PEM 文件对构建产物进行签名。
+
+```bash
+kam sign [OPTIONS] [SRC]
+```
+
+**参数：**
+- `[SRC]` - 要签名的构建产物（zip）。如果省略，使用 --dist 或 --all 对多个文件进行签名
+
+**选项：**
+- `--secret <SECRET>` - kam 密钥环中保存私钥的密钥名称 [默认：main]
+- `--out <OUT>` - 输出目录（默认：dist）
+- `--dist <DIR>` - 对给定目录中的所有构建产物进行签名（而不是指定单个 src 文件）
+- `--all` - 对 dist 内的所有构建产物进行签名（使用默认 dist 的 --dist <dir> 的别名）
+- `--cert <CERT>` - 要包含在签名元数据中的证书 PEM 链路径
+- `--key-path <KEY_PATH>` - 可选路径，指向用于替代密钥环密钥的私钥 PEM 文件
+
+**示例：**
+```bash
+kam sign module.zip
+kam sign --all
+kam sign --dist dist --cert cert.pem
+```
+
+### `kam verify` - 验证签名
+
+验证构建产物签名（.sig）或 sigstore 包（DSSE）。
+
+```bash
+kam verify [OPTIONS] [SRC]
+```
+
+**参数：**
+- `[SRC]` - 要验证的构建产物路径（.sig 验证必需）
+
+**选项：**
+- `--sig <SIG>` - 签名文件路径（base64 .sig）。如果省略，默认为 <src>.sig
+- `--bundle <BUNDLE>` - 包含 DSSE 信封和证书的 .sigstore.json 包路径
+- `--cert <CERT>` - 用于验证的可选证书 PEM（覆盖包证书）
+- `--root <ROOT>` - 用于验证证书链的可选根 CA PEM（受信任锚点）
+- `--secret <SECRET>` - kam 密钥环中保存私钥的密钥名称；用于派生公钥进行验证 [默认：main]
+- `--key <KEY>` - 用于验证的公钥 PEM 路径（覆盖从密钥派生的密钥）
+- `--cert-name <CERT_NAME>` - 用于验证的缓存开发者证书名称
+- `--cert-chain <CERT_CHAIN>` - 用于验证的证书链 PEM 文件路径
+- `--skip-crl` - 跳过 CRL（证书撤销列表）检查
+- `-v, --verbose` - 显示验证步骤的详细输出
+
+**示例：**
+```bash
+kam verify module.zip
+kam verify module.zip --sig module.zip.sig
+kam verify module.zip --bundle module.zip.sigstore.json
+kam verify module.zip --cert cert.pem --root root.pem
+```
+
+### `kam completions` - 生成 Shell 补全
+
+为常见 shell 生成补全脚本。
+
+```bash
+kam completions [OPTIONS] <SHELL>
+```
+
+**参数：**
+- `<SHELL>` - 补全的 shell 类型（bash, zsh, fish, powershell, elvish）
+
+**选项：**
+- `-o, --out <OUT>` - 输出文件。如果省略，打印到 STDOUT
+
+**示例：**
+```bash
+kam completions bash > /etc/bash_completion.d/kam
+kam completions fish -o ~/.config/fish/completions/kam.fish
+```
+
+### `kam about` - 显示关于信息
+
+显示 Kam 的关于信息和致谢。
+
+```bash
+kam about
 ```
 
 ### ⚠️ 网络与可选在线功能
@@ -194,17 +579,46 @@ kam tmpl update
 
 这些功能默认情况下尽量关闭，以保留 Kam 的离线优先特性。
 
+### TOML 操作
+
+你可以使用 `toml` 子命令直接从 CLI 检查和修改 `kam.toml`：
+
+```bash
+# 通过点分隔的键路径获取嵌套值
+kam toml get mmrl.repo.repository
+
+# 设置值：支持 `key value` 和 `key=value` 两种形式
+kam toml set prop.name "我的模块"
+kam toml set prop.version=1.2.3
+
+# 删除值
+kam toml unset prop.not_used
+
+# 转储 kam.toml
+kam toml list
+```
+
 ### 构建选项
 
 ```bash
 # 基本构建
 kam build
 
+# 构建所有
+kam build -a    # --all 的简写
+kam build --all
+
 # 构建并自动升级版本号
 kam build --bump
 
 # 构建并创建 GitHub Release
+# 创建 GitHub release 并从 `dist/` 上传构建产物（签名和不可变性可选）
 kam build --release
+#
+# 示例：创建不可变的签名 release（如果相同标签已存在则跳过重新上传）并上传 Sigstore
+# 证明 JSON（DSSE 包复制为 `*.attestation.json`）作为 release 资产：
+#
+# kam build -r -s -i
 
 # 调试模式
 KAM_DEBUG=1 kam build
@@ -371,6 +785,7 @@ my_module/
 - [Magisk](https://github.com/topjohnwu/Magisk) - Android 的魔法框架
 - [KernelSU](https://github.com/tiann/KernelSU) - 基于内核的 root 方案
 - [APatch](https://github.com/bmax121/APatch) - 另一个内核 root 方案
+- [Mmrl](https://github.com/MMRLApp/MMRL) - 模块仓库
 
 ## 📞 联系方式
 

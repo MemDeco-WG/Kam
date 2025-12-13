@@ -83,11 +83,8 @@ fn set_config_value(global: bool, key: &str, value: &str) -> Result<(), KamError
 
 pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
     let download_url = url.as_deref().unwrap_or(DEFAULT_TEMPLATES_URL);
-    println!(
-        "{} Downloading templates from: {}",
-        "→".cyan(),
-        download_url
-    );
+    use crate::utils::Utils;
+    Utils::executing(&format!("Downloading templates from: {}", download_url));
 
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
@@ -120,10 +117,7 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
         ).unwrap().progress_chars("#>-"));
         Some(pb)
     } else {
-        println!(
-            "{} Could not determine file size. Progress bar will be disabled.",
-            "!".yellow()
-        );
+        Utils::warn("Could not determine file size. Progress bar will be disabled.");
         None
     };
 
@@ -161,17 +155,14 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
     }
 
     let tmp_path = tmpf.path().to_path_buf();
-    println!("{} Importing downloaded templates...", "→".cyan());
+    Utils::executing("Importing downloaded templates...");
     import::import_template(&tmp_path, None, true)?;
 
     set_config_value(true, "tmpl.pull.url", download_url)?;
     let now = Utc::now().to_rfc3339();
     set_config_value(true, "tmpl.pull.last_download", &now)?;
 
-    println!(
-        "{} Templates downloaded and imported successfully",
-        "✓".green()
-    );
+    Utils::success("Templates downloaded and imported successfully");
     Ok(())
 }
 

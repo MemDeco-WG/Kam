@@ -7,10 +7,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
 
-// Helper to extract archive
+// 解压压缩包的辅助函数
+// 支持tar.gz和zip，根据扩展名判断（简单粗暴）
 fn extract_archive(path: &Path, dst: &Path) -> Result<(), KamError> {
     let file = fs::File::open(path).map_err(KamError::Io)?;
-    // Simple detection based on extension
+    // 转小写再判断，避免大小写问题
     let path_str = path.to_string_lossy().to_lowercase();
     if path_str.ends_with(".tar.gz") || path_str.ends_with(".tgz") {
         let tar = flate2::read::GzDecoder::new(file);
@@ -58,13 +59,13 @@ pub fn init_impl(
     force: bool,
     explicit_template_id: Option<&str>,
 ) -> Result<(), KamError> {
-    // Prepare a temp dir for extraction if needed
+    // 如果需要解压，先准备个临时目录
     let temp_dir = tempfile::tempdir().map_err(KamError::Io)?;
     let mut template_path = impl_source.to_path_buf();
 
     if template_path.exists() {
         if template_path.is_file() {
-            // Extract archive
+            // 是文件就解压
             let extract_dst = temp_dir.path().join("extracted");
             fs::create_dir_all(&extract_dst).map_err(KamError::Io)?;
             extract_archive(&template_path, &extract_dst)?;
@@ -77,24 +78,25 @@ pub fn init_impl(
         )));
     }
 
-    // Flatten single directory if present
+    // 如果解压后只有一个目录，就进入那个目录
+    // 这样用户打包时不用考虑目录层级问题
     if template_path.is_dir() {
         let entries: Vec<_> = fs::read_dir(&template_path)
             .map_err(KamError::Io)?
             .filter_map(|e| e.ok())
             .collect();
 
-        // If only one entry and it is a directory, descend into it
+        // 只有一个目录就进去，避免多一层嵌套
         if entries.len() == 1 && entries[0].path().is_dir() {
             template_path = entries[0].path();
         }
     }
 
-    // Determine archive_id
+    // 确定模板ID，如果用户没指定就用默认的"template"
     let archive_id = if let Some(eid) = explicit_template_id {
         eid.to_string()
     } else {
-        "template".to_string()
+        "template".to_string()  // 默认值，虽然可能不太有用
     };
 
     // Load template variables from template's kam.toml
@@ -108,7 +110,7 @@ pub fn init_impl(
         id.to_string(),
         name.clone(),
         version.to_string(),
-        author.to_string(),
+        Some(author.to_string()),
         description.clone(),
         None,
         None,
@@ -157,9 +159,10 @@ pub fn init_impl(
     template_vars
         .entry("versionCode".to_string())
         .or_insert_with(|| kt.prop.versionCode.to_string());
+    // author现在是Option，需要处理None的情况
     template_vars
         .entry("author".to_string())
-        .or_insert_with(|| kt.prop.author.clone());
+        .or_insert_with(|| kt.prop.author.as_ref().unwrap_or(&String::new()).clone());
 
     template_vars
         .entry("name".to_string())
@@ -208,9 +211,10 @@ pub fn init_impl(
                     Ok(mut rendered_kt) => {
                         // Override with user-provided values
                         rendered_kt.prop.id = id.to_string();
+                        // 更新渲染后的kam.toml，用实际的值替换模板变量
                         rendered_kt.prop.name = name.clone();
                         rendered_kt.prop.version = version.to_string();
-                        rendered_kt.prop.author = author.to_string();
+                        rendered_kt.prop.author = Some(author.to_string());  // author现在是Option了
                         rendered_kt.prop.description = description.clone();
                         rendered_kt.prop.versionCode = kt.prop.versionCode;
 
@@ -253,15 +257,15 @@ pub fn init_impl(
         }
     }
 
-    // Write resolved template variables into `.kam/template-vars.env.init` during `kam init`.
-    // This file contains `KEY="VALUE"` lines that can be consumed or sourced by hooks during initialization.
-    // Keys are normalized into `KAM_<PATH>` uppercase; dots and dashes become underscores.
+    // 把模板变量写到.kam/template-vars.env.init文件里
+    // 这样hooks脚本就可以source这个文件来获取变量了
+    // 变量名会转成KAM_XXX的格式，点号和横线都变成下划线
     let env_dir = path.join(".kam");
     fs::create_dir_all(&env_dir).map_err(KamError::Io)?;
     let env_file_path = env_dir.join("template-vars.env.init");
     let mut env_lines: Vec<String> = Vec::new();
 
-    // Basic project-level details
+    // 先写一些基本的项目信息
     env_lines.push(format!("KAM_PROJECT_ROOT=\"{}\"", path.to_string_lossy()));
     env_lines.push(format!("KAM_MODULE_ID=\"{}\"", kt.prop.id));
     env_lines.push(format!("KAM_MODULE_VERSION=\"{}\"", kt.prop.version));
@@ -270,22 +274,28 @@ pub fn init_impl(
         kt.prop.versionCode
     ));
     env_lines.push(format!("KAM_MODULE_NAME=\"{}\"", kt.prop.get_name()));
-    env_lines.push(format!("KAM_MODULE_AUTHOR=\"{}\"", kt.prop.author));
+    // author可能是None，用空字符串作为默认值
+    env_lines.push(format!(
+        "KAM_MODULE_AUTHOR=\"{}\"",
+        kt.prop.author.as_ref().unwrap_or(&String::new())
+    ));
     env_lines.push(format!(
         "KAM_MODULE_DESCRIPTION=\"{}\"",
         kt.prop.get_description()
     ));
 
-    // Add flattened kam.toml keys (prop.* etc) as KAM_<PATH>
+    // 把kam.toml的所有键值对扁平化后也加进去
+    // 这样hooks就能访问到kam.toml里的所有配置了
     let kt_flatvars = crate::template::TemplateVariableProcessor::flatten_kam_toml(&kt);
     for (k, v) in kt_flatvars.iter() {
         let base = k.to_ascii_uppercase().replace('.', "_").replace('-', "_");
         let key = format!("KAM_{}", base);
-        let v_escaped = v.replace('"', "\\\"");
+        let v_escaped = v.replace('"', "\\\"");  // 转义引号
         env_lines.push(format!("{}=\"{}\"", key, v_escaped));
     }
 
-    // Add template-defined variables (KAM_TMPL_<NAME>) using actual values in template_vars or defaults
+    // 再加上模板定义的变量，用KAM_TMPL_前缀
+    // 优先用用户提供的值，没有就用默认值
     if let Some(tmpl_section) = &kt.kam.tmpl {
         for (var_name, var_def) in tmpl_section.variables.iter() {
             let nm = var_name
@@ -303,10 +313,12 @@ pub fn init_impl(
         }
     }
 
-    // Persist file (create/overwrite)
+    // 写文件，覆盖已存在的（如果有的话）
+    // 这个文件主要是给hooks用的，所以格式要严格一点
     fs::write(&env_file_path, env_lines.join("\n")).map_err(KamError::Io)?;
 
     Ok(())
+    // 终于写完了，这个函数有点长，但暂时不想拆分
 }
 
 pub fn init_template(

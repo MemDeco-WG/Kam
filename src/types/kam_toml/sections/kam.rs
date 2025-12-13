@@ -3,28 +3,27 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// `[kam]` 部分的高层结构，包含与 Kam 平台相关的配置
-///
-/// 该结构反映 `kam.toml` 中的部分字段，许多字段是可选的（Option），
-/// 但 Default 实现会提供合理的空值以便模板和代码更容易使用。
+// [kam]部分的高层结构，包含与Kam平台相关的配置
+// 这个结构反映kam.toml中的字段，很多字段是可选的
+// Default实现会提供合理的空值，方便模板和代码使用
 pub struct KamSection {
-    /// 最低兼容 API 版本（0 表示未指定或所有版本）
+    // 最低兼容API版本（0表示未指定或所有版本）
     pub min_api: Option<u32>,
-    /// 最高兼容 API 版本（0 表示未指定或不限制）
+    // 最高兼容API版本（0表示未指定或不限制）
     pub max_api: Option<u32>,
-    /// 支持的 CPU 架构列表（例如 ["arm", "arm64"]）
+    // 支持的CPU架构列表（例如 ["arm", "arm64"]）
     pub supported_arch: Option<Vec<SupportedArch>>,
-    /// 与该模块冲突的模块 ID 列表
+    // 与该模块冲突的模块ID列表
     pub conflicts: Option<Vec<String>>,
 
-    /// 打包/构建相关的配置
+    // 打包/构建相关的配置
     pub build: Option<BuildSection>,
-    /// 模块类型（kam/template/library）
+    // 模块类型（kam/template/library）
     pub module_type: ModuleType,
-    /// 模板相关子配置
+    // 模板相关子配置
     pub tmpl: Option<TmplSection>,
 
-    /// 工作区配置
+    // 工作区配置
     pub workspace: Option<WorkspaceSection>,
 }
 

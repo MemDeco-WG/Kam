@@ -17,7 +17,7 @@ if [ "${KAM_DEBUG:-}" = "1" ]; then
         YELLOW=""
         NC=""
     fi
-    printf "${BLUE}KAM variables:${NC}\n"
+    printf '%sKAM variables:%s\n' "$BLUE" "$NC"
     if env | grep '^KAM' >/dev/null 2>&1; then
         env | sort | grep '^KAM' | while IFS= read -r line; do
             name="${line%%=*}"

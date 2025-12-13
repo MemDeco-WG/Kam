@@ -4,6 +4,7 @@ use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::enums::ModuleType;
 use crate::utils::Utils;
 
+use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashSet;
 use std::fs;
@@ -227,7 +228,15 @@ fn run_hooks(
         kam_toml.prop.versionCode.to_string(),
     );
     add_env("KAM_MODULE_NAME", kam_toml.prop.get_name().to_string());
-    add_env("KAM_MODULE_AUTHOR", kam_toml.prop.author.clone());
+    add_env(
+        "KAM_MODULE_AUTHOR",
+        kam_toml
+            .prop
+            .author
+            .as_ref()
+            .unwrap_or(&String::new())
+            .clone(),
+    );
     add_env(
         "KAM_MODULE_DESCRIPTION",
         kam_toml.prop.get_description().to_string(),
@@ -309,7 +318,15 @@ fn run_hooks(
         "KAM_PROP_VERSION_CODE",
         kam_toml.prop.versionCode.to_string(),
     );
-    add_env("KAM_PROP_AUTHOR", kam_toml.prop.author.clone());
+    add_env(
+        "KAM_PROP_AUTHOR",
+        kam_toml
+            .prop
+            .author
+            .as_ref()
+            .unwrap_or(&String::new())
+            .clone(),
+    );
     add_env(
         "KAM_PROP_DESCRIPTION",
         kam_toml.prop.get_description().to_string(),
@@ -359,7 +376,7 @@ fn run_hooks(
     let total_hooks = entries.iter().filter(|e| e.path().is_file()).count();
     if !args.quiet {
         Utils::section(&format!(
-            "Running {} hooks from {} ({} script(s))",
+            "✿ Running {} hooks from {} ({} script(s)) ✿",
             stage,
             hooks_dir.display(),
             total_hooks
@@ -452,10 +469,12 @@ fn run_hooks(
                             }
                             // successful run - increment progress or print success line
                             if pb.is_none() {
-                                Utils::success(&format!(
-                                    "[{} {}/{}] {}",
-                                    stage, idx, total_hooks, filename
-                                ));
+                                println!("  {} [{}/{}] {}",
+                                    "✓".green().bold(),
+                                    idx,
+                                    total_hooks,
+                                    filename.green()
+                                );
                             } else {
                                 if let Some(pb) = &pb {
                                     pb.inc(1);

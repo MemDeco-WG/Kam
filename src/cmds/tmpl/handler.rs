@@ -6,7 +6,7 @@ use crate::template::TemplateCacheManager;
 use super::args::{TmplArgs, TmplCommands};
 use super::{export, import, pull};
 
-/// Run the tmpl command
+// 模板命令的入口，就是处理各种模板相关的操作
 pub fn run(args: TmplArgs) -> Result<(), KamError> {
     match args.command {
         TmplCommands::List => list_templates(),
@@ -26,19 +26,18 @@ pub fn run(args: TmplArgs) -> Result<(), KamError> {
 fn list_templates() -> Result<(), KamError> {
     let templates = TemplateCacheManager::list_local_templates()?;
 
+    use crate::utils::Utils;
     if templates.is_empty() {
-        println!("{} No templates found in cache", "!".yellow());
-        println!("\nUse {} to import templates", "kam tmpl import".bold());
+        Utils::warn("No templates found in cache");
+        println!();
+        Utils::info(&format!("Use {} to import templates", "kam tmpl import".bold()));
     } else {
-        println!("{} Templates in cache:", "✓".green());
+        Utils::section("Templates in Cache");
         for template in &templates {
-            println!("  • {}", template);
+            Utils::info(template);
         }
-        println!(
-            "\n{} {} template(s) available",
-            "✓".green(),
-            templates.len()
-        );
+        println!();
+        Utils::success(&format!("{} template(s) available", templates.len()));
     }
 
     Ok(())
@@ -46,11 +45,8 @@ fn list_templates() -> Result<(), KamError> {
 
 fn remove_template(name: &str) -> Result<(), KamError> {
     TemplateCacheManager::remove_template(name)?;
-    println!(
-        "{} Template '{}' removed successfully",
-        "✓".green(),
-        name.bold()
-    );
+    use crate::utils::Utils;
+    Utils::success(&format!("Template '{}' removed successfully", name));
     Ok(())
 }
 

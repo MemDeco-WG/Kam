@@ -7,8 +7,8 @@ use sections::*;
 
 pub mod enums;
 
-/// KamToml: A superset of module.prop, update.json, and other metadata,
-/// inspired by pyproject.toml format with hierarchical sections.
+// KamToml：module.prop、update.json和其他元数据的超集
+// 设计灵感来自pyproject.toml，使用分层section结构
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[allow(non_snake_case)]
 pub struct KamToml {
@@ -42,9 +42,8 @@ impl KamToml {
         .to_string()
     }
 
-    /// Construct a KamToml starting from a PropSection (useful for default
-    /// composition). This helper keeps the same signature as other
-    /// constructors in this module.
+    // 从PropSection构造KamToml（用于默认值组合）
+    // 这个辅助函数保持和其他构造函数相同的签名
     pub fn from_prop(prop: PropSection) -> Self {
         KamToml {
             prop,
@@ -61,7 +60,7 @@ impl KamToml {
         id: String,
         name: String,
         version: String,
-        author: String,
+        author: Option<String>,
         description: String,
         update_json: Option<String>,
         module_type: Option<enums::ModuleType>,
@@ -113,7 +112,13 @@ impl KamToml {
 
     /// Apply template variables to the KamToml structure
     pub fn apply_vars(&mut self, kam_vars: Vec<(String, String)>) -> crate::errors::Result<()> {
-        let mut value: toml::Value = toml::from_str(&self.raw)?;
+        // If `raw` is empty, fall back to the current struct by serializing it to TOML
+        let mut value: toml::Value = if self.raw.trim().is_empty() {
+            let s = toml::to_string_pretty(self)?;
+            toml::from_str(&s)?
+        } else {
+            toml::from_str(&self.raw)?
+        };
         for (key, val) in kam_vars {
             let key = key.strip_prefix('#').unwrap_or(&key);
             Self::set_value_by_path(&mut value, key, &val);

@@ -1,10 +1,10 @@
 [prop]
 id = "tmpl_template"
+name = "Kam Template Template"
 version = "0.1.0"
 versionCode = 1  # Will be auto-generated as timestamp during initialization
 author = "LightJunction"
-name = "tmpl_template"
-description = "A Kam template created with Kam"
+description = "A Kam template for creating custom Kam templates"
 updateJson = ""
 metamodule = false
 
@@ -18,7 +18,12 @@ changelog = ""
 changelog_file = "CHANGELOG.md"
 screenshots = []
 categories = ["tools"]
-keywords = ["kam", "template", "android"]
+keywords = [
+    "kam",
+    "template",
+    "android",
+    "template-template",
+]
 maintainers = ["LightJunction"]
 repository = ""
 documentation = ""
@@ -36,7 +41,11 @@ max_num = 0
 min_api = 21
 max_api = 35
 verified = false
-features = ["template"]
+features = [
+    "template",
+    "template-template",
+    "customization",
+]
 
 [mmrl.repo.note]
 title = ""
@@ -73,16 +82,21 @@ output_file = "tmpl_template"
 hooks_dir = "hooks"
 exclude = ["src/tmpl_template/"]
 
-[kam.tmpl.variables]
 [kam.tmpl.variables.repository]
 var_type = "string"
 required = false
 default = ""
+note = "GitHub repository URL (optional)"
+help = "The GitHub repository URL where your template source code is hosted"
+example = "https://github.com/user/repo"
 
 [kam.tmpl.variables.example]
 var_type = "string"
 required = true
 default = ""
+note = "Example variable for demonstration"
+help = "This is an example variable that demonstrates how to define required template variables"
+example = "example_value"
 
 [kam.workspace]
 members = ["."]

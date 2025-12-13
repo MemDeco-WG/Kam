@@ -25,7 +25,7 @@ rm -f "$DIST/templates.zip"
 
 # Create a minimal archive of the contents of templates/
 
-zip -rj "$DIST/templates.zip" $TEMPLATES_DIR || exit 1
+zip -rj "$DIST/templates.zip" "$TEMPLATES_DIR" || exit 1
 
 log_success "Templates packaged at $DIST/templates.zip "
 exit 0

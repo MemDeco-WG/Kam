@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Feat
+
+- Introduce `about` command, implement interactive `init` flow, and improve CI workflows with package manager caching.
+
+## 0.4.31 (2025-12-13)
+
 ## 0.4.29 (2025-12-12)
 
 ## 0.4.28 (2025-12-12)

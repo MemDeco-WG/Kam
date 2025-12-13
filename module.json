@@ -3,6 +3,10 @@
     {
       "name": "LightJunction",
       "type": "add"
+    },
+    {
+      "name": "LightJunction",
+      "type": "add"
     }
   ],
   "metamodule": false,

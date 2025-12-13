@@ -12,11 +12,10 @@ use crate::utils::Utils;
 
 use super::args::AboutArgs;
 
-/// Try to extract an email address from a string:
-/// - prefer `<email@domain>` pattern,
-/// - otherwise fallback to a generic email regex match.
+// 从字符串里提取邮箱地址
+// 优先找 <email@domain> 这种格式，没有就用正则匹配
 fn extract_email(text: &str) -> Option<String> {
-    // Look for `<...>` email first
+    // 先找 <...> 格式的
     if let Some(start) = text.find('<') {
         if let Some(end_rel) = text[start..].find('>') {
             let candidate = text[start + 1..start + end_rel].trim();
@@ -26,7 +25,8 @@ fn extract_email(text: &str) -> Option<String> {
         }
     }
 
-    // Fallback: simple email regex
+    // 回退方案：用简单的邮箱正则匹配
+    // 这个正则可能不够完善，但大部分情况够用了
     if let Ok(re) = Regex::new(r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)") {
         if let Some(cap) = re.captures(text) {
             return Some(cap[1].to_string());
@@ -36,7 +36,8 @@ fn extract_email(text: &str) -> Option<String> {
     None
 }
 
-/// Pick the first non-empty value from candidates and return as a String
+// 从候选列表里选第一个非空的值，都没有就用fallback
+// 这个函数主要是为了处理各种可能的来源（kam.toml、Cargo metadata等）
 fn pick_first<'a>(candidates: Vec<Option<&'a str>>, fallback: &'a str) -> String {
     for c in candidates {
         if let Some(v) = c {
@@ -49,13 +50,14 @@ fn pick_first<'a>(candidates: Vec<Option<&'a str>>, fallback: &'a str) -> String
     fallback.to_string()
 }
 
-/// Execute the `kam about` subcommand.
+// 执行 kam about 命令
+// 就是显示一些项目信息，用表格展示，看起来比较好看
 pub fn run(_args: AboutArgs) -> Result<(), KamError> {
-    // Use the current directory's kam.toml when present to prefer project-local metadata
+    // 优先用当前目录的kam.toml，没有就用Cargo的metadata
     let cwd = std::env::current_dir().map_err(KamError::Io)?;
     let kam_toml = KamToml::load_from_dir(&cwd).ok();
 
-    // Prefer values from kam.toml, otherwise fall back to Cargo metadata (via env), then to a sensible default.
+    // 优先级：kam.toml > Cargo metadata > 默认值
     let name = pick_first(
         vec![
             kam_toml.as_ref().map(|k| k.prop.name.as_str()),
@@ -83,14 +85,15 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     // Author: prefer kam.toml prop.author, otherwise CARGO_PKG_AUTHORS
     let author_raw = pick_first(
         vec![
-            kam_toml.as_ref().map(|k| k.prop.author.as_str()),
+            kam_toml
+                .as_ref()
+                .and_then(|k| k.prop.author.as_ref().map(|s| s.as_str())),
             option_env!("CARGO_PKG_AUTHORS"),
         ],
         "LIghJUNction",
     );
 
-    // For email, try (in order) to extract from author string, then KAM_AUTHOR_EMAIL env var,
-    // then try the Cargo metadata authors string, otherwise none
+    // 邮箱的优先级：从author字符串提取 > 环境变量 KAM_AUTHOR_EMAIL > Cargo metadata > 没有
     let mut email = extract_email(&author_raw);
     if email.is_none() {
         if let Ok(val) = std::env::var("KAM_AUTHOR_EMAIL") {
@@ -105,15 +108,15 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
         }
     }
 
-    // Developer / Homepage site
+    // 开发者网站链接
     let dev_site = "https://developers.kernelsu.org/";
 
-    // Make a tidy table using comfy_table
+    // 用comfy_table做个好看的表格
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_content_arrangement(ContentArrangement::Dynamic);
 
-    // Header: style name + version a bit
+    // 表头：名字和版本，加粗和颜色
     table.set_header(vec![
         Cell::new(format!("{} v{}", name, version))
             .add_attribute(Attribute::Bold)
@@ -146,7 +149,7 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
         ]));
     }
 
-    // Optional repository info if available from Cargo metadata
+    // 如果有仓库信息（从Cargo metadata）也显示出来
     if let Some(repo) = option_env!("CARGO_PKG_REPOSITORY") {
         if !repo.trim().is_empty() {
             table.add_row(Row::from(vec![
@@ -156,10 +159,10 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
         }
     }
 
-    // Print a small centered banner and the table for a nice output style
+    // 打印banner和表格，看起来比较专业（虽然其实没啥用）
     Utils::banner(&format!("{} v{}", name, version));
     println!("{}", table);
-    println!(); // visual spacing
+    println!(); // 空行，视觉上舒服点
 
     Utils::info("This command is informational only; it doesn't modify files or the registry.");
     Utils::info("Use other commands (e.g., `kam init`, `kam build`) to perform actions.");
@@ -167,7 +170,8 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
 
     Utils::section("Thanks for using Kam");
     Utils::info("Enjoy your module tooling experience!");
-    Utils::success("Powered by the Kam CLI — Happy building!");
+    Utils::success("Powered by the Kam CLI — Happy building!");  // 这句有点中二，但留着吧
+    // 其实这个命令没啥用，就是显示个信息，但至少看起来比较专业（？）
 
     Ok(())
 }

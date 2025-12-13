@@ -2,25 +2,24 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 额外包含的文件配置
+// 额外包含的文件配置
 pub struct ExtraInclude {
-    /// 源文件相对路径（相对于项目根目录）
+    // 源文件相对路径（相对于项目根目录）
     pub source: String,
-    /// 目标路径（打包进压缩包的相对路径）
+    // 目标路径（打包进压缩包的相对路径）
     pub dest: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
-/// 打包/构建配置节
-///
-/// - `source_dir`：自定义源代码目录（默认为 `src/<id>`）
-/// - `target_dir`：打包输出目录，默认 "dist"
-/// - `output_file`：可选的输出文件名（为空时使用 `<id>-<versionCode>-<version>.zip`）
-/// - `hooks_dir`：钩子脚本目录，默认 "hooks"
-/// - `extra_includes`：额外包含的文件列表
-/// - `exclude`：额外的排除路径列表（支持 glob 模式）
-/// - `include`：强制包含的路径列表（覆盖 exclude，支持 glob 模式）
+// 打包/构建配置节
+// - source_dir：自定义源代码目录（默认为 src/<id>）
+// - target_dir：打包输出目录，默认 "dist"
+// - output_file：可选的输出文件名（为空时使用 <id>-<versionCode>-<version>.zip）
+// - hooks_dir：钩子脚本目录，默认 "hooks"
+// - extra_includes：额外包含的文件列表
+// - exclude：额外的排除路径列表（支持 glob 模式）
+// - include：强制包含的路径列表（覆盖 exclude，支持 glob 模式）
 pub struct BuildSection {
     pub source_dir: Option<String>,
     pub target_dir: Option<String>,

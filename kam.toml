@@ -24,7 +24,7 @@ keywords = [
     "android",
     "template",
 ]
-maintainers = []
+maintainers = ["LightJunction"]
 repository = "https://github.com/MemDeco-WG/Kam"
 documentation = "https://github.com/MemDeco-WG/Kam"
 issues = "https://github.com/MemDeco-WG/Kam/issues"
@@ -32,7 +32,7 @@ funding = "https://github.com/sponsors/LightJunction"
 support = "https://github.com/MemDeco-WG/Kam/issues"
 donate = ""
 cover = ""
-icon = "icon.png"
+icon = ""
 devices = []
 arch = ["arm64-v8a"]
 require = []
@@ -71,13 +71,14 @@ compression = ""
 [kam]
 min_api = 0
 max_api = 0
-supported_arch = []
+supported_arch = ["arm64"]
 conflicts = []
 module_type = "kam"
 
 [kam.build]
+source_dir = "src/Kam"
 target_dir = "dist"
-output_file = "{{id}}"
+output_file = "{{id}}-{{versionCode}}-{{version}}"
 hooks_dir = "hooks"
 
 [kam.tmpl.variables.repository]

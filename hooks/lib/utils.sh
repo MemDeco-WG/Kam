@@ -97,7 +97,7 @@ require_command() {
 # Check if a variable is set
 require_env() {
     var_name="$1"
-    eval value=\$$var_name
+    eval value=\$"$var_name"
     if [ -z "$value" ]; then
         log_error "Environment variable '$var_name' is not set."
         exit 1

@@ -12,6 +12,7 @@ use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::{template::TemplateCacheManager, template::TemplateManager};
 use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
+use colored::Colorize;
 
 use super::args::InitArgs;
 use super::{impl_mod, post_init, pre_init};
@@ -79,24 +80,24 @@ fn prompt_confirm(prompt: &str, default: bool) -> Result<bool, KamError> {
     }
 }
 
-/// Display a simplified list of candidate templates and ask the user to choose one
+// 显示模板列表让用户选一个
+// 如果默认模板存在就默认选中它
 fn choose_template(default_template: &str) -> Result<String, KamError> {
     loop {
         let mut choices = TemplateManager::list_builtin_templates();
         choices.sort();
         choices.dedup();
-        // Add a visible option for a local path
+        // 加两个特殊选项：本地路径和在线拉取
         choices.push("<local path or archive>".to_string());
-        // Provide an explicit option to pull default templates online
         choices.push("<pull default templates>".to_string());
 
-        // Compute a reasonable default index if possible
+        // 计算默认选中项，如果默认模板在列表里就选它
         let default_idx = choices
             .iter()
             .position(|t| t == default_template)
             .unwrap_or(0);
 
-        // Try an interactive Select first (arrow keys). If it fails (non-TTY), fallback to text input.
+        // 先试试交互式选择（用方向键），如果不是TTY就回退到文本输入
         match Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Choose a template to use")
             .items(&choices[..])
@@ -106,13 +107,13 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
             Ok(idx) => {
                 let sel = &choices[idx];
                 if sel == "<pull default templates>" {
-                    // Pull default templates from the configured URL (default behavior)
+                    // 从配置的URL拉取默认模板
                     pull::run_pull(None, true)?;
-                    // Refresh the choices and present the menu again
+                    // 刷新列表再显示一次
                     continue;
                 }
                 if sel == "<local path or archive>" {
-                    // Ask for local path
+                    // 让用户输入本地路径
                     let input = Input::<String>::with_theme(&ColorfulTheme::default())
                     .with_prompt("Enter local template path or archive file (leave empty to download default templates)")
                     .allow_empty(true)
@@ -120,9 +121,8 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                     .map_err(|e| KamError::Io(e.into()))?;
                     let input_trim = input.trim();
                     if input_trim.is_empty() {
-                        // When left blank, download default templates and re-run the template selection flow
+                        // 如果留空，就下载默认模板然后重新显示菜单
                         pull::run_pull(None, true)?;
-                        // Refresh the local list and re-display to the user
                         continue;
                     }
 
@@ -157,7 +157,8 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
             }
             Err(_) => {
                 // Fallback to previous text-based interaction
-                println!("(Non-interactive mode detected: falling back to text input.)");
+                use crate::utils::Utils;
+                Utils::info("(Non-interactive mode detected: falling back to text input.)");
                 loop {
                     let pick = prompt_input(
                         "Select a template by name or number (or provide a local path)",
@@ -178,7 +179,8 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                         } else if num > 0 && num <= choices.len() {
                             return Ok(choices[num - 1].clone());
                         } else {
-                            println!("Invalid selection: {}", num);
+                            use crate::utils::Utils;
+                            Utils::warn(&format!("Invalid selection: {}", num));
                             continue;
                         }
                     } else {
@@ -204,8 +206,8 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
     }
 }
 
-/// Extract an archive path (tar.gz, tgz, zip) into provided `dst` folder.
-/// Returns Ok(()) on success, or KamError on failure.
+// 解压压缩包到指定目录
+// 支持tar.gz、tgz、zip格式
 fn extract_archive(path: &Path, dst: &Path) -> Result<(), KamError> {
     let file = fs::File::open(path).map_err(KamError::Io)?;
     let path_str = path.to_string_lossy().to_lowercase();
@@ -227,11 +229,10 @@ fn extract_archive(path: &Path, dst: &Path) -> Result<(), KamError> {
     Ok(())
 }
 
-/// Resolve the template source into a path containing a `kam.toml`.
-///
-/// Returns a tuple of (kam_toml_path, optional_tempdir).
-/// If the template requires extraction to a tempdir, the TempDir is returned so it is kept alive.
-/// Otherwise None returned and the kam_toml_path references an existing directory/file on disk.
+// 解析模板源，找到包含kam.toml的路径
+// 返回 (kam_toml_path, optional_tempdir)
+// 如果模板需要解压到临时目录，就返回TempDir（这样它不会被drop）
+// 否则返回None，kam_toml_path指向磁盘上的现有路径
 fn resolve_template_kam_toml(template_spec: &str) -> Result<(PathBuf, Option<TempDir>), KamError> {
     let try_specs = {
         let mut v = vec![template_spec.to_string()];
@@ -346,9 +347,9 @@ fn resolve_template_kam_toml(template_spec: &str) -> Result<(PathBuf, Option<Tem
     )))
 }
 
-/// Prompt for template-defined variables using the `kam.toml` definition.
-///
-/// Returns a HashMap of variables to values (overrides).
+// 提示用户输入模板定义的变量（根据kam.toml的定义）
+// 返回变量名到值的HashMap（覆盖默认值）
+// 这个函数会交互式地询问用户，所以如果非TTY可能会出问题
 fn prompt_template_variables(
     kam_toml_path: &Path,
     existing: &mut HashMap<String, String>,
@@ -363,19 +364,21 @@ fn prompt_template_variables(
                 .unwrap_or_default();
 
             // Show notes/help/example where available
+            use crate::utils::Utils;
+            println!();
             if let Some(note) = &var_def.note {
-                println!("\n{} - Note: {}", var_name, note);
+                Utils::info(&format!("{} - Note: {}", var_name, note));
             } else {
-                println!("\nVariable: {}", var_name);
+                Utils::info(&format!("Variable: {}", var_name));
             }
             if let Some(help) = &var_def.help {
-                println!("  Help: {}", help);
+                println!("  {} Help: {}", "→".blue().dimmed(), help.dimmed());
             }
             if let Some(example) = &var_def.example {
-                println!("  Example: {}", example);
+                println!("  {} Example: {}", "→".blue().dimmed(), example.dimmed());
             }
             if !default.is_empty() {
-                println!("  Default: {}", default);
+                println!("  {} Default: {}", "→".blue().dimmed(), default.dimmed());
             }
 
             // If the variable offers choices, prefer a visual Select and allow a custom value option.
@@ -423,7 +426,8 @@ fn prompt_template_variables(
                                 Some(&default),
                             )?;
                             if response.is_empty() && var_def.required {
-                                println!("Value is required for {}", var_name);
+                                use crate::utils::Utils;
+                                Utils::warn(&format!("Value is required for {}", var_name));
                                 continue;
                             }
                             // numeric index allowed (1-based)
@@ -432,7 +436,8 @@ fn prompt_template_variables(
                                     existing.insert(var_name.clone(), choices[idx - 1].clone());
                                     break;
                                 } else {
-                                    println!("Invalid selection index");
+                                    use crate::utils::Utils;
+                                    Utils::warn("Invalid selection index");
                                     continue;
                                 }
                             }
@@ -480,7 +485,8 @@ fn prompt_template_variables(
                                     Some(if default_bool { "true" } else { "false" }),
                                 )?;
                                 if resp.is_empty() && var_def.required {
-                                    println!("Value is required for {}", var_name);
+                                    use crate::utils::Utils;
+                                    Utils::warn(&format!("Value is required for {}", var_name));
                                     continue;
                                 }
                                 let v = resp.to_lowercase();
@@ -491,7 +497,8 @@ fn prompt_template_variables(
                                     existing.insert(var_name.clone(), "0".to_string());
                                     break;
                                 } else {
-                                    println!("Please enter 'true' or 'false'");
+                                    use crate::utils::Utils;
+                                    Utils::warn("Please enter 'true' or 'false'");
                                     continue;
                                 }
                             }
@@ -526,7 +533,8 @@ fn prompt_template_variables(
     Ok(())
 }
 
-/// Build a list of files that would be copied by the template (visualize).
+// 构建会被模板复制的文件列表（用于可视化）
+// 这个功能主要是让用户看看模板会生成哪些文件
 fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError> {
     // Build a tree-like list with indentation and provide a Select UI to scroll and preview files.
     // This is arrow-key friendly via `dialoguer::Select`.
@@ -568,7 +576,8 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
 
     // Nothing to show?
     if entries.is_empty() {
-        println!("(Template directory empty)");
+        use crate::utils::Utils;
+        Utils::info("(Template directory empty)");
         return Ok(());
     }
 
@@ -598,7 +607,8 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
                 }
                 // If choose exit -> simply return Ok (cancel preview)
                 if idx == choices_len - 1 {
-                    println!("Preview cancelled.");
+                    use crate::utils::Utils;
+                    Utils::info("Preview cancelled.");
                     return Ok(());
                 }
                 // If an actual entry is selected
@@ -667,7 +677,9 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
             }
             Err(_) => {
                 // Non-interactive: fallback to simple listing (no arrows)
-                println!("\nTemplate contents (showing up to {} files):", limit);
+                use crate::utils::Utils;
+            println!();
+            Utils::section(&format!("Template Contents (showing up to {} files)", limit));
                 for (i, (_, rel, is_file)) in entries.iter().enumerate().take(limit) {
                     let suffix = if *is_file { "" } else { "/" };
                     println!("  {}) {}{}", i + 1, rel.display(), suffix);
@@ -765,14 +777,16 @@ fn save_global_config(
 }
 
 pub fn run(args: InitArgs) -> Result<(), KamError> {
-    println!("Interactive Kam init");
-    println!("(You may press Enter to accept a default value shown in brackets)\n");
+    use crate::utils::Utils;
+    Utils::banner("Interactive Kam Init");
+    Utils::info("You may press Enter to accept a default value shown in brackets");
+    println!();
 
     // Prepare defaults (non-interactive sanity pass)
     let mut data = match pre_init::prepare_init(&args) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("Failed to prepare initialization defaults: {}", e);
+            Utils::error(&format!("Failed to prepare initialization defaults: {}", e));
             return Err(e);
         }
     };
@@ -809,10 +823,10 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .unwrap_or(&data.id)
         .to_string();
     if path_basename != data.id {
-        println!(
+        Utils::warn(&format!(
             "Module id '{}' does not match folder basename '{}'.",
             data.id, path_basename
-        );
+        ));
         if prompt_confirm("Set module id to folder basename?", true)? {
             data.id = path_basename.clone();
         } else {
@@ -845,7 +859,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         false,
     )? {
         save_global_config(Some(&data.author), Some(&data.name), Some(&data.version))?;
-        println!("Saved base configuration to ~/.kam/config.toml");
+        Utils::success("Saved base configuration to ~/.kam/config.toml");
     }
 
     // Template variables: find template kam.toml then prompt for variables
@@ -878,8 +892,9 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             "GitHub CLI (gh) not found. Would you like to view instructions to install it?",
             true,
         )? {
-            println!("Recommend: https://cli.github.com/manual/installation");
-            println!("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh");
+            use crate::utils::Utils;
+            Utils::info("Recommend: https://cli.github.com/manual/installation");
+            Utils::info("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh");
         }
     }
 
@@ -894,28 +909,30 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             "Commitizen (cz) not found. Would you like to view instructions to install it?",
             false,
         )? {
-            println!(
-                "Recommended: python -m pip install --user commitizen  (or npm/yarn global install)"
-            );
-            println!("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh");
+            use crate::utils::Utils;
+            Utils::info("Recommended: python -m pip install --user commitizen  (or npm/yarn global install)");
+            Utils::info("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh");
         }
     }
 
     // Present a summary and confirm before creating files
-    println!("\nSummary:");
-    println!("  Path: {}", data.path.display());
-    println!("  Module ID: {}", data.id);
-    println!("  Project name: {}", data.name);
-    println!("  Version: {}", data.version);
-    println!("  Author: {}", data.author);
-    println!("  Template: {}", data.impl_template);
-    println!("  Template variables:");
-    for (k, v) in &data.template_vars {
-        println!("    {} = {}", k, v);
+    println!();
+    Utils::section("Summary");
+    Utils::kv("Path", &data.path.display().to_string());
+    Utils::kv("Module ID", &data.id);
+    Utils::kv("Project name", &data.name);
+    Utils::kv("Version", &data.version);
+    Utils::kv("Author", &data.author);
+    Utils::kv("Template", &data.impl_template);
+    if !data.template_vars.is_empty() {
+        println!("  {} Template variables:", "•".cyan());
+        for (k, v) in &data.template_vars {
+            println!("    {} {} = {}", "→".blue().dimmed(), k.bold(), v.dimmed());
+        }
     }
 
     if !prompt_confirm("Proceed and create project with these settings?", true)? {
-        println!("Aborted.");
+        Utils::warn("Aborted.");
         return Err(KamError::CommandFailed(
             "User aborted interactive init".to_string(),
         ));
@@ -947,9 +964,10 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // Post-process
     post_init::post_process(&data.path)?;
 
-    println!("Interactive initialization completed successfully.");
-    println!("Suggestion:");
-    println!("  cd {}", data.path.display());
-    println!("  kam build");
+    Utils::success("Interactive initialization completed successfully.");
+    println!();
+    Utils::info("Next steps:");
+    println!("  {} cd {}", "→".blue(), data.path.display());
+    println!("  {} kam build", "→".blue());
     Ok(())
 }

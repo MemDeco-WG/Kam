@@ -1,62 +1,60 @@
 use clap::Args;
 
-/// Arguments for the init command
+// init命令的参数
 #[derive(Args, Debug)]
 pub struct InitArgs {
-    /// Path to initialize the project
-    /// When running interactively (`-i`/`--interactive`) this PATH may be omitted;
-    /// the interactive flow will prompt for it instead.
+    // 项目路径
+    // 交互模式下可以省略，会提示用户输入
     #[arg(value_name = "PATH", required_unless_present = "interactive")]
     pub name: Option<String>,
 
-    /// Project ID (default: folder name)
+    // 项目ID（默认：文件夹名）
     #[arg(long)]
     pub id: Option<String>,
 
-    /// Project name (default: "Example Module Name")
+    // 项目名称（默认："Example Module Name"）
     #[arg(long)]
     pub project_name: Option<String>,
 
-    /// Project version (default: "1.0.0")
+    // 项目版本（默认："1.0.0"）
     #[arg(long)]
     pub version: Option<String>,
 
-    /// Author name (default: "Your Name")
+    // 作者名字（默认："Your Name"）
     #[arg(long)]
     pub author: Option<String>,
 
-    /// Update JSON URL (default: auto-generated from git)
+    // Update JSON URL（默认：从git自动生成）
     #[arg(long)]
     pub update_json: Option<String>,
 
-    /// Description (default: "Describe your module here")
+    // 描述（默认："Describe your module here"）
     #[arg(long)]
     pub description: Option<String>,
 
-    /// Force overwrite existing files
+    // 强制覆盖已存在的文件
     #[arg(short, long)]
     pub force: bool,
 
-    /// Run the init interactively; ask for required values
+    // 交互模式运行，会询问必需的值
     #[arg(short = 'i', long = "interactive")]
     pub interactive: bool,
 
-    /// Deprecated: Template source to implement (local path, URL, or git repo)
-    /// NOTE: This option has been removed from the CLI. Use -t/--template
-    /// and --tmpl to select built-in templates (e.g., kam_template, ak3_template).
+    // 已废弃：实现模板源（本地路径、URL或git仓库）
+    // 注意：这个选项已经从CLI移除了，用-t/--template和--tmpl来选择内置模板
     #[arg(skip)]
     pub r#impl: Option<String>,
 
-    /// Template variables in key=value format
+    // 模板变量，key=value格式
     #[arg(long)]
     pub var: Vec<String>,
 
-    /// Template to use (built-in ID or local path)
+    // 要使用的模板（内置ID或本地路径）
     #[arg(short, long)]
     pub template: Option<String>,
 
-    /// Create a template project
-    /// Template id: "tmpl_template"
+    // 创建模板项目
+    // 模板ID："tmpl_template"
     #[arg(long)]
     pub tmpl: bool,
 }
