@@ -5,6 +5,8 @@
 
 English | [中文](README.zh-CN.md)
 
+! [WARNING ⚠]It's under development. You can follow the development progress by checking the asl module in the kernelsu module repository. Testing will begin with the asl module.
+
 ## 📖 Overview
 
 Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android module packages and templates (ksu/APU/Magisk/AnyTemplate). It focuses on rapid project initialization, reproducible builds, template management, and convenient repository/metadata export for module maintainers and distribution channels.
