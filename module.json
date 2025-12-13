@@ -7,5 +7,5 @@
   ],
   "metamodule": false,
   "sourceUrl": "https://github.com/MemDeco-WG/Kam",
-  "summary": "Kam： ksu/apu/magisk module builder."
+  "summary": "Kam — A CLI toolkit for scaffolding, building, and distributing ksu/APU/Magisk/AnyTemplate modules"
 }

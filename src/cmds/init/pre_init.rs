@@ -24,14 +24,15 @@ pub struct PreInitData {
 /// Prepare initialization data before creating the project
 pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     let current_dir = std::env::current_dir()?;
-    let project_name = &args.name;
-    let project_path: PathBuf = if project_name.starts_with('/')
-        || project_name.starts_with('\\')
-        || project_name.contains(':')
+    // When running interactively, `name` may be omitted; default to "." in that case.
+    let project_name_raw = args.name.as_deref().unwrap_or(".");
+    let project_path: PathBuf = if project_name_raw.starts_with('/')
+        || project_name_raw.starts_with('\\')
+        || project_name_raw.contains(':')
     {
-        PathBuf::from(project_name)
+        PathBuf::from(project_name_raw)
     } else {
-        current_dir.join(project_name)
+        current_dir.join(project_name_raw)
     };
 
     // Validate conflicting flags
@@ -123,7 +124,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     // otherwise use folder name
     let id = if let Some(custom_id) = &args.id {
         custom_id.clone()
-    } else if args.name == "." {
+    } else if project_name_raw == "." {
         // if git repo identified, prefer repo name
         if let Some(repo_url) = git_repo_url.clone() {
             if let Some((_owner, repo_name)) = parse_git_remote_url(&repo_url) {
@@ -148,10 +149,10 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         }
     } else {
         // Extract basename from path (e.g., "/tmp/test_kam_init" -> "test_kam_init")
-        std::path::Path::new(&args.name)
+        std::path::Path::new(project_name_raw)
             .file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or(&args.name)
+            .unwrap_or(project_name_raw)
             .to_string()
     };
 

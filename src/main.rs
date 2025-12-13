@@ -31,6 +31,7 @@ fn main() {
         Commands::Export(args) => kam::cmds::export::run(args),
         Commands::Config(args) => kam::cmds::config::run(args),
         Commands::Toml(args) => kam::cmds::toml::run(args),
+        Commands::About(args) => kam::cmds::about::run(args),
     };
 
     if let Err(e) = res {

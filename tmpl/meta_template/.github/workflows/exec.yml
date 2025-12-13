@@ -17,6 +17,36 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Cache Cargo & Rustup
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.rustup
+          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
+          restore-keys: |
+            ${{ runner.os }}-rust-cache-
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Cache JavaScript package manager caches (npm / yarn / pnpm / bun)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/.cache/yarn
+            ~/.yarn/cache
+            ~/.pnpm-store
+            ~/.bun
+          # Use lockfiles to version cache; fallback to OS-based key if none found
+          key: ${{ runner.os }}-js-cache-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/bun.lockb') || github.sha }}-v1
+          restore-keys: |
+            ${{ runner.os }}-js-cache-
       - name: Setup kam
         uses: MemDeco-WG/setup-kam@main
         with:

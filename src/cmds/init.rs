@@ -1,6 +1,7 @@
 pub mod args;
 pub mod handler;
 pub mod impl_mod;
+pub mod interactive;
 pub mod post_init;
 pub mod pre_init;
 

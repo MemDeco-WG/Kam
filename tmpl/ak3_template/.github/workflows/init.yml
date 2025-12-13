@@ -26,6 +26,58 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Cache bun
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') || github.sha }}-v1
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/.cache/npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') || github.sha }}-v1
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - name: Cache Yarn
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/yarn
+            ~/.yarn
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') || github.sha }}-v1
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - name: Cache pnpm
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') || github.sha }}-v1
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+      - name: Cache Cargo & Rustup
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.rustup
+          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
+          restore-keys: |
+            ${{ runner.os }}-rust-cache-
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Setup kam
         uses: MemDeco-WG/setup-kam@main
         with:

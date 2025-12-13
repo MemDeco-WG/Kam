@@ -4,8 +4,10 @@ use clap::Args;
 #[derive(Args, Debug)]
 pub struct InitArgs {
     /// Path to initialize the project
-    #[arg(value_name = "PATH")]
-    pub name: String,
+    /// When running interactively (`-i`/`--interactive`) this PATH may be omitted;
+    /// the interactive flow will prompt for it instead.
+    #[arg(value_name = "PATH", required_unless_present = "interactive")]
+    pub name: Option<String>,
 
     /// Project ID (default: folder name)
     #[arg(long)]
@@ -34,6 +36,10 @@ pub struct InitArgs {
     /// Force overwrite existing files
     #[arg(short, long)]
     pub force: bool,
+
+    /// Run the init interactively; ask for required values
+    #[arg(short = 'i', long = "interactive")]
+    pub interactive: bool,
 
     /// Deprecated: Template source to implement (local path, URL, or git repo)
     /// NOTE: This option has been removed from the CLI. Use -t/--template

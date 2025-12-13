@@ -1,10 +1,15 @@
 use crate::errors::KamError;
 
 use super::args::InitArgs;
-use super::{impl_mod, post_init, pre_init};
+use super::{impl_mod, interactive, post_init, pre_init};
 
 /// Run the init command
 pub fn run(args: InitArgs) -> Result<(), KamError> {
+    // If interactive flag is set, delegate to the interactive prompt flow
+    if args.interactive {
+        return interactive::run(args);
+    }
+
     // Prepare initialization data
     // Make `data` mutable because we'll pass a mutable reference to the template vars later
     let data = pre_init::prepare_init(&args)?;
@@ -45,6 +50,8 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::Cli;
+    use clap::Parser;
     use serial_test::serial;
     use tempfile::tempdir;
 
@@ -57,7 +64,7 @@ mod tests {
         std::env::set_current_dir(dir).unwrap();
 
         let args = InitArgs {
-            name: "my_test_module".to_string(),
+            name: Some("my_test_module".to_string()),
             id: None,
             project_name: None,
             version: None,
@@ -69,6 +76,7 @@ mod tests {
             var: vec![],
             template: Some("tmpl_template".to_string()),
             tmpl: false,
+            interactive: false,
         };
 
         run(args).unwrap();
@@ -91,7 +99,7 @@ mod tests {
         std::env::set_current_dir(dir).unwrap();
 
         let args = InitArgs {
-            name: "custom_mod".to_string(),
+            name: Some("custom_mod".to_string()),
             id: Some("custom.id".to_string()),
             project_name: Some("Custom Name".to_string()),
             version: Some("0.1.2".to_string()),
@@ -103,6 +111,7 @@ mod tests {
             var: vec![],
             template: Some("tmpl_template".to_string()),
             tmpl: false,
+            interactive: false,
         };
 
         run(args).unwrap();
@@ -114,5 +123,54 @@ mod tests {
         assert_eq!(kt.prop.version, "0.1.2");
 
         std::env::set_current_dir(orig).unwrap();
+    }
+
+    #[test]
+    fn test_init_parses_short_interactive_flag() {
+        // Short alias -i
+        let cli = Cli::try_parse_from(&["kam", "init", "-i", "my_test_module"]).unwrap();
+        match cli.command {
+            crate::cli::Commands::Init(args) => assert!(args.interactive),
+            _ => panic!("Expected init command"),
+        }
+    }
+
+    #[test]
+    fn test_init_parses_long_interactive_flag() {
+        // Long alias --interactive (explicit PATH provided)
+        let cli = Cli::try_parse_from(&["kam", "init", "--interactive", "my_test_module"]).unwrap();
+        match cli.command {
+            crate::cli::Commands::Init(args) => {
+                assert!(args.interactive);
+                assert_eq!(args.name, Some("my_test_module".to_string()));
+            }
+            _ => panic!("Expected init command"),
+        }
+    }
+
+    #[test]
+    fn test_init_parses_short_interactive_without_path() {
+        // Short alias -i without PATH should be accepted when interactive mode is used
+        let cli = Cli::try_parse_from(&["kam", "init", "-i"]).unwrap();
+        match cli.command {
+            crate::cli::Commands::Init(args) => {
+                assert!(args.interactive);
+                assert!(args.name.is_none());
+            }
+            _ => panic!("Expected init command"),
+        }
+    }
+
+    #[test]
+    fn test_init_parses_long_interactive_without_path() {
+        // Long alias --interactive without PATH should be accepted when interactive mode is used
+        let cli = Cli::try_parse_from(&["kam", "init", "--interactive"]).unwrap();
+        match cli.command {
+            crate::cli::Commands::Init(args) => {
+                assert!(args.interactive);
+                assert!(args.name.is_none());
+            }
+            _ => panic!("Expected init command"),
+        }
     }
 }

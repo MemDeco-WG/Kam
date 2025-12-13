@@ -1,4 +1,4 @@
-# Kam - Offline-first module scaffolding, packaging, and template toolkit
+# Kam - A CLI toolkit for scaffolding, building, and distributing ksu/APU/Magisk/AnyTemplate modules
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-0.4.26-blue.svg)](https://github.com/MemDeco-WG/Kam)
@@ -7,13 +7,13 @@ English | [中文](README.zh-CN.md)
 
 ## 📖 Overview
 
-Kam is an offline-first(kam tmpl pull requires a network connection.) CLI toolkit for scaffolding, building, and distributing Android module packages and templates. It focuses on rapid project initialization, reproducible offline builds, template management, and convenient repository/metadata export for module maintainers and distribution channels. Kam still supports building modules for Magisk, KernelSU, and APatch workflows.
+Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android module packages and templates (ksu/APU/Magisk/AnyTemplate). It focuses on rapid project initialization, reproducible builds, template management, and convenient repository/metadata export for module maintainers and distribution channels.
 
 ### ✨ Key Features
 
 - 🚀 **Quick Initialization** - Rapidly create new module projects using various templates
 - 🔧 **Automated Build** - One-click module ZIP packaging
- - 🔒 **Offline-first (network optional)** - Kam is designed to work offline and does not require network access for most commands. However, some commands optionally rely on network services for additional capabilities (see below).
+ - 🔒 **Network optional** - Kam supports offline operation for most commands, but some features may rely on network services for additional capabilities (see below).
 - 🎯 **Smart Sync** - Auto-sync `kam.toml` configuration to `module.prop` and `update.json`
  - ⚙️ **Config Management** - `kam config` to manage global (`~/.kam/config.toml`) and project-level (`./.kam/config.toml`) settings to avoid repetitive edits
  - 🗂️ **Repo & Metadata Export** - Export `kam.toml` into repo.json, module.json, track.json, config.json for marketplaces or registries
@@ -207,13 +207,13 @@ For more details on templates, see [templates/README.md](docs/templates.md).
 
 ### ⚠️ Network & Optional Online Features
 
-Kam is offline-first, but supports optional network-backed functionality to increase security and convenience. These features are not required for basic scaffolding and builds, but may be enabled by flags or in future updates:
+Kam supports optional network-backed functionality to increase security and convenience. These features are not required for basic scaffolding and builds, but may be enabled by flags or in future updates:
 
 - **Timestamped signatures / Sigstore** — Using `kam sign` with Sigstore/timestamping enabled may contact a timestamp authority (TSA) or Sigstore services to generate RFC 3161 timestamped signatures or to record signatures on transparency logs (Rekor). This requires network access when enabled.
   Note: `kam sign` does not request an RFC3161 timestamp by default. Use `--timestamp` to enable timestamping when needed.
 - **Template downloads (planned)** — A `kam tmpl pull` command will be added to make it easy to fetch and import templates from remote repositories or template registries.
 
-When possible, these features are optional and disabled by default to preserve the offline-first behavior of Kam.
+When possible, these features are optional and disabled by default.
 
 ### Build Options
 ### TOML Manipulation
