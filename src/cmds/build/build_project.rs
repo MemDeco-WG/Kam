@@ -150,7 +150,12 @@ pub fn build_project(
         if let Some(pb) = &build_pb {
             pb.set_message(crate::i18n::tr_key("hooks.running_pre"));
         }
-        run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+        if let Some(pb) = &build_pb {
+            let run_res = pb.suspend(|| run_pre_build_hooks(project_path, &kam_toml, &output_dir, args));
+            run_res?;
+        } else {
+            run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+        }
         if let Some(pb) = &build_pb {
             pb.inc(1);
         }
