@@ -14,7 +14,7 @@ use crate::errors::KamError;
 pub fn run(args: CheckArgs) -> Result<(), KamError> {
     let project_path = Path::new(&args.path);
     if !project_path.exists() {
-        return Err(KamError::InvalidDirectory(format!(
+        return Err(KamError::InvalidDirectory(trf!(
             "Path does not exist: {}",
             args.path
         )));
@@ -24,7 +24,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
 
     // 检测项目类型：是否是 Kam 项目
     let is_kam_project = project_path.join("kam.toml").exists();
-    
+
     // 如果是 Kam 项目，优先检查 kam.toml
     if is_kam_project {
         let kam_toml_path = project_path.join("kam.toml");
@@ -41,16 +41,14 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             skip_dirs.push(d.to_string());
         }
     }
-    
+
     // 如果是 Kam 项目，根据配置调整检查范围
     if is_kam_project {
-        if let Ok(kam_toml) = crate::types::kam_toml::KamToml::load_from_dir(project_path) {
+        if let Ok(_kam_toml) = crate::types::kam_toml::KamToml::load_from_dir(project_path) {
             // 如果配置了 source_dir，可以优先检查该目录
             // 但这里我们仍然检查整个项目，只是跳过一些不必要的目录
-            if let Some(build) = &kam_toml.kam.build {
-                // 可以添加基于 build 配置的智能过滤逻辑
-                // 例如：如果配置了 exclude，可以跳过这些文件
-            }
+            // 可以添加基于 build 配置的智能过滤逻辑
+            // 例如：如果配置了 exclude，可以跳过这些文件
         }
     }
     // 虽然可能漏掉一些，但至少能跳过大部分不需要检查的目录
@@ -73,12 +71,21 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         .filter(|e| e.file_type().is_file())
     {
         let path = entry.path();
+        // 如果是 Kam 项目，kam.toml 已经单独检查过了，不统计
+        if is_kam_project && path.file_name().and_then(|n| n.to_str()) == Some("kam.toml") {
+            continue;
+        }
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
             match ext.to_lowercase().as_str() {
                 "json" | "yml" | "yaml" | "toml" | "sh" | "bash" | "md" => total_files += 1,
                 _ => {}
             }
         }
+    }
+
+    // 如果已经检查过 kam.toml，总数需要加上它（因为进度条需要包含它）
+    if is_kam_project {
+        total_files += 1;
     }
 
     // 只在非JSON输出且是终端时显示进度条
@@ -92,6 +99,10 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         .unwrap()
         .progress_chars("#>-");  // 进度条字符，看起来比较好看
         pb.set_style(style);
+        // 如果已经检查过 kam.toml，进度条从 1 开始
+        if is_kam_project {
+            pb.inc(1);
+        }
         Some(pb)
     } else {
         None
@@ -127,7 +138,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             if is_kam_project && path.file_name().and_then(|n| n.to_str()) == Some("kam.toml") {
                 continue;
             }
-            
+
             let res = check_file(path, kind, args.fix)?;
             results.push(res);
             if let Some(ref p) = pb {
@@ -153,11 +164,11 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     for r in &results {
         let path = &r.path;
         match (r.valid, r.fixed) {
-            (true, true) => println!("{} {} (fixed)", "✓".green(), path),
+            (true, true) => println!("{} {}", "✓".green(), trf!("{} (fixed)", path)),
             (true, false) => println!("{} {}", "✓".green(), path),
             (false, true) => {
                 any_errors = true;
-                println!("{} {} (fixed)", "✕".yellow(), path)
+                println!("{} {}", "✕".yellow(), trf!("{} (fixed)", path))
             }
             (false, false) => {
                 any_errors = true;
@@ -166,13 +177,13 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         }
 
         if !r.errors.is_empty() {
-            println!("  {} {}", "✗".red().bold(), "Errors:".red().bold());
+            println!("  {} {}", "✗".red().bold(), crate::i18n::tr_key("Errors:").red().bold());
             for e in &r.errors {
                 println!("    {} {}", "→".red().dimmed(), e.red());
             }
         }
         if !r.warnings.is_empty() {
-            println!("  {} {}", "!".yellow().bold(), "Warnings:".yellow().bold());
+            println!("  {} {}", "!".yellow().bold(), crate::i18n::tr_key("Warnings:").yellow().bold());
             for w in &r.warnings {
                 println!("    {} {}", "→".yellow().dimmed(), w.yellow());
             }
@@ -180,9 +191,9 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     }
 
     if any_errors {
-        println!("\n{} {}", "✕".red().bold(), "Some issues found.".red());
+        println!("\n{} {}", "✕".red().bold(), crate::i18n::tr_key("Some issues found.").red());
     } else {
-        println!("\n{} {}", "✓".green().bold(), "No issues found.".green());
+        println!("\n{} {}", "✓".green().bold(), crate::i18n::tr_key("No issues found.").green());
     }
 
     Ok(())

@@ -52,7 +52,7 @@ pub fn export_single_template(
 
             let relative_path = path
                 .strip_prefix(&template_path)
-                .map_err(|e| KamError::StripPrefixFailed(e.to_string()))?;
+                .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {}", e)))?;
 
             if path.is_file() {
                 let mut file = File::open(path).map_err(KamError::Io)?;
@@ -147,7 +147,7 @@ pub fn export_multiple_templates(
 
                 let relative_path = path
                     .strip_prefix(&template_path)
-                    .map_err(|e| KamError::StripPrefixFailed(e.to_string()))?;
+                    .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {}", e)))?;
 
                 if path.is_file() {
                     let mut file = File::open(path).map_err(KamError::Io)?;

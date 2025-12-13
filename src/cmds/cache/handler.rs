@@ -11,9 +11,9 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
             let templates = TemplateCacheManager::list_local_templates()?;
             use crate::utils::Utils;
             if templates.is_empty() {
-                Utils::info("No templates found in local cache.");
+                Utils::info(crate::i18n::tr_key("No templates found in local cache."));
             } else {
-                Utils::section("Local Cached Templates");
+                Utils::section(crate::i18n::tr_key("Local Cached Templates"));
                 for tmpl in templates {
                     Utils::info(&tmpl);
                 }
@@ -27,27 +27,23 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                 std::fs::remove_dir_all(&cache_dir).map_err(KamError::Io)?;
                 std::fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
                 use crate::utils::Utils;
-                Utils::success("Cache cleaned successfully");
+                Utils::success(crate::i18n::tr_key("Cache cleaned successfully"));
             } else {
                 use crate::utils::Utils;
-                Utils::info("Cache directory is already empty or does not exist.");
+                Utils::info(crate::i18n::tr_key("Cache directory is already empty or does not exist."));
             }
         }
         CacheCommands::Add { name, path } => {
             // 添加模板到缓存
             TemplateCacheManager::install_template(&name, &path)?;
             use crate::utils::Utils;
-            Utils::success(&format!(
-                "Template '{}' added to cache from {}",
-                name,
-                path.display()
-            ));
+            Utils::success(&trf!("Template '{}' added to cache from {}", name, path.display()));
         }
         CacheCommands::Remove { name } => {
             // 从缓存删除模板
             TemplateCacheManager::remove_template(&name)?;
             use crate::utils::Utils;
-            Utils::success(&format!("Template '{}' removed from cache", name));
+            Utils::success(&trf!("Template '{}' removed from cache", name));
         }
         CacheCommands::Path => {
             // 显示缓存目录路径

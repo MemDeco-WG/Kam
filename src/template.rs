@@ -477,7 +477,7 @@ impl TemplateCopier {
             // Calculate relative path
             let rel_path = src_path
                 .strip_prefix(src)
-                .map_err(|e| KamError::StripPrefixFailed(e.to_string()))?;
+                .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {}", e)))?;
 
             // Replace variables in filename
             let rel_path_str = rel_path.to_string_lossy();

@@ -89,7 +89,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
         ExportFormat::Json => {
             // 导出module.json格式（MMRL格式）
             let json_val = build_module_json(&kt);
-            let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
+            let pretty = serde_json::to_string_pretty(&json_val)?;
             if let Some(path) = &output_path {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
@@ -103,7 +103,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
         ExportFormat::Repo => {
             // 导出repo.json格式
             let json_val = build_repo_json(&kt);
-            let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
+            let pretty = serde_json::to_string_pretty(&json_val)?;
             if let Some(path) = &output_path {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
@@ -117,7 +117,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
         ExportFormat::Track => {
             // 导出track.json格式
             let json_val = build_track_json(&kt);
-            let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
+            let pretty = serde_json::to_string_pretty(&json_val)?;
             if let Some(path) = &output_path {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
@@ -131,7 +131,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
         ExportFormat::Config => {
             // 导出config.json格式
             let json_val = build_config_json(&kt);
-            let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
+            let pretty = serde_json::to_string_pretty(&json_val)?;
             if let Some(path) = &output_path {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
@@ -145,7 +145,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
         ExportFormat::Update => {
             // 导出update.json格式
             let json_val = build_update_json(&kt);
-            let pretty = serde_json::to_string_pretty(&json_val).map_err(KamError::Json)?;
+            let pretty = serde_json::to_string_pretty(&json_val)?;
             if let Some(path) = &output_path {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;

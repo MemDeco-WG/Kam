@@ -10,26 +10,15 @@ pub enum KamError {
     #[error("Zip error: {0}")]
     Zip(#[from] zip::result::ZipError),
 
-    #[error("TOML edit error: {0}")]
-    TomlEdit(#[from] toml_edit::TomlError),
-
-    #[error("TOML schema error: {0}")]
-    TomlSchema(#[from] toml_edit::de::Error),
-
-    #[error("TOML deserialization error: {0}")]
-    TomlDe(#[from] toml::de::Error),
-
-    #[error("TOML serialization error: {0}")]
-    TomlSer(#[from] toml::ser::Error),
+    #[error("TOML error: {0}")]
+    Toml(String),
 
     #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
+    Json(String),
 
     #[error("Walkdir error: {0}")]
     Walkdir(#[from] walkdir::Error),
 
-    #[error("Strip prefix error: {0}")]
-    StripPrefix(#[from] std::path::StripPrefixError),
 
     #[error("KamToml error: {0}")]
     KamToml(#[from] crate::errors::KamTomlError),
@@ -82,8 +71,6 @@ pub enum KamError {
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
 
-    #[error("JSON error: {0}")]
-    JsonError(String),
 
     #[error("Implementation requires template variables: {0}")]
     ImplRequiresVars(String),
@@ -100,17 +87,10 @@ pub enum KamError {
     #[error("Failed to create table: {0}")]
     TableCreationFailed(String),
 
-    #[error("TOML parse error: {0}")]
-    TomlParseError(String),
-
-    #[error("TOML serialize error: {0}")]
-    TomlSerializeError(String),
 
     #[error("Invalid module type: {0}")]
     InvalidModuleType(String),
 
-    #[error("Strip prefix failed: {0}")]
-    StripPrefixFailed(String),
 
     #[error("Parse source spec failed: {0}")]
     ParseSourceFailed(String),
@@ -123,4 +103,40 @@ pub enum KamError {
 
     #[error("Template render error: {0}")]
     TemplateRenderError(String),
+}
+
+impl From<toml_edit::TomlError> for KamError {
+    fn from(e: toml_edit::TomlError) -> Self {
+        KamError::Toml(format!("TOML edit error: {}", e))
+    }
+}
+
+impl From<toml_edit::de::Error> for KamError {
+    fn from(e: toml_edit::de::Error) -> Self {
+        KamError::Toml(format!("TOML schema error: {}", e))
+    }
+}
+
+impl From<toml::de::Error> for KamError {
+    fn from(e: toml::de::Error) -> Self {
+        KamError::Toml(format!("TOML deserialization error: {}", e))
+    }
+}
+
+impl From<toml::ser::Error> for KamError {
+    fn from(e: toml::ser::Error) -> Self {
+        KamError::Toml(format!("TOML serialization error: {}", e))
+    }
+}
+
+impl From<serde_json::Error> for KamError {
+    fn from(e: serde_json::Error) -> Self {
+        KamError::Json(format!("JSON error: {}", e))
+    }
+}
+
+impl From<std::path::StripPrefixError> for KamError {
+    fn from(e: std::path::StripPrefixError) -> Self {
+        KamError::InvalidDirectory(format!("strip_prefix failed: {}", e))
+    }
 }

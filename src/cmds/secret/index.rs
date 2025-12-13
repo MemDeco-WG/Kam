@@ -68,13 +68,15 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
     // 支持新索引格式（map）和旧遗留格式（names: [...]）
     // 这样旧版本的索引文件也能正常加载
     let v: serde_json::Value = serde_json::from_str(&s)
-        .map_err(|e| KamError::JsonError(format!("Failed to parse secret index JSON: {}", e)))?;
+        .map_err(|e| KamError::Json(format!("Failed to parse secret index JSON: {}", e)))?;
     let mut idx = if v.get("entries").is_some() {
-        // Manually parse entries to be robust to missing fields
+        // 手动解析entries，对缺失字段更健壮
+        // 虽然可能有点繁琐，但至少不会因为缺少字段而失败
         let mut new = SecretIndex::default();
         let map = v.get("entries").unwrap();
         if let Some(obj) = map.as_object() {
             for (k, val) in obj.iter() {
+                // 提取各个字段，缺失就用默认值
                 let encrypted = val
                     .get("encrypted")
                     .and_then(|x| x.as_bool())
@@ -83,7 +85,7 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                 let storage = val
                     .get("storage")
                     .and_then(|x| x.as_str())
-                    .unwrap_or("file")
+                    .unwrap_or("file")  // 默认用file存储
                     .to_string();
                 let last_probe = val.get("last_probe").and_then(|x| x.as_i64()).unwrap_or(0);
                 let size = val.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
@@ -111,19 +113,22 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
         }
         new
     } else if v.get("names").is_some() {
+        // 旧格式：只有names数组
+        // 为了向后兼容，需要转换
         #[derive(Deserialize)]
         struct Legacy {
             names: HashSet<String>,
         }
         let legacy: Legacy = serde_json::from_value(v.clone()).map_err(|e| {
-            KamError::JsonError(format!("Failed to parse legacy secret index: {}", e))
+            KamError::Json(format!("Failed to parse legacy secret index: {}", e))
         })?;
         let mut new = SecretIndex::default();
+        // 把旧格式的names转成新格式的entries
         for n in legacy.names {
             new.entries.insert(
                 n,
                 SecretMeta {
-                    encrypted: false,
+                    encrypted: false,  // 旧格式没有加密信息，默认false
                     created_at: 0,
                     storage: "file".to_string(),
                     last_probe: 0,
@@ -135,11 +140,12 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
         }
         new
     } else if v.is_object() {
-        // Map from name -> SecretMeta
+        // 直接是map格式（name -> SecretMeta）
+        // 这种格式虽然不太标准，但也支持一下
         let mut new = SecretIndex::default();
         if let Some(obj) = v.as_object() {
             for (k, val) in obj.iter() {
-                // attempt to parse fields with defaults
+                // 尝试解析字段，缺失就用默认值
                 let encrypted = val
                     .get("encrypted")
                     .and_then(|x| x.as_bool())
@@ -178,7 +184,7 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
     } else if v.is_array() {
         // legacy array of names
         let arr = serde_json::from_value::<Vec<String>>(v).map_err(|e| {
-            KamError::JsonError(format!("Failed to parse legacy names array: {}", e))
+            KamError::Json(format!("Failed to parse legacy names array: {}", e))
         })?;
         let mut new = SecretIndex::default();
         for n in arr {
@@ -197,7 +203,7 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
         }
         new
     } else {
-        return Err(KamError::JsonError(
+        return Err(KamError::Json(
             "Unsupported secret index format".to_string(),
         ));
     };
@@ -243,7 +249,7 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
 pub fn save_index(idx: &SecretIndex) -> Result<(), KamError> {
     let p = index_path()?;
     let s = serde_json::to_string_pretty(idx)
-        .map_err(|e| KamError::JsonError(format!("Failed to serialize secret index: {}", e)))?;
+        .map_err(|e| KamError::Json(format!("Failed to serialize secret index: {}", e)))?;
     fs::write(&p, s).map_err(KamError::Io)?;
     Ok(())
 }

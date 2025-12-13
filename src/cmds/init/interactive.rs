@@ -158,7 +158,7 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
             Err(_) => {
                 // Fallback to previous text-based interaction
                 use crate::utils::Utils;
-                Utils::info("(Non-interactive mode detected: falling back to text input.)");
+                Utils::info(&trf!("(Non-interactive mode detected: falling back to text input.)"));
                 loop {
                     let pick = prompt_input(
                         "Select a template by name or number (or provide a local path)",
@@ -367,9 +367,9 @@ fn prompt_template_variables(
             use crate::utils::Utils;
             println!();
             if let Some(note) = &var_def.note {
-                Utils::info(&format!("{} - Note: {}", var_name, note));
+                Utils::info(&trf!("{} - Note: {}", var_name, note));
             } else {
-                Utils::info(&format!("Variable: {}", var_name));
+                Utils::info(&trf!("Variable: {}", var_name));
             }
             if let Some(help) = &var_def.help {
                 println!("  {} Help: {}", "→".blue().dimmed(), help.dimmed());
@@ -381,16 +381,17 @@ fn prompt_template_variables(
                 println!("  {} Default: {}", "→".blue().dimmed(), default.dimmed());
             }
 
-            // If the variable offers choices, prefer a visual Select and allow a custom value option.
+            // 如果变量提供了choices，优先用可视化的Select，也允许自定义值
             if let Some(choices) = &var_def.choices {
-                // Offer existing choices plus a '<Custom value>' option to allow free-form input.
+                // 提供现有选项加上"<Custom value>"选项，允许自由输入
                 let mut opts = choices.clone();
                 opts.push("<Custom value>".to_string());
 
-                // Default index: prefer a matching default value if present, otherwise 0
+                // 默认索引：优先匹配默认值，没有就用0
                 let default_idx = choices.iter().position(|c| c == &default).unwrap_or(0);
 
-                // Try dialoguer Select (arrow navigation). On failure fall back to textual input.
+                // 尝试用dialoguer Select（方向键导航），失败就回退到文本输入
+                // 虽然可能有点慢，但至少用户体验好一点
                 match Select::with_theme(&ColorfulTheme::default())
                     .with_prompt(format!("Select a value for '{}'", var_name))
                     .items(&opts)
@@ -536,53 +537,74 @@ fn prompt_template_variables(
 // 构建会被模板复制的文件列表（用于可视化）
 // 这个功能主要是让用户看看模板会生成哪些文件
 fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError> {
-    // Build a tree-like list with indentation and provide a Select UI to scroll and preview files.
-    // This is arrow-key friendly via `dialoguer::Select`.
+    // 构建树状列表（带缩进），提供Select UI来滚动和预览文件
+    // 用dialoguer::Select支持方向键导航，比较友好
     let mut entries: Vec<(String, PathBuf, bool)> = Vec::new();
 
+    // 遍历模板目录，收集所有文件
     for entry in WalkDir::new(template_dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(|e| e.ok())  // 忽略读取失败的条目
     {
-        // Use metadata where possible; ignore broken entries
+        // 使用metadata（如果可能），忽略损坏的条目
         let metadata = match entry.metadata() {
             Ok(m) => m,
-            Err(_) => continue,
+            Err(_) => continue,  // 读取失败就跳过
         };
-        // only consider files and directories
+        // 只考虑文件和目录
         let path = entry.path();
-        // relative path for display
+        // 相对路径用于显示
         let rel = path
             .strip_prefix(template_dir)
             .unwrap_or(path)
             .to_path_buf();
-        // compute depth for a tree prefix
+        // 计算深度用于树状前缀
         let depth = rel.components().count().saturating_sub(1);
         let mut prefix = String::new();
         for _ in 0..depth {
-            prefix.push_str("  ");
+            prefix.push_str("  ");  // 每层缩进2个空格
         }
-        // Display name (with last component only to make the tree compact)
+        // 显示名称（只用最后一部分，让树更紧凑）
+        let is_file = metadata.is_file();
         let display_name = if let Some(name) = rel.file_name().and_then(|s| s.to_str()) {
-            format!("{}{}", prefix, name)
+            if is_file {
+                format!("{}{}", prefix, name)
+            } else {
+                format!("{}{}/", prefix, name)
+            }
         } else {
-            format!("{}{}", prefix, rel.display())
+            if is_file {
+                format!("{}{}", prefix, rel.display())
+            } else {
+                format!("{}{}/", prefix, rel.display())
+            }
         };
-        entries.push((display_name, rel, metadata.is_file()));
+        entries.push((display_name, rel, is_file));
     }
 
-    // Sort for deterministic order
+    // 排序，确保顺序确定（虽然可能不太重要，但至少一致）
     entries.sort_by(|a, b| a.0.cmp(&b.0));
 
     // Nothing to show?
     if entries.is_empty() {
         use crate::utils::Utils;
-        Utils::info("(Template directory empty)");
+        Utils::info(&trf!("(Template directory empty)"));
         return Ok(());
     }
 
-    // Build the display items
-    let mut display_items: Vec<String> = entries.iter().map(|(d, _, _)| d.clone()).collect();
+    // Build the display items (with icons and color: 📁 for dirs, 📄 for files)
+    let mut display_items: Vec<String> = entries
+        .iter()
+        .map(|(d, _, is_file)| {
+            if *is_file {
+                // file icon, dimmed for less emphasis
+                format!("📄 {}", d).dimmed().to_string()
+            } else {
+                // folder icon, cyan color to stand out
+                format!("📁 {}", d).cyan().to_string()
+            }
+        })
+        .collect();
     // Add control items at the end
     display_items.push("-- Continue --".to_string());
     display_items.push("-- Exit preview --".to_string());
@@ -608,7 +630,7 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
                 // If choose exit -> simply return Ok (cancel preview)
                 if idx == choices_len - 1 {
                     use crate::utils::Utils;
-                    Utils::info("Preview cancelled.");
+                    Utils::info(&trf!("Preview cancelled."));
                     return Ok(());
                 }
                 // If an actual entry is selected
@@ -617,13 +639,19 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
                     let full_path = template_dir.join(rel_path);
                     if !is_file {
                         // Directory selected: list immediate children as a small preview
-                        println!("\n--- Directory: {} ---", rel_path.display());
+                        println!("\n--- Directory: {} ---", rel_path.display().to_string().cyan());
                         if let Ok(children) = fs::read_dir(&full_path) {
                             let mut cvec: Vec<_> = children.filter_map(|e| e.ok()).collect();
                             cvec.sort_by_key(|d| d.path());
                             for c in cvec.iter().take(50) {
                                 if let Some(name) = c.path().file_name().and_then(|s| s.to_str()) {
-                                    println!("  - {}", name);
+                                    if c.path().is_dir() {
+                                        // Directory entries show an icon and cyan color
+                                        println!("  - 📁 {}/", name.cyan());
+                                    } else {
+                                        // Files show a file icon and dimmed color
+                                        println!("  - 📄 {}", name.dimmed());
+                                    }
                                 }
                             }
                             println!("--- End of directory preview ---\n");
@@ -778,8 +806,8 @@ fn save_global_config(
 
 pub fn run(args: InitArgs) -> Result<(), KamError> {
     use crate::utils::Utils;
-    Utils::banner("Interactive Kam Init");
-    Utils::info("You may press Enter to accept a default value shown in brackets");
+    Utils::banner(crate::i18n::tr_key("Interactive Kam Init"));
+    Utils::info(crate::i18n::tr_key("You may press Enter to accept a default value shown in brackets"));
     println!();
 
     // Prepare defaults (non-interactive sanity pass)
@@ -813,6 +841,69 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             }
         };
         data.path = final_path;
+
+        // If the user didn't pass --id explicitly, recompute `data.id`
+        // to match the final folder basename. If the inferred id contains
+        // invalid characters, prompt the user to accept a sanitized suggestion
+        // or input a valid custom ID.
+        if args.id.is_none() {
+            if let Some(basename) = data.path.file_name().and_then(|s| s.to_str()) {
+                let candidate = basename.to_string();
+                // Check ID validity (alphanumeric, '.', '-', '_')
+                if candidate
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
+                {
+                    data.id = candidate;
+                } else {
+                    use crate::utils::Utils;
+                    Utils::warn(&format!(
+                        "Inferred module id '{}' from path contains invalid characters.",
+                        candidate
+                    ));
+
+                    // Suggest a sanitized version (replace spaces with underscore)
+                    let suggested = candidate.replace(' ', "_");
+                    if suggested
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
+                    {
+                        if prompt_confirm(&format!("Use sanitized module id '{}'?", suggested), true)?
+                        {
+                            data.id = suggested;
+                        } else {
+                            // Ask the user to input a valid ID
+                            let id_input = prompt_input("Module ID", Some(&data.id))?;
+                            data.id = id_input;
+                            if !data
+                                .id
+                                .chars()
+                                .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
+                            {
+                                return Err(KamError::InvalidConfig(format!(
+                                    "Invalid module ID '{}': ID must contain only alphanumeric characters, dots, dashes, and underscores",
+                                    data.id
+                                )));
+                            }
+                        }
+                    } else {
+                        // If we couldn't create a valid suggestion, force the user to input
+                        let id_input = prompt_input("Module ID", Some(&data.id))?;
+                        data.id = id_input;
+                        if !data
+                            .id
+                            .chars()
+                            .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
+                        {
+                            return Err(KamError::InvalidConfig(format!(
+                                "Invalid module ID '{}': ID must contain only alphanumeric characters, dots, dashes, and underscores",
+                                data.id
+                            )));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Ensure module id matches path name
@@ -893,8 +984,8 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             true,
         )? {
             use crate::utils::Utils;
-            Utils::info("Recommend: https://cli.github.com/manual/installation");
-            Utils::info("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh");
+            Utils::info(&trf!("Recommend: https://cli.github.com/manual/installation"));
+            Utils::info(&trf!("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh"));
         }
     }
 
@@ -910,8 +1001,8 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             false,
         )? {
             use crate::utils::Utils;
-            Utils::info("Recommended: python -m pip install --user commitizen  (or npm/yarn global install)");
-            Utils::info("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh");
+            Utils::info(&trf!("Recommended: python -m pip install --user commitizen  (or npm/yarn global install)"));
+            Utils::info(&trf!("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh"));
         }
     }
 
@@ -964,9 +1055,9 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // Post-process
     post_init::post_process(&data.path)?;
 
-    Utils::success("Interactive initialization completed successfully.");
+    Utils::success(crate::i18n::tr_key("Interactive initialization completed successfully."));
     println!();
-    Utils::info("Next steps:");
+    Utils::info(crate::i18n::tr_key("Next steps:"));
     println!("  {} cd {}", "→".blue(), data.path.display());
     println!("  {} kam build", "→".blue());
     Ok(())

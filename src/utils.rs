@@ -51,65 +51,80 @@ pub fn default_exclude_dir_names() -> Vec<String> {
 // - 以'/'结尾的当作目录前缀匹配
 // - 包含'*'或'?'的转成正则表达式
 // - '*.ext'这种后缀模式直接匹配文件名后缀
-// FIXME: 这个函数有点复杂，可能可以重构一下
+
+fn matches_directory_prefix(pattern: &str, path: &str) -> bool {
+    let prefix = pattern.trim_end_matches('/');
+    let path_norm = if path.starts_with("./") {
+        &path[2..]
+    } else {
+        path
+    };
+    path_norm == prefix || path_norm.starts_with(&format!("{}/", prefix))
+}
+
+fn matches_suffix_wildcard(pattern: &str, file_name: &str) -> bool {
+    if pattern.starts_with("*.") {
+        file_name.ends_with(&pattern[1..])
+    } else {
+        false
+    }
+}
+
+fn matches_wildcard(pattern: &str, text: &str) -> bool {
+    if !pattern.contains('*') && !pattern.contains('?') {
+        return false;
+    }
+    let mut regex_str = regex::escape(pattern);
+    regex_str = regex_str.replace("\\*", ".*").replace("\\?", ".");
+    let final_regex = format!("^{}$", regex_str);
+    Regex::new(&final_regex)
+        .map(|re| re.is_match(text))
+        .unwrap_or(false)
+}
+
+fn matches_exact(pattern: &str, text: &str) -> bool {
+    text == pattern
+}
+
 pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -> bool {
-    // Normalize pattern and rel_path for comparison
     let patt = pattern.trim();
     let rel = rel_path.trim();
 
-    // 目录前缀匹配，比如 "foo/" 或 "foo/bar/"
+    // 目录前缀匹配
     if patt.ends_with('/') {
-        let prefix = patt.trim_end_matches('/');
-        // 去掉开头的"./"，这样"a/b"和"./a/b"都能匹配
-        let rel_norm = if rel.starts_with("./") {
-            &rel[2..]
-        } else {
-            rel
-        };
-        // 只匹配完整的目录名，不能部分匹配
-        // 比如"foo/"不能匹配"foobar"，".git"不能匹配".github"
-        if rel_norm == prefix || rel_norm.starts_with(&format!("{}/", prefix)) {
+        if matches_directory_prefix(patt, rel) {
             return true;
         }
     }
 
-    // 简单的后缀通配符，比如 "*.ext"
-    if patt.starts_with("*.") {
-        if let Some(fname) = file_name {
-            return fname.ends_with(&patt[1..]);
+    // 后缀通配符匹配
+    if let Some(fname) = file_name {
+        if matches_suffix_wildcard(patt, fname) {
+            return true;
         }
     }
 
-    // 如果有通配符，转成正则表达式
-    // 这里用了一个简单的转换，可能不够完善，但大部分情况够用了
-    if patt.contains('*') || patt.contains('?') {
-        let mut regex_str = regex::escape(patt);
-        regex_str = regex_str.replace("\\*", ".*").replace("\\?", ".");
-        let final_regex = format!("^{}$", regex_str);
-        if let Ok(re) = Regex::new(&final_regex) {
-            if re.is_match(rel) {
-                return true;
-            }
-            if let Some(fname) = file_name {
-                if re.is_match(fname) {
-                    return true;
-                }
-            }
+    // 通配符正则匹配
+    if matches_wildcard(patt, rel) {
+        return true;
+    }
+    if let Some(fname) = file_name {
+        if matches_wildcard(patt, fname) {
+            return true;
         }
     }
 
     // 精确匹配
-    if rel == patt {
+    if matches_exact(patt, rel) {
         return true;
     }
     if let Some(fname) = file_name {
-        if fname == patt {
+        if matches_exact(patt, fname) {
             return true;
         }
     }
-    false  // 都不匹配就返回false
-    // 这个函数逻辑有点复杂，但暂时够用了
-    // TODO: 也许可以优化一下性能？不过现在还没遇到性能问题
+
+    false
 }
 
 // 文件操作和打印相关的枚举
@@ -209,14 +224,16 @@ impl Utils {
     /// title is longer than the width it'll simply be printed without additional
     /// padding.
     pub fn banner(title: &str) {
-        let (formatted, _) = Self::format_centered_title(title);
+        // Translate section/banners where possible before centering
+        let (formatted, _) = Self::format_centered_title(crate::i18n::tr_key(title));
         println!("{}", formatted.cyan().bold());
         println!();
     }
 
     /// Print a "key: value" pair with a clear bullet icon and subtle value styling.
     pub fn kv(key: &str, value: &str) {
-        println!("  {} {}: {}", "•".cyan(), key.bold(), value.dimmed());
+        let key_translated = crate::i18n::tr_key(key);
+        println!("  {} {}: {}", "•".cyan(), key_translated.bold(), value.dimmed());
     }
 
     /// Print a compact section header with a horizontal separator below.
@@ -227,7 +244,8 @@ impl Utils {
         if title.is_empty() {
             return;
         }
-        let (formatted, _) = Self::format_centered_title(title);
+        // Translate section titles (if we have mapping), then format/center them.
+        let (formatted, _) = Self::format_centered_title(crate::i18n::tr_key(title));
         println!();
         println!("{}", formatted.cyan().bold());
         println!();
@@ -235,33 +253,40 @@ impl Utils {
 
     /// Print a generic informational line.
     pub fn info(msg: &str) {
-        println!("  {} {}", "•".cyan(), msg);
+        // Attempt to translate the message (if we can map it). Useful for static
+        // phrases and common messages. For complex templates consider using `trf!`.
+        let translated = crate::i18n::tr(msg);
+        println!("  {} {}", "•".cyan(), translated);
     }
 
     /// Print an executing line for tasks such as scripts or commands being run.
     pub fn executing(msg: &str) {
-        println!("  {} {}", "→".blue(), msg);
+        let translated = crate::i18n::tr(msg);
+        println!("  {} {}", "→".blue(), translated);
     }
 
     /// Print a success line with a prominent green check.
     pub fn success(msg: &str) {
-        println!("{} {}", "✓".green().bold(), msg.green());
+        let translated = crate::i18n::tr(msg);
+        println!("{} {}", "✓".green().bold(), translated.green());
     }
 
     /// Print a warning line with yellow emphasis.
     /// Print a warning message in yellow.
     pub fn warn(msg: &str) {
-        println!("  {} {}", "!".yellow(), msg.yellow());
+        let translated = crate::i18n::tr(msg);
+        println!("  {} {}", "!".yellow(), translated.yellow());
     }
 
     /// Print an error message in bold red with context.
     pub fn error(msg: &str) {
-        eprintln!("{} {}", "✗".red().bold(), msg.red());
+        let translated = crate::i18n::tr(msg);
+        eprintln!("{} {}", "✗".red().bold(), translated.red());
     }
 
     /// Classify a log line and return its log level type.
     /// This centralizes the classification logic used across multiple functions.
-    fn classify_log_line(line: &str) -> LogLevel {
+    fn classify_log_line<'a>(line: &'a str) -> LogLevel<'a> {
         let l = line.trim();
         if l.is_empty() {
             return LogLevel::Empty;

@@ -116,7 +116,6 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
             }
         }
         "toml" => {
-            let content_for_extract = s.clone();
             let parse_fn = |s: &str| -> Result<(), String> {
                 toml::from_str::<toml::Value>(s)
                     .map_err(|e| {
@@ -432,5 +431,4 @@ fn extract_line_number(err_msg: &str, content: &str) -> String {
         }
     }
     err_msg.to_string()
-}
 }

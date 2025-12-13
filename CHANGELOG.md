@@ -4,6 +4,10 @@
 
 - Introduce `about` command, implement interactive `init` flow, and improve CI workflows with package manager caching.
 
+### Refactor
+
+- major code improvements and enhancements
+
 ## 0.4.31 (2025-12-13)
 
 ## 0.4.29 (2025-12-12)

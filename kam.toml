@@ -78,7 +78,7 @@ module_type = "kam"
 [kam.build]
 source_dir = "src/Kam"
 target_dir = "dist"
-output_file = "{{id}}-{{versionCode}}-{{version}}"
+output_file = "{{id}}"
 hooks_dir = "hooks"
 
 [kam.tmpl.variables.repository]
@@ -88,7 +88,7 @@ default = ""
 
 [kam.workspace]
 members = [
-    "tmpl/*_template",
+    "[tmpl/*_template]",
     ".",
 ]
 

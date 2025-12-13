@@ -20,10 +20,7 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
     let src_path = Path::new(src_str);
 
     if !src_path.exists() {
-        return Err(KamError::CommandFailed(format!(
-            "Source file not found: {}",
-            src_path.display()
-        )));
+        return Err(KamError::CommandFailed(trf!("Source file not found: {}", src_path.display())));
     }
 
     // 如果没有指定签名文件，就用源文件名+.sig
@@ -34,10 +31,7 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
     };
 
     if !sig_path.exists() {
-        return Err(KamError::CommandFailed(format!(
-            "Signature file not found: {}",
-            sig_path.display()
-        )));
+        return Err(KamError::CommandFailed(trf!("Signature file not found: {}", sig_path.display())));
     }
 
     // 2. 读取源文件和签名
@@ -46,7 +40,7 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
     // 签名是base64编码的，需要解码
     let sig_bytes = BASE64_ENGINE
         .decode(sig_b64.trim().as_bytes())
-        .map_err(|e| KamError::CommandFailed(format!("Failed to base64 decode signature: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(trf!("Failed to base64 decode signature: {}", e)))?;
 
     // 3. 获取公钥
     // 优先级：--key > --cert-chain > --cert-name > secret
@@ -56,7 +50,7 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         let key_path = Path::new(key_path_str);
         let key_bytes = fs::read(key_path).map_err(KamError::Io)?;
         PKey::public_key_from_pem(&key_bytes)
-            .map_err(|e| KamError::CommandFailed(format!("Failed to parse public key PEM from {}: {}", key_path.display(), e)))?
+            .map_err(|e| KamError::CommandFailed(trf!("Failed to parse public key PEM from {}: {}", key_path.display(), e)))?
     } else if let Some(cert_chain_path) = &args.cert_chain {
         // Certificate chain from file
         if args.verbose {
@@ -116,54 +110,49 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
 
         // Parse public key PEM
         PKey::public_key_from_pem(pub_key_pem.as_bytes())
-            .map_err(|e| KamError::CommandFailed(format!("Failed to parse public key from certificate: {}", e)))?
+            .map_err(|e| KamError::CommandFailed(trf!("Failed to parse public key from certificate: {}", e)))?
     } else {
         // Use helper to get/refresh public key from secret (handles caching and fallback)
         match crate::cmds::secret::utils::get_or_refresh_public_key(&args.secret, args.verbose) {
             Ok(pk) => pk,
-            Err(e) => return Err(KamError::CommandFailed(format!("Failed to retrieve public key: {}", e))),
+            Err(e) => return Err(KamError::CommandFailed(trf!("Failed to retrieve public key: {}", e))),
         }
     };
 
     if args.verbose {
         use crate::utils::Utils;
-        Utils::executing(&format!("Calculating hash for '{}'...", src_path.display()));
+        Utils::executing(&trf!("Calculating hash for '{}'...", src_path.display()));
     }
 
     // 4. 验证签名
     // 用SHA-256哈希和公钥验证签名
     let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey)
-        .map_err(|e| KamError::CommandFailed(format!("Failed to create verifier: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(trf!("Failed to create verifier: {}", e)))?;
 
     if args.verbose {
         use crate::utils::Utils;
-        Utils::executing("Verifying signature...");
+        Utils::executing(crate::i18n::tr_key("Verifying signature..."));
     }
     // 更新验证器（把文件内容加进去）
-    verifier.update(&data).map_err(|e| KamError::CommandFailed(format!("Failed to update verifier: {}", e)))?;
+    verifier.update(&data).map_err(|e| KamError::CommandFailed(trf!("Failed to update verifier: {}", e)))?;
 
     // 验证签名
-    let result = verifier.verify(&sig_bytes).map_err(|e| KamError::CommandFailed(format!("Verification error: {}", e)))?;
+    let result = verifier.verify(&sig_bytes).map_err(|e| KamError::CommandFailed(trf!("Verification error: {}", e)))?;
 
     if result {
         // 验证成功！
         use crate::utils::Utils;
         if args.verbose {
-            Utils::success("Verification successful");
+            Utils::success(crate::i18n::tr_key("Verification successful"));
         } else {
-            Utils::success("Verified");
+            Utils::success(crate::i18n::tr_key("Verified"));
         }
         Ok(())
     } else {
         // 验证失败，文件可能被篡改或签名不对
         use crate::utils::Utils;
-        Utils::error(&format!(
-            "Verification FAILED for '{}'",
-            src_path.display()
-        ));
-        Err(KamError::CommandFailed(format!(
-            "Verification FAILED for '{}'",
-            src_path.display()
-        )))
+        let fail_msg = trf!("Verification FAILED for '{}'", src_path.display());
+        Utils::error(&fail_msg);
+        Err(KamError::CommandFailed(fail_msg))
     }
 }

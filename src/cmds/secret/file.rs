@@ -8,6 +8,8 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
+// 获取密钥目录（~/.kam/secrets）
+// 如果不存在就创建，并设置合适的权限（Unix系统）
 fn secrets_dir() -> Result<PathBuf, KamError> {
     let home = dirs::home_dir().ok_or_else(|| {
         KamError::InvalidDirectory("Could not determine home directory".to_string())
@@ -17,6 +19,7 @@ fn secrets_dir() -> Result<PathBuf, KamError> {
         fs::create_dir_all(&dir).map_err(KamError::Io)?;
         #[cfg(unix)]
         {
+            // 设置目录权限为700（只有所有者能访问）
             let mut perm = fs::metadata(home.join(".kam"))
                 .map_err(KamError::Io)?
                 .permissions();
@@ -27,16 +30,20 @@ fn secrets_dir() -> Result<PathBuf, KamError> {
     Ok(dir)
 }
 
+// 获取密钥文件路径（~/.kam/secrets/{name}.blob）
 pub fn secret_file_path(name: &str) -> Result<PathBuf, KamError> {
     let dir = secrets_dir()?;
     Ok(dir.join(format!("{}.blob", name)))
 }
 
+// 写密钥文件
+// 在Unix系统上设置权限为600（只有所有者能读写）
 pub fn write_secret_file(name: &str, blob: &[u8]) -> Result<(), KamError> {
     let p = secret_file_path(name)?;
     fs::write(&p, blob).map_err(KamError::Io)?;
     #[cfg(unix)]
     {
+        // 设置文件权限为600（安全第一）
         let mut perm = fs::metadata(&p).map_err(KamError::Io)?.permissions();
         perm.set_mode(0o600);
         fs::set_permissions(&p, perm).map_err(KamError::Io)?;
@@ -53,6 +60,8 @@ pub fn read_secret_file(name: &str) -> Result<Vec<u8>, KamError> {
     Ok(b)
 }
 
+// 存储密钥
+// 把blob base64编码后存到文件，并更新索引
 pub fn store_secret(
     name: &str,
     blob: &[u8],
@@ -61,11 +70,12 @@ pub fn store_secret(
     pub_key_pem: Option<String>,
     pub_key_signature: Option<String>,
 ) -> Result<(), KamError> {
+    // base64编码后存储（虽然可能有点冗余，但至少格式统一）
     let s = BASE64_ENGINE.encode(blob);
-    // Store only to local secure file storage
+    // 只存储到本地安全文件存储
     write_secret_file(name, &s.as_bytes())?;
 
-    // Local file storage
+    // 更新索引（记录元数据）
     let mut idx = load_index()?;
     let storage = "file";
     let meta = SecretMeta {

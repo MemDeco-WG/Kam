@@ -1,5 +1,3 @@
-use colored::*;
-
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 
@@ -25,36 +23,34 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
         };
 
         if new_version != kam_toml.prop.version {
-            println!(
+            let msg = trf!(
                 "Bumped version: {} -> {}",
-                kam_toml.prop.version.cyan(),
-                new_version.green()
+                &kam_toml.prop.version,
+                &new_version
             );
+            println!("{}", msg);
             kam_toml.prop.version = new_version;
         } else {
-            println!("Version unchanged: {}", kam_toml.prop.version.cyan());
+            println!("{}", trf!("Version unchanged: {}", &kam_toml.prop.version));
         }
 
         // 更新版本时总是更新versionCode（用当前时间戳）
         // 这样每次发布都有唯一的versionCode
         let old_code = kam_toml.prop.versionCode;
         let new_code = chrono::Utc::now().timestamp_millis();
-        println!(
+        println!("{}", trf!(
             "Updated versionCode: {} -> {}",
-            old_code.to_string().cyan(),
-            new_code.to_string().green()
-        );
+            &old_code.to_string(),
+            &new_code.to_string()
+        ));
         kam_toml.prop.versionCode = new_code;
 
         // 写回文件
         kam_toml.write_to_dir(&current_dir)?;
     } else {
         // 没有版本参数，就显示当前版本
-        println!("Current version: {}", kam_toml.prop.version.cyan());
-        println!(
-            "Current versionCode: {}",
-            kam_toml.prop.versionCode.to_string().cyan()
-        );
+        println!("{}", trf!("Current version: {}", &kam_toml.prop.version));
+        println!("{}", trf!("Current versionCode: {}", &kam_toml.prop.versionCode.to_string()));
     }
 
     Ok(())
@@ -67,13 +63,13 @@ fn validate_version(version: &str) -> Result<(), KamError> {
 
     if parts.is_empty() {
         return Err(KamError::InvalidConfig(
-            "Version cannot be empty".to_string(),
+            crate::i18n::tr_key("Version cannot be empty").to_string(),
         ));
     }
 
     for (i, part) in parts.iter().enumerate() {
         if part.is_empty() {
-            return Err(KamError::InvalidConfig(format!(
+            return Err(KamError::InvalidConfig(trf!(
                 "Invalid version '{}': part {} is empty",
                 version,
                 i + 1
@@ -83,7 +79,7 @@ fn validate_version(version: &str) -> Result<(), KamError> {
         // 每个部分应该是数字或字母数字（支持预发布版本如1.0.0-beta1）
         // 允许字母数字和横线
         if !part.chars().all(|c| c.is_alphanumeric() || c == '-') {
-            return Err(KamError::InvalidConfig(format!(
+            return Err(KamError::InvalidConfig(trf!(
                 "Invalid version '{}': part '{}' contains invalid characters",
                 version, part
             )));
@@ -107,7 +103,7 @@ fn bump_version(current: &str, index: usize) -> Result<String, KamError> {
 
     if index >= parts.len() {
         return Err(KamError::InvalidConfig(
-            "Invalid version format for bumping".to_string(),
+            crate::i18n::tr_key("Invalid version format for bumping").to_string(),
         ));
     }
 

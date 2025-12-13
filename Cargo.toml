@@ -36,6 +36,7 @@ walkdir = "2.3.3"
 x509-parser = "0.18.0"
 zip = "6.0.0"
 comfy-table = "7.2.1"
+sys-locale = { version = "0.3", optional = true }
 
 [dependencies.chrono]
 features = ["serde"]
@@ -79,6 +80,10 @@ features = ["unicode-width"]
 
 [dev-dependencies]
 serial_test = "3.2.0"
+
+[features]
+default = []
+sys-locale = ["dep:sys-locale"]
 
 [package]
 authors = ["LightJunction"]

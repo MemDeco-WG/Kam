@@ -1,7 +1,10 @@
-use colored::*;
+
 use comfy_table::{Cell, Table};
 use glob::glob;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
+use std::thread;
 use std::time::Instant;
 
 use super::args::BuildArgs;
@@ -16,12 +19,67 @@ struct BuildResult {
     error: Option<String>,
 }
 
+// 展开成员模式（支持 glob 和 [] 包裹）
+// 返回 (是否用 [] 包裹, 展开后的成员列表)
+fn expand_member_pattern(
+    project_path: &Path,
+    member_pattern: &str,
+) -> Result<(bool, Vec<String>), KamError> {
+    // 检查是否用 [] 包裹
+    let (is_bracketed, pattern) = if member_pattern.starts_with('[') && member_pattern.ends_with(']') {
+        // 去掉首尾的 []
+        let inner = &member_pattern[1..member_pattern.len() - 1];
+        (true, inner.to_string())
+    } else {
+        (false, member_pattern.to_string())
+    };
+
+    let mut expanded = Vec::new();
+
+    // 检查是否包含 glob 字符
+    if pattern.contains('*') || pattern.contains('?') || pattern.contains('[') {
+        // 是 glob 模式，展开它
+        let pattern_path = project_path.join(&pattern);
+        let pattern_str = pattern_path.to_string_lossy();
+
+        match glob(&pattern_str) {
+            Ok(paths) => {
+                for entry in paths.flatten() {
+                    // 规范化路径为绝对路径
+                    let abs_entry = if entry.is_absolute() {
+                        entry.clone()
+                    } else {
+                        project_path.join(&entry)
+                    };
+
+                    // 只包含有 kam.toml 的目录
+                    if abs_entry.is_dir() && abs_entry.join("kam.toml").exists() {
+                        if let Ok(rel_path) = abs_entry.strip_prefix(project_path) {
+                            let rel_str = rel_path.to_string_lossy().to_string();
+                            expanded.push(rel_str);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                // glob 模式无效，警告一下但继续
+                Utils::warn(&trf!("Invalid glob pattern '{}': {}", pattern, e));
+            }
+        }
+    } else {
+        // 不是 glob 模式，直接使用
+        expanded.push(pattern);
+    }
+
+    Ok((is_bracketed, expanded))
+}
+
 // 构建工作区成员
 // 这个函数会切换目录，所以要注意恢复
 fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -> BuildResult {
     let member_path = project_path.join(member);
     if !member_path.exists() {
-        Utils::warn(&format!("workspace member {} not found", member));
+        Utils::warn(&trf!("workspace member {} not found", member));
         return BuildResult {
             member: member.to_string(),
             success: false,
@@ -31,7 +89,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
     // 检查有没有kam.toml，没有就跳过
     if !member_path.join("kam.toml").exists() {
         if !args.quiet {
-            Utils::info(&format!("Skipping {}: no kam.toml found", member));
+            Utils::info(&trf!("Skipping {}: no kam.toml found", member));
         }
         return BuildResult {
             member: member.to_string(),
@@ -40,44 +98,20 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
         };
     }
     if !args.quiet {
-        Utils::banner(&format!("Building workspace member: {}", member));
-    }
-    // 保存当前目录，构建完要恢复
-    // 虽然理论上应该用绝对路径，但有些代码可能依赖当前目录
-    let original_cwd = match std::env::current_dir() {
-        Ok(cwd) => cwd,
-        Err(e) => {
-            Utils::error(&format!("Failed to get current dir: {}", e));
-            return BuildResult {
-                member: member.to_string(),
-                success: false,
-                error: Some(format!("failed to get current dir: {}", e)),
-            };
-        }
-    };
-    // 切换到成员目录，这样相对路径就能正常工作了
-    if let Err(e) = std::env::set_current_dir(&member_path) {
-        Utils::error(&format!(
-            "Failed to change to {}: {}",
-            member_path.display(),
-            e
-        ));
-        return BuildResult {
-            member: member.to_string(),
-            success: false,
-            error: Some(format!("failed to change directory: {}", e)),
-        };
+        Utils::banner(&trf!("Building workspace member: {}", member));
     }
 
-    let result = match KamToml::load_from_dir(".") {
-        Ok(kt) => match build_project(std::path::Path::new("."), args, Some(kt)) {
+    // 注：不要切换全局 CWD（在并发环境下会导致竞态）。
+    // 直接使用成员路径进行构建，避免修改进程级别的状态。
+    let result = match KamToml::load_from_dir(member_path.as_path()) {
+        Ok(kt) => match build_project(member_path.as_path(), args, Some(kt)) {
             Ok(_) => BuildResult {
                 member: member.to_string(),
                 success: true,
                 error: None,
             },
             Err(e) => {
-                Utils::error(&format!("Failed to build {}: {}", member, e));
+                Utils::error(&trf!("Failed to build {}: {}", member, e));
                 BuildResult {
                     member: member.to_string(),
                     success: false,
@@ -86,10 +120,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
             }
         },
         Err(e) => {
-            Utils::warn(&format!(
-                "Skipping {}: failed to load kam.toml: {}",
-                member, e
-            ));
+            Utils::warn(&trf!("Skipping {}: failed to load kam.toml: {}", member, e));
             BuildResult {
                 member: member.to_string(),
                 success: false,
@@ -97,10 +128,6 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
             }
         }
     };
-
-    if let Err(e) = std::env::set_current_dir(original_cwd) {
-        Utils::warn(&format!("Failed to restore cwd: {}", e));
-    }
 
     result
 }
@@ -117,59 +144,156 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     let mut results = Vec::new();
 
     if let Some(members) = &workspace.members {
-        // 展开工作区成员的glob模式
-        // 支持像 "modules/*" 这样的模式，会自动匹配所有子目录
-        let mut expanded_members = Vec::new();
+        // 解析成员列表，识别用 [] 包裹的项目
+        // 重要：只有用 [] 包裹的项目组才会并发执行，没有包裹的必须顺序执行
+        // 连续的 [] 包裹的项目会被合并成一个并发组
+        // 这样可以避免重复构建和竞争条件
+        let mut i = 0;
+        while i < members.len() {
+            let member_pattern = &members[i];
+            match expand_member_pattern(project_path, member_pattern) {
+                Ok((is_bracketed, expanded)) => {
+                    if expanded.is_empty() {
+                        i += 1;
+                        continue;
+                    }
 
-        for member_pattern in members {
-            // 检查是否包含glob字符（*、?、[）
-            if member_pattern.contains('*')
-                || member_pattern.contains('?')
-                || member_pattern.contains('[')
-            {
-                // 是glob模式，展开它
-                let pattern_path = project_path.join(member_pattern);
-                let pattern_str = pattern_path.to_string_lossy();
+                    if is_bracketed {
+                        // 收集所有连续的 [] 包裹的项目，合并成一个并发组
+                        let mut all_concurrent_members = expanded;
+                        i += 1;
 
-                match glob(&pattern_str) {
-                    Ok(paths) => {
-                        for entry in paths.flatten() {
-                            // 规范化路径为绝对路径
-                            let abs_entry = if entry.is_absolute() {
-                                entry.clone()
-                            } else {
-                                project_path.join(&entry)
-                            };
-
-                            // 只包含有kam.toml的目录（不然构建会失败）
-                            if abs_entry.is_dir() && abs_entry.join("kam.toml").exists() {
-                                if let Ok(rel_path) = abs_entry.strip_prefix(project_path) {
-                                    let rel_str = rel_path.to_string_lossy().to_string();
-                                    expanded_members.push(rel_str);
+                        // 继续收集后续的 [] 包裹的项目
+                        while i < members.len() {
+                            match expand_member_pattern(project_path, &members[i]) {
+                                Ok((next_bracketed, next_expanded)) => {
+                                    if next_bracketed && !next_expanded.is_empty() {
+                                        // 也是 [] 包裹的，合并到当前并发组
+                                        all_concurrent_members.extend(next_expanded);
+                                        i += 1;
+                                    } else {
+                                        // 不是 [] 包裹的，停止收集
+                                        break;
+                                    }
+                                }
+                                Err(_) => {
+                                    // 展开失败，停止收集
+                                    break;
                                 }
                             }
                         }
-                    }
-                    Err(e) => {
-                        // glob模式无效，警告一下但继续
-                        Utils::warn(&format!("Invalid glob pattern '{}': {}", member_pattern, e));
+
+                        // 现在处理合并后的并发组
+                        // 用 [] 包裹的项目组，使用线程池并发执行
+                        // 注意：只有这里才会使用并发，-j 参数也只在这里生效
+                        let member_count = all_concurrent_members.len();
+
+                        // 确定线程池大小（仅在并发组中使用）
+                        let num_jobs = args.jobs.unwrap_or_else(|| {
+                            thread::available_parallelism()
+                                .map(|n| n.get())
+                                .unwrap_or(1)
+                        });
+
+                        // 确保至少有一个线程（如果 member_count > 0）
+                        let actual_jobs = if member_count > 0 {
+                            num_jobs.min(member_count).max(1)
+                        } else {
+                            0
+                        };
+
+                        if !args.quiet {
+                            Utils::info(&trf!(
+                                "Building {} member(s) concurrently (using {} jobs)",
+                                member_count,
+                                actual_jobs
+                            ));
+                        }
+
+                        // 如果没有任务，跳过
+                        if member_count == 0 {
+                            continue;
+                        }
+
+                        // 使用线程池并发执行
+                        let project_path = Arc::new(project_path.to_path_buf());
+                        let args = Arc::new(args.clone());
+
+                        // 创建任务队列和结果 channel
+                        let task_queue = Arc::new(Mutex::new(all_concurrent_members));
+                        let (result_tx, result_rx) = mpsc::channel();
+
+                        // 创建工作线程
+                        let mut handles = Vec::new();
+                        for _ in 0..actual_jobs {
+                            let task_queue = Arc::clone(&task_queue);
+                            let result_tx = result_tx.clone();
+                            let project_path = Arc::clone(&project_path);
+                            let args = Arc::clone(&args);
+
+                            let handle = thread::spawn(move || {
+                                loop {
+                                    // 从任务队列中取任务
+                                    let member = {
+                                        let mut queue = task_queue.lock().unwrap();
+                                        queue.pop()
+                                    };
+
+                                    if let Some(member) = member {
+                                        let result = build_workspace_member(
+                                            project_path.as_path(),
+                                            &member,
+                                            args.as_ref(),
+                                        );
+                                        result_tx.send(result).unwrap();
+                                    } else {
+                                        // 没有更多任务，退出
+                                        break;
+                                    }
+                                }
+                            });
+                            handles.push(handle);
+                        }
+
+                        // 等待所有工作线程完成
+                        // 注意：工作线程中的 result_tx clone 会在线程结束时自动销毁
+                        for handle in handles {
+                            handle.join().unwrap();
+                        }
+
+                        // 收集结果
+                        // 所有工作线程已完成，它们的 result_tx clone 已经销毁
+                        // 现在关闭主发送端，使 channel 关闭，然后收集所有结果
+                        drop(result_tx);
+                        // 从 channel 中收集所有结果（iter 会在 channel 关闭时结束）
+                        let mut concurrent_results: Vec<_> = result_rx.iter().collect();
+                        results.append(&mut concurrent_results);
+                    } else {
+                        // 没有用 [] 包裹的项目，必须顺序执行
+                        // 重要：这里不使用并发，即使设置了 -j 参数也不会生效
+                        // 这样可以避免重复构建和竞争条件
+                        for member in expanded {
+                            let result = build_workspace_member(project_path, &member, args);
+                            results.push(result);
+                        }
+                        i += 1;
                     }
                 }
-            } else {
-                // 不是glob模式，直接使用
-                expanded_members.push(member_pattern.clone());
+                Err(e) => {
+                    Utils::warn(&trf!(
+                        "Failed to expand member pattern '{}': {}",
+                        member_pattern,
+                        e
+                    ));
+                    i += 1;
+                }
             }
         }
 
-        if expanded_members.is_empty() {
+        if results.is_empty() {
             return Err(KamError::InvalidConfig(
                 "No workspace members found after expanding patterns".to_string(),
             ));
-        }
-
-        for member in expanded_members {
-            let result = build_workspace_member(project_path, &member, args);
-            results.push(result);
         }
     } else {
         build_project(project_path, args, None)?;
@@ -181,7 +305,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     // 打印总结，让用户知道哪些成功了哪些失败了
     if !args.quiet {
         println!();
-        Utils::section("✿ Workspace Build Summary ✿");
+        Utils::section(crate::i18n::tr_key("✿ Workspace Build Summary ✿"));
     }
 
     // 统计成功和失败的数量
@@ -190,22 +314,23 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
 
     if !args.quiet {
         let mut summary_table = Table::new();
-        summary_table.set_header(vec!["模块", "状态"]);
+        summary_table.set_header(vec![crate::i18n::tr_key("模块"), crate::i18n::tr_key("状态")]);
 
         for result in &results {
             if result.success {
                 summary_table.add_row(vec![
                     Cell::new(&result.member).fg(comfy_table::Color::White),
-                    Cell::new("✓ 成功").fg(comfy_table::Color::Green),
+                    Cell::new(crate::i18n::tr_key("✓ 成功")).fg(comfy_table::Color::Green),
                 ]);
             } else {
+                let default_error = "unknown error".to_string();
                 let error_msg = result
                     .error
                     .as_ref()
-                    .unwrap_or(&"unknown error".to_string());
+                    .unwrap_or(&default_error);
                 summary_table.add_row(vec![
                     Cell::new(&result.member).fg(comfy_table::Color::White),
-                    Cell::new(&format!("✗ 失败: {}", error_msg)).fg(comfy_table::Color::Red),
+                    Cell::new(trf!("✗ 失败: {}", error_msg)).fg(comfy_table::Color::Red),
                 ]);
             }
         }
@@ -217,21 +342,21 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
         println!();
         let mut stats_table = Table::new();
         stats_table
-            .set_header(vec!["统计项", "值"])
+            .set_header(vec![crate::i18n::tr_key("统计项"), crate::i18n::tr_key("值")])
             .add_row(vec![
-                Cell::new("总计").fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("总计")).fg(comfy_table::Color::Cyan),
                 Cell::new(results.len().to_string()).fg(comfy_table::Color::White),
             ])
             .add_row(vec![
-                Cell::new("成功").fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("成功")).fg(comfy_table::Color::Cyan),
                 Cell::new(success_count.to_string()).fg(comfy_table::Color::Green),
             ])
             .add_row(vec![
-                Cell::new("失败").fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("失败")).fg(comfy_table::Color::Cyan),
                 Cell::new(failed_count.to_string()).fg(comfy_table::Color::Red),
             ])
             .add_row(vec![
-                Cell::new("总耗时").fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr_key("总耗时")).fg(comfy_table::Color::Cyan),
                 Cell::new(&format!("{:.2}s", total_duration.as_secs_f64())).fg(comfy_table::Color::White),
             ]);
 
@@ -241,10 +366,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     // 如果有失败的，就返回错误
     // 虽然可以继续构建其他的，但通常用户希望所有都成功
     if failed_count > 0 {
-        return Err(KamError::CommandFailed(format!(
-            "{} workspace member(s) failed to build",
-            failed_count
-        )));
+        return Err(KamError::CommandFailed(trf!("{} workspace member(s) failed to build", failed_count)));
     }
 
     Ok(())

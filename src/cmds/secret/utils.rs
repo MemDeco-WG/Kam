@@ -140,33 +140,36 @@ pub fn get_or_refresh_public_key(name: &str, verbose: bool) -> Result<PKey<opens
         }
     }
 
-    // 2. Fallback: Repair Cache
-    // Decrypt (prompts if needed)
+    // 2. 回退方案：修复缓存
+    // 解密私钥（如果需要密码会提示）
     let secret_bytes = read_secret_plaintext(name, true)?;
 
-    // Parse private key
+    // 解析私钥（尝试无密码，不行再试有密码的）
     let priv_key = if let Ok(pk) = PKey::private_key_from_pem(&secret_bytes) {
         pk
     } else if let Ok(pass) = std::env::var("KAM_SIGN_PASSPHRASE") {
+        // 有密码，用密码解析
         PKey::private_key_from_pem_passphrase(&secret_bytes, pass.as_bytes())
              .map_err(|e| KamError::CommandFailed(format!("Failed to parse private key with passphrase: {}", e)))?
     } else {
         return Err(KamError::CommandFailed("Failed to parse private key from secret (passphrase needed?)".to_string()));
     };
 
-    // Derive Public Key and Sign it
+    // 从私钥推导公钥并签名
+    // 这样下次就不用再解密私钥了（直接用缓存的公钥）
     let pub_der = priv_key.public_key_to_der().map_err(|e| KamError::CommandFailed(format!("Derive err: {}", e)))?;
     let pub_key = PKey::public_key_from_der(&pub_der).map_err(|e| KamError::CommandFailed(format!("Pub parse err: {}", e)))?;
     let pem_bytes = pub_key.public_key_to_pem().map_err(|e| KamError::CommandFailed(format!("PEM err: {}", e)))?;
     let pem_str = String::from_utf8(pem_bytes).map_err(|e| KamError::CommandFailed(format!("UTF8 err: {}", e)))?;
 
+    // 用私钥签名公钥（用于验证公钥的完整性）
     let mut signer = Signer::new(MessageDigest::sha256(), &priv_key).map_err(|e| KamError::CommandFailed(format!("Sign init err: {}", e)))?;
     signer.update(pem_str.as_bytes()).map_err(|e| KamError::CommandFailed(format!("Sign update err: {}", e)))?;
     let sig_bytes = signer.sign_to_vec().map_err(|e| KamError::CommandFailed(format!("Sign final err: {}", e)))?;
     let sig_b64 = BASE64_ENGINE.encode(&sig_bytes);
 
-    // Update Index
-    // Reload index to be safe
+    // 更新索引（保存公钥和签名）
+    // 重新加载索引，避免并发问题
     let mut idx = load_index().map_err(|e| KamError::CommandFailed(format!("Failed to reload index: {}", e)))?;
     if let Some(meta) = idx.entries.get_mut(name) {
         meta.pub_key_pem = Some(pem_str);
@@ -178,4 +181,5 @@ pub fn get_or_refresh_public_key(name: &str, verbose: bool) -> Result<PKey<opens
     }
 
     Ok(pub_key)
+    // 缓存修复完成，下次就能直接用公钥了（不用再解密私钥）
 }

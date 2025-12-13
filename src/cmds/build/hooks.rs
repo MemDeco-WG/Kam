@@ -6,12 +6,14 @@ use crate::utils::Utils;
 
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fs;
 use std::io::IsTerminal;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+// 运行pre-build hooks
+// 在构建之前执行，比如生成一些文件、检查环境等
 pub fn run_pre_build_hooks(
     project_root: &Path,
     kam_toml: &KamToml,
@@ -21,6 +23,8 @@ pub fn run_pre_build_hooks(
     run_hooks(project_root, kam_toml, output_dir, "pre-build", args)
 }
 
+// 运行post-build hooks
+// 在构建之后执行，比如签名、上传、清理等
 pub fn run_post_build_hooks(
     project_root: &Path,
     kam_toml: &KamToml,
@@ -30,6 +34,8 @@ pub fn run_post_build_hooks(
     run_hooks(project_root, kam_toml, output_dir, "post-build", args)
 }
 
+// 运行hooks的核心函数
+// 这个函数有点长，但逻辑还算清晰
 fn run_hooks(
     project_root: &Path,
     kam_toml: &KamToml,
@@ -37,16 +43,18 @@ fn run_hooks(
     stage: &str,
     args: &BuildArgs,
 ) -> Result<(), KamError> {
-    // Do not run hooks when packaging a template archive
+    // 打包模板时不运行hooks（模板不需要构建）
     if kam_toml.kam.module_type == ModuleType::Template {
-        Utils::info(&format!("Skipping {} hooks for template packaging", stage));
+        Utils::info(&trf!("Skipping {} hooks for template packaging", stage));
         return Ok(());
     }
 
-    // Load .env from project root if it exists and override existing env vars
+    // Read .env file into a local map instead of mutating process environment.
+    // This keeps builds thread-safe and ensures parallel builds don't interfere with each other.
     let env_path = project_root.join(".env");
+    let mut parsed_env: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     if env_path.exists() {
-        // Read and parse .env file manually to allow overriding existing variables
+        // 手动解析 .env 文件并放入 parsed_env（不会修改进程级环境）
         if let Ok(content) = fs::read_to_string(&env_path) {
             for (line_num, line) in content.lines().enumerate() {
                 let line = line.trim();
@@ -68,7 +76,7 @@ fn run_hooks(
 
                     // Validate key (must be valid identifier)
                     if key.is_empty() || !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                        Utils::warn(&format!(
+                        Utils::warn(&trf!(
                             "Warning: Invalid environment variable name '{}' at line {} in {}",
                             key,
                             line_num + 1,
@@ -91,15 +99,10 @@ fn run_hooks(
                         value
                     };
 
-                    // Override existing environment variable
-                    // SAFETY: We're setting environment variables in a controlled manner
-                    // during the build process. This is safe as long as we're not running
-                    // concurrent code that accesses these variables during modification.
-                    unsafe {
-                        std::env::set_var(key, value);
-                    }
+                    // Put into local parsed_env map — do not modify global env in-process
+                    parsed_env.insert(key.to_string(), value.to_string());
                 } else if !line.is_empty() {
-                    Utils::warn(&format!(
+                    Utils::warn(&trf!(
                         "Warning: Malformed line {} in {}: {}",
                         line_num + 1,
                         env_path.display(),
@@ -110,16 +113,16 @@ fn run_hooks(
         }
     }
 
-    // Template-provided env auto-loading removed:
+    // 模板提供的env自动加载已移除：
     //
-    // We no longer automatically load `.kam/template-vars.env` or `template-vars.env` into
-    // the build hook environment. This avoids surprising behavior (e.g. implicit template
-    // variables taking effect) and gives callers explicit control over environment injection.
+    // 我们不再自动加载`.kam/template-vars.env`或`template-vars.env`到构建hook环境
+    // 这样可以避免意外行为（比如隐式模板变量生效）并给调用者明确的控制
     //
-    // If you need to seed env variables for hooks, write them to `.env` in the project root
-    // or export them explicitly before invoking `kam` in your CI / custom workflows.
+    // 如果需要为hooks预加载env变量，写到项目根的`.env`文件
+    // 或者在CI/自定义工作流中在调用`kam`之前显式export
     //
-    // (The code that previously parsed `template-vars.env` has been intentionally removed.)
+    // （之前解析`template-vars.env`的代码已故意移除）
+    // 虽然可能有点不方便，但至少行为更可预测
 
     let hooks_dir_name = kam_toml
         .kam
@@ -148,9 +151,14 @@ fn run_hooks(
     };
     let web_root = module_root.join("webroot");
 
-    // Determine repo and ref for KAM_REPO / KAM_REPO_REF
+    // 确定仓库和ref（用于KAM_REPO / KAM_REPO_REF）
+    // 优先级：.env（项目根） > 环境变量 > kam.toml配置
     let mut detected_repo = String::new();
-    if let Ok(repo) = std::env::var("GITHUB_REPOSITORY") {
+    if let Some(repo) = parsed_env.get("GITHUB_REPOSITORY") {
+        // .env 中的值优先
+        detected_repo = repo.clone();
+    } else if let Ok(repo) = std::env::var("GITHUB_REPOSITORY") {
+        // GitHub Actions环境
         detected_repo = repo;
     } else if !kam_toml
         .mmrl
@@ -160,6 +168,7 @@ fn run_hooks(
         .unwrap_or(&String::new())
         .is_empty()
     {
+        // 从kam.toml读取
         detected_repo = kam_toml
             .mmrl
             .as_ref()
@@ -169,16 +178,24 @@ fn run_hooks(
             .clone();
     }
 
-    // Determine repo ref (branch) from environment or local git
+    // 确定仓库ref（分支名）
+    // 优先级：.env（项目根） > 环境变量 > git命令
     let mut detected_ref = String::new();
-    if let Ok(github_ref) = std::env::var("GITHUB_REF") {
-        // Trim refs/heads/ prefix when present
+    if let Some(github_ref) = parsed_env.get("GITHUB_REF") {
+        // 从 .env 读取（如果存在）
+        detected_ref = github_ref
+            .strip_prefix("refs/heads/")
+            .unwrap_or(github_ref)
+            .to_string();
+    } else if let Ok(github_ref) = std::env::var("GITHUB_REF") {
+        // GitHub Actions环境，去掉refs/heads/前缀
         detected_ref = github_ref
             .strip_prefix("refs/heads/")
             .unwrap_or(&github_ref)
             .to_string();
     } else {
-        // Attempt to run git rev-parse --abbrev-ref HEAD
+        // 尝试运行git命令获取当前分支
+        // 虽然可能失败（比如不在git仓库里），但不影响构建
         if let Ok(out) = Command::new("git")
             .arg("rev-parse")
             .arg("--abbrev-ref")
@@ -192,17 +209,24 @@ fn run_hooks(
         }
     }
 
-    // Build env var list and keep track of keys to avoid accidental duplicates.
+    // 构建环境变量列表，跟踪key避免重复
+    // 用HashSet快速检查是否已存在
     let mut env_vars: Vec<(String, String)> = Vec::new();
     let mut env_keys: HashSet<String> = HashSet::new();
 
-    // Helper closure to insert an env var while preserving existing keys (precedence)
+    // 辅助闭包：插入环境变量，保留现有key（优先级）
+    // 如果key已存在就不覆盖（先设置的优先级更高）
     let mut add_env = |k: &str, value: String| {
         if !env_keys.contains(k) {
             env_keys.insert(k.to_string());
             env_vars.push((k.to_string(), value));
         }
     };
+
+    // 将 .env（parsed_env）中的变量先加入 env_vars（优先级最高）
+    for (k, v) in parsed_env.iter() {
+        add_env(k, v.clone());
+    }
 
     // Template init variables are *not* merged automatically here anymore.
     // The environment for hooks is now constructed from the canonical values below
@@ -358,17 +382,18 @@ fn run_hooks(
         add_env(&env_key, v);
     }
 
-    // Execute hook files directly and let the OS determine execution behavior.
-    // This runner intentionally avoids OS-specific wrappers or extension-based dispatch.
-    // If a script cannot be executed on the current platform, it will fail and return an error.
-    // We'll display a header after we've determined the total number of hooks
+    // 直接执行hook文件，让OS决定执行行为
+    // 这个runner故意避免OS特定的包装器或基于扩展名的分发
+    // 如果脚本在当前平台无法执行，会失败并返回错误
+    // 在确定hook总数后再显示header
 
     let mut entries: Vec<_> = fs::read_dir(&hooks_dir)
         .map_err(KamError::Io)?
-        .filter_map(|e| e.ok())
+        .filter_map(|e| e.ok())  // 忽略读取失败的条目
         .collect();
 
-    // Sort by filename to ensure deterministic order (01-init.sh, 02-build.sh, etc.)
+    // 按文件名排序，确保执行顺序确定（01-init.sh, 02-build.sh等）
+    // 这样用户可以控制执行顺序
     entries.sort_by_key(|e| e.file_name());
 
     // Determine if we should show a progress bar
@@ -385,11 +410,13 @@ fn run_hooks(
     let pb = if show_progress && total_hooks > 0 {
         let pb = ProgressBar::new(total_hooks as u64);
         let style = ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+            "{spinner:.green.bold} {msg:.bold} [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) {elapsed_precise}",
         )
         .unwrap()
-        .progress_chars("#>-");
+        .progress_chars("█▉▊▋▌▍▎▏  ")
+        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
         pb.set_style(style);
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
         Some(pb)
     } else {
         None
@@ -421,87 +448,73 @@ fn run_hooks(
                 Utils::executing(&format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
             }
 
-            // Stream stdout/stderr so the progress bar can continue animating and we get line-by-line logs.
-            // This avoids blocking the main thread via `Command::output()` and prints output as it's produced.
-            // For error reporting we keep a tail of recent lines to include in the error message if the script fails.
+            // 流式输出stdout/stderr，实时显示命令输出
+            // 使用suspend()暂停进度条，确保输出不会被进度条干扰
 
             let mut cmd = Command::new(&path);
             cmd.current_dir(project_root)
-                .envs(env_vars.iter().cloned())
-                .stdout(Stdio::inherit())
+                .envs(env_vars.iter().cloned())  // 设置所有环境变量
+                .stdout(Stdio::inherit())  // 直接继承，实时输出
                 .stderr(Stdio::inherit())
                 .stdin(Stdio::inherit());
 
-            // Run process, suspending progress bar to allow clean output
+            // 执行命令前，先禁用进度条的自动更新，然后使用suspend()暂停进度条
+            // 这样可以确保命令输出能够实时显示，不会被进度条干扰
             let status_res = if let Some(pb) = &pb {
-                pb.suspend(|| cmd.status())
+                // 禁用steady_tick，避免后台更新干扰输出
+                pb.disable_steady_tick();
+                // 使用suspend()暂停进度条，允许命令输出正常显示
+                let result = pb.suspend(|| {
+                    cmd.status()
+                });
+                // 重新启用steady_tick
+                pb.enable_steady_tick(std::time::Duration::from_millis(100));
+                result
             } else {
                 cmd.status()
             };
 
-            // Remove all the complex buffering logic since we are inheriting stdio
+            // 处理命令执行结果
             match status_res {
-                Ok(_status) => {
-                    // Re-draw progress bar
-                    if let Some(pb) = &pb {
-                        // Force a redraw or message update
-                        pb.set_message(format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
+                Ok(status) => {
+                    if !status.success() {
+                        // 命令执行失败
+                        if let Some(pb) = &pb {
+                            pb.finish_and_clear();
+                        }
+
+                        let status_code = status
+                            .code()
+                            .map(|c| c.to_string())
+                            .unwrap_or_else(|| status.to_string());
+                        return Err(KamError::CommandFailed(format!(
+                            "Hook script {} failed with status: {}. (Output above)",
+                            filename, status_code
+                        )));
                     }
-
-                    match status_res {
-                        Ok(_status) => {
-                            if !_status.success() {
-                                // Since we inherit stdio, output is already visible to the user.
-                                // We don't need to capture and print it again.
-
-                                if let Some(pb) = &pb {
-                                    pb.finish_and_clear();
-                                }
-
-                                let status_code = _status
-                                    .code()
-                                    .map(|c| c.to_string())
-                                    .unwrap_or_else(|| _status.to_string());
-                                return Err(KamError::CommandFailed(format!(
-                                    "Hook script {} failed with status: {}. (Output above)",
-                                    filename, status_code
-                                )));
-                            }
-                            // successful run - increment progress or print success line
-                            if pb.is_none() {
-                                println!("  {} [{}/{}] {}",
-                                    "✓".green().bold(),
-                                    idx,
-                                    total_hooks,
-                                    filename.green()
-                                );
-                            } else {
-                                if let Some(pb) = &pb {
-                                    pb.inc(1);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            // wait() error
-                            if let Some(pb) = &pb {
-                                pb.finish_and_clear();
-                            }
-                            return Err(KamError::CommandFailed(format!(
-                                "Failed to wait for hook {}: {}",
-                                filename, e
-                            )));
-                        }
+                    // 命令执行成功
+                    if let Some(pb) = &pb {
+                        pb.inc(1);
+                    } else {
+                        println!("  {} [{}/{}] {}",
+                            "✓".green().bold(),
+                            idx,
+                            total_hooks,
+                            filename.green()
+                        );
                     }
                 }
                 Err(e) => {
-                    // Same hints as before (permission / not found)
+                    // 执行命令时出错（权限、找不到文件等）
                     match e.kind() {
                         std::io::ErrorKind::PermissionDenied => {
+                            // 权限被拒绝，提示用户
                             Utils::warn(
                                 "Permission denied. Make sure the script is executable and accessible. On Unix, you may need to run: chmod +x <file>. On Windows, ensure the script association or runtime is available (or run via WSL/Git Bash).",
                             );
                         }
                         std::io::ErrorKind::NotFound => {
+                            // 找不到解释器，提示用户
                             Utils::warn(&format!(
                                 "Not found. Could not execute {}. Ensure the script has an interpreter or runtime available on the system (e.g., `sh`, `bash`, or `pwsh`), or invoke the script via a shell that is available on your platform.",
                                 filename
@@ -518,16 +531,12 @@ fn run_hooks(
                     )));
                 }
             }
-            // Increment and update progress bar on successful run
-            if let Some(pb) = &pb {
-                pb.inc(1);
-            }
         }
     }
 
     // Finish the progress bar if shown
     if let Some(pb) = &pb {
-        pb.finish_with_message("Done");
+        pb.finish_with_message(format!("✓ Completed {} hooks", total_hooks));
     }
 
     Ok(())

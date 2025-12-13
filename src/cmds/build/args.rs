@@ -1,6 +1,6 @@
 use clap::Args;
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct BuildArgs {
     /// Path to the project (default: current directory)
     #[arg(default_value = ".")]
@@ -37,4 +37,8 @@ pub struct BuildArgs {
     /// Suppress most output; show only warnings and errors
     #[arg(short, long)]
     pub quiet: bool,
+
+    /// Number of parallel jobs (default: number of CPU cores)
+    #[arg(short = 'j', long = "jobs")]
+    pub jobs: Option<usize>,
 }

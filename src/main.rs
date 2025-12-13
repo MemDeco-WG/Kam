@@ -4,8 +4,6 @@
 // 👾
 // author/human : LIghtJUNction
 //
-// TODO: 这个main函数有点长，但暂时不想重构
-// FIXME: 错误处理可能可以更优雅一点
 use clap::Parser;
 use dotenvy::dotenv;
 use kam::errors::KamError;
@@ -14,9 +12,22 @@ use colored::Colorize;
 
 use kam::cli::{Cli, Commands};
 
+fn print_error_chain(e: &KamError) {
+    use kam::utils::Utils;
+    Utils::error(&format!("{}", e));
+    let mut source = e.source();
+    while let Some(s) = source {
+        eprintln!("  {} {}", "→".dimmed(), s.to_string().dimmed());
+        source = s.source();
+    }
+}
+
 fn main() {
-    // 加载.env文件（如果有的话），失败了也不管
     dotenv().ok();
+    // Initialize i18n subsystem (language detection + config-based override).
+    // This ensures that CLI messages use the correct language as early as possible.
+    kam::i18n::init();
+
     let cli = Cli::parse();
 
     let res: Result<(), KamError> = match cli.command {
@@ -38,18 +49,7 @@ fn main() {
     };
 
     if let Err(e) = res {
-        use kam::utils::Utils;
-        Utils::error(&format!("{}", e));
-
-        // 打印错误链，这样能看到完整的错误信息
-        // Rust的error chain还是挺有用的，虽然有时候会打印很多
-        let mut source = e.source();
-        while let Some(s) = source {
-            eprintln!("  {} {}", "→".dimmed(), s.to_string().dimmed());
-            source = s.source();
-        }
-
-        std::process::exit(1);  // 非零退出码表示失败
+        print_error_chain(&e);
+        std::process::exit(1);
     }
-    // 如果一切正常，就静默退出（exit code 0）
 }
