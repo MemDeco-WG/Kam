@@ -150,12 +150,11 @@ pub fn build_project(
         if let Some(pb) = &build_pb {
             pb.set_message(crate::i18n::tr_key("hooks.running_pre"));
         }
-        if let Some(pb) = &build_pb {
-            let run_res = pb.suspend(|| run_pre_build_hooks(project_path, &kam_toml, &output_dir, args));
-            run_res?;
-        } else {
-            run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)?;
-        }
+        // Suspend the top-level progress bar while running pre-build hooks so any
+        // interactive prompts or command output are not overwritten.
+        Utils::suspend_progressbar(build_pb.as_ref(), || {
+            run_pre_build_hooks(project_path, &kam_toml, &output_dir, args)
+        })?;
         if let Some(pb) = &build_pb {
             pb.inc(1);
         }
@@ -173,9 +172,6 @@ pub fn build_project(
     if let Some(pb) = &build_pb {
         pb.set_message(crate::i18n::tr_key("build.packaging_artifacts"));
     }
-
-    // Remove the redundant spinner - we already have the main progress bar
-    let main_spinner: Option<ProgressBar> = None;
 
     let basename = determine_basename(&kam_toml)?;
 
@@ -242,17 +238,16 @@ pub fn build_project(
         }
     }
 
-    // Finish main spinner before running post-build hooks
-    if let Some(pb) = main_spinner {
-        pb.finish_and_clear();
-    }
-
     // Run post-build hooks only for non-template modules
     if !is_template_build {
         if let Some(pb) = &build_pb {
             pb.set_message(crate::i18n::tr_key("hooks.running_post"));
         }
-        run_post_build_hooks(project_path, &kam_toml, &output_dir, args)?;
+        // Suspend the top-level progress bar while running post-build hooks so that
+        // any interactive prompts or subtree command outputs remain visible to the user.
+        Utils::suspend_progressbar(build_pb.as_ref(), || {
+            run_post_build_hooks(project_path, &kam_toml, &output_dir, args)
+        })?;
         if let Some(pb) = &build_pb {
             pb.inc(1);
             pb.finish_with_message(crate::i18n::tr_key("build.complete"));
@@ -304,7 +299,10 @@ pub fn create_kam_module_zip(
 
     if !src_dir.exists() {
         if !args.quiet {
-            Utils::warn(&trf!("packaging.source_directory_not_found", src_dir.display()));
+            Utils::warn(&trf!(
+                "packaging.source_directory_not_found",
+                src_dir.display()
+            ));
         }
         // We allow building even if src dir is missing, but it might be empty
     }

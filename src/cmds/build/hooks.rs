@@ -455,19 +455,9 @@ fn run_hooks(
                 .stderr(Stdio::inherit())
                 .stdin(Stdio::inherit());
 
-            // 执行命令前，先禁用进度条的自动更新，然后使用suspend()暂停进度条
-            // 这样可以确保命令输出能够实时显示，不会被进度条干扰
-            let status_res = if let Some(pb) = &pb {
-                // 禁用steady_tick，避免后台更新干扰输出
-                pb.disable_steady_tick();
-                // 使用suspend()暂停进度条，允许命令输出正常显示
-                let result = pb.suspend(|| cmd.status());
-                // 重新启用steady_tick
-                pb.enable_steady_tick(std::time::Duration::from_millis(100));
-                result
-            } else {
-                cmd.status()
-            };
+            // Execute the command while suspending the hook progress bar so stdout/stderr
+            // and any interactive prompts are visible without being overwritten.
+            let status_res = Utils::suspend_progressbar(pb.as_ref(), || cmd.status());
 
             // 处理命令执行结果
             match status_res {

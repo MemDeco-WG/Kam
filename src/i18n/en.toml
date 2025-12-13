@@ -92,10 +92,6 @@ secret.failed_read_ca = "Failed to read CA: {}"
 secret.root_ca_added = "Root CA '{}' added to trust store"
 secret.root_ca_removed = "Root CA '{}' removed from trust store"
 
-# Secret command keys
-secret.trusted_root_cas = "Trusted Root CAs"
-secret.no_trusted_root_cas = "No trusted Root CAs."
-
 # Check command keys
 check.no_issues_found = "No issues found."
 check.some_issues_found = "Some issues found."

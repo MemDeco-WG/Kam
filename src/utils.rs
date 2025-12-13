@@ -1,9 +1,11 @@
 use super::errors::KamError;
 use colored::{Color, Colorize};
+use indicatif::ProgressBar;
 use regex::Regex;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use terminal_size::{Width, terminal_size};
 
 pub struct Utils;
@@ -233,7 +235,12 @@ impl Utils {
     /// Print a "key: value" pair with a clear bullet icon and subtle value styling.
     pub fn kv(key: &str, value: &str) {
         let key_translated = crate::i18n::tr_key(key);
-        println!("  {} {}: {}", "•".cyan(), key_translated.bold(), value.dimmed());
+        println!(
+            "  {} {}: {}",
+            "•".cyan(),
+            key_translated.bold(),
+            value.dimmed()
+        );
     }
 
     /// Print a compact section header with a horizontal separator below.
@@ -360,6 +367,28 @@ impl Utils {
             LogLevel::Error(msg) => format!("{} {}", "✗".red().bold(), msg.red()),
             LogLevel::Info(msg) => format!("  {} {}", "•".cyan(), msg),
             LogLevel::Empty => String::new(),
+        }
+    }
+
+    /// Run a closure while suspending a progress bar if provided.
+    ///
+    /// This ensures CLI output (including interactive prompts) produced while the
+    /// closure executes won't be overwritten by an active progress bar.
+    /// The closure's result is returned unchanged.
+    pub fn suspend_progressbar<F, R>(pb: Option<&ProgressBar>, op: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        if let Some(pb) = pb {
+            // Temporarily disable steady tick while we run the action to avoid
+            // background updates interfering with output.
+            pb.disable_steady_tick();
+            let res = pb.suspend(op);
+            // Re-enable steady tick with a sensible default to maintain prior behavior.
+            pb.enable_steady_tick(Duration::from_millis(100));
+            res
+        } else {
+            op()
         }
     }
 
