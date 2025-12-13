@@ -164,11 +164,11 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     for r in &results {
         let path = &r.path;
         match (r.valid, r.fixed) {
-            (true, true) => println!("{} {}", "✓".green(), trf!("{} (fixed)", path)),
+            (true, true) => println!("{} {}", "✓".green(), trf!("common.file_fixed", path)),
             (true, false) => println!("{} {}", "✓".green(), path),
             (false, true) => {
                 any_errors = true;
-                println!("{} {}", "✕".yellow(), trf!("{} (fixed)", path))
+                println!("{} {}", "✕".yellow(), trf!("common.file_fixed", path))
             }
             (false, false) => {
                 any_errors = true;
