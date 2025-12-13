@@ -588,7 +588,7 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
     // Nothing to show?
     if entries.is_empty() {
         use crate::utils::Utils;
-        Utils::info(&trf!("(Template directory empty)"));
+        Utils::info(&trf!("init.interactive.template_directory_empty"));
         return Ok(());
     }
 
