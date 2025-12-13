@@ -24,6 +24,7 @@ table.stat.total_duration = "总耗时"
 build.packaging_artifacts = "正在打包制品..."
 build.complete = "构建完成"
 build.building_module_version = "构建模块：{} v{}"
+build.concurrent_building_members = "正在并行构建 {} 个成员（使用 {} 个作业）"
 build.invalid_glob_pattern = "无效的 glob 模式 '{}': {}"
 build.workspace_member_not_found = "工作区成员 {} 未找到"
 build.skipping_no_kam_toml = "跳过 {}：未找到 kam.toml"
@@ -31,12 +32,15 @@ build.building_workspace_member = "构建工作区成员：{}"
 build.failed_to_build = "构建 {} 失败: {}"
 build.skipping_failed_load_kam_toml = "跳过 {}：无法加载 kam.toml: {}"
 build.failed_workspace_members = "{} 个工作区成员构建失败"
-build.source_directory_not_found = "源目录未找到: {}"
+packaging.source_directory_not_found = "源目录未找到: {}"
 
 # Hooks
 hooks.running_pre = "正在运行预构建钩子"
 hooks.running_post = "正在运行后构建钩子"
 hooks.skipping_template_packaging = "跳过用于模板打包的构建钩子"
+hooks.skipping_hooks_for_template_packaging = "跳过 {} 钩子（模板打包）"
+hooks.invalid_env_variable_name = "警告：无效的环境变量名 '{}'（第 {} 行，路径：{}）"
+hooks.malformed_env_line = "警告：第 {} 行在文件 {} 中格式错误：{}"
 
 # Packaging / module files
 packaging.files = "正在打包文件..."
@@ -55,6 +59,8 @@ cache.no_templates = "本地缓存中未找到模板。"
 cache.local_cached_templates = "本地缓存模板"
 cache.cleaned_successfully = "缓存已成功清理"
 cache.directory_empty_or_not_exists = "缓存目录已为空或不存在。"
+cache.template_added = "模板 '{}' 已从 {} 添加到缓存"
+cache.template_removed = "模板 '{}' 已从缓存中删除"
 
 # Secret command keys
 secret.stored_secrets = "存储的 Secrets"

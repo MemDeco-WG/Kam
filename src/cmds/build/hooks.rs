@@ -6,7 +6,7 @@ use crate::utils::Utils;
 
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::IsTerminal;
 use std::path::Path;
@@ -45,13 +45,14 @@ fn run_hooks(
 ) -> Result<(), KamError> {
     // 打包模板时不运行hooks（模板不需要构建）
     if kam_toml.kam.module_type == ModuleType::Template {
-        Utils::info(&trf!("Skipping {} hooks for template packaging", stage));
+        Utils::info(&trf!("hooks.skipping_hooks_for_template_packaging", stage));
         return Ok(());
     }
 
     // Read .env file into a local map instead of mutating process environment.
     // This keeps builds thread-safe and ensures parallel builds don't interfere with each other.
-    let env_path = project_root.join(".env");    let mut parsed_env: HashMap<String, String> = HashMap::new();
+    let env_path = project_root.join(".env");
+    let mut parsed_env: HashMap<String, String> = HashMap::new();
     if env_path.exists() {
         // 手动解析 .env 文件并放入 parsed_env（不会修改进程级环境）
         if let Ok(content) = fs::read_to_string(&env_path) {
@@ -76,7 +77,7 @@ fn run_hooks(
                     // Validate key (must be valid identifier)
                     if key.is_empty() || !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
                         Utils::warn(&trf!(
-                            "Warning: Invalid environment variable name '{}' at line {} in {}",
+                            "hooks.invalid_env_variable_name",
                             key,
                             line_num + 1,
                             env_path.display()
@@ -102,7 +103,7 @@ fn run_hooks(
                     parsed_env.insert(key.to_string(), value.to_string());
                 } else if !line.is_empty() {
                     Utils::warn(&trf!(
-                        "Warning: Malformed line {} in {}: {}",
+                        "hooks.malformed_env_line",
                         line_num + 1,
                         env_path.display(),
                         line
@@ -385,7 +386,7 @@ fn run_hooks(
 
     let mut entries: Vec<_> = fs::read_dir(&hooks_dir)
         .map_err(KamError::Io)?
-        .filter_map(|e| e.ok())  // 忽略读取失败的条目
+        .filter_map(|e| e.ok()) // 忽略读取失败的条目
         .collect();
 
     // 按文件名排序，确保执行顺序确定（01-init.sh, 02-build.sh等）
@@ -449,8 +450,8 @@ fn run_hooks(
 
             let mut cmd = Command::new(&path);
             cmd.current_dir(project_root)
-                .envs(env_vars.iter().cloned())  // 设置所有环境变量
-                .stdout(Stdio::inherit())  // 直接继承，实时输出
+                .envs(env_vars.iter().cloned()) // 设置所有环境变量
+                .stdout(Stdio::inherit()) // 直接继承，实时输出
                 .stderr(Stdio::inherit())
                 .stdin(Stdio::inherit());
 
@@ -460,9 +461,7 @@ fn run_hooks(
                 // 禁用steady_tick，避免后台更新干扰输出
                 pb.disable_steady_tick();
                 // 使用suspend()暂停进度条，允许命令输出正常显示
-                let result = pb.suspend(|| {
-                    cmd.status()
-                });
+                let result = pb.suspend(|| cmd.status());
                 // 重新启用steady_tick
                 pb.enable_steady_tick(std::time::Duration::from_millis(100));
                 result
@@ -492,7 +491,8 @@ fn run_hooks(
                     if let Some(pb) = &pb {
                         pb.inc(1);
                     } else {
-                        println!("  {} [{}/{}] {}",
+                        println!(
+                            "  {} [{}/{}] {}",
                             "✓".green().bold(),
                             idx,
                             total_hooks,

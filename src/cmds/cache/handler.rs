@@ -37,13 +37,13 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
             // 添加模板到缓存
             TemplateCacheManager::install_template(&name, &path)?;
             use crate::utils::Utils;
-            Utils::success(&trf!("Template '{}' added to cache from {}", name, path.display()));
+            Utils::success(&trf!("cache.template_added", name, path.display()));
         }
         CacheCommands::Remove { name } => {
             // 从缓存删除模板
             TemplateCacheManager::remove_template(&name)?;
             use crate::utils::Utils;
-            Utils::success(&trf!("Template '{}' removed from cache", name));
+            Utils::success(&trf!("cache.template_removed", name));
         }
         CacheCommands::Path => {
             // 显示缓存目录路径

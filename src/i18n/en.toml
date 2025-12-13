@@ -28,6 +28,7 @@ table.stat.total_duration = "Total Duration"
 build.packaging_artifacts = "Packaging artifacts..."
 build.complete = "Build complete"
 build.building_module_version = "Building module: {} v{}"
+build.concurrent_building_members = "Building {} member(s) concurrently (using {} jobs)"
 
 # Build / workspace messages
 build.invalid_glob_pattern = "Invalid glob pattern '{}': {}"
@@ -43,6 +44,9 @@ packaging.source_directory_not_found = "Source directory not found: {}"
 hooks.running_pre = "Running pre-build hooks"
 hooks.running_post = "Running post-build hooks"
 hooks.skipping_template_packaging = "Skipping build hooks for template packaging"
+hooks.skipping_hooks_for_template_packaging = "Skipping {} hooks for template packaging"
+hooks.invalid_env_variable_name = "Warning: Invalid environment variable name '{}' at line {} in {}"
+hooks.malformed_env_line = "Warning: Malformed line {} in {}: {}"
 
 # Packaging / module files
 packaging.files = "Packaging files..."
@@ -62,6 +66,8 @@ cache.no_templates = "No templates found in local cache."
 cache.local_cached_templates = "Local Cached Templates"
 cache.cleaned_successfully = "Cache cleaned successfully"
 cache.directory_empty_or_not_exists = "Cache directory is already empty or does not exist."
+cache.template_added = "Template '{}' added to cache from {}"
+cache.template_removed = "Template '{}' removed from cache"
 
 # Secret command keys
 secret.stored_secrets = "Stored Secrets"
@@ -87,7 +93,6 @@ secret.root_ca_added = "Root CA '{}' added to trust store"
 secret.root_ca_removed = "Root CA '{}' removed from trust store"
 
 # Secret command keys
-secret.stored_secrets = "Stored Secrets"
 secret.trusted_root_cas = "Trusted Root CAs"
 secret.no_trusted_root_cas = "No trusted Root CAs."
 
