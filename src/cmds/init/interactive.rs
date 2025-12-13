@@ -630,7 +630,7 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
                 // If choose exit -> simply return Ok (cancel preview)
                 if idx == choices_len - 1 {
                     use crate::utils::Utils;
-                    Utils::info(&trf!("Preview cancelled."));
+                    Utils::info(&trf!("init.interactive.preview_cancelled"));
                     return Ok(());
                 }
                 // If an actual entry is selected
