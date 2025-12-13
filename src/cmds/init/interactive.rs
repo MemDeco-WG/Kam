@@ -984,8 +984,8 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             true,
         )? {
             use crate::utils::Utils;
-            Utils::info(&trf!("Recommend: https://cli.github.com/manual/installation"));
-            Utils::info(&trf!("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh"));
+            Utils::info(&trf!("init.interactive.recommend_github_cli"));
+            Utils::info(&trf!("init.interactive.helper_script"));
         }
     }
 
@@ -1002,7 +1002,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         )? {
             use crate::utils::Utils;
             Utils::info(&trf!("Recommended: python -m pip install --user commitizen  (or npm/yarn global install)"));
-            Utils::info(&trf!("Or you may run the interactive helper script: Kam/KamModuleX/kam.sh"));
+            Utils::info(&trf!("init.interactive.helper_script"));
         }
     }
 
