@@ -1,9 +1,8 @@
-
 use comfy_table::{Cell, Table};
 use glob::glob;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
@@ -26,13 +25,14 @@ fn expand_member_pattern(
     member_pattern: &str,
 ) -> Result<(bool, Vec<String>), KamError> {
     // 检查是否用 [] 包裹
-    let (is_bracketed, pattern) = if member_pattern.starts_with('[') && member_pattern.ends_with(']') {
-        // 去掉首尾的 []
-        let inner = &member_pattern[1..member_pattern.len() - 1];
-        (true, inner.to_string())
-    } else {
-        (false, member_pattern.to_string())
-    };
+    let (is_bracketed, pattern) =
+        if member_pattern.starts_with('[') && member_pattern.ends_with(']') {
+            // 去掉首尾的 []
+            let inner = &member_pattern[1..member_pattern.len() - 1];
+            (true, inner.to_string())
+        } else {
+            (false, member_pattern.to_string())
+        };
 
     let mut expanded = Vec::new();
 
@@ -204,7 +204,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
 
                         if !args.quiet {
                             Utils::info(&trf!(
-                                "Building {} member(s) concurrently (using {} jobs)",
+                                "build.concurrent_building_members",
                                 member_count,
                                 actual_jobs
                             ));
@@ -314,7 +314,10 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
 
     if !args.quiet {
         let mut summary_table = Table::new();
-        summary_table.set_header(vec![crate::i18n::tr_key("table.header.module"), crate::i18n::tr_key("table.header.status")]);
+        summary_table.set_header(vec![
+            crate::i18n::tr_key("table.header.module"),
+            crate::i18n::tr_key("table.header.status"),
+        ]);
 
         for result in &results {
             if result.success {
@@ -324,10 +327,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
                 ]);
             } else {
                 let default_error = "unknown error".to_string();
-                let error_msg = result
-                    .error
-                    .as_ref()
-                    .unwrap_or(&default_error);
+                let error_msg = result.error.as_ref().unwrap_or(&default_error);
                 summary_table.add_row(vec![
                     Cell::new(&result.member).fg(comfy_table::Color::White),
                     Cell::new(trf!("status.failed", error_msg)).fg(comfy_table::Color::Red),
@@ -342,7 +342,10 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
         println!();
         let mut stats_table = Table::new();
         stats_table
-            .set_header(vec![crate::i18n::tr_key("table.header.stat"), crate::i18n::tr_key("table.header.value")])
+            .set_header(vec![
+                crate::i18n::tr_key("table.header.stat"),
+                crate::i18n::tr_key("table.header.value"),
+            ])
             .add_row(vec![
                 Cell::new(crate::i18n::tr_key("table.stat.total")).fg(comfy_table::Color::Cyan),
                 Cell::new(results.len().to_string()).fg(comfy_table::Color::White),
@@ -356,8 +359,10 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
                 Cell::new(failed_count.to_string()).fg(comfy_table::Color::Red),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("table.stat.total_duration")).fg(comfy_table::Color::Cyan),
-                Cell::new(&format!("{:.2}s", total_duration.as_secs_f64())).fg(comfy_table::Color::White),
+                Cell::new(crate::i18n::tr_key("table.stat.total_duration"))
+                    .fg(comfy_table::Color::Cyan),
+                Cell::new(&format!("{:.2}s", total_duration.as_secs_f64()))
+                    .fg(comfy_table::Color::White),
             ]);
 
         println!("{}", stats_table);
@@ -366,7 +371,10 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     // 如果有失败的，就返回错误
     // 虽然可以继续构建其他的，但通常用户希望所有都成功
     if failed_count > 0 {
-        return Err(KamError::CommandFailed(trf!("build.failed_workspace_members", failed_count)));
+        return Err(KamError::CommandFailed(trf!(
+            "build.failed_workspace_members",
+            failed_count
+        )));
     }
 
     Ok(())
@@ -375,13 +383,13 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
 
 #[cfg(test)]
 mod tests {
+    use super::super::args::BuildArgs;
     use super::*;
-    use serial_test::serial;
-    use tempfile::tempdir;
-    use std::fs;
     use crate::types::kam_toml::KamToml;
     use crate::types::kam_toml::sections::WorkspaceSection;
-    use super::super::args::BuildArgs;
+    use serial_test::serial;
+    use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     #[serial]
@@ -433,7 +441,10 @@ pwd > "$KAM_MODULE_ROOT/hook_pwd.txt"
 echo "ok" > "$KAM_MODULE_ROOT/hook_marker.txt"
 sleep 1
 "#;
-            let hook_path = module_dir.join("hooks").join("pre-build").join("01_concurrent_test.sh");
+            let hook_path = module_dir
+                .join("hooks")
+                .join("pre-build")
+                .join("01_concurrent_test.sh");
             fs::write(&hook_path, script).unwrap();
 
             // Make sure the hook is executable on unix systems (tests run on linux CI)
@@ -464,14 +475,33 @@ sleep 1
 
         // Check that each module had its hook executed and wrote expected files in its own module root
         for m in &modules {
-            let env_id = fs::read_to_string(root.join(m).join("src").join(m).join("hook_env_id.txt")).unwrap();
+            let env_id =
+                fs::read_to_string(root.join(m).join("src").join(m).join("hook_env_id.txt"))
+                    .unwrap();
             assert_eq!(env_id.trim(), *m, "expected KAM_MODULE_ID to be '{}'", m);
 
-            let pwd = fs::read_to_string(root.join(m).join("src").join(m).join("hook_pwd.txt")).unwrap();
-            let last_component = std::path::Path::new(pwd.trim()).file_name().unwrap().to_str().unwrap();
-            assert_eq!(last_component, *m, "expected pwd to end with module name '{}'", m);
+            let pwd =
+                fs::read_to_string(root.join(m).join("src").join(m).join("hook_pwd.txt")).unwrap();
+            let last_component = std::path::Path::new(pwd.trim())
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap();
+            assert_eq!(
+                last_component, *m,
+                "expected pwd to end with module name '{}'",
+                m
+            );
 
-            assert!(root.join(m).join("src").join(m).join("hook_marker.txt").exists(), "hook marker not found for module {}", m);
+            assert!(
+                root.join(m)
+                    .join("src")
+                    .join(m)
+                    .join("hook_marker.txt")
+                    .exists(),
+                "hook marker not found for module {}",
+                m
+            );
         }
     }
 
@@ -513,13 +543,21 @@ sleep 1
         fs::create_dir_all(root.join("a").join("src").join("a")).unwrap();
 
         // Create project-local `.env` that overrides KAM_MODULE_ID
-        fs::write(root.join("a").join(".env"), "KAM_MODULE_ID=override_module_a\n").unwrap();
+        fs::write(
+            root.join("a").join(".env"),
+            "KAM_MODULE_ID=override_module_a\n",
+        )
+        .unwrap();
 
         // Hook script writes KAM_MODULE_ID into a file under the module's src dir
         let script = r#"#!/usr/bin/env sh
 echo "$KAM_MODULE_ID" > "$KAM_MODULE_ROOT/hook_env_override.txt"
 "#;
-        let hook_path = root.join("a").join("hooks").join("pre-build").join("01_env_override.sh");
+        let hook_path = root
+            .join("a")
+            .join("hooks")
+            .join("pre-build")
+            .join("01_env_override.sh");
         fs::write(&hook_path, script).unwrap();
 
         #[cfg(unix)]
@@ -548,7 +586,13 @@ echo "$KAM_MODULE_ID" > "$KAM_MODULE_ROOT/hook_env_override.txt"
 
         // The hook should have written the `.env` override value into the module's src path,
         // showing that parsed `.env` took precedence over kam.toml (KAM_MODULE_ID)
-        let env_override = fs::read_to_string(root.join("a").join("src").join("a").join("hook_env_override.txt")).unwrap();
+        let env_override = fs::read_to_string(
+            root.join("a")
+                .join("src")
+                .join("a")
+                .join("hook_env_override.txt"),
+        )
+        .unwrap();
         assert_eq!(env_override.trim(), "override_module_a");
     }
 }

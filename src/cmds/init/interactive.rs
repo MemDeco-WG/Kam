@@ -158,7 +158,7 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
             Err(_) => {
                 // Fallback to previous text-based interaction
                 use crate::utils::Utils;
-                Utils::info(&trf!("(Non-interactive mode detected: falling back to text input.)"));
+                Utils::info(&trf!("init.interactive.non_interactive_fallback"));
                 loop {
                     let pick = prompt_input(
                         "Select a template by name or number (or provide a local path)",
