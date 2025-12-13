@@ -65,16 +65,11 @@ When hooks are executed, Kam injects the following environment variables, which 
 
 Example sign command output (shows timestamp attempt and graceful network failure):
 
-```bash
-  kam sign update.json --sigstore --timestamp
-Private key password:
-✓ Signed 'update.json' -> dist/update.json.sig
-! Failed to obtain TSA timestamp: TSA request error: error sending request for url (https://tsa.sigstore.dev/api/v1/timestamp). Skipping timestamp.
-```
+
 
 Default post-build hook behaviors:
 
-Note: `kam init` persists the resolved template variables used to render templates into `.kam/template-vars.env` in the project root (for legacy compatibility `template-vars.env` in the project root may also be present). During `kam build`, Kam will load these files (in addition to `.env`) and inject the derived `KAM_*` and `KAM_TMPL_*` variables into hook environments. If you wish to override any value, set it in your project `.env` (or `~/.kam/...`); `.env` takes precedence.
+Note: `kam init` persists the resolved template variables used to render templates into `.kam/template-vars.env.init` in the project root (for legacy compatibility, `template-vars.env.init` in the project root may also be present). These `.init` files are intended for initialization-time consumption only and are not automatically loaded by `kam` during `build`. If you wish to inject or override environment variables used by hooks, place them in your project `.env` (or `~/.kam/...`); `.env` takes precedence.
 
 Note: Kam also exports additional environment variables derived from the generated `kam.toml` and from templates:
 
