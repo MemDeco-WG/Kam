@@ -1,5 +1,9 @@
 ## Unreleased
 
+## 0.4.28 (2025-12-12)
+
+## 0.4.27 (2025-12-12)
+
 ### Feat
 
 - Add certificate and GitHub secret management, refactor signing by removing Fulcio/Sigstore integration, and update project version.
