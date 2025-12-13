@@ -367,7 +367,7 @@ fn prompt_template_variables(
             use crate::utils::Utils;
             println!();
             if let Some(note) = &var_def.note {
-                Utils::info(&trf!("{} - Note: {}", var_name, note));
+                Utils::info(&trf!("init.interactive.variable_note", var_name, note));
             } else {
                 Utils::info(&trf!("Variable: {}", var_name));
             }
