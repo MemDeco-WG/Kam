@@ -142,3 +142,8 @@ export.repo_json = "已导出 repo.json 到 {}"
 export.track_json = "已导出 track.json 到 {}"
 export.config_json = "已导出 config.json 到 {}"
 export.update_json = "已导出 update.json 到 {}"
+
+# Sign related
+sign.signed = "已签名 '{}' -> {}"
+sign.failed_to_sign = "签名 {} 失败: {}"
+sign.no_src_or_dist = "请指定 'src' 或使用 --dist/--all 来签署制品"
