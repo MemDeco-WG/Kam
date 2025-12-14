@@ -58,7 +58,10 @@ pub fn import_single_template(
     fs::copy(archive_path, &dest_path).map_err(KamError::Io)?;
 
     use crate::utils::Utils;
-    Utils::success(&format!("Template '{}' imported successfully", template_name));
+    Utils::success(&format!(
+        "Template '{}' imported successfully",
+        template_name
+    ));
 
     Ok(())
 }
@@ -199,11 +202,17 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
     use crate::utils::Utils;
     if imported_count > 0 {
         println!();
-        Utils::success(&format!("Successfully imported {} template(s)", imported_count));
+        Utils::success(&format!(
+            "Successfully imported {} template(s)",
+            imported_count
+        ));
     }
 
     if skipped_count > 0 {
-        Utils::warn(&format!("Skipped {} template(s) (already exist)", skipped_count));
+        Utils::warn(&format!(
+            "Skipped {} template(s) (already exist)",
+            skipped_count
+        ));
     }
 
     if imported_count == 0 && skipped_count == 0 {
@@ -227,7 +236,9 @@ pub fn import_template(path: &Path, name: Option<String>, force: bool) -> Result
         // Multiple templates import
         if name.is_some() {
             use crate::utils::Utils;
-            Utils::warn("Note: --name is ignored when importing from ZIP (contains multiple templates)");
+            Utils::warn(
+                "Note: --name is ignored when importing from ZIP (contains multiple templates)",
+            );
         }
         import_multiple_templates(path, force)
     } else {

@@ -13,14 +13,16 @@ use std::path::Path;
 // 这个函数会检查文件是否被正确签名，支持多种公钥来源
 pub fn run(args: VerifyArgs) -> Result<(), KamError> {
     // 1. 确定源文件和签名文件路径
-    let src_str = args
-        .src
-        .as_ref()
-        .ok_or_else(|| KamError::CommandFailed("Source file is required for verification".to_string()))?;
+    let src_str = args.src.as_ref().ok_or_else(|| {
+        KamError::CommandFailed("Source file is required for verification".to_string())
+    })?;
     let src_path = Path::new(src_str);
 
     if !src_path.exists() {
-        return Err(KamError::CommandFailed(trf!("Source file not found: {}", src_path.display())));
+        return Err(KamError::CommandFailed(trf!(
+            "Source file not found: {}",
+            src_path.display()
+        )));
     }
 
     // 如果没有指定签名文件，就用源文件名+.sig
@@ -31,7 +33,10 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
     };
 
     if !sig_path.exists() {
-        return Err(KamError::CommandFailed(trf!("Signature file not found: {}", sig_path.display())));
+        return Err(KamError::CommandFailed(trf!(
+            "Signature file not found: {}",
+            sig_path.display()
+        )));
     }
 
     // 2. 读取源文件和签名
@@ -49,13 +54,21 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         // Direct public key file
         let key_path = Path::new(key_path_str);
         let key_bytes = fs::read(key_path).map_err(KamError::Io)?;
-        PKey::public_key_from_pem(&key_bytes)
-            .map_err(|e| KamError::CommandFailed(trf!("Failed to parse public key PEM from {}: {}", key_path.display(), e)))?
+        PKey::public_key_from_pem(&key_bytes).map_err(|e| {
+            KamError::CommandFailed(trf!(
+                "Failed to parse public key PEM from {}: {}",
+                key_path.display(),
+                e
+            ))
+        })?
     } else if let Some(cert_chain_path) = &args.cert_chain {
         // Certificate chain from file
         if args.verbose {
             use crate::utils::Utils;
-            Utils::executing(&format!("Loading certificate chain from {}...", cert_chain_path));
+            Utils::executing(&format!(
+                "Loading certificate chain from {}...",
+                cert_chain_path
+            ));
         }
         let chain_pem = fs::read_to_string(cert_chain_path).map_err(KamError::Io)?;
 
@@ -80,8 +93,12 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         }
 
         // Parse public key PEM
-        PKey::public_key_from_pem(pub_key_pem.as_bytes())
-            .map_err(|e| KamError::CommandFailed(format!("Failed to parse public key from certificate: {}", e)))?
+        PKey::public_key_from_pem(pub_key_pem.as_bytes()).map_err(|e| {
+            KamError::CommandFailed(format!(
+                "Failed to parse public key from certificate: {}",
+                e
+            ))
+        })?
     } else if let Some(cert_name) = &args.cert_name {
         // Cached certificate
         if args.verbose {
@@ -109,13 +126,19 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         }
 
         // Parse public key PEM
-        PKey::public_key_from_pem(pub_key_pem.as_bytes())
-            .map_err(|e| KamError::CommandFailed(trf!("Failed to parse public key from certificate: {}", e)))?
+        PKey::public_key_from_pem(pub_key_pem.as_bytes()).map_err(|e| {
+            KamError::CommandFailed(trf!("Failed to parse public key from certificate: {}", e))
+        })?
     } else {
         // Use helper to get/refresh public key from secret (handles caching and fallback)
         match crate::cmds::secret::utils::get_or_refresh_public_key(&args.secret, args.verbose) {
             Ok(pk) => pk,
-            Err(e) => return Err(KamError::CommandFailed(trf!("Failed to retrieve public key: {}", e))),
+            Err(e) => {
+                return Err(KamError::CommandFailed(trf!(
+                    "Failed to retrieve public key: {}",
+                    e
+                )));
+            }
         }
     };
 
@@ -134,10 +157,14 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         Utils::executing(crate::i18n::tr_key("Verifying signature..."));
     }
     // 更新验证器（把文件内容加进去）
-    verifier.update(&data).map_err(|e| KamError::CommandFailed(trf!("Failed to update verifier: {}", e)))?;
+    verifier
+        .update(&data)
+        .map_err(|e| KamError::CommandFailed(trf!("Failed to update verifier: {}", e)))?;
 
     // 验证签名
-    let result = verifier.verify(&sig_bytes).map_err(|e| KamError::CommandFailed(trf!("Verification error: {}", e)))?;
+    let result = verifier
+        .verify(&sig_bytes)
+        .map_err(|e| KamError::CommandFailed(trf!("Verification error: {}", e)))?;
 
     if result {
         // 验证成功！

@@ -1,6 +1,5 @@
 /// 集成测试模块
 /// 测试多个功能模块的协同工作
-
 use kam::types::kam_toml::KamToml;
 use std::fs;
 use tempfile::TempDir;
@@ -156,7 +155,11 @@ fn test_config_export_workflow() {
         kt.prop.versionCode,
         kt.prop.author.as_ref().map(|s| s.as_str()).unwrap_or(""),
         kt.prop.description,
-        kt.prop.updateJson.as_ref().map(|s| s.as_str()).unwrap_or("")
+        kt.prop
+            .updateJson
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("")
     );
 
     let prop_path = project_dir.join("module.prop");

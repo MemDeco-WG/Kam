@@ -18,7 +18,7 @@ fn find_kam_toml_path(file: &Option<String>) -> Result<PathBuf, KamError> {
             return Ok(candidate);
         }
         if !cwd.pop() {
-            break;  // 到根目录了，停止查找
+            break; // 到根目录了，停止查找
         }
     }
     // 找不到就回退到当前目录的kam.toml（虽然可能不存在）
@@ -187,7 +187,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                             )));
                         }
                     }
-                    _ => {}  // 字符串或其他类型，不检查
+                    _ => {} // 字符串或其他类型，不检查
                 }
             } else {
                 // key不存在，但如果是已知的整数字段（如versionCode），强制要求整数
@@ -206,7 +206,12 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             set_value_by_path(&mut v, &key, &new_value);
             write_toml(&path, &v)?;
             use crate::utils::Utils;
-            Utils::success(&format!("Set {} = {} in {}", key, new_value, path.display()));
+            Utils::success(&format!(
+                "Set {} = {} in {}",
+                key,
+                new_value,
+                path.display()
+            ));
             Ok(())
         }
         crate::cmds::toml::args::TomlCommand::Unset { key } => {

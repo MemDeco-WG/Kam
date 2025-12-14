@@ -19,7 +19,6 @@ pub enum KamError {
     #[error("Walkdir error: {0}")]
     Walkdir(#[from] walkdir::Error),
 
-
     #[error("KamToml error: {0}")]
     KamToml(#[from] crate::errors::KamTomlError),
 
@@ -71,7 +70,6 @@ pub enum KamError {
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
 
-
     #[error("Implementation requires template variables: {0}")]
     ImplRequiresVars(String),
 
@@ -87,10 +85,8 @@ pub enum KamError {
     #[error("Failed to create table: {0}")]
     TableCreationFailed(String),
 
-
     #[error("Invalid module type: {0}")]
     InvalidModuleType(String),
-
 
     #[error("Parse source spec failed: {0}")]
     ParseSourceFailed(String),

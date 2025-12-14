@@ -1,6 +1,5 @@
 /// 导出功能测试模块
 /// 测试 kam export 命令的功能
-
 use kam::types::kam_toml::KamToml;
 use std::fs;
 use std::path::PathBuf;
@@ -33,7 +32,11 @@ fn test_export_module_prop() {
         kt.prop.versionCode,
         kt.prop.author.as_ref().map(|s| s.as_str()).unwrap_or(""),
         kt.prop.description,
-        kt.prop.updateJson.as_ref().map(|s| s.as_str()).unwrap_or("")
+        kt.prop
+            .updateJson
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("")
     );
 
     let output_path = temp_dir.path().join("module.prop");
@@ -62,7 +65,11 @@ fn test_export_update_json() {
     });
 
     let output_path = temp_dir.path().join("update.json");
-    fs::write(&output_path, serde_json::to_string_pretty(&update_json).unwrap()).unwrap();
+    fs::write(
+        &output_path,
+        serde_json::to_string_pretty(&update_json).unwrap(),
+    )
+    .unwrap();
 
     // 验证 JSON 格式
     let content = fs::read_to_string(&output_path).unwrap();
@@ -89,7 +96,11 @@ fn test_export_module_json() {
     });
 
     let output_path = temp_dir.path().join("module.json");
-    fs::write(&output_path, serde_json::to_string_pretty(&module_json).unwrap()).unwrap();
+    fs::write(
+        &output_path,
+        serde_json::to_string_pretty(&module_json).unwrap(),
+    )
+    .unwrap();
 
     // 验证
     let content = fs::read_to_string(&output_path).unwrap();
@@ -140,7 +151,11 @@ fn test_export_repo_json() {
     });
 
     let output_path = temp_dir.path().join("repo.json");
-    fs::write(&output_path, serde_json::to_string_pretty(&repo_json).unwrap()).unwrap();
+    fs::write(
+        &output_path,
+        serde_json::to_string_pretty(&repo_json).unwrap(),
+    )
+    .unwrap();
 
     // 验证
     let content = fs::read_to_string(&output_path).unwrap();

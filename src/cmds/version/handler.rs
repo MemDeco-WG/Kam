@@ -12,9 +12,9 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
     if let Some(v) = args.version {
         // 有版本参数，就更新版本
         let new_version = match v.as_str() {
-            "major" => bump_version(&kam_toml.prop.version, 0)?,  // 主版本号+1
-            "minor" => bump_version(&kam_toml.prop.version, 1)?,  // 次版本号+1
-            "patch" => bump_version(&kam_toml.prop.version, 2)?,  // 补丁版本号+1
+            "major" => bump_version(&kam_toml.prop.version, 0)?, // 主版本号+1
+            "minor" => bump_version(&kam_toml.prop.version, 1)?, // 次版本号+1
+            "patch" => bump_version(&kam_toml.prop.version, 2)?, // 补丁版本号+1
             _ => {
                 // 自定义版本号，先验证格式
                 validate_version(&v)?;
@@ -38,11 +38,14 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
         // 这样每次发布都有唯一的versionCode
         let old_code = kam_toml.prop.versionCode;
         let new_code = chrono::Utc::now().timestamp_millis();
-        println!("{}", trf!(
-            "Updated versionCode: {} -> {}",
-            &old_code.to_string(),
-            &new_code.to_string()
-        ));
+        println!(
+            "{}",
+            trf!(
+                "Updated versionCode: {} -> {}",
+                &old_code.to_string(),
+                &new_code.to_string()
+            )
+        );
         kam_toml.prop.versionCode = new_code;
 
         // 写回文件
@@ -50,7 +53,13 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
     } else {
         // 没有版本参数，就显示当前版本
         println!("{}", trf!("Current version: {}", &kam_toml.prop.version));
-        println!("{}", trf!("Current versionCode: {}", &kam_toml.prop.versionCode.to_string()));
+        println!(
+            "{}",
+            trf!(
+                "Current versionCode: {}",
+                &kam_toml.prop.versionCode.to_string()
+            )
+        );
     }
 
     Ok(())
@@ -81,7 +90,8 @@ fn validate_version(version: &str) -> Result<(), KamError> {
         if !part.chars().all(|c| c.is_alphanumeric() || c == '-') {
             return Err(KamError::InvalidConfig(trf!(
                 "Invalid version '{}': part '{}' contains invalid characters",
-                version, part
+                version,
+                part
             )));
         }
     }

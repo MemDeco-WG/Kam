@@ -343,12 +343,15 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                         // 如果 key 使用了 key=value 的简写，我们就将其拆分出来作为要写入的 key/value
                         if final_key.contains('=') {
                             // Convert to owned Strings to avoid borrowing `final_key` while mutating it.
-                            let parts: Vec<String> = final_key.splitn(2, '=').map(|s| s.to_string()).collect();
+                            let parts: Vec<String> =
+                                final_key.splitn(2, '=').map(|s| s.to_string()).collect();
                             if parts.len() >= 2 {
                                 final_key = parts[0].clone();
                                 final_value = parts[1].clone();
                             } else {
-                                return Err(KamError::CommandFailed("Invalid key=value shorthand".to_string()));
+                                return Err(KamError::CommandFailed(
+                                    "Invalid key=value shorthand".to_string(),
+                                ));
                             }
                         } else {
                             // 没有 '=' 且第二个参数是一个选项：说明用户写法错误
@@ -360,7 +363,8 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                         // final_value 不是 option（常规情况）
                         if final_key.contains('=') {
                             // Convert to owned Strings to avoid borrowing `final_key` while mutating it.
-                            let parts: Vec<String> = final_key.splitn(2, '=').map(|s| s.to_string()).collect();
+                            let parts: Vec<String> =
+                                final_key.splitn(2, '=').map(|s| s.to_string()).collect();
                             if parts.len() >= 2 {
                                 let shorthand_key = parts[0].clone();
                                 let shorthand_val = parts[1].clone();
@@ -379,7 +383,12 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                     set_value_by_path(&mut toml_v, &final_key, &final_value);
                     write_toml(&target_path, &toml_v)?;
                     use crate::utils::Utils;
-                    Utils::success(&crate::trf!("config.set_success", final_key, final_value, target_path.display()));
+                    Utils::success(&crate::trf!(
+                        "config.set_success",
+                        final_key,
+                        final_value,
+                        target_path.display()
+                    ));
                     Ok(())
                 }
                 ConfigCommand::Unset { key } => {
@@ -414,11 +423,11 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::env;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use serial_test::serial;
 
     fn mk_temp_dir(prefix: &str) -> PathBuf {
         let now = SystemTime::now()
@@ -431,7 +440,12 @@ mod tests {
         dir
     }
 
-    fn restore_env(orig_home: Option<String>, orig_kam_ui: Option<String>, orig_kam_lang: Option<String>, orig_cwd: PathBuf) {
+    fn restore_env(
+        orig_home: Option<String>,
+        orig_kam_ui: Option<String>,
+        orig_kam_lang: Option<String>,
+        orig_cwd: PathBuf,
+    ) {
         if let Some(h) = orig_home {
             unsafe { env::set_var("HOME", h) };
         } else {
@@ -463,11 +477,19 @@ mod tests {
         let tmp = mk_temp_dir("local");
         fs::create_dir_all(tmp.join(".kam")).unwrap();
         fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
-        fs::write(tmp.join(".kam").join("config.toml"), r#"ui.language = "zh""#).unwrap();
+        fs::write(
+            tmp.join(".kam").join("config.toml"),
+            r#"ui.language = "zh""#,
+        )
+        .unwrap();
 
         // Make sure no env overrides interfere
-        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
-        unsafe { env::remove_var("KAM_LANG"); }
+        unsafe {
+            env::remove_var("KAM_UI_LANGUAGE");
+        }
+        unsafe {
+            env::remove_var("KAM_LANG");
+        }
         // Do not override HOME for this local-only test; rely on the project directory detection.
         // (Setting HOME in-process is brittle because `dirs` may cache the home directory.)
         // Switch to our project dir (so get_config_paths(false, true) resolves to local)
@@ -493,13 +515,23 @@ mod tests {
         // Prepare a HOME with `.kam/config.toml`
         let htmp = mk_temp_dir("home");
         fs::create_dir_all(htmp.join(".kam")).unwrap();
-        fs::write(htmp.join(".kam").join("config.toml"), r#"ui.language = "en""#).unwrap();
+        fs::write(
+            htmp.join(".kam").join("config.toml"),
+            r#"ui.language = "en""#,
+        )
+        .unwrap();
 
         // Make sure no env overrides interfere
-        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
-        unsafe { env::remove_var("KAM_LANG"); }
+        unsafe {
+            env::remove_var("KAM_UI_LANGUAGE");
+        }
+        unsafe {
+            env::remove_var("KAM_LANG");
+        }
         // Set HOME to our fake home
-        unsafe { env::set_var("HOME", htmp.to_str().unwrap()); }
+        unsafe {
+            env::set_var("HOME", htmp.to_str().unwrap());
+        }
         // Because the `dirs` crate may cache the first-observed home path for the process,
         // confirm that it actually returned our new home value; if it didn't, skip the test
         // to avoid writing into the real user's home directory during testing.
@@ -533,18 +565,32 @@ mod tests {
         let tmp = mk_temp_dir("both");
         fs::create_dir_all(tmp.join(".kam")).unwrap();
         fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
-        fs::write(tmp.join(".kam").join("config.toml"), r#"ui.language = "zh""#).unwrap();
+        fs::write(
+            tmp.join(".kam").join("config.toml"),
+            r#"ui.language = "zh""#,
+        )
+        .unwrap();
 
         // Prepare a global HOME with a different value
         let htmp = mk_temp_dir("home2");
         fs::create_dir_all(htmp.join(".kam")).unwrap();
-        fs::write(htmp.join(".kam").join("config.toml"), r#"ui.language = "en""#).unwrap();
+        fs::write(
+            htmp.join(".kam").join("config.toml"),
+            r#"ui.language = "en""#,
+        )
+        .unwrap();
 
         // Remove env overrides
-        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
-        unsafe { env::remove_var("KAM_LANG"); }
+        unsafe {
+            env::remove_var("KAM_UI_LANGUAGE");
+        }
+        unsafe {
+            env::remove_var("KAM_LANG");
+        }
         // Point HOME to the global config with `en`
-        unsafe { env::set_var("HOME", htmp.to_str().unwrap()); }
+        unsafe {
+            env::set_var("HOME", htmp.to_str().unwrap());
+        }
         // Ensure `dirs::home_dir()` reflects this change — otherwise skip to avoid mutating real home
         if dirs::home_dir().as_ref().map(|p| p.as_path()) != Some(htmp.as_path()) {
             restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
@@ -580,8 +626,12 @@ mod tests {
         fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
 
         // Ensure no env override is in place
-        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
-        unsafe { env::remove_var("KAM_LANG"); }
+        unsafe {
+            env::remove_var("KAM_UI_LANGUAGE");
+        }
+        unsafe {
+            env::remove_var("KAM_LANG");
+        }
 
         // Switch to our project dir so get_config_paths(false, false) resolves to local
         env::set_current_dir(&tmp).unwrap();
@@ -603,8 +653,7 @@ mod tests {
         let config_path = get_config_paths(false, true).unwrap();
         let toml_v = read_toml(&config_path).unwrap();
         assert_eq!(
-            get_value_by_path(&toml_v, "language")
-                .and_then(|v| v.as_str().map(|s| s.to_string())),
+            get_value_by_path(&toml_v, "language").and_then(|v| v.as_str().map(|s| s.to_string())),
             Some("en".to_string())
         );
 

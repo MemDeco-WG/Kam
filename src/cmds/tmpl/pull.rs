@@ -134,12 +134,12 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
         .tempfile()
         .map_err(KamError::Io)?;
     let mut downloaded: u64 = 0;
-    let mut buf = [0u8; 8192];  // 8KB缓冲区，应该够用了
+    let mut buf = [0u8; 8192]; // 8KB缓冲区，应该够用了
 
     // 分块读取并写入临时文件
     loop {
         match resp.read(&mut buf) {
-            Ok(0) => break,  // 读完了
+            Ok(0) => break, // 读完了
             Ok(n) => {
                 tmpf.write_all(&buf[..n]).map_err(KamError::Io)?;
                 downloaded += n as u64;

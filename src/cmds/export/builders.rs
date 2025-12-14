@@ -380,7 +380,7 @@ pub fn build_track_json(kt: &KamToml) -> serde_json::Value {
         "id".to_string(),
         serde_json::Value::String(kt.prop.id.clone()),
     );
-    root.insert("enable".to_string(), serde_json::Value::Bool(true));  // 默认启用
+    root.insert("enable".to_string(), serde_json::Value::Bool(true)); // 默认启用
 
     // source字段：优先repository，没有就用homepage，再没有就用updateJson
     let source = kt
@@ -412,7 +412,7 @@ pub fn build_track_json(kt: &KamToml) -> serde_json::Value {
                     kt.prop.id
                 )
             } else {
-                kt.prop.version.clone()  // 没有URL，用版本号
+                kt.prop.version.clone() // 没有URL，用版本号
             }
         } else {
             kt.prop.version.clone()
@@ -479,7 +479,7 @@ pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
         .as_ref()
         .and_then(|m| m.repo.as_ref())
         .and_then(|r| r.repository.as_ref())
-        .map(|s| s.split('/').last().unwrap_or(s).to_string())  // 取URL最后一部分
+        .map(|s| s.split('/').last().unwrap_or(s).to_string()) // 取URL最后一部分
         .unwrap_or_else(|| kt.prop.id.clone());
     root.insert("id".to_string(), serde_json::Value::String(id));
 
@@ -503,7 +503,7 @@ pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
         .unwrap_or_else(|| String::new());
     let mut base_url = base_url.clone();
     if !base_url.is_empty() && !base_url.ends_with('/') {
-        base_url.push('/');  // 确保末尾有斜杠
+        base_url.push('/'); // 确保末尾有斜杠
     }
     root.insert("base_url".to_string(), serde_json::Value::String(base_url));
 

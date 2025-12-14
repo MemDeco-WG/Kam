@@ -96,7 +96,7 @@ pub fn init_impl(
     let archive_id = if let Some(eid) = explicit_template_id {
         eid.to_string()
     } else {
-        "template".to_string()  // 默认值，虽然可能不太有用
+        "template".to_string() // 默认值，虽然可能不太有用
     };
 
     // Load template variables from template's kam.toml
@@ -214,7 +214,7 @@ pub fn init_impl(
                         // 更新渲染后的kam.toml，用实际的值替换模板变量
                         rendered_kt.prop.name = name.clone();
                         rendered_kt.prop.version = version.to_string();
-                        rendered_kt.prop.author = Some(author.to_string());  // author现在是Option了
+                        rendered_kt.prop.author = Some(author.to_string()); // author现在是Option了
                         rendered_kt.prop.description = description.clone();
                         rendered_kt.prop.versionCode = kt.prop.versionCode;
 
@@ -290,7 +290,7 @@ pub fn init_impl(
     for (k, v) in kt_flatvars.iter() {
         let base = k.to_ascii_uppercase().replace('.', "_").replace('-', "_");
         let key = format!("KAM_{}", base);
-        let v_escaped = v.replace('"', "\\\"");  // 转义引号
+        let v_escaped = v.replace('"', "\\\""); // 转义引号
         env_lines.push(format!("{}=\"{}\"", key, v_escaped));
     }
 

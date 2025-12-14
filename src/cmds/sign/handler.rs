@@ -25,9 +25,9 @@ fn sign_single_file(src_path: &Path, args: &SignArgs) -> Result<(), KamError> {
     } else if let Ok(env_key) = env::var("KAM_SIGN_KEY") {
         if env_key.trim().is_empty() {
             // 环境变量是空的，当作不存在，继续用secret
-             read_secret_plaintext(&args.secret, true)?
+            read_secret_plaintext(&args.secret, true)?
         } else {
-             env_key.into_bytes()
+            env_key.into_bytes()
         }
     } else {
         read_secret_plaintext(&args.secret, true)?
@@ -106,7 +106,6 @@ pub fn run(args: SignArgs) -> Result<(), KamError> {
         PathBuf::from(&args.out)
     } else {
         return Err(KamError::CommandFailed(trf!("sign.no_src_or_dist")));
-    }
     };
     for entry in std::fs::read_dir(dist_dir).map_err(KamError::Io)? {
         let entry = entry.map_err(KamError::Io)?;

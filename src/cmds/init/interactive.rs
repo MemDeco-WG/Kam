@@ -11,8 +11,8 @@ use crate::cmds::tmpl::pull;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::{template::TemplateCacheManager, template::TemplateManager};
-use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
 use colored::Colorize;
+use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
 
 use super::args::InitArgs;
 use super::{impl_mod, post_init, pre_init};
@@ -544,12 +544,13 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
     // 遍历模板目录，收集所有文件
     for entry in WalkDir::new(template_dir)
         .into_iter()
-        .filter_map(|e| e.ok())  // 忽略读取失败的条目
+        .filter_map(|e| e.ok())
+    // 忽略读取失败的条目
     {
         // 使用metadata（如果可能），忽略损坏的条目
         let metadata = match entry.metadata() {
             Ok(m) => m,
-            Err(_) => continue,  // 读取失败就跳过
+            Err(_) => continue, // 读取失败就跳过
         };
         // 只考虑文件和目录
         let path = entry.path();
@@ -562,7 +563,7 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
         let depth = rel.components().count().saturating_sub(1);
         let mut prefix = String::new();
         for _ in 0..depth {
-            prefix.push_str("  ");  // 每层缩进2个空格
+            prefix.push_str("  "); // 每层缩进2个空格
         }
         // 显示名称（只用最后一部分，让树更紧凑）
         let is_file = metadata.is_file();
@@ -868,8 +869,10 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
                         .chars()
                         .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
                     {
-                        if prompt_confirm(&format!("Use sanitized module id '{}'?", suggested), true)?
-                        {
+                        if prompt_confirm(
+                            &format!("Use sanitized module id '{}'?", suggested),
+                            true,
+                        )? {
                             data.id = suggested;
                         } else {
                             // Ask the user to input a valid ID
@@ -1001,7 +1004,9 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             false,
         )? {
             use crate::utils::Utils;
-            Utils::info(&trf!("Recommended: python -m pip install --user commitizen  (or npm/yarn global install)"));
+            Utils::info(&trf!(
+                "Recommended: python -m pip install --user commitizen  (or npm/yarn global install)"
+            ));
             Utils::info(&trf!("init.interactive.helper_script"));
         }
     }
@@ -1055,7 +1060,9 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // Post-process
     post_init::post_process(&data.path)?;
 
-    Utils::success(crate::i18n::tr_key("init.interactive.completed_successfully"));
+    Utils::success(crate::i18n::tr_key(
+        "init.interactive.completed_successfully",
+    ));
     println!();
     Utils::info(crate::i18n::tr_key("init.interactive.next_steps"));
     println!("  {} cd {}", "→".blue(), data.path.display());

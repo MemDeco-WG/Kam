@@ -1,6 +1,5 @@
 /// KamToml 配置测试模块
 /// 测试 kam.toml 的加载、保存和操作
-
 use kam::types::kam_toml::KamToml;
 use std::fs;
 use tempfile::TempDir;

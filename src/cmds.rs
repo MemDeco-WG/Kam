@@ -1,3 +1,4 @@
+pub mod about;
 pub mod build;
 pub mod cache;
 pub mod check;
@@ -12,5 +13,4 @@ pub mod tmpl;
 pub mod toml;
 pub mod validate;
 pub mod verify;
-pub mod about;
 pub mod version;

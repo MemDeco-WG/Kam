@@ -199,7 +199,8 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                         && !trimmed.starts_with('#')
                         && !trimmed.starts_with("```")
                         && !trimmed.starts_with("<!--")
-                        && trimmed.len() > 10 // 至少要有一定长度
+                        && trimmed.len() > 10
+                    // 至少要有一定长度
                     {
                         // 取前 200 个字符作为描述
                         let desc = if trimmed.len() > 200 {
@@ -407,11 +408,14 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
 
                     // 设置 issues URL
                     if repo.issues.is_none() || repo.issues.as_ref().unwrap().is_empty() {
-                        repo.issues = Some(format!("https://github.com/{}/{}/issues", owner, repo_name));
+                        repo.issues =
+                            Some(format!("https://github.com/{}/{}/issues", owner, repo_name));
                     }
 
                     // 设置 documentation URL（如果有 docs 目录或 README）
-                    if repo.documentation.is_none() || repo.documentation.as_ref().unwrap().is_empty() {
+                    if repo.documentation.is_none()
+                        || repo.documentation.as_ref().unwrap().is_empty()
+                    {
                         repo.documentation = Some(format!(
                             "https://github.com/{}/{}/blob/{}/README.md",
                             owner, repo_name, default_branch
@@ -434,38 +438,61 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                                 let content_upper = content.to_uppercase();
                                 if content_upper.contains("MIT") {
                                     repo.license = Some("MIT".to_string());
-                                    repo.license_file = Some(license_path.file_name()
-                                        .and_then(|s| s.to_str())
-                                        .map(|s| s.to_string())
-                                        .unwrap_or_else(|| "LICENSE".to_string()));
+                                    repo.license_file = Some(
+                                        license_path
+                                            .file_name()
+                                            .and_then(|s| s.to_str())
+                                            .map(|s| s.to_string())
+                                            .unwrap_or_else(|| "LICENSE".to_string()),
+                                    );
                                     break;
-                                } else if content_upper.contains("APACHE") && content_upper.contains("2.0") {
+                                } else if content_upper.contains("APACHE")
+                                    && content_upper.contains("2.0")
+                                {
                                     repo.license = Some("Apache-2.0".to_string());
-                                    repo.license_file = Some(license_path.file_name()
-                                        .and_then(|s| s.to_str())
-                                        .map(|s| s.to_string())
-                                        .unwrap_or_else(|| "LICENSE".to_string()));
+                                    repo.license_file = Some(
+                                        license_path
+                                            .file_name()
+                                            .and_then(|s| s.to_str())
+                                            .map(|s| s.to_string())
+                                            .unwrap_or_else(|| "LICENSE".to_string()),
+                                    );
                                     break;
-                                } else if content_upper.contains("GPL") && content_upper.contains("3.0") {
+                                } else if content_upper.contains("GPL")
+                                    && content_upper.contains("3.0")
+                                {
                                     repo.license = Some("GPL-3.0".to_string());
-                                    repo.license_file = Some(license_path.file_name()
-                                        .and_then(|s| s.to_str())
-                                        .map(|s| s.to_string())
-                                        .unwrap_or_else(|| "LICENSE".to_string()));
+                                    repo.license_file = Some(
+                                        license_path
+                                            .file_name()
+                                            .and_then(|s| s.to_str())
+                                            .map(|s| s.to_string())
+                                            .unwrap_or_else(|| "LICENSE".to_string()),
+                                    );
                                     break;
-                                } else if content_upper.contains("GPL") && content_upper.contains("2.0") {
+                                } else if content_upper.contains("GPL")
+                                    && content_upper.contains("2.0")
+                                {
                                     repo.license = Some("GPL-2.0".to_string());
-                                    repo.license_file = Some(license_path.file_name()
-                                        .and_then(|s| s.to_str())
-                                        .map(|s| s.to_string())
-                                        .unwrap_or_else(|| "LICENSE".to_string()));
+                                    repo.license_file = Some(
+                                        license_path
+                                            .file_name()
+                                            .and_then(|s| s.to_str())
+                                            .map(|s| s.to_string())
+                                            .unwrap_or_else(|| "LICENSE".to_string()),
+                                    );
                                     break;
-                                } else if content_upper.contains("BSD") && content_upper.contains("3") {
+                                } else if content_upper.contains("BSD")
+                                    && content_upper.contains("3")
+                                {
                                     repo.license = Some("BSD-3-Clause".to_string());
-                                    repo.license_file = Some(license_path.file_name()
-                                        .and_then(|s| s.to_str())
-                                        .map(|s| s.to_string())
-                                        .unwrap_or_else(|| "LICENSE".to_string()));
+                                    repo.license_file = Some(
+                                        license_path
+                                            .file_name()
+                                            .and_then(|s| s.to_str())
+                                            .map(|s| s.to_string())
+                                            .unwrap_or_else(|| "LICENSE".to_string()),
+                                    );
                                     break;
                                 }
                             }
@@ -484,7 +511,12 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         version: version.to_string(),
         // author可能是None，用空字符串作为默认值
         // 虽然可能不太优雅，但至少不会panic
-        author: kam_toml.prop.author.as_ref().unwrap_or(&String::new()).clone(),
+        author: kam_toml
+            .prop
+            .author
+            .as_ref()
+            .unwrap_or(&String::new())
+            .clone(),
         description: description_str.to_string(),
         template_vars,
         impl_template,

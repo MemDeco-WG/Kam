@@ -45,7 +45,7 @@ where
                                 .map_err(|e| format!("Failed to open file: {}", e))?
                                 .write_all(pretty.as_bytes())
                                 .map_err(|e| format!("Failed to write file: {}", e))?;
-                            return Ok((true, true));  // 有效且已修复
+                            return Ok((true, true)); // 有效且已修复
                         }
                     }
                     Err(e) => {
@@ -53,7 +53,7 @@ where
                     }
                 }
             }
-            Ok((true, false))  // 有效但未修复
+            Ok((true, false)) // 有效但未修复
         }
         Err(e) => Err(format!("{} parse error: {}", format_name, e)),
     }
@@ -78,8 +78,7 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
                     .map(|_| ())
             };
             let format_fn = |s: &str| -> Result<String, String> {
-                let v = serde_json::from_str::<serde_json::Value>(s)
-                    .map_err(|e| e.to_string())?;
+                let v = serde_json::from_str::<serde_json::Value>(s).map_err(|e| e.to_string())?;
                 serde_json::to_string_pretty(&v).map_err(|e| e.to_string())
             };
             match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "JSON") {
@@ -100,8 +99,7 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
                     .map(|_| ())
             };
             let format_fn = |s: &str| -> Result<String, String> {
-                let v = serde_yaml::from_str::<serde_yaml::Value>(s)
-                    .map_err(|e| e.to_string())?;
+                let v = serde_yaml::from_str::<serde_yaml::Value>(s).map_err(|e| e.to_string())?;
                 serde_yaml::to_string(&v).map_err(|e| e.to_string())
             };
             match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "YAML") {
@@ -125,9 +123,8 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
                     .map(|_| ())
             };
             let format_fn = |s: &str| -> Result<String, String> {
-                let v = toml::from_str::<toml::Value>(s).map_err(|e| {
-                    extract_line_number(&e.to_string(), s)
-                })?;
+                let v = toml::from_str::<toml::Value>(s)
+                    .map_err(|e| extract_line_number(&e.to_string(), s))?;
                 toml::to_string_pretty(&v).map_err(|e| e.to_string())
             };
             match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "TOML") {
@@ -144,7 +141,7 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
             if path.file_name().and_then(|n| n.to_str()) == Some("kam.toml") {
                 check_kam_toml_deep(path, &mut fr);
             }
-        },
+        }
         "sh" => {
             // Delegated to check_sh in sh.rs
             match super::sh::check_sh(path, do_fix) {
@@ -212,10 +209,8 @@ fn check_kam_toml_deep(path: &Path, fr: &mut FileResult) {
         Err(e) => {
             // 如果解析失败，错误已经在基本检查中报告了
             // 这里只添加一个提示
-            fr.warnings.push(format!(
-                "Cannot perform deep validation: {}",
-                e
-            ));
+            fr.warnings
+                .push(format!("Cannot perform deep validation: {}", e));
         }
     }
 }
@@ -249,7 +244,8 @@ fn check_required_fields(kam_toml: &KamToml, fr: &mut FileResult) {
 
     if kam_toml.prop.versionCode <= 0 {
         fr.valid = false;
-        fr.errors.push("[prop] versionCode must be a positive integer".to_string());
+        fr.errors
+            .push("[prop] versionCode must be a positive integer".to_string());
     }
 
     if kam_toml.prop.description.trim().is_empty() {
@@ -265,7 +261,8 @@ fn check_required_fields(kam_toml: &KamToml, fr: &mut FileResult) {
         .map(|a| a.trim().is_empty())
         .unwrap_or(true)
     {
-        fr.warnings.push("[prop] author is empty (recommended to fill)".to_string());
+        fr.warnings
+            .push("[prop] author is empty (recommended to fill)".to_string());
     }
 }
 
@@ -292,7 +289,8 @@ fn check_version_format(version: &str, fr: &mut FileResult) {
         if part.is_empty() {
             fr.warnings.push(format!(
                 "[prop] version '{}' has empty part at position {}",
-                version, i + 1
+                version,
+                i + 1
             ));
             return;
         }
@@ -324,17 +322,30 @@ fn check_file_references(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileRe
     // 检查 [mmrl.repo] 中的文件引用
     if let Some(mmrl) = &kam_toml.mmrl {
         if let Some(repo) = &mmrl.repo {
-            check_file_exists(project_dir, &repo.license_file, "[mmrl.repo] license_file", fr);
-            check_file_exists(project_dir, &repo.readme_file, "[mmrl.repo] readme_file", fr);
-            check_file_exists(project_dir, &repo.changelog_file, "[mmrl.repo] changelog_file", fr);
+            check_file_exists(
+                project_dir,
+                &repo.license_file,
+                "[mmrl.repo] license_file",
+                fr,
+            );
+            check_file_exists(
+                project_dir,
+                &repo.readme_file,
+                "[mmrl.repo] readme_file",
+                fr,
+            );
+            check_file_exists(
+                project_dir,
+                &repo.changelog_file,
+                "[mmrl.repo] changelog_file",
+                fr,
+            );
 
             // 检查图标文件
             if let Some(icon) = &repo.icon {
                 if !icon.is_empty() && !project_dir.join(icon).exists() {
-                    fr.warnings.push(format!(
-                        "[mmrl.repo] icon file '{}' not found",
-                        icon
-                    ));
+                    fr.warnings
+                        .push(format!("[mmrl.repo] icon file '{}' not found", icon));
                 }
             }
         }
@@ -342,12 +353,7 @@ fn check_file_references(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileRe
 }
 
 /// 检查单个文件是否存在
-fn check_file_exists(
-    base: &Path,
-    file: &Option<String>,
-    name: &str,
-    fr: &mut FileResult,
-) {
+fn check_file_exists(base: &Path, file: &Option<String>, name: &str, fr: &mut FileResult) {
     if let Some(f) = file {
         if !f.is_empty() {
             let file_path = base.join(f);
@@ -411,7 +417,8 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
     if let Some(mmrl) = &kam_toml.mmrl {
         if let Some(repo) = &mmrl.repo {
             if repo.license.as_deref().unwrap_or("").is_empty() {
-                fr.warnings.push("[mmrl.repo] license is recommended".to_string());
+                fr.warnings
+                    .push("[mmrl.repo] license is recommended".to_string());
             }
         }
     }

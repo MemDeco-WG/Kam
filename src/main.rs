@@ -5,10 +5,10 @@
 // author/human : LIghtJUNction
 //
 use clap::Parser;
+use colored::Colorize;
 use dotenvy::dotenv;
 use kam::errors::KamError;
 use std::error::Error;
-use colored::Colorize;
 
 use kam::cli::{Cli, Commands};
 

@@ -30,7 +30,7 @@ pub fn run(args: CompletionArgs) -> Result<(), KamError> {
             shells::Shell::Fish => generate(shells::Fish, &mut cmd, "kam", &mut buf),
             shells::Shell::PowerShell => generate(shells::PowerShell, &mut cmd, "kam", &mut buf),
             shells::Shell::Elvish => generate(shells::Elvish, &mut cmd, "kam", &mut buf),
-            _ => generate(shells::Bash, &mut cmd, "kam", &mut buf),  // 默认用bash
+            _ => generate(shells::Bash, &mut cmd, "kam", &mut buf), // 默认用bash
         }
         fs::write(p, &buf)?;
     } else {

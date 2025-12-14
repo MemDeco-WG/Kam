@@ -62,7 +62,7 @@ fn index_path() -> Result<PathBuf, KamError> {
 pub fn load_index() -> Result<SecretIndex, KamError> {
     let p = index_path()?;
     if !p.exists() {
-        return Ok(SecretIndex::default());  // 文件不存在就返回空的
+        return Ok(SecretIndex::default()); // 文件不存在就返回空的
     }
     let s = fs::read_to_string(&p).map_err(KamError::Io)?;
     // 支持新索引格式（map）和旧遗留格式（names: [...]）
@@ -85,7 +85,7 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                 let storage = val
                     .get("storage")
                     .and_then(|x| x.as_str())
-                    .unwrap_or("file")  // 默认用file存储
+                    .unwrap_or("file") // 默认用file存储
                     .to_string();
                 let last_probe = val.get("last_probe").and_then(|x| x.as_i64()).unwrap_or(0);
                 let size = val.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
@@ -119,16 +119,15 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
         struct Legacy {
             names: HashSet<String>,
         }
-        let legacy: Legacy = serde_json::from_value(v.clone()).map_err(|e| {
-            KamError::Json(format!("Failed to parse legacy secret index: {}", e))
-        })?;
+        let legacy: Legacy = serde_json::from_value(v.clone())
+            .map_err(|e| KamError::Json(format!("Failed to parse legacy secret index: {}", e)))?;
         let mut new = SecretIndex::default();
         // 把旧格式的names转成新格式的entries
         for n in legacy.names {
             new.entries.insert(
                 n,
                 SecretMeta {
-                    encrypted: false,  // 旧格式没有加密信息，默认false
+                    encrypted: false, // 旧格式没有加密信息，默认false
                     created_at: 0,
                     storage: "file".to_string(),
                     last_probe: 0,
@@ -183,9 +182,8 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
         new
     } else if v.is_array() {
         // legacy array of names
-        let arr = serde_json::from_value::<Vec<String>>(v).map_err(|e| {
-            KamError::Json(format!("Failed to parse legacy names array: {}", e))
-        })?;
+        let arr = serde_json::from_value::<Vec<String>>(v)
+            .map_err(|e| KamError::Json(format!("Failed to parse legacy names array: {}", e)))?;
         let mut new = SecretIndex::default();
         for n in arr {
             new.entries.insert(

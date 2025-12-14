@@ -1,6 +1,5 @@
 /// 工具函数测试模块
 /// 测试 utils.rs 中的各种工具函数
-
 use kam::utils;
 
 #[test]
@@ -16,25 +15,57 @@ fn test_pattern_matches_directory_prefix() {
 #[test]
 fn test_pattern_matches_suffix() {
     // 测试后缀匹配
-    assert!(utils::pattern_matches("*.rs", "src/main.rs", Some("main.rs")));
-    assert!(utils::pattern_matches("*.toml", "kam.toml", Some("kam.toml")));
-    assert!(!utils::pattern_matches("*.rs", "src/main.txt", Some("main.txt")));
+    assert!(utils::pattern_matches(
+        "*.rs",
+        "src/main.rs",
+        Some("main.rs")
+    ));
+    assert!(utils::pattern_matches(
+        "*.toml",
+        "kam.toml",
+        Some("kam.toml")
+    ));
+    assert!(!utils::pattern_matches(
+        "*.rs",
+        "src/main.txt",
+        Some("main.txt")
+    ));
 }
 
 #[test]
 fn test_pattern_matches_glob() {
     // 测试通配符匹配
-    assert!(utils::pattern_matches("*.rs", "src/main.rs", Some("main.rs")));
-    assert!(utils::pattern_matches("test_*.rs", "test_utils.rs", Some("test_utils.rs")));
+    assert!(utils::pattern_matches(
+        "*.rs",
+        "src/main.rs",
+        Some("main.rs")
+    ));
+    assert!(utils::pattern_matches(
+        "test_*.rs",
+        "test_utils.rs",
+        Some("test_utils.rs")
+    ));
     assert!(utils::pattern_matches("src/*.rs", "src/main.rs", None));
 }
 
 #[test]
 fn test_pattern_matches_exact() {
     // 测试精确匹配
-    assert!(utils::pattern_matches("kam.toml", "kam.toml", Some("kam.toml")));
-    assert!(utils::pattern_matches("README.md", "README.md", Some("README.md")));
-    assert!(!utils::pattern_matches("kam.toml", "config.toml", Some("config.toml")));
+    assert!(utils::pattern_matches(
+        "kam.toml",
+        "kam.toml",
+        Some("kam.toml")
+    ));
+    assert!(utils::pattern_matches(
+        "README.md",
+        "README.md",
+        Some("README.md")
+    ));
+    assert!(!utils::pattern_matches(
+        "kam.toml",
+        "config.toml",
+        Some("config.toml")
+    ));
 }
 
 #[test]

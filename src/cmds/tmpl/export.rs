@@ -145,9 +145,9 @@ pub fn export_multiple_templates(
                     continue;
                 }
 
-                let relative_path = path
-                    .strip_prefix(&template_path)
-                    .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {}", e)))?;
+                let relative_path = path.strip_prefix(&template_path).map_err(|e| {
+                    KamError::InvalidDirectory(format!("strip_prefix failed: {}", e))
+                })?;
 
                 if path.is_file() {
                     let mut file = File::open(path).map_err(KamError::Io)?;

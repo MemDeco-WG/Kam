@@ -539,15 +539,15 @@ impl TemplateCopier {
                                     fs::write(&dst_path, rendered).map_err(KamError::Io)?;
                                 }
                                 Err(_e) => {
-                            // 渲染失败，可能是语法错误，也可能不是模板文件
-                            // 直接复制原始内容，不报错（减少噪音）
-                            // 比如GitHub workflows那种用{{ }}的文件，虽然看起来像模板
-                            // 但实际上不是Tera模板，直接复制就行
-                            // TODO: 也许可以加个verbose标志来显示警告？
-                            // 不过现在先这样，大部分情况够用了
+                                    // 渲染失败，可能是语法错误，也可能不是模板文件
+                                    // 直接复制原始内容，不报错（减少噪音）
+                                    // 比如GitHub workflows那种用{{ }}的文件，虽然看起来像模板
+                                    // 但实际上不是Tera模板，直接复制就行
+                                    // TODO: 也许可以加个verbose标志来显示警告？
+                                    // 不过现在先这样，大部分情况够用了
 
-                            // 直接复制原始文件（就当它不是模板）
-                            fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
+                                    // 直接复制原始文件（就当它不是模板）
+                                    fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
                                 }
                             }
                         }

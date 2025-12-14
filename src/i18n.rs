@@ -29,9 +29,9 @@
 //! use kam::i18n::trf;
 //! let formatted = trf!("Building module: {} v{}", &module_id, &version);
 //! ```
-use std::fmt::Display;
-use std::sync::{RwLock, OnceLock};
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::sync::{OnceLock, RwLock};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Language {
@@ -279,7 +279,11 @@ fn parse_toml_string_to_map(inp: &str) -> HashMap<String, String> {
 
     fn flatten(prefix: &str, tbl: &toml::value::Table, out: &mut HashMap<String, String>) {
         for (k, v) in tbl {
-            let key = if prefix.is_empty() { k.clone() } else { format!("{}.{}", prefix, k) };
+            let key = if prefix.is_empty() {
+                k.clone()
+            } else {
+                format!("{}.{}", prefix, k)
+            };
             match v {
                 toml::Value::String(s) => {
                     out.insert(key, s.clone());
@@ -381,8 +385,12 @@ fn keyed_en(key: &str) -> Option<&'static str> {
         "about.developer" => Some("Developer"),
         "about.description" => Some("Description"),
         "about.repository" => Some("Repository"),
-        "about.info.command_informational" => Some("This command is informational only; it doesn't modify files or the registry."),
-        "about.info.use_other_commands" => Some("Use other commands (e.g., `kam init`, `kam build`) to perform actions."),
+        "about.info.command_informational" => {
+            Some("This command is informational only; it doesn't modify files or the registry.")
+        }
+        "about.info.use_other_commands" => {
+            Some("Use other commands (e.g., `kam init`, `kam build`) to perform actions.")
+        }
         "about.thanks" => Some("Thanks for using Kam"),
         "about.enjoy" => Some("Enjoy your module tooling experience!"),
         "about.powered" => Some("Powered by the Kam CLI — Happy building!"),
@@ -416,7 +424,9 @@ fn keyed_zh(key: &str) -> Option<&'static str> {
         "about.description" => Some("描述"),
         "about.repository" => Some("仓库"),
         "about.info.command_informational" => Some("此命令仅供参考，不会修改文件或注册表。"),
-        "about.info.use_other_commands" => Some("请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。"),
+        "about.info.use_other_commands" => {
+            Some("请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。")
+        }
         "about.thanks" => Some("感谢使用 Kam"),
         "about.enjoy" => Some("祝您使用愉快！"),
         "about.powered" => Some("由 Kam CLI 提供支持 — 祝构建顺利！"),
@@ -426,10 +436,12 @@ fn keyed_zh(key: &str) -> Option<&'static str> {
 
 fn en_to_zh(s: &str) -> Option<&'static str> {
     match s {
-        "This command is informational only; it doesn't modify files or the registry." =>
-            Some("此命令仅供参考，不会修改文件或注册表。"),
-        "Use other commands (e.g., `kam init`, `kam build`) to perform actions." =>
-            Some("请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。"),
+        "This command is informational only; it doesn't modify files or the registry." => {
+            Some("此命令仅供参考，不会修改文件或注册表。")
+        }
+        "Use other commands (e.g., `kam init`, `kam build`) to perform actions." => {
+            Some("请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。")
+        }
         "Thanks for using Kam" => Some("感谢使用 Kam"),
         "Enjoy your module tooling experience!" => Some("祝您使用愉快！"),
         "Powered by the Kam CLI — Happy building!" => Some("由 Kam CLI 提供支持 — 祝构建顺利！"),
@@ -450,14 +462,20 @@ fn en_to_zh(s: &str) -> Option<&'static str> {
         "Packaging artifacts..." => Some("正在打包制品..."),
         "Source directory not found: {}" => Some("源目录未找到: {}"),
         "Generating module.prop" => Some("正在生成 module.prop"),
-        "Using existing module.prop (from pre-build hook)" => Some("使用现有的 module.prop（来自预构建钩子）"),
+        "Using existing module.prop (from pre-build hook)" => {
+            Some("使用现有的 module.prop（来自预构建钩子）")
+        }
         // Additional mapping for common messages (Set/Unset, secrets, interactive prompts, preview/next steps)
         "Set {} = {} in {}" => Some("设置 {} = {} 到 {}"),
         "Unset {} in {}" => Some("{} 已在 {} 中移除"),
         "No secrets stored." => Some("未存储任何机密。"),
         "No trusted Root CAs." => Some("没有受信任的根证书颁发机构。"),
-        "(Non-interactive mode detected: falling back to text input.)" => Some("(检测到非交互模式：退回到文本输入。)"),
-        "You may press Enter to accept a default value shown in brackets" => Some("您可以按 Enter 接受方括号中显示的默认值"),
+        "(Non-interactive mode detected: falling back to text input.)" => {
+            Some("(检测到非交互模式：退回到文本输入。)")
+        }
+        "You may press Enter to accept a default value shown in brackets" => {
+            Some("您可以按 Enter 接受方括号中显示的默认值")
+        }
         "Variable: {}" => Some("变量：{}"),
         "{} - Note: {}" => Some("{} - 备注：{}"),
         "Preview cancelled." => Some("预览已取消。"),
@@ -513,7 +531,11 @@ fn en_to_zh(s: &str) -> Option<&'static str> {
         "Verified" => Some("已验证"),
         "Source file not found: {}" => Some("源文件未找到: {}"),
         "Signature file not found: {}" => Some("签名文件未找到: {}"),
-        "No trusted Root CAs found. Add one with: kam secret trust --add-root <ca.pem> --ca-name <name>" => Some("未找到受信任的根 CA。请使用：kam secret trust --add-root <ca.pem> --ca-name <name> 来添加"),
+        "No trusted Root CAs found. Add one with: kam secret trust --add-root <ca.pem> --ca-name <name>" => {
+            Some(
+                "未找到受信任的根 CA。请使用：kam secret trust --add-root <ca.pem> --ca-name <name> 来添加",
+            )
+        }
         "Verifying certificate chain..." => Some("正在验证证书链..."),
         "Certificate chain verified successfully" => Some("证书链验证成功"),
         "Loading cached certificate '{}'..." => Some("正在加载缓存证书 '{}'..."),
@@ -546,7 +568,9 @@ fn en_to_zh(s: &str) -> Option<&'static str> {
         // Init/Interactive related
         "Please enter 'y' or 'n'." => Some("请输入 'y' 或 'n'。"),
         "Choose a template to use" => Some("选择要使用的模板"),
-        "Enter local template path or archive file (leave empty to download default templates)" => Some("输入本地模板路径或归档文件（留空以下载默认模板）"),
+        "Enter local template path or archive file (leave empty to download default templates)" => {
+            Some("输入本地模板路径或归档文件（留空以下载默认模板）")
+        }
         "Enter path to local template (file or dir)" => Some("输入本地模板路径（文件或目录）"),
         "Enter custom value for {}" => Some("输入 {} 的自定义值"),
         "Enter value for {} (index or value)" => Some("输入 {} 的值（索引或值）"),
@@ -556,12 +580,16 @@ fn en_to_zh(s: &str) -> Option<&'static str> {
         "Failed to parse existing config: {}" => Some("解析现有配置失败：{}"),
         "Failed to serialize config: {}" => Some("序列化配置失败：{}"),
         "Failed to prepare initialization defaults: {}" => Some("准备初始化默认值失败：{}"),
-        "Saved base configuration to ~/.kam/config.toml" => Some("已保存基础配置到 ~/.kam/config.toml"),
+        "Saved base configuration to ~/.kam/config.toml" => {
+            Some("已保存基础配置到 ~/.kam/config.toml")
+        }
         "Summary" => Some("摘要"),
         "Path" => Some("路径"),
         "Template variables:" => Some("模板变量："),
         "Recommend: {}" => Some("推荐：{}"),
-        "Or you may run the interactive helper script: {}" => Some("或者您可以运行交互式辅助脚本：{}"),
+        "Or you may run the interactive helper script: {}" => {
+            Some("或者您可以运行交互式辅助脚本：{}")
+        }
         "Recommended: {}" => Some("推荐：{}"),
         "(Template directory empty)" => Some("（模板目录为空）"),
         "Interactive Kam Init" => Some("交互式 Kam 初始化"),
@@ -569,16 +597,22 @@ fn en_to_zh(s: &str) -> Option<&'static str> {
         "Downloading templates from: {}" => Some("正在从 {} 下载模板"),
         "Importing downloaded templates..." => Some("正在导入已下载的模板..."),
         "Templates downloaded and imported successfully" => Some("模板已成功下载并导入"),
-        "Could not determine file size. Progress bar will be disabled." => Some("无法确定文件大小。进度条将被禁用。"),
+        "Could not determine file size. Progress bar will be disabled." => {
+            Some("无法确定文件大小。进度条将被禁用。")
+        }
         // Sign related
         "Signed '{}' -> {}" => Some("已签名 '{}' -> {}"),
         "Signing failed for {}: {}" => Some("签名失败 {}: {}"),
-        "Either specify 'src' or --dist/--all to sign artifacts" => Some("请指定 'src' 或 --dist/--all 来签名制品"),
+        "Either specify 'src' or --dist/--all to sign artifacts" => {
+            Some("请指定 'src' 或 --dist/--all 来签名制品")
+        }
         // Verify related
         "Loading certificate chain from {}..." => Some("正在从 {} 加载证书链..."),
         "Calculating hash for '{}'..." => Some("正在计算 '{}' 的哈希值..."),
         // Build hooks related
-        "✿ Running {} hooks from {} ({} script(s)) ✿" => Some("✿ 正在运行来自 {} 的 {} 钩子（{} 个脚本）✿"),
+        "✿ Running {} hooks from {} ({} script(s)) ✿" => {
+            Some("✿ 正在运行来自 {} 的 {} 钩子（{} 个脚本）✿")
+        }
         "[{} {}/{}] {}" => Some("[{} {}/{}] {}"),
         "Running pre-build hooks" => Some("正在运行预构建钩子"),
         "Running post-build hooks" => Some("正在运行后构建钩子"),
@@ -599,49 +633,67 @@ fn en_to_zh(s: &str) -> Option<&'static str> {
 
 fn zh_to_en(s: &str) -> Option<&'static str> {
     match s {
-        "此命令仅供参考，不会修改文件或注册表。" =>
-            Some("This command is informational only; it doesn't modify files or the registry."),
-        "请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。" =>
-            Some("Use other commands (e.g., `kam init`, `kam build`) to perform actions."),
+        "此命令仅供参考，不会修改文件或注册表。" => {
+            Some("This command is informational only; it doesn't modify files or the registry.")
+        }
+        "请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。" => {
+            Some("Use other commands (e.g., `kam init`, `kam build`) to perform actions.")
+        }
         "感谢使用 Kam" => Some("Thanks for using Kam"),
         "祝您使用愉快！" => Some("Enjoy your module tooling experience!"),
-        "由 Kam CLI 提供支持 — 祝构建顺利！" => Some("Powered by the Kam CLI — Happy building!"),
+        "由 Kam CLI 提供支持 — 祝构建顺利！" => {
+            Some("Powered by the Kam CLI — Happy building!")
+        }
         "工作区成员 {} 未找到" => Some("workspace member {} not found"),
         "跳过 {}：未找到 kam.toml" => Some("Skipping {}: no kam.toml found"),
         "构建工作区成员：{}" => Some("Building workspace member: {}"),
         "无法获取当前目录：{}" => Some("Failed to get current dir: {}"),
         "切换到目录 {} 失败: {}" => Some("Failed to change to {}: {}"),
         "构建 {} 失败：{}" => Some("Failed to build {}: {}"),
-        "跳过 {}：加载 kam.toml 失败: {}" => Some("Skipping {}: failed to load kam.toml: {}"),
+        "跳过 {}：加载 kam.toml 失败: {}" => {
+            Some("Skipping {}: failed to load kam.toml: {}")
+        }
         "恢复当前工作目录失败：{}" => Some("Failed to restore cwd: {}"),
         "无效的 glob 模式 '{}': {}" => Some("Invalid glob pattern '{}': {}"),
         "✿ 工作区构建摘要 ✿" => Some("✿ Workspace Build Summary ✿"),
         "✗ 失败: {}" => Some("✗ Failed: {}"),
         "✓ 成功构建模块: {}" => Some("✓ Successfully built module: {}"),
         "构建模块：{} v{}" => Some("Building module: {} v{}"),
-        "跳过用于模板打包的构建钩子" => Some("Skipping build hooks for template packaging"),
+        "跳过用于模板打包的构建钩子" => {
+            Some("Skipping build hooks for template packaging")
+        }
         "正在打包制品..." => Some("Packaging artifacts..."),
         "源目录未找到: {}" => Some("Source directory not found: {}"),
         "正在生成 module.prop" => Some("Generating module.prop"),
-        "使用现有的 module.prop（来自预构建钩子）" => Some("Using existing module.prop (from pre-build hook)"),
+        "使用现有的 module.prop（来自预构建钩子）" => {
+            Some("Using existing module.prop (from pre-build hook)")
+        }
         // Additional mapping for common messages (reverse direction: zh -> en)
         "设置 {} = {} 到 {}" => Some("Set {} = {} in {}"),
         "{} 已在 {} 中移除" => Some("Unset {} in {}"),
         "未存储任何机密。" => Some("No secrets stored."),
         "没有受信任的根证书颁发机构。" => Some("No trusted Root CAs."),
-        "(检测到非交互模式：退回到文本输入。)" => Some("(Non-interactive mode detected: falling back to text input.)"),
-        "您可以按 Enter 接受方括号中显示的默认值" => Some("You may press Enter to accept a default value shown in brackets"),
+        "(检测到非交互模式：退回到文本输入。)" => {
+            Some("(Non-interactive mode detected: falling back to text input.)")
+        }
+        "您可以按 Enter 接受方括号中显示的默认值" => {
+            Some("You may press Enter to accept a default value shown in brackets")
+        }
         "变量：{}" => Some("Variable: {}"),
         "{} - 备注：{}" => Some("{} - Note: {}"),
         "预览已取消。" => Some("Preview cancelled."),
-        "交互式初始化已成功完成。" => Some("Interactive initialization completed successfully."),
+        "交互式初始化已成功完成。" => {
+            Some("Interactive initialization completed successfully.")
+        }
         "下一步：" => Some("Next steps:"),
         "✓ 成功构建模板: {}" => Some("✓ Successfully built template: {}"),
         // Cache-related strings
         "本地缓存中未找到模板。" => Some("No templates found in local cache."),
         "本地缓存模板" => Some("Local Cached Templates"),
         "缓存清理成功" => Some("Cache cleaned successfully"),
-        "缓存目录已经为空或不存在。" => Some("Cache directory is already empty or does not exist."),
+        "缓存目录已经为空或不存在。" => {
+            Some("Cache directory is already empty or does not exist.")
+        }
         "模板 '{}' 已从 {} 添加到缓存" => Some("Template '{}' added to cache from {}"),
         "模板 '{}' 已从缓存中移除" => Some("Template '{}' removed from cache"),
         // Secrets / Trust strings (zh -> en)
@@ -677,7 +729,9 @@ fn zh_to_en(s: &str) -> Option<&'static str> {
         "签名失败: {}" => Some("Failed to sign: {}"),
         "Base64 解码签名失败: {}" => Some("Failed to base64 decode signature: {}"),
         "从 {} 解析公钥 PEM 失败: {}" => Some("Failed to parse public key PEM from {}: {}"),
-        "从证书解析公钥失败: {}" => Some("Failed to parse public key from certificate: {}"),
+        "从证书解析公钥失败: {}" => {
+            Some("Failed to parse public key from certificate: {}")
+        }
         "创建验证器失败: {}" => Some("Failed to create verifier: {}"),
         "更新验证器失败: {}" => Some("Failed to update verifier: {}"),
         "验证错误: {}" => Some("Verification error: {}"),
@@ -686,11 +740,17 @@ fn zh_to_en(s: &str) -> Option<&'static str> {
         "已验证" => Some("Verified"),
         "源文件未找到: {}" => Some("Source file not found: {}"),
         "签名文件未找到: {}" => Some("Signature file not found: {}"),
-        "未找到受信任的根 CA。请使用：kam secret trust --add-root <ca.pem> --ca-name <name> 来添加" => Some("No trusted Root CAs found. Add one with: kam secret trust --add-root <ca.pem> --ca-name <name>"),
+        "未找到受信任的根 CA。请使用：kam secret trust --add-root <ca.pem> --ca-name <name> 来添加" => {
+            Some(
+                "No trusted Root CAs found. Add one with: kam secret trust --add-root <ca.pem> --ca-name <name>",
+            )
+        }
         "正在验证证书链..." => Some("Verifying certificate chain..."),
         "证书链验证成功" => Some("Certificate chain verified successfully"),
         "正在加载缓存证书 '{}'..." => Some("Loading cached certificate '{}'..."),
-        "从 GitHub issue {} 获取证书..." => Some("Fetching certificate from GitHub issue {}..."),
+        "从 GitHub issue {} 获取证书..." => {
+            Some("Fetching certificate from GitHub issue {}...")
+        }
         // Validate related (zh -> en)
         "在 {} 未找到 kam.toml" => Some("kam.toml not found at {}"),
         "正在验证 {}..." => Some("Validating {}..."),
@@ -698,7 +758,9 @@ fn zh_to_en(s: &str) -> Option<&'static str> {
         "未发现问题。kam.toml 有效。" => Some("No issues found. kam.toml is valid."),
         "错误：" => Some("Errors:"),
         "警告：" => Some("Warnings:"),
-        "验证失败。请修复上述错误。" => Some("Validation failed. Please fix the errors above."),
+        "验证失败。请修复上述错误。" => {
+            Some("Validation failed. Please fix the errors above.")
+        }
         "验证通过，但有警告。" => Some("Validation passed with warnings."),
         // Export related (zh -> en)
         "已导出 module.prop 到 {}" => Some("Exported module.prop to {}"),
@@ -719,38 +781,56 @@ fn zh_to_en(s: &str) -> Option<&'static str> {
         // Init/Interactive related (zh -> en)
         "请输入 'y' 或 'n'。" => Some("Please enter 'y' or 'n'."),
         "选择要使用的模板" => Some("Choose a template to use"),
-        "输入本地模板路径或归档文件（留空以下载默认模板）" => Some("Enter local template path or archive file (leave empty to download default templates)"),
-        "输入本地模板路径（文件或目录）" => Some("Enter path to local template (file or dir)"),
+        "输入本地模板路径或归档文件（留空以下载默认模板）" => Some(
+            "Enter local template path or archive file (leave empty to download default templates)",
+        ),
+        "输入本地模板路径（文件或目录）" => {
+            Some("Enter path to local template (file or dir)")
+        }
         "输入 {} 的自定义值" => Some("Enter custom value for {}"),
         "输入 {} 的值（索引或值）" => Some("Enter value for {} (index or value)"),
-        "为 {} 输入 true/false（默认：{}）" => Some("Enter true/false for {} (default: {})"),
+        "为 {} 输入 true/false（默认：{}）" => {
+            Some("Enter true/false for {} (default: {})")
+        }
         "请输入 'true' 或 'false'" => Some("Please enter 'true' or 'false'"),
         "输入 {} 的值" => Some("Enter value for {}"),
         "解析现有配置失败：{}" => Some("Failed to parse existing config: {}"),
         "序列化配置失败：{}" => Some("Failed to serialize config: {}"),
-        "准备初始化默认值失败：{}" => Some("Failed to prepare initialization defaults: {}"),
-        "已保存基础配置到 ~/.kam/config.toml" => Some("Saved base configuration to ~/.kam/config.toml"),
+        "准备初始化默认值失败：{}" => {
+            Some("Failed to prepare initialization defaults: {}")
+        }
+        "已保存基础配置到 ~/.kam/config.toml" => {
+            Some("Saved base configuration to ~/.kam/config.toml")
+        }
         "摘要" => Some("Summary"),
         "路径" => Some("Path"),
         "模板变量：" => Some("Template variables:"),
         "推荐：{}" => Some("Recommend: {}"),
-        "或者您可以运行交互式辅助脚本：{}" => Some("Or you may run the interactive helper script: {}"),
+        "或者您可以运行交互式辅助脚本：{}" => {
+            Some("Or you may run the interactive helper script: {}")
+        }
         "（模板目录为空）" => Some("(Template directory empty)"),
         "交互式 Kam 初始化" => Some("Interactive Kam Init"),
         // Template pull related (zh -> en)
         "正在从 {} 下载模板" => Some("Downloading templates from: {}"),
         "正在导入已下载的模板..." => Some("Importing downloaded templates..."),
         "模板已成功下载并导入" => Some("Templates downloaded and imported successfully"),
-        "无法确定文件大小。进度条将被禁用。" => Some("Could not determine file size. Progress bar will be disabled."),
+        "无法确定文件大小。进度条将被禁用。" => {
+            Some("Could not determine file size. Progress bar will be disabled.")
+        }
         // Sign related (zh -> en)
         "已签名 '{}' -> {}" => Some("Signed '{}' -> {}"),
         "签名失败 {}: {}" => Some("Signing failed for {}: {}"),
-        "请指定 'src' 或 --dist/--all 来签名制品" => Some("Either specify 'src' or --dist/--all to sign artifacts"),
+        "请指定 'src' 或 --dist/--all 来签名制品" => {
+            Some("Either specify 'src' or --dist/--all to sign artifacts")
+        }
         // Verify related (zh -> en)
         "正在从 {} 加载证书链..." => Some("Loading certificate chain from {}..."),
         "正在计算 '{}' 的哈希值..." => Some("Calculating hash for '{}'..."),
         // Build hooks related (zh -> en)
-        "✿ 正在运行来自 {} 的 {} 钩子（{} 个脚本）✿" => Some("✿ Running {} hooks from {} ({} script(s)) ✿"),
+        "✿ 正在运行来自 {} 的 {} 钩子（{} 个脚本）✿" => {
+            Some("✿ Running {} hooks from {} ({} script(s)) ✿")
+        }
         "[{} {}/{}] {}" => Some("[{} {}/{}] {}"),
         "正在运行预构建钩子" => Some("Running pre-build hooks"),
         "正在运行后构建钩子" => Some("Running post-build hooks"),
@@ -758,21 +838,47 @@ fn zh_to_en(s: &str) -> Option<&'static str> {
         // Config command related (zh -> en)
         "内置配置项：" => Some("Built-in configuration keys:"),
         "示例：" => Some("Example:"),
-        "注意：您也可以设置自定义键。使用 'kam config list' 查看所有已配置的值。" => Some("Note: You can also set custom keys. Use 'kam config list' to see all configured values."),
-        "UI 语言偏好（优先于 'language'）" => Some("UI language preference (preferred over 'language')"),
-        "UI 语言偏好（备用，建议使用 'ui.language'）" => Some("UI language preference (fallback, use 'ui.language' instead)"),
-        "新项目的默认作者名称（在初始化时保存）" => Some("Default author name for new projects (saved during init)"),
-        "新项目的默认模块名称（在初始化时保存）" => Some("Default module name for new projects (saved during init)"),
-        "新项目的默认版本（在初始化时保存）" => Some("Default version for new projects (saved during init)"),
+        "注意：您也可以设置自定义键。使用 'kam config list' 查看所有已配置的值。" => {
+            Some(
+                "Note: You can also set custom keys. Use 'kam config list' to see all configured values.",
+            )
+        }
+        "UI 语言偏好（优先于 'language'）" => {
+            Some("UI language preference (preferred over 'language')")
+        }
+        "UI 语言偏好（备用，建议使用 'ui.language'）" => {
+            Some("UI language preference (fallback, use 'ui.language' instead)")
+        }
+        "新项目的默认作者名称（在初始化时保存）" => {
+            Some("Default author name for new projects (saved during init)")
+        }
+        "新项目的默认模块名称（在初始化时保存）" => {
+            Some("Default module name for new projects (saved during init)")
+        }
+        "新项目的默认版本（在初始化时保存）" => {
+            Some("Default version for new projects (saved during init)")
+        }
         // Config command related (en -> zh)
         "Built-in configuration keys:" => Some("内置配置项："),
         "Example:" => Some("示例："),
-        "Note: You can also set custom keys. Use 'kam config list' to see all configured values." => Some("注意：您也可以设置自定义键。使用 'kam config list' 查看所有已配置的值。"),
-        "UI language preference (preferred over 'language')" => Some("UI 语言偏好（优先于 'language'）"),
-        "UI language preference (fallback, use 'ui.language' instead)" => Some("UI 语言偏好（备用，建议使用 'ui.language'）"),
-        "Default author name for new projects (saved during init)" => Some("新项目的默认作者名称（在初始化时保存）"),
-        "Default module name for new projects (saved during init)" => Some("新项目的默认模块名称（在初始化时保存）"),
-        "Default version for new projects (saved during init)" => Some("新项目的默认版本（在初始化时保存）"),
+        "Note: You can also set custom keys. Use 'kam config list' to see all configured values." => {
+            Some("注意：您也可以设置自定义键。使用 'kam config list' 查看所有已配置的值。")
+        }
+        "UI language preference (preferred over 'language')" => {
+            Some("UI 语言偏好（优先于 'language'）")
+        }
+        "UI language preference (fallback, use 'ui.language' instead)" => {
+            Some("UI 语言偏好（备用，建议使用 'ui.language'）")
+        }
+        "Default author name for new projects (saved during init)" => {
+            Some("新项目的默认作者名称（在初始化时保存）")
+        }
+        "Default module name for new projects (saved during init)" => {
+            Some("新项目的默认模块名称（在初始化时保存）")
+        }
+        "Default version for new projects (saved during init)" => {
+            Some("新项目的默认版本（在初始化时保存）")
+        }
         // About related (zh -> en)
         "作者" => Some("Author"),
         "邮箱" => Some("Email"),
@@ -868,12 +974,6 @@ mod tests {
         assert!(s.contains("构建模块") || s.contains("构建模块："));
     }
 
-
-
-
-
-
-
     #[test]
     #[serial]
     fn test_init_env_var_precedence() {
@@ -884,10 +984,16 @@ mod tests {
         let orig_cwd = env::current_dir().unwrap();
 
         // Ensure no config overrides
-        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
-        unsafe { env::remove_var("KAM_LANG"); }
+        unsafe {
+            env::remove_var("KAM_UI_LANGUAGE");
+        }
+        unsafe {
+            env::remove_var("KAM_LANG");
+        }
         // set KAM_UI_LANGUAGE to zh
-        unsafe { env::set_var("KAM_UI_LANGUAGE", "zh"); }
+        unsafe {
+            env::set_var("KAM_UI_LANGUAGE", "zh");
+        }
 
         // start from a known language
         set_language(Language::En);
@@ -899,19 +1005,31 @@ mod tests {
 
         // restore environment
         if let Some(k) = orig_kam_ui {
-            unsafe { env::set_var("KAM_UI_LANGUAGE", k); }
+            unsafe {
+                env::set_var("KAM_UI_LANGUAGE", k);
+            }
         } else {
-            unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+            unsafe {
+                env::remove_var("KAM_UI_LANGUAGE");
+            }
         }
         if let Some(k2) = orig_kam_lang {
-            unsafe { env::set_var("KAM_LANG", k2); }
+            unsafe {
+                env::set_var("KAM_LANG", k2);
+            }
         } else {
-            unsafe { env::remove_var("KAM_LANG"); }
+            unsafe {
+                env::remove_var("KAM_LANG");
+            }
         }
         if let Some(l) = orig_lang {
-            unsafe { env::set_var("LANG", l); }
+            unsafe {
+                env::set_var("LANG", l);
+            }
         } else {
-            unsafe { env::remove_var("LANG"); }
+            unsafe {
+                env::remove_var("LANG");
+            }
         }
         let _ = env::set_current_dir(orig_cwd);
 
@@ -931,12 +1049,20 @@ mod tests {
         // Create a temporary project with a local .kam/config.toml that sets zh
         let tmp = mk_temp_dir("i18n_local");
         fs::create_dir_all(tmp.join(".kam")).unwrap();
-        fs::write(tmp.join(".kam").join("config.toml"), r#"ui.language = "zh""#).unwrap();
+        fs::write(
+            tmp.join(".kam").join("config.toml"),
+            r#"ui.language = "zh""#,
+        )
+        .unwrap();
         fs::write(tmp.join("kam.toml"), "name = \"i18n-test\"").unwrap();
 
         // ensure env overrides won't take precedence
-        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
-        unsafe { env::remove_var("KAM_LANG"); }
+        unsafe {
+            env::remove_var("KAM_UI_LANGUAGE");
+        }
+        unsafe {
+            env::remove_var("KAM_LANG");
+        }
 
         // jump to project dir so local config is used
         env::set_current_dir(&tmp).unwrap();
@@ -949,24 +1075,40 @@ mod tests {
 
         // restore environment
         if let Some(h) = orig_home {
-            unsafe { env::set_var("HOME", h); }
+            unsafe {
+                env::set_var("HOME", h);
+            }
         } else {
-            unsafe { env::remove_var("HOME"); }
+            unsafe {
+                env::remove_var("HOME");
+            }
         }
         if let Some(k) = orig_kam_ui {
-            unsafe { env::set_var("KAM_UI_LANGUAGE", k); }
+            unsafe {
+                env::set_var("KAM_UI_LANGUAGE", k);
+            }
         } else {
-            unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+            unsafe {
+                env::remove_var("KAM_UI_LANGUAGE");
+            }
         }
         if let Some(k2) = orig_kam_lang {
-            unsafe { env::set_var("KAM_LANG", k2); }
+            unsafe {
+                env::set_var("KAM_LANG", k2);
+            }
         } else {
-            unsafe { env::remove_var("KAM_LANG"); }
+            unsafe {
+                env::remove_var("KAM_LANG");
+            }
         }
         if let Some(l) = orig_lang {
-            unsafe { env::set_var("LANG", l); }
+            unsafe {
+                env::set_var("LANG", l);
+            }
         } else {
-            unsafe { env::remove_var("LANG"); }
+            unsafe {
+                env::remove_var("LANG");
+            }
         }
         let _ = env::set_current_dir(orig_cwd);
 
@@ -989,37 +1131,63 @@ mod tests {
         // Create a fake HOME with global config
         let htmp = mk_temp_dir("i18n_home");
         fs::create_dir_all(htmp.join(".kam")).unwrap();
-        fs::write(htmp.join(".kam").join("config.toml"), r#"ui.language = "en""#).unwrap();
+        fs::write(
+            htmp.join(".kam").join("config.toml"),
+            r#"ui.language = "en""#,
+        )
+        .unwrap();
 
         // ensure env overrides won't take precedence
-        unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
-        unsafe { env::remove_var("KAM_LANG"); }
+        unsafe {
+            env::remove_var("KAM_UI_LANGUAGE");
+        }
+        unsafe {
+            env::remove_var("KAM_LANG");
+        }
         // attempt to set HOME
-        unsafe { env::set_var("HOME", htmp.to_str().unwrap()); }
+        unsafe {
+            env::set_var("HOME", htmp.to_str().unwrap());
+        }
 
         // Because `dirs` may cache the home directory at process startup, confirm it changed.
         // If not, skip to avoid mutating the real user's home directory.
         if dirs::home_dir().as_ref().map(|p| p.as_path()) != Some(htmp.as_path()) {
             // restore and cleanup, then skip by returning early
             if let Some(h) = orig_home {
-                unsafe { env::set_var("HOME", h); }
+                unsafe {
+                    env::set_var("HOME", h);
+                }
             } else {
-                unsafe { env::remove_var("HOME"); }
+                unsafe {
+                    env::remove_var("HOME");
+                }
             }
             if let Some(k) = orig_kam_ui {
-                unsafe { env::set_var("KAM_UI_LANGUAGE", k); }
+                unsafe {
+                    env::set_var("KAM_UI_LANGUAGE", k);
+                }
             } else {
-                unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+                unsafe {
+                    env::remove_var("KAM_UI_LANGUAGE");
+                }
             }
             if let Some(k2) = orig_kam_lang {
-                unsafe { env::set_var("KAM_LANG", k2); }
+                unsafe {
+                    env::set_var("KAM_LANG", k2);
+                }
             } else {
-                unsafe { env::remove_var("KAM_LANG"); }
+                unsafe {
+                    env::remove_var("KAM_LANG");
+                }
             }
             if let Some(l) = orig_lang {
-                unsafe { env::set_var("LANG", l); }
+                unsafe {
+                    env::set_var("LANG", l);
+                }
             } else {
-                unsafe { env::remove_var("LANG"); }
+                unsafe {
+                    env::remove_var("LANG");
+                }
             }
             let _ = env::set_current_dir(orig_cwd);
             let _ = fs::remove_dir_all(&htmp);
@@ -1037,24 +1205,40 @@ mod tests {
 
         // restore environment and cleanup
         if let Some(h) = orig_home {
-            unsafe { env::set_var("HOME", h); }
+            unsafe {
+                env::set_var("HOME", h);
+            }
         } else {
-            unsafe { env::remove_var("HOME"); }
+            unsafe {
+                env::remove_var("HOME");
+            }
         }
         if let Some(k) = orig_kam_ui {
-            unsafe { env::set_var("KAM_UI_LANGUAGE", k); }
+            unsafe {
+                env::set_var("KAM_UI_LANGUAGE", k);
+            }
         } else {
-            unsafe { env::remove_var("KAM_UI_LANGUAGE"); }
+            unsafe {
+                env::remove_var("KAM_UI_LANGUAGE");
+            }
         }
         if let Some(k2) = orig_kam_lang {
-            unsafe { env::set_var("KAM_LANG", k2); }
+            unsafe {
+                env::set_var("KAM_LANG", k2);
+            }
         } else {
-            unsafe { env::remove_var("KAM_LANG"); }
+            unsafe {
+                env::remove_var("KAM_LANG");
+            }
         }
         if let Some(l) = orig_lang {
-            unsafe { env::set_var("LANG", l); }
+            unsafe {
+                env::set_var("LANG", l);
+            }
         } else {
-            unsafe { env::remove_var("LANG"); }
+            unsafe {
+                env::remove_var("LANG");
+            }
         }
         let _ = env::set_current_dir(orig_cwd);
         let _ = fs::remove_dir_all(&htmp);
@@ -1069,13 +1253,19 @@ mod tests {
         // Validate keyed translations (basic)
         // Ensure English mapping returns the English phrase
         set_language(Language::En);
-        assert_eq!(tr_key("workspace.summary.title"), "✿ Workspace Build Summary ✿");
+        assert_eq!(
+            tr_key("workspace.summary.title"),
+            "✿ Workspace Build Summary ✿"
+        );
         // English authorship: check a table header key
         assert_eq!(tr_key("table.header.module"), "Module");
 
         // Keys added from the external TOML file should also be visible:
         assert_eq!(tr_key("about.author"), "Author");
-        assert_eq!(tr_key("build.packaging_artifacts"), "Packaging artifacts...");
+        assert_eq!(
+            tr_key("build.packaging_artifacts"),
+            "Packaging artifacts..."
+        );
 
         // Validate Chinese mapping returns the Chinese phrase
         set_language(Language::Zh);

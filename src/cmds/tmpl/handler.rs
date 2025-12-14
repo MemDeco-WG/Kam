@@ -30,7 +30,10 @@ fn list_templates() -> Result<(), KamError> {
     if templates.is_empty() {
         Utils::warn("No templates found in cache");
         println!();
-        Utils::info(&format!("Use {} to import templates", "kam tmpl import".bold()));
+        Utils::info(&format!(
+            "Use {} to import templates",
+            "kam tmpl import".bold()
+        ));
     } else {
         Utils::section("Templates in Cache");
         for template in &templates {

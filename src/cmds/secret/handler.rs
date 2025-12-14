@@ -7,12 +7,12 @@ use super::file::secret_file_path;
 use super::index::{load_index, save_index};
 use super::utils::{global_with_backup_default, read_secret_blob};
 use crate::errors::KamError;
-use chrono::TimeZone;
-use rpassword::prompt_password;
-use openssl::sign::Signer;
-use openssl::hash::MessageDigest;
-use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
 use base64::engine::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
+use chrono::TimeZone;
+use openssl::hash::MessageDigest;
+use openssl::sign::Signer;
+use rpassword::prompt_password;
 
 /// Extract public key and signature from private key data.
 /// Returns (pub_key_pem, pub_key_signature) if successful.
@@ -22,20 +22,25 @@ fn extract_public_key_and_signature(
 ) -> Result<(Option<String>, Option<String>), KamError> {
     // Try to parse private key, first without password, then with password
     let pkey = openssl::pkey::PKey::private_key_from_pem(data)
-        .or_else(|_| openssl::pkey::PKey::private_key_from_pem_passphrase(data, password.as_bytes()))
+        .or_else(|_| {
+            openssl::pkey::PKey::private_key_from_pem_passphrase(data, password.as_bytes())
+        })
         .map_err(|e| KamError::CommandFailed(format!("Failed to parse private key: {}", e)))?;
 
     // Extract public key PEM
-    let pem_bytes = pkey.public_key_to_pem()
+    let pem_bytes = pkey
+        .public_key_to_pem()
         .map_err(|e| KamError::CommandFailed(format!("Failed to extract public key: {}", e)))?;
     let pem_s = String::from_utf8_lossy(&pem_bytes).to_string();
 
     // Sign the PEM string
     let mut signer = Signer::new(MessageDigest::sha256(), &pkey)
         .map_err(|e| KamError::CommandFailed(format!("Failed to create signer: {}", e)))?;
-    signer.update(pem_s.as_bytes())
+    signer
+        .update(pem_s.as_bytes())
         .map_err(|e| KamError::CommandFailed(format!("Failed to update signer: {}", e)))?;
-    let sig = signer.sign_to_vec()
+    let sig = signer
+        .sign_to_vec()
         .map_err(|e| KamError::CommandFailed(format!("Failed to sign: {}", e)))?;
     let signature = BASE64_ENGINE.encode(&sig);
 
@@ -143,34 +148,42 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
 
             // 尝试解析私钥，先试试无密码的，不行再试有密码的
             // 虽然可能有点慢，但至少能兼容两种情况
-            let pkey_res = openssl::pkey::PKey::private_key_from_pem(&data)
-                .or_else(|_| openssl::pkey::PKey::private_key_from_pem_passphrase(&data, pw.as_bytes()));
+            let pkey_res = openssl::pkey::PKey::private_key_from_pem(&data).or_else(|_| {
+                openssl::pkey::PKey::private_key_from_pem_passphrase(&data, pw.as_bytes())
+            });
 
             if let Ok(pkey) = pkey_res {
-                 if let Ok(pem) = pkey.public_key_to_pem() {
-                     let pem_s = String::from_utf8_lossy(&pem).to_string();
-                     pub_key_pem = Some(pem_s.clone());
+                if let Ok(pem) = pkey.public_key_to_pem() {
+                    let pem_s = String::from_utf8_lossy(&pem).to_string();
+                    pub_key_pem = Some(pem_s.clone());
 
-                     // Sign the PEM string
-                     use openssl::sign::Signer;
-                     use openssl::hash::MessageDigest;
-                     use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
-                     use base64::engine::Engine as _;
+                    // Sign the PEM string
+                    use base64::engine::Engine as _;
+                    use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
+                    use openssl::hash::MessageDigest;
+                    use openssl::sign::Signer;
 
-                     if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey) {
-                         if signer.update(pem_s.as_bytes()).is_ok() {
-                             if let Ok(sig) = signer.sign_to_vec() {
-                                 pub_key_signature = Some(BASE64_ENGINE.encode(&sig));
-                             }
-                         }
-                     }
-                 }
+                    if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey) {
+                        if signer.update(pem_s.as_bytes()).is_ok() {
+                            if let Ok(sig) = signer.sign_to_vec() {
+                                pub_key_signature = Some(BASE64_ENGINE.encode(&sig));
+                            }
+                        }
+                    }
+                }
             }
 
             // Determine effective with_backup: CLI flag overrides global default
             let _default_with_backup = global_with_backup_default();
             // Always store to local file (no keyring)
-            super::file::store_secret(&name, &blob, true, force_file, pub_key_pem, pub_key_signature)?;
+            super::file::store_secret(
+                &name,
+                &blob,
+                true,
+                force_file,
+                pub_key_pem,
+                pub_key_signature,
+            )?;
             use crate::utils::Utils;
             Utils::success(&trf!("secret.saved", name));
         }
@@ -280,33 +293,44 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 let blob = crate::cmds::secret_crypto::encrypt_with_password(&data, &pw)?;
 
                 // Attempt to derive public key
-                let (pub_key_pem, pub_key_signature) = extract_public_key_and_signature(&data, &pw)
-                    .unwrap_or((None, None));
+                let (pub_key_pem, pub_key_signature) =
+                    extract_public_key_and_signature(&data, &pw).unwrap_or((None, None));
 
-                super::file::store_secret(&final_name, &blob, true, false, pub_key_pem, pub_key_signature)?;
+                super::file::store_secret(
+                    &final_name,
+                    &blob,
+                    true,
+                    false,
+                    pub_key_pem,
+                    pub_key_signature,
+                )?;
             }
             use crate::utils::Utils;
             Utils::success(&trf!("secret.imported", final_name));
         }
         SecretCommands::ExportPub { name, out } => {
-
-
             // Use helper to get/refresh public key (handles caching and fallback)
             let pkey = match crate::cmds::secret::utils::get_or_refresh_public_key(&name, true) {
                 Ok(pk) => pk,
                 Err(e) => {
-                    return Err(KamError::CommandFailed(trf!("secret.failed_retrieve_public_key", name, e)));
+                    return Err(KamError::CommandFailed(trf!(
+                        "secret.failed_retrieve_public_key",
+                        name,
+                        e
+                    )));
                 }
             };
 
             // 4. Derive Public Key PEM
-            let pub_pem = pkey.public_key_to_pem().map_err(|e| KamError::CommandFailed(format!("Failed to derive public key: {}", e)))?;
+            let pub_pem = pkey.public_key_to_pem().map_err(|e| {
+                KamError::CommandFailed(format!("Failed to derive public key: {}", e))
+            })?;
 
             // 5. Output
             if let Some(path) = out {
                 fs::write(&path, &pub_pem).map_err(KamError::Io)?;
-                 use crate::utils::Utils;
-                 Utils::success(&trf!("secret.public_key_exported", name, path.display()));
+                use crate::utils::Utils;
+                Utils::success(&trf!("secret.public_key_exported", name, path.display()));
             } else {
                 let s = String::from_utf8_lossy(&pub_pem);
                 print!("{}", s);
@@ -367,11 +391,15 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 }
             } else if let Some(ca_path_or_url) = add_root {
                 let ca_name = ca_name.ok_or_else(|| {
-                    KamError::CommandFailed("--ca-name is required when adding a Root CA".to_string())
+                    KamError::CommandFailed(
+                        "--ca-name is required when adding a Root CA".to_string(),
+                    )
                 })?;
 
                 // Load CA certificate
-                let ca_pem = if ca_path_or_url.starts_with("http://") || ca_path_or_url.starts_with("https://") {
+                let ca_pem = if ca_path_or_url.starts_with("http://")
+                    || ca_path_or_url.starts_with("https://")
+                {
                     // Fetch from URL
                     use crate::utils::Utils;
                     Utils::executing(&trf!("secret.fetching_root_ca", ca_path_or_url));

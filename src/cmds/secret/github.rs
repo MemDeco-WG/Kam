@@ -20,7 +20,10 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
     let client = Client::new();
 
     // 先抓issue看看
-    let issue_url = format!("https://api.github.com/repos/{}/{}/issues/{}", user, repo, issue_num);
+    let issue_url = format!(
+        "https://api.github.com/repos/{}/{}/issues/{}",
+        user, repo, issue_num
+    );
     let issue: Issue = client
         .get(&issue_url)
         .header("User-Agent", "kam-cli")
@@ -46,7 +49,9 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
             .send()
             .map_err(|e| KamError::CommandFailed(format!("Failed to fetch comments: {}", e)))?
             .json()
-            .map_err(|e| KamError::CommandFailed(format!("Failed to parse comments JSON: {}", e)))?;
+            .map_err(|e| {
+                KamError::CommandFailed(format!("Failed to parse comments JSON: {}", e))
+            })?;
 
         for comment in comments {
             if let Some(cert) = extract_cert_chain(&comment.body) {
@@ -55,7 +60,9 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
         }
     }
 
-    Err(KamError::CommandFailed("No certificate chain found in issue or comments".to_string()))
+    Err(KamError::CommandFailed(
+        "No certificate chain found in issue or comments".to_string(),
+    ))
 }
 
 // 从markdown文本里抠出证书链
@@ -88,11 +95,7 @@ pub fn extract_cert_chain(text: &str) -> Option<String> {
         }
     }
 
-    if chain.is_empty() {
-        None
-    } else {
-        Some(chain)
-    }
+    if chain.is_empty() { None } else { Some(chain) }
 }
 
 #[cfg(test)]

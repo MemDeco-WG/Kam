@@ -3,7 +3,7 @@ Kam/src/cmds/about/handler.rs
 Use comfy_table for rendering About output, dynamic values, and remove any hardcoded ASCII art.
 */
 
-use comfy_table::{presets::UTF8_FULL, Attribute, Cell, ContentArrangement, Row, Table};
+use comfy_table::{Attribute, Cell, ContentArrangement, Row, Table, presets::UTF8_FULL};
 use regex::Regex;
 
 use crate::errors::KamError;
@@ -170,7 +170,7 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
 
     Utils::section(crate::i18n::tr_key("about.thanks"));
     Utils::info(crate::i18n::tr_key("about.enjoy"));
-    Utils::success(crate::i18n::tr_key("about.powered"));  // 这句有点中二，但留着吧
+    Utils::success(crate::i18n::tr_key("about.powered")); // 这句有点中二，但留着吧
     // 其实这个命令没啥用，就是显示个信息，但至少看起来比较专业（？）
 
     Ok(())

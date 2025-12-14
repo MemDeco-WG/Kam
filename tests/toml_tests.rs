@@ -1,6 +1,5 @@
 /// TOML 操作测试模块
 /// 测试 kam toml 命令的功能
-
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -40,14 +39,8 @@ fn test_toml_get_value() {
     let value: toml::Value = toml::from_str(&content).unwrap();
 
     // 测试获取嵌套值
-    assert_eq!(
-        value["prop"]["id"].as_str().unwrap(),
-        "test_module"
-    );
-    assert_eq!(
-        value["prop"]["version"].as_str().unwrap(),
-        "1.0.0"
-    );
+    assert_eq!(value["prop"]["id"].as_str().unwrap(), "test_module");
+    assert_eq!(value["prop"]["version"].as_str().unwrap(), "1.0.0");
     assert_eq!(
         value["mmrl"]["repo"]["repository"].as_str().unwrap(),
         "https://github.com/test/test_module"
@@ -152,7 +145,10 @@ fn test_toml_set_nested_path() {
     let content = fs::read_to_string(&toml_path).unwrap();
     let value: toml::Value = toml::from_str(&content).unwrap();
     assert_eq!(value["prop"]["name"].as_str().unwrap(), "New Name");
-    assert_eq!(value["new"]["section"]["key"].as_str().unwrap(), "new value");
+    assert_eq!(
+        value["new"]["section"]["key"].as_str().unwrap(),
+        "new value"
+    );
 }
 
 #[test]
@@ -179,5 +175,10 @@ fn test_toml_unset_value() {
     // 验证
     let content = fs::read_to_string(&toml_path).unwrap();
     let value: toml::Value = toml::from_str(&content).unwrap();
-    assert!(value.get("prop").and_then(|p| p.get("updateJson")).is_none());
+    assert!(
+        value
+            .get("prop")
+            .and_then(|p| p.get("updateJson"))
+            .is_none()
+    );
 }

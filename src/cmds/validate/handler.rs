@@ -42,9 +42,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
     {
         // id只能包含字母数字、下划线、横线、点号
-        errors.push(
-            crate::i18n::tr_key("validate.prop.id_invalid_characters").to_string(),
-        );
+        errors.push(crate::i18n::tr_key("validate.prop.id_invalid_characters").to_string());
     }
 
     if kam_toml.prop.name.trim().is_empty() {
@@ -56,7 +54,8 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
     }
 
     if kam_toml.prop.versionCode <= 0 {
-        errors.push(crate::i18n::tr_key("validate.prop.version_code_should_be_positive").to_string());
+        errors
+            .push(crate::i18n::tr_key("validate.prop.version_code_should_be_positive").to_string());
     }
 
     if kam_toml.prop.description.trim().is_empty() {
@@ -80,7 +79,9 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
         if let Some(repo) = &mmrl.repo {
             // 检查推荐字段（license建议填写）
             if repo.license.as_deref().unwrap_or("").is_empty() {
-                warnings.push(crate::i18n::tr_key("validate.mmrl.repo.license_recommended").to_string());
+                warnings.push(
+                    crate::i18n::tr_key("validate.mmrl.repo.license_recommended").to_string(),
+                );
             }
 
             // 检查文件是否存在（如果配置了但文件不存在就是错误）
@@ -112,7 +113,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
         let src_dir = if let Some(custom) = &build.source_dir {
             project_path.join(custom)
         } else {
-            project_path.join("src").join(&kam_toml.prop.id)  // 默认是 src/<id>
+            project_path.join("src").join(&kam_toml.prop.id) // 默认是 src/<id>
         };
 
         if !src_dir.exists() {
@@ -155,16 +156,24 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
     } else {
         // 有错误或警告，打印出来
         if !errors.is_empty() {
-            println!("{}", crate::i18n::tr_key("validate.errors.header").red().bold());
+            println!(
+                "{}",
+                crate::i18n::tr_key("validate.errors.header").red().bold()
+            );
             for e in &errors {
                 println!("  {} {}", "✗".red().bold(), e.red());
             }
         }
         if !warnings.is_empty() {
             if !errors.is_empty() {
-                println!();  // 错误和警告之间空一行
+                println!(); // 错误和警告之间空一行
             }
-            println!("{}", crate::i18n::tr_key("validate.warnings.header").yellow().bold());
+            println!(
+                "{}",
+                crate::i18n::tr_key("validate.warnings.header")
+                    .yellow()
+                    .bold()
+            );
             for w in &warnings {
                 println!("  {} {}", "!".yellow().bold(), w.yellow());
             }

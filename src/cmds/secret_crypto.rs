@@ -14,7 +14,7 @@ const MAGIC: &[u8] = b"KAMKEYv1"; // 8字节
 const SALT_LEN: usize = 16;
 const IV_LEN: usize = 16; // AES-256-CBC用16字节IV
 const HMAC_LEN: usize = 32; // SHA256的HMAC是32字节
-const PBKDF2_ITERS: u32 = 100_000;  // PBKDF2迭代次数，虽然可能有点慢但安全第一
+const PBKDF2_ITERS: u32 = 100_000; // PBKDF2迭代次数，虽然可能有点慢但安全第一
 
 // 用密码加密数据
 // 使用AES-256-CBC加密，HMAC-SHA256验证
@@ -32,8 +32,8 @@ pub fn encrypt_with_password(plaintext: &[u8], password: &str) -> Result<Vec<u8>
         &mut key_material,
     )
     .map_err(|e| KamError::CommandFailed(format!("KDF failed: {}", e)))?;
-    let key_enc = &key_material[0..32];  // 前32字节用于加密
-    let key_hmac = &key_material[32..64];  // 后32字节用于HMAC
+    let key_enc = &key_material[0..32]; // 前32字节用于加密
+    let key_hmac = &key_material[32..64]; // 后32字节用于HMAC
 
     // 生成随机IV
     let mut iv = [0u8; IV_LEN];
@@ -88,7 +88,7 @@ pub fn decrypt_with_password(blob: &[u8], password: &str) -> Result<Vec<u8>, Kam
     offset += SALT_LEN;
     let iv = &blob[offset..offset + IV_LEN];
     offset += IV_LEN;
-    let tag = &blob[blob.len() - HMAC_LEN..];  // tag在最后
+    let tag = &blob[blob.len() - HMAC_LEN..]; // tag在最后
     let ciphertext = &blob[offset..(blob.len() - HMAC_LEN)];
 
     // 派生密钥（和加密时一样）
