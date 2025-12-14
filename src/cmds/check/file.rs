@@ -272,46 +272,34 @@ fn check_version_format(version: &str, fr: &mut FileResult) {
         return; // 已经在必需字段检查中处理
     }
 
-    // 基本格式检查：应该包含至少一个点号（如 1.0 或 1.0.0）
-    let parts: Vec<&str> = version.split('.').collect();
+    let s = version.trim();
 
-    if parts.is_empty() {
-        fr.warnings.push(format!(
-            "[prop] version '{}' does not follow semantic versioning (recommended: x.y.z)",
+    // 不允许多重前缀 'vv'（例如 vv1.2.3）
+    if s.to_lowercase().starts_with("vv") {
+        fr.valid = false;
+        fr.errors.push(format!(
+            "[prop] version '{}' is invalid: leading 'vv' is not allowed (expected format: vX.Y.Z)",
             version
         ));
         return;
     }
 
-    // 检查每个部分
-    let mut has_invalid_chars = false;
-    for (i, part) in parts.iter().enumerate() {
-        if part.is_empty() {
-            fr.warnings.push(format!(
-                "[prop] version '{}' has empty part at position {}",
-                version,
-                i + 1
-            ));
-            return;
-        }
-
-        // 允许数字、字母和横线（支持预发布版本如 1.0.0-beta1）
-        if !part.chars().all(|c| c.is_alphanumeric() || c == '-') {
-            has_invalid_chars = true;
-        }
-    }
-
-    if has_invalid_chars {
-        fr.warnings.push(format!(
-            "[prop] version '{}' contains invalid characters (allowed: alphanumeric and '-')",
+    // 要求以小写或大写 'v' 前缀开始（例如 v1.2.3）
+    if !(s.starts_with('v') || s.starts_with('V')) {
+        fr.valid = false;
+        fr.errors.push(format!(
+            "[prop] version '{}' must start with 'v' (expected format: vX.Y.Z)",
             version
         ));
+        return;
     }
 
-    // 建议使用语义化版本（x.y.z）
-    if parts.len() < 2 {
-        fr.warnings.push(format!(
-            "[prop] version '{}' is not semantic (recommended: x.y.z format)",
+    // 去掉可选的前缀 'v' 或 'V' 并使用 semver 解析剩余部分
+    let naked = &s[1..];
+    if semver::Version::parse(naked).is_err() {
+        fr.valid = false;
+        fr.errors.push(format!(
+            "[prop] version '{}' is not a valid semantic version (expected: vX.Y.Z, optionally with pre-release/build metadata)",
             version
         ));
     }

@@ -1,4 +1,3 @@
-use colored::Colorize;
 // PathBuf only used for argument types; keep import to prevent future lint
 
 use crate::errors::KamError;
