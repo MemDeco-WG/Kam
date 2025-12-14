@@ -141,3 +141,15 @@ about.info.use_other_commands = "Use other commands (e.g., `kam init`, `kam buil
 about.thanks = "Thanks for using Kam"
 about.enjoy = "Enjoy your module tooling experience!"
 about.powered = "Powered by the Kam CLI — Happy building!"
+# Export related
+export.module_prop = "Exported module.prop to {}"
+export.module_json = "Exported module.json to {}"
+export.repo_json = "Exported repo.json to {}"
+export.track_json = "Exported track.json to {}"
+export.config_json = "Exported config.json to {}"
+export.update_json = "Exported update.json to {}"
+
+# Sign related
+sign.signed = "Signed '{}' -> {}"
+sign.failed_to_sign = "Signing failed for {}: {}"
+sign.no_src_or_dist = "Either specify 'src' or --dist/--all to sign artifacts"

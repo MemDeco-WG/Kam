@@ -86,7 +86,7 @@ fn sign_single_file(src_path: &Path, args: &SignArgs) -> Result<(), KamError> {
     let sig_b64 = BASE64_ENGINE.encode(&sig_der);
     fs::write(&path, sig_b64.as_bytes()).map_err(KamError::Io)?;
     use crate::utils::Utils;
-    Utils::success(&format!("Signed '{}' -> {}", filename, path.display()));
+    Utils::success(&trf!("sign.signed", filename, path.display()));
 
     Ok(())
 }
@@ -105,9 +105,8 @@ pub fn run(args: SignArgs) -> Result<(), KamError> {
     } else if args.all {
         PathBuf::from(&args.out)
     } else {
-        return Err(KamError::CommandFailed(
-            "Either specify 'src' or --dist/--all to sign artifacts".to_string(),
-        ));
+        return Err(KamError::CommandFailed(trf!("sign.no_src_or_dist")));
+    }
     };
     for entry in std::fs::read_dir(dist_dir).map_err(KamError::Io)? {
         let entry = entry.map_err(KamError::Io)?;
@@ -123,7 +122,7 @@ pub fn run(args: SignArgs) -> Result<(), KamError> {
         }
         if let Err(e) = sign_single_file(&p, &args) {
             use crate::utils::Utils;
-            Utils::error(&format!("Signing failed for {}: {}", p.display(), e));
+            Utils::error(&trf!("sign.failed_to_sign", p.display(), e));
         }
     }
     Ok(())

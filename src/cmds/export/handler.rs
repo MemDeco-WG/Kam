@@ -54,7 +54,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
     // 如果输出是"-"就打印到stdout，否则写到文件
     let output_path: Option<std::path::PathBuf> = if let Some(p) = &args.output {
         match p.to_str() {
-            Some("-") => None,  // stdout
+            Some("-") => None, // stdout
             _ => Some(p.clone()),
         }
     } else {
@@ -80,7 +80,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
                 }
                 std::fs::write(path, content).map_err(KamError::Io)?;
-                println!("{} Exported module.prop to {}", "✓".green(), path.display());
+                crate::utils::Utils::success(&crate::trf!("export.module_prop", path.display()));
             } else {
                 // 输出到stdout
                 println!("{}", content);
@@ -95,7 +95,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
                 }
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
-                println!("{} Exported module.json to {}", "✓".green(), path.display());
+                crate::utils::Utils::success(&crate::trf!("export.module_json", path.display()));
             } else {
                 println!("{}", pretty);
             }
@@ -109,7 +109,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
                 }
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
-                println!("{} Exported repo.json to {}", "✓".green(), path.display());
+                crate::utils::Utils::success(&crate::trf!("export.repo_json", path.display()));
             } else {
                 println!("{}", pretty);
             }
@@ -123,7 +123,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
                 }
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
-                println!("{} Exported track.json to {}", "✓".green(), path.display());
+                crate::utils::Utils::success(&crate::trf!("export.track_json", path.display()));
             } else {
                 println!("{}", pretty);
             }
@@ -137,7 +137,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
                 }
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
-                println!("{} Exported config.json to {}", "✓".green(), path.display());
+                crate::utils::Utils::success(&crate::trf!("export.config_json", path.display()));
             } else {
                 println!("{}", pretty);
             }
@@ -151,7 +151,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                     std::fs::create_dir_all(parent).map_err(KamError::Io)?;
                 }
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
-                println!("{} Exported update.json to {}", "✓".green(), path.display());
+                crate::utils::Utils::success(&crate::trf!("export.update_json", path.display()));
             } else {
                 println!("{}", pretty);
             }
