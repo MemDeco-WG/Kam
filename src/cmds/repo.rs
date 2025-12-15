@@ -39,9 +39,9 @@ pub struct RepoArgs {
     #[arg(short = 's', long = "search")]
     pub search: bool,
 
-    /// Skip interactive confirmation prompts (use -y or --yes)
-    #[arg(short = 'y', long = "yes")]
-    pub yes: bool,
+    /// Override modules registry base URL for this invocation (e.g., https://example.org)
+    #[arg(long = "modules-url", value_name = "URL")]
+    pub modules_url: Option<String>,
 
     /// Positional targets: module IDs or search terms (used with -S / -s)
     #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
@@ -50,7 +50,13 @@ pub struct RepoArgs {
 
 /// Entrypoint for `kam repo` subcommand.
 pub fn run(args: RepoArgs) -> Result<(), KamError> {
-    handle_pacman_style(args.sync, args.search, args.targets, args.yes)
+    handle_pacman_style(
+        args.sync,
+        args.search,
+        args.targets,
+        false,
+        args.modules_url,
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,9 +121,12 @@ pub fn handle_pacman_style(
     search: bool,
     targets: Vec<String>,
     yes: bool,
+    modules_url: Option<String>,
 ) -> Result<(), KamError> {
     // Respect explicit --yes/-y flag passed from CLI (as param) or environment arg fallback
     let assume_yes = yes || std::env::args().any(|a| a == "-y" || a == "--yes");
+    // Determine effective base URL (override -> env -> config -> default)
+    let base = effective_base_url(modules_url.as_deref());
 
     // Search mode (supports fuzzy search)
     if search {
@@ -127,7 +136,7 @@ pub fn handle_pacman_style(
                 "Search requires a query e.g. `-Ss <term>`".into(),
             ));
         }
-        return search_remote(&q);
+        return search_remote(&q, &base);
     }
 
     // Download mode with interactive confirmation per-target
@@ -147,7 +156,7 @@ pub fn handle_pacman_style(
             Utils::section(&format!("Download: {}", module_id));
 
             // Fetch module details
-            let md = fetch_module_detail(&client, module_id)?;
+            let md = fetch_module_detail(&client, module_id, &base)?;
             // Select an asset (first zip-like asset in releases)
             let mut chosen_asset: Option<(&Asset, &str)> = None; // (asset, release_name)
             if let Some(rels) = md.releases.as_ref() {
@@ -238,13 +247,13 @@ pub fn handle_pacman_style(
 
 /// Search the remote catalog (search-index.json) for the provided query
 /// (case-insensitive substring match across name/description/summary/authors).
-pub fn search_remote(query: &str) -> Result<(), KamError> {
+pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
     let client = Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
         .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
 
-    let url = format!("{}{}", BASE_URL, SEARCH_INDEX_PATH);
+    let url = format!("{}{}", base_url, SEARCH_INDEX_PATH);
     let resp = client
         .get(&url)
         .header(USER_AGENT, "kam/repo-search")
@@ -407,8 +416,49 @@ fn format_size(bytes: u64) -> String {
 }
 
 /// Fetch module JSON details using provided client
-fn fetch_module_detail(client: &Client, module_id: &str) -> Result<ModuleDetail, KamError> {
-    let url = format!("{}{}{}.json", BASE_URL, MODULE_JSON_PREFIX, module_id);
+/// Derive the effective base URL for modules registry.
+///
+/// Priority:
+/// 1) `override_url` passed to the function call
+/// 2) `KAM_MODULES_URL` environment variable
+/// 3) `~/.kam/config.toml` -> `[modules] base_url = "..."`
+/// 4) default builtin URL
+fn effective_base_url(override_url: Option<&str>) -> String {
+    if let Some(u) = override_url {
+        if !u.trim().is_empty() {
+            return u.to_string();
+        }
+    }
+    if let Ok(env) = std::env::var("KAM_MODULES_URL") {
+        if !env.trim().is_empty() {
+            return env;
+        }
+    }
+    if let Some(home) = dirs::home_dir() {
+        let cfg = home.join(".kam").join("config.toml");
+        if cfg.exists() {
+            if let Ok(content) = std::fs::read_to_string(&cfg) {
+                if let Ok(v) = toml::from_str::<toml::Value>(&content) {
+                    if let Some(m) = v
+                        .get("modules")
+                        .and_then(|m| m.get("base_url"))
+                        .and_then(|x| x.as_str())
+                    {
+                        return m.to_string();
+                    }
+                }
+            }
+        }
+    }
+    "https://modules.kernelsu.org".to_string()
+}
+
+fn fetch_module_detail(
+    client: &Client,
+    module_id: &str,
+    base_url: &str,
+) -> Result<ModuleDetail, KamError> {
+    let url = format!("{}{}{}.json", base_url, MODULE_JSON_PREFIX, module_id);
     let resp = client
         .get(&url)
         .header(USER_AGENT, "kam/repo-module")
@@ -421,6 +471,7 @@ fn fetch_module_detail(client: &Client, module_id: &str) -> Result<ModuleDetail,
             resp.status()
         )));
     }
+
     let md: ModuleDetail = resp
         .json()
         .map_err(|e| KamError::Json(format!("Failed to parse {} JSON: {}", url, e)))?;
@@ -551,12 +602,11 @@ fn download_asset(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqwest::blocking::Client;
 
     #[test]
     fn test_search_asl() {
-        // Best-effort network test: ensure search completes and doesn't error.
-        let res = search_remote("asl");
+        let base = effective_base_url(None);
+        let res = search_remote("asl", &base);
         assert!(res.is_ok());
     }
 

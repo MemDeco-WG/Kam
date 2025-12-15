@@ -21,6 +21,10 @@ pub struct Cli {
     #[arg(value_name = "TARGETS", num_args = 0..)]
     pub targets: Vec<String>,
 
+    /// URL for the modules registry API (default: https://modules.kernelsu.org). Overrides the built-in modules endpoint.
+    #[arg(long = "modules-url", value_name = "URL", global = true)]
+    pub modules_url: Option<String>,
+
     /// Assume "yes" to all confirmation prompts (equivalent to -y). Use `-y` or `--yes` to skip confirmation.
     #[arg(short = 'y', long = "yes", action = clap::ArgAction::SetTrue, global = true)]
     pub assume_yes: bool,

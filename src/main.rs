@@ -154,6 +154,7 @@ fn main() {
             cli.search,
             cli.targets.clone(),
             cli.assume_yes,
+            cli.modules_url.clone(),
         ) {
             Ok(()) => return,
             Err(e) => {
