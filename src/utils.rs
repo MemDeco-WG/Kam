@@ -410,8 +410,26 @@ impl Utils {
     }
 }
 
+/// Normalize a free-form root manager string into a canonical manager name.
+///
+/// Returns one of: "Magisk", "KernelSU", "APatchSU", or "Unknown".
+/// Recognizes common aliases and variants (case-insensitive): magisk, ksu, kernel,
+/// apatch, apd, apu, etc.
+pub fn normalize_root_manager(raw: &str) -> String {
+    let low = raw.trim().to_lowercase();
+    if low.contains("magisk") {
+        "Magisk".to_string()
+    } else if low.contains("kernel") || low.contains("ksu") {
+        "KernelSU".to_string()
+    } else if low.contains("apatch") || low.contains("apd") || low.contains("apu") {
+        "APatchSU".to_string()
+    } else {
+        "Unknown".to_string()
+    }
+}
+
 // 确保path的父目录存在
-// 如果path没有父目录（比如是根目录），就什么都不做
+// 如果path没有父目录（比如是根目录），就什么都做
 pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         if !parent.exists() {
@@ -602,4 +620,23 @@ pub fn symlink_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_root_manager() {
+        assert_eq!(normalize_root_manager("magisk"), "Magisk");
+        assert_eq!(normalize_root_manager("MagIsK"), "Magisk");
+        assert_eq!(normalize_root_manager("ksu"), "KernelSU");
+        assert_eq!(normalize_root_manager("KSU"), "KernelSU");
+        assert_eq!(normalize_root_manager("apatch"), "APatchSU");
+        assert_eq!(normalize_root_manager("apd"), "APatchSU");
+        assert_eq!(normalize_root_manager("apu"), "APatchSU");
+        assert_eq!(normalize_root_manager("APU"), "APatchSU");
+        assert_eq!(normalize_root_manager("Iapu"), "APatchSU");
+        assert_eq!(normalize_root_manager("something-else"), "Unknown");
+    }
 }

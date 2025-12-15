@@ -56,6 +56,9 @@ pub enum Commands {
     /// Manage per-project or global kam configuration (similar to git config)
     Config(crate::cmds::config::ConfigArgs),
 
+    /// Install a module package to a connected device (using configured root manager)
+    Install(crate::cmds::install::InstallArgs),
+
     /// Display about information for Kam and credits
     About(crate::cmds::about::AboutArgs),
 }

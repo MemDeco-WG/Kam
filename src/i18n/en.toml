@@ -1,155 +1,491 @@
-# English translation file for Kam CLI
-# Keys are dotted to represent namespaces and nested tables.
-# Keep values as literal strings. Use {} as a placeholder for simple formatting.
-#
-# Example usage:
-#   crate::i18n::tr_key("workspace.summary.title")
-#   crate::i18n::tr_fmt("status.failed", &[&"reason"])
+[about]
+author = "Author"
+description = "Description"
+developer = "Developer"
+email = "Email"
+enjoy = "Enjoy your module tooling experience!"
+powered = "Powered by the Kam CLI — Happy building!"
+repository = "Repository"
+thanks = "Thanks for using Kam"
 
-# Workspace summary / table headers
-workspace.summary.title = "✿ Workspace Build Summary ✿"
-table.header.module = "Module"
-table.header.status = "Status"
-table.header.stat = "Statistic"
-table.header.value = "Value"
-common.file_fixed = "{} (fixed)"
+[about.info]
+command_informational = "This command is informational only; it doesn't modify files or the registry."
+use_other_commands = "Use other commands (e.g., `kam init`, `kam build`) to perform actions."
 
-# Status strings
-status.success = "✓ Success"
-status.failed = "✗ Failed: {}"
+[build]
+building_module_version = "Building module: {} v{}"
+building_workspace_member = "Building workspace member: {}"
+complete = "Build complete"
+concurrent_building_members = "Building {} member(s) concurrently (using {} jobs)"
+failed_to_build = "Failed to build {}: {}"
+failed_workspace_members = "{} workspace member(s) failed to build"
+invalid_glob_pattern = "Invalid glob pattern '{}': {}"
+packaging_artifacts = "Packaging artifacts..."
+skipping_failed_load_kam_toml = "Skipping {}: failed to load kam.toml: {}"
+skipping_no_kam_toml = "Skipping {}: no kam.toml found"
+workspace_member_not_found = "workspace member {} not found"
 
-# Table stats
-table.stat.total = "Total"
-table.stat.succeeded = "Succeeded"
-table.stat.failed = "Failed"
-table.stat.total_duration = "Total Duration"
+[cache]
+cleaned_successfully = "Cache cleaned successfully"
+directory_empty_or_not_exists = "Cache directory is already empty or does not exist."
+local_cached_templates = "Local Cached Templates"
+no_templates = "No templates found in local cache."
+template_added = "Template '{}' added to cache from {}"
+template_removed = "Template '{}' removed from cache"
 
-# Build and packaging
-build.packaging_artifacts = "Packaging artifacts..."
-build.complete = "Build complete"
-build.building_module_version = "Building module: {} v{}"
-build.concurrent_building_members = "Building {} member(s) concurrently (using {} jobs)"
+[check]
+no_issues_found = "No issues found."
+some_issues_found = "Some issues found."
 
-# Build / workspace messages
-build.invalid_glob_pattern = "Invalid glob pattern '{}': {}"
-build.workspace_member_not_found = "workspace member {} not found"
-build.skipping_no_kam_toml = "Skipping {}: no kam.toml found"
-build.building_workspace_member = "Building workspace member: {}"
-build.failed_to_build = "Failed to build {}: {}"
-build.skipping_failed_load_kam_toml = "Skipping {}: failed to load kam.toml: {}"
-build.failed_workspace_members = "{} workspace member(s) failed to build"
-packaging.source_directory_not_found = "Source directory not found: {}"
+[check.errors]
+header = "Errors:"
 
-# Hooks
-hooks.running_pre = "Running pre-build hooks"
-hooks.running_post = "Running post-build hooks"
-hooks.skipping_template_packaging = "Skipping build hooks for template packaging"
-hooks.skipping_hooks_for_template_packaging = "Skipping {} hooks for template packaging"
-hooks.invalid_env_variable_name = "Warning: Invalid environment variable name '{}' at line {} in {}"
-hooks.malformed_env_line = "Warning: Malformed line {} in {}: {}"
+[check.warnings]
+header = "Warnings:"
 
-# Packaging / module files
-packaging.files = "Packaging files..."
-packaging.generating_module_prop = "Generating module.prop"
-packaging.using_existing_module_prop_from_hook = "Using existing module.prop (from pre-build hook)"
-packaging.packaging = "Packaging"
-packaging.success_module_built = "✓ Successfully built module: {}"
-packaging.success_template_built = "✓ Successfully built template: {}"
-project.output_directory = "Output Directory"
-project.header = "Project"
-project.build_time = "Build Time"
-project.package_size = "Package Size"
-project.output_file = "Output File"
+[common]
+file_fixed = "{} (fixed)"
 
-# Cache / templates
-cache.no_templates = "No templates found in local cache."
-cache.local_cached_templates = "Local Cached Templates"
-cache.cleaned_successfully = "Cache cleaned successfully"
-cache.directory_empty_or_not_exists = "Cache directory is already empty or does not exist."
-cache.template_added = "Template '{}' added to cache from {}"
-cache.template_removed = "Template '{}' removed from cache"
+[config]
+builtin_keys = "Built-in configuration keys:"
+example = "Example:"
+note_custom_keys = "Note: You can also set custom keys. Use 'kam config list' to see all configured values."
+set_success = "Set {} = {} in {}"
+unset_success = "Unset {} in {}"
 
-# Secret command keys
-secret.stored_secrets = "Stored Secrets"
-secret.trusted_root_cas = "Trusted Root CAs"
-secret.no_trusted_root_cas = "No trusted Root CAs."
-secret.no_secrets_stored = "No secrets stored."
-secret.saved = "Secret '{}' saved"
-secret.written_to = "Secret '{}' written to {}"
-secret.removed = "Secret '{}' removed"
-secret.exported = "Secret '{}' exported to {}"
-secret.imported = "Secret '{}' imported"
-secret.public_key_exported = "Public key for secret '{}' exported to {}"
-secret.cert_chain_imported = "Certificate chain '{}' imported successfully"
-secret.encrypted = "(encrypted)"
-secret.plain = "(plain)"
+[export]
+config_json = "Exported config.json to {}"
+module_json = "Exported module.json to {}"
+module_prop = "Exported module.prop to {}"
+repo_json = "Exported repo.json to {}"
+track_json = "Exported track.json to {}"
+update_json = "Exported update.json to {}"
 
-# Secret command keys (additional)
-secret.failed_retrieve_public_key = "Failed to retrieve public key for secret '{}': {}"
-secret.fetching_cert_from_github = "Fetching certificate from GitHub issue {}..."
-secret.failed_fetch_ca = "Failed to fetch CA: {}"
-secret.failed_read_ca = "Failed to read CA: {}"
-secret.root_ca_added = "Root CA '{}' added to trust store"
-secret.root_ca_removed = "Root CA '{}' removed from trust store"
+[hooks]
+invalid_env_variable_name = "Warning: Invalid environment variable name '{}' at line {} in {}"
+malformed_env_line = "Warning: Malformed line {} in {}: {}"
+running_post = "Running post-build hooks"
+running_pre = "Running pre-build hooks"
+skipping_hooks_for_template_packaging = "Skipping {} hooks for template packaging"
+skipping_template_packaging = "Skipping build hooks for template packaging"
 
-# Check command keys
-check.no_issues_found = "No issues found."
-check.some_issues_found = "Some issues found."
-check.errors.header = "Errors:"
-check.warnings.header = "Warnings:"
+[init.interactive]
+aborted = "Aborted."
+author = "Author"
+choice_local_path = "<local path or archive>"
+choice_pull_default_templates = "<pull default templates>"
+choose_template = "Choose a template to use"
+completed_successfully = "Interactive initialization completed successfully."
+confirm_proceed_create = "Proceed and create project with these settings?"
+description = "Description"
+enter_custom_value_for = "Enter custom value for {}"
+enter_local_template_path = "Enter local template path or archive file (leave empty to download default templates)"
+enter_path_to_local_template = "Enter path to local template (file or dir)"
+enter_value_for = "Enter value for {}"
+enter_yes_no = "Please enter 'y' or 'n'."
+gh_not_found = "GitHub CLI (gh) not found. Would you like to view instructions to install it?"
+helper_script = "See helper script at: ~/.kam/scripts/init_helper.sh"
+inferred_id_invalid = "Inferred module id '{}' from path contains invalid characters."
+invalid_module_id = "Invalid module ID '{}': ID must contain only alphanumeric characters, dots, dashes, and underscores"
+invalid_selection = "Invalid selection: {}"
+invalid_selection_index = "Invalid selection index"
+loaded_template_from_temp = "Loaded template from temporary extraction at: {}"
+module_id_mismatch = "Module id '{}' does not match folder basename '{}'."
+module_id_prompt = "Module ID"
+next_steps = "Next steps:"
+non_interactive_fallback = "Falling back to non-interactive template selection..."
+path_to_create_project = "Path to create project"
+press_enter = "You may press Enter to accept a default value shown in brackets"
+preview_another_file = "Preview another file?"
+preview_cancelled = "Template preview cancelled"
+preview_continue = "-- Continue --"
+preview_exit = "-- Exit preview --"
+preview_failed_read_dir = "(unable to read directory contents)"
+preview_failed_read_file = "(failed to read file for preview)"
+preview_file_empty = "(file is empty)"
+preview_file_truncated = "[... preview truncated after 50 lines ...]"
+project_name = "Project name"
+recommend_cz_install = "Recommended: python -m pip install --user commitizen (or npm/yarn global install)"
+recommend_github_cli = "View GitHub CLI installation instructions"
+save_base_values = "Save these base values to global config (~/.kam/config.toml)?"
+saved_base_values = "Saved base configuration to ~/.kam/config.toml"
+select_by_name_or_number = "Select a template by name or number (or provide a local path)"
+select_value_for = "Select a value for '{}'"
+set_module_id_to_basename = "Set module id to folder basename?"
+summary_title = "Summary"
+template_directory_empty = "Template directory is empty."
+template_preview = "Template preview ({} entries): (Enter to preview; select '-- Continue --' to proceed)"
+template_variables = "Template variables"
+title = "Interactive Kam Init"
+use_sanitized_module_id = "Use sanitized module id '{}'?"
+value_is_not_choice_prompt = "Value is not one of the choices. Use raw value anyway?"
+value_required = "Value required for {}"
+variable = "Variable: {}"
+variable_note = "Variable: {} — Note: {}"
+version = "Version"
 
-# Validate command keys
-validate.prop.id_required = "[prop] id is required"
-validate.prop.id_invalid_characters = "[prop] id contains invalid characters (allowed: a-z, A-Z, 0-9, _, -, .)"
-validate.prop.name_required = "[prop] name is required"
-validate.prop.version_required = "[prop] version is required"
-validate.prop.version_code_should_be_positive = "[prop] versionCode must be a positive integer"
-validate.prop.description_required = "[prop] description is required"
-validate.prop.author_empty_recommended = "[prop] author is empty (recommended to fill)"
-validate.mmrl.repo.license_recommended = "[mmrl.repo] license is recommended"
-validate.mmrl.repo.license_file = "[mmrl.repo] license_file"
-validate.mmrl.repo.readme_file = "[mmrl.repo] readme_file"
-validate.mmrl.repo.changelog_file = "[mmrl.repo] changelog_file"
-validate.no_issues_kam_toml_valid = "No issues found. kam.toml is valid."
-validate.errors.header = "Errors:"
-validate.warnings.header = "Warnings:"
-validate.failed = "Validation failed. Please fix the errors above."
-validate.passed_with_warnings = "Validation passed with warnings."
+[init.interactive.summary]
+author = "Author"
+module_id = "Module ID"
+path = "Path"
+project_name = "Project name"
+template = "Template"
+version = "Version"
 
-# Config command keys
-config.set_success = "Set {} = {} in {}"
-config.unset_success = "Unset {} in {}"
-config.builtin_keys = "Built-in configuration keys:"
-config.example = "Example:"
-config.note_custom_keys = "Note: You can also set custom keys. Use 'kam config list' to see all configured values."
+[packaging]
+files = "Packaging files..."
+generating_module_prop = "Generating module.prop"
+packaging = "Packaging"
+source_directory_not_found = "Source directory not found: {}"
+success_module_built = "✓ Successfully built module: {}"
+success_template_built = "✓ Successfully built template: {}"
+using_existing_module_prop_from_hook = "Using existing module.prop (from pre-build hook)"
 
-# About command keys
-about.author = "Author"
-init.interactive.title = "Interactive Kam Init"
-init.interactive.press_enter = "You may press Enter to accept a default value shown in brackets"
-init.interactive.completed_successfully = "Interactive initialization completed successfully."
-init.interactive.next_steps = "Next steps:"
+[project]
+build_time = "Build Time"
+header = "Project"
+output_directory = "Output Directory"
+output_file = "Output File"
+package_size = "Package Size"
 
-# About command keys
-about.author = "Author"
-about.email = "Email"
-about.developer = "Developer"
-about.description = "Description"
-about.repository = "Repository"
-about.info.command_informational = "This command is informational only; it doesn't modify files or the registry."
-about.info.use_other_commands = "Use other commands (e.g., `kam init`, `kam build`) to perform actions."
-about.thanks = "Thanks for using Kam"
-about.enjoy = "Enjoy your module tooling experience!"
-about.powered = "Powered by the Kam CLI — Happy building!"
-# Export related
-export.module_prop = "Exported module.prop to {}"
-export.module_json = "Exported module.json to {}"
-export.repo_json = "Exported repo.json to {}"
-export.track_json = "Exported track.json to {}"
-export.config_json = "Exported config.json to {}"
-export.update_json = "Exported update.json to {}"
+[secret]
+cert_chain_imported = "Certificate chain '{}' imported successfully"
+encrypted = "(encrypted)"
+exported = "Secret '{}' exported to {}"
+failed_fetch_ca = "Failed to fetch CA: {}"
+failed_read_ca = "Failed to read CA: {}"
+failed_retrieve_public_key = "Failed to retrieve public key for secret '{}': {}"
+fetching_cert_from_github = "Fetching certificate from GitHub issue {}..."
+imported = "Secret '{}' imported"
+no_secrets_stored = "No secrets stored."
+no_trusted_root_cas = "No trusted Root CAs."
+plain = "(plain)"
+public_key_exported = "Public key for secret '{}' exported to {}"
+removed = "Secret '{}' removed"
+root_ca_added = "Root CA '{}' added to trust store"
+root_ca_removed = "Root CA '{}' removed from trust store"
+saved = "Secret '{}' saved"
+stored_secrets = "Stored Secrets"
+trusted_root_cas = "Trusted Root CAs"
+written_to = "Secret '{}' written to {}"
 
-# Sign related
-sign.signed = "Signed '{}' -> {}"
-sign.failed_to_sign = "Signing failed for {}: {}"
-sign.no_src_or_dist = "Either specify 'src' or --dist/--all to sign artifacts"
+[sign]
+failed_to_sign = "Signing failed for {}: {}"
+no_src_or_dist = "Either specify 'src' or --dist/--all to sign artifacts"
+signed = "Signed '{}' -> {}"
+
+[status]
+failed = "✗ Failed: {}"
+success = "✓ Success"
+
+[table.header]
+module = "Module"
+stat = "Statistic"
+status = "Status"
+value = "Value"
+
+[table.stat]
+failed = "Failed"
+succeeded = "Succeeded"
+total = "Total"
+total_duration = "Total Duration"
+
+[validate]
+failed = "Validation failed. Please fix the errors above."
+no_issues_kam_toml_valid = "No issues found. kam.toml is valid."
+passed_with_warnings = "Validation passed with warnings."
+
+[validate.errors]
+header = "Errors:"
+
+[validate.mmrl.repo]
+changelog_file = "[mmrl.repo] changelog_file"
+license_file = "[mmrl.repo] license_file"
+license_recommended = "[mmrl.repo] license is recommended"
+readme_file = "[mmrl.repo] readme_file"
+
+[validate.prop]
+author_empty_recommended = "[prop] author is empty (recommended to fill)"
+description_required = "[prop] description is required"
+id_invalid_characters = "[prop] id contains invalid characters (allowed: a-z, A-Z, 0-9, _, -, .)"
+id_required = "[prop] id is required"
+name_required = "[prop] name is required"
+version_code_should_be_positive = "[prop] versionCode must be a positive integer"
+version_required = "[prop] version is required"
+
+[validate.warnings]
+header = "Warnings:"
+
+[workspace.summary]
+title = "✿ Workspace Build Summary ✿"
+
+# --------------------------------------------------------------------------
+# CLI help / commands (used to localize `kam --help` and subcommand help)
+# --------------------------------------------------------------------------
+[cli]
+about = "Kam — Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repo metadata exports."
+long_about = "Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repository metadata exports. Use `kam help <COMMAND>` for more details about a specific command."
+
+# Global flags (top-level)
+[cli.flags]
+help = "Print help (see a summary with '-h')"
+version = "Print version"
+
+# -------------------------
+# Command: init
+# -------------------------
+[cli.commands.init]
+summary = "Initialize a new Kam project from templates (supports meta and kernel templates)"
+description = "Interactive and non-interactive initialization from templates; supports local archives or built-in templates, with options to prefill common metadata."
+
+[cli.commands.init.flags]
+name = "Project path (optional in interactive mode)"
+id = "Project ID (default: folder basename)"
+project_name = "Project name (default: Example Module Name)"
+version = "Project version (default: 1.0.0)"
+author = "Author name"
+update_json = "Update JSON URL (default: generated from git)"
+description = "Project description"
+force = "Force overwrite existing files"
+interactive = "Run in interactive mode and prompt for required values"
+var = "Template variable in key=value format (can be repeated)"
+template = "Template to use (builtin ID or local path)"
+tmpl = "Create a template project"
+
+# -------------------------
+# Command: build
+# -------------------------
+[cli.commands.build]
+summary = "Build and package a module into a deployable ZIP artifact"
+description = "Builds a module or workspace member and creates artifacts in the output directory."
+
+[cli.commands.build.flags]
+path = "Path to the project (default: current directory)"
+all = "Build all workspace members"
+output = "Output directory (default: dist)"
+bump = "Enable version bump process (KAM_BUMP_ENABLED)"
+release = "Enable release build mode (KAM_RELEASE_ENABLED)"
+sign = "Enable signing after build (KAM_SIGN_ENABLE)"
+interactive = "Run build interactively; confirm potentially destructive actions"
+pre_release = "Enable pre-release mode (KAM_PRE_RELEASE)"
+quiet = "Suppress non-essential output; show warnings and errors only"
+jobs = "Number of parallel jobs (default: number of CPU cores)"
+
+# -------------------------
+# Command: version
+# -------------------------
+[cli.commands.version]
+summary = "Manage module versions and bump policies"
+description = "Manage and query module versions, bump policies, and automated versioning helpers."
+
+# -------------------------
+# Command: cache
+# -------------------------
+[cli.commands.cache]
+summary = "Manage local template and artifact cache"
+description = "List, add, remove, or clean cached templates and show cache directory."
+
+[cli.commands.cache.list]
+summary = "List cached templates"
+[cli.commands.cache.clean]
+summary = "Clean all cached templates"
+[cli.commands.cache.add]
+summary = "Add a template to cache from a local directory or archive"
+[cli.commands.cache.add.flags]
+name = "Name of the template to register"
+path = "Path to the template source (directory or archive)"
+[cli.commands.cache.remove]
+summary = "Remove a template from cache"
+[cli.commands.cache.remove.flags]
+name = "Name of the template to remove"
+[cli.commands.cache.path]
+summary = "Show cache directory path"
+
+# -------------------------
+# Command: tmpl
+# -------------------------
+[cli.commands.tmpl]
+summary = "Manage templates: import, export, package, and list"
+description = "Manage templates including import/export, listing and path queries."
+
+[cli.commands.tmpl.list]
+summary = "List all available templates"
+[cli.commands.tmpl.import]
+summary = "Import template(s) from file"
+[cli.commands.tmpl.import.flags]
+path = "Path to template archive (.tar.gz for single, .zip for multiple)"
+name = "Template name (optional; defaults to filename)"
+force = "Force overwrite if template already exists"
+[cli.commands.tmpl.export]
+summary = "Export template(s) to file"
+[cli.commands.tmpl.export.flags]
+templates = "Template name(s) to export (can specify multiple)"
+output = "Output file path (.tar.gz for single, .zip for multiple)"
+force = "Force overwrite if output exists"
+[cli.commands.tmpl.remove]
+summary = "Remove a template from cache"
+[cli.commands.tmpl.path]
+summary = "Show template cache directory path"
+[cli.commands.tmpl.pull]
+summary = "Download templates from a URL and import them"
+[cli.commands.tmpl.pull.flags]
+url = "Download URL (defaults to GitHub latest release templates ZIP)"
+global = "Flag accepted for consistency but has no effect (uses config)"
+[cli.commands.tmpl.update]
+summary = "Re-download based on recorded URL in config and import"
+[cli.commands.tmpl.update.flags]
+global = "Flag accepted for consistency but has no effect (uses config)"
+
+# -------------------------
+# Command: validate
+# -------------------------
+[cli.commands.validate]
+summary = "Validate `kam.toml` configuration and templates"
+description = "Validate kam.toml, templates, and project structure for errors and warnings."
+
+[cli.commands.validate.flags]
+path = "Path to the project directory (default: current directory)"
+
+# -------------------------
+# Command: completions
+# -------------------------
+[cli.commands.completions]
+summary = "Generate shell completion scripts for common shells"
+description = "Generate completion scripts for supported shells (bash, zsh, fish, powershell, elvish)."
+
+[cli.commands.completions.flags]
+shell = "Shell type for completion (bash,zsh,fish,powershell,elvish)"
+out = "Output file. If omitted, prints to STDOUT."
+
+# -------------------------
+# Command: install
+# -------------------------
+[cli.commands.install]
+summary = "Install a module package to a connected device using the configured root manager"
+description = "Install a built module (.zip) to a connected device using Magisk/KernelSU/APatchSU. Configure the preferred manager with `kam config set root.manager <Manager>`"
+
+[cli.commands.install.flags]
+path = "Path to module package (.zip). If omitted, Kam will try to find an artifact in the project's dist/ output dir"
+manager = "Preferred root manager (Magisk, KernelSU, APatchSU)"
+dry_run = "Print the derived install command instead of executing it"
+quiet = "Suppress non-essential output"
+
+# -------------------------
+# Command: secret
+# -------------------------
+[cli.commands.secret]
+summary = "Secret keyring management (used by sign/verify tasks)"
+description = "Manage stored secrets: add, get, list, remove, export, import and trust CA management."
+
+[cli.commands.secret.list]
+summary = "List saved secrets"
+[cli.commands.secret.add]
+summary = "Add a secret from a value or file"
+[cli.commands.secret.add.flags]
+name = "Name for the secret"
+file = "Path to file to read the secret from"
+file_path = "Positional path to read secret from (alternative to --file)"
+value = "Provide secret value directly"
+force_file = "Store as a local file instead of using the system keyring"
+password = "Pass the password on the CLI (not recommended)"
+with_backup = "Also create a local fallback file under ~/.kam/secrets"
+[cli.commands.secret.get]
+summary = "Get a secret and print it to stdout (or write to file)"
+[cli.commands.secret.get.flags]
+out = "Write to file instead of stdout"
+password = "Pass password on the CLI (not recommended)"
+[cli.commands.secret.remove]
+summary = "Remove a secret"
+[cli.commands.secret.export]
+summary = "Export secret to a file (default: decrypted; use --encrypted to export encrypted blob)"
+[cli.commands.secret.export.flags]
+encrypted = "Export encrypted blob if set"
+[cli.commands.secret.import]
+summary = "Import secret from a file"
+[cli.commands.secret.exportpub]
+summary = "Export public key from a stored private key secret"
+[cli.commands.secret.exportpub.flags]
+name = "Name of the secret (default: main)"
+out = "Output file path (if omitted, prints to stdout)"
+[cli.commands.secret.importcert]
+summary = "Import developer certificate chain from GitHub issue or file"
+[cli.commands.secret.importcert.flags]
+repo = "GitHub repo (owner/repo) containing the certificate (optional)"
+issue = "GitHub issue number containing the certificate (optional)"
+cert_chain = "Path to certificate chain PEM file"
+name = "Name to store certificate under"
+[cli.commands.secret.trust]
+summary = "Manage trusted Root CAs"
+[cli.commands.secret.trust.flags]
+add_root = "Add a Root CA from file or URL"
+ca_name = "Name for the Root CA"
+list = "List trusted Root CAs"
+remove = "Remove Root CA by name"
+
+# -------------------------
+# Command: sign
+# -------------------------
+[cli.commands.sign]
+summary = "Sign an artifact using a key from the keyring or a PEM file"
+
+[cli.commands.sign.flags]
+src = "Artifact to sign (zip). If omitted, use --dist or --all to sign multiple files"
+secret = "Name of the keyring secret holding the private key (default: main)"
+out = "Output directory (default: dist)"
+dist = "Sign all artifacts in given directory (alternative to src)"
+all = "Sign all artifacts inside dist (alias of --dist with default dist)"
+cert = "Certificate PEM chain path to include in signature metadata"
+key_path = "Optional path to private key PEM file to use instead of keyring secret"
+
+# -------------------------
+# Command: verify
+# -------------------------
+[cli.commands.verify]
+summary = "Verify an artifact signature (.sig) or a sigstore bundle (DSSE)"
+description = "Verify digital signatures or sigstore bundles; supports a variety of verification options."
+
+# -------------------------
+# Command: check
+# -------------------------
+[cli.commands.check]
+summary = "Check project JSON/YAML/Markdown files (lint/format/parse)"
+description = "Static checking utilities for files in the project, useful for CI and local development."
+
+[cli.commands.check.flags]
+path = "Path to the project directory (default: current directory)"
+json = "Output results as JSON"
+fix = "Try to automatically fix/format files when possible"
+
+# -------------------------
+# Command: export
+# -------------------------
+[cli.commands.export]
+summary = "Export `kam.toml` to common formats (module.prop, module.json, repo.json, track.json, config.json, update.json)"
+
+[cli.commands.export.flags]
+format = "Export format: prop, json, update, repo, track, config"
+output = "Output file path (default: a format-specific filename in the current directory)"
+
+# -------------------------
+# Command: toml
+# -------------------------
+[cli.commands.toml]
+summary = "Inspect and edit `kam.toml` using dot-path keys (get/set/unset/list)"
+[cli.commands.toml.flags]
+file = "Operate on this file instead of project's kam.toml"
+
+# -------------------------
+# Misc / about / help
+# -------------------------
+[cli.commands.about]
+summary = "Display about information for Kam and credits"
+
+[cli.commands.config]
+summary = "Manage per-project or global kam configuration (similar to git config)"
+
+[cli.commands.help]
+summary = "Print this message or the help of the given subcommand(s)"
+
+# --------------------------------------------------------------------------
+# End CLI localization entries
+# --------------------------------------------------------------------------

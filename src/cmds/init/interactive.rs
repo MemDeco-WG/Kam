@@ -71,7 +71,7 @@ fn prompt_confirm(prompt: &str, default: bool) -> Result<bool, KamError> {
                     "y" | "yes" => return Ok(true),
                     "n" | "no" => return Ok(false),
                     _ => {
-                        println!("Please enter 'y' or 'n'.");
+                        println!("{}", trf!("init.interactive.enter_yes_no"));
                         continue;
                     }
                 }
@@ -88,8 +88,8 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
         choices.sort();
         choices.dedup();
         // 加两个特殊选项：本地路径和在线拉取
-        choices.push("<local path or archive>".to_string());
-        choices.push("<pull default templates>".to_string());
+        choices.push(trf!("init.interactive.choice_local_path"));
+        choices.push(trf!("init.interactive.choice_pull_default_templates"));
 
         // 计算默认选中项，如果默认模板在列表里就选它
         let default_idx = choices
@@ -99,26 +99,26 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
 
         // 先试试交互式选择（用方向键），如果不是TTY就回退到文本输入
         match Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Choose a template to use")
+            .with_prompt(&trf!("init.interactive.choose_template"))
             .items(&choices[..])
             .default(default_idx)
             .interact()
         {
             Ok(idx) => {
                 let sel = &choices[idx];
-                if sel == "<pull default templates>" {
+                if sel == &trf!("init.interactive.choice_pull_default_templates") {
                     // 从配置的URL拉取默认模板
                     pull::run_pull(None, true)?;
                     // 刷新列表再显示一次
                     continue;
                 }
-                if sel == "<local path or archive>" {
+                if sel == &trf!("init.interactive.choice_local_path") {
                     // 让用户输入本地路径
                     let input = Input::<String>::with_theme(&ColorfulTheme::default())
-                    .with_prompt("Enter local template path or archive file (leave empty to download default templates)")
-                    .allow_empty(true)
-                    .interact_text()
-                    .map_err(|e| KamError::Io(e.into()))?;
+                        .with_prompt(&trf!("init.interactive.enter_local_template_path"))
+                        .allow_empty(true)
+                        .interact_text()
+                        .map_err(|e| KamError::Io(e.into()))?;
                     let input_trim = input.trim();
                     if input_trim.is_empty() {
                         // 如果留空，就下载默认模板然后重新显示菜单
@@ -161,7 +161,7 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                 Utils::info(&trf!("init.interactive.non_interactive_fallback"));
                 loop {
                     let pick = prompt_input(
-                        "Select a template by name or number (or provide a local path)",
+                        &trf!("init.interactive.select_by_name_or_number"),
                         Some(default_template),
                     )?;
                     if pick.trim().is_empty() {
@@ -171,8 +171,10 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                     }
                     if let Ok(num) = pick.parse::<usize>() {
                         if num == 0 {
-                            let p =
-                                prompt_input("Enter path to local template (file or dir)", None)?;
+                            let p = prompt_input(
+                                &trf!("init.interactive.enter_path_to_local_template"),
+                                None,
+                            )?;
                             if !p.trim().is_empty() {
                                 return Ok(p);
                             }
@@ -180,7 +182,7 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                             return Ok(choices[num - 1].clone());
                         } else {
                             use crate::utils::Utils;
-                            Utils::warn(&format!("Invalid selection: {}", num));
+                            Utils::warn(&trf!("init.interactive.invalid_selection", num));
                             continue;
                         }
                     } else {
@@ -372,20 +374,32 @@ fn prompt_template_variables(
                 Utils::info(&trf!("init.interactive.variable", var_name));
             }
             if let Some(help) = &var_def.help {
-                println!("  {} Help: {}", "→".blue().dimmed(), help.dimmed());
+                println!(
+                    "  {} {}",
+                    "→".blue().dimmed(),
+                    trf!("init.interactive.help", help).dimmed()
+                );
             }
             if let Some(example) = &var_def.example {
-                println!("  {} Example: {}", "→".blue().dimmed(), example.dimmed());
+                println!(
+                    "  {} {}",
+                    "→".blue().dimmed(),
+                    trf!("init.interactive.example", example).dimmed()
+                );
             }
             if !default.is_empty() {
-                println!("  {} Default: {}", "→".blue().dimmed(), default.dimmed());
+                println!(
+                    "  {} {}",
+                    "→".blue().dimmed(),
+                    trf!("init.interactive.default", default).dimmed()
+                );
             }
 
             // 如果变量提供了choices，优先用可视化的Select，也允许自定义值
             if let Some(choices) = &var_def.choices {
                 // 提供现有选项加上"<Custom value>"选项，允许自由输入
                 let mut opts = choices.clone();
-                opts.push("<Custom value>".to_string());
+                opts.push(trf!("init.interactive.custom_value_choice"));
 
                 // 默认索引：优先匹配默认值，没有就用0
                 let default_idx = choices.iter().position(|c| c == &default).unwrap_or(0);
@@ -393,7 +407,7 @@ fn prompt_template_variables(
                 // 尝试用dialoguer Select（方向键导航），失败就回退到文本输入
                 // 虽然可能有点慢，但至少用户体验好一点
                 match Select::with_theme(&ColorfulTheme::default())
-                    .with_prompt(format!("Select a value for '{}'", var_name))
+                    .with_prompt(&trf!("init.interactive.select_value_for", var_name))
                     .items(&opts)
                     .default(default_idx)
                     .interact()
@@ -405,14 +419,17 @@ fn prompt_template_variables(
                         } else {
                             // User chose the '<Custom value>' option -> ask for free-form input
                             let custom = Input::<String>::with_theme(&ColorfulTheme::default())
-                                .with_prompt(format!("Enter custom value for {}", var_name))
+                                .with_prompt(&trf!(
+                                    "init.interactive.enter_custom_value_for",
+                                    var_name
+                                ))
                                 .allow_empty(!var_def.required)
                                 .default(default.clone())
                                 .interact_text()
                                 .map_err(|e| KamError::Io(e.into()))?;
                             if custom.is_empty() && var_def.required {
-                                return Err(KamError::InvalidConfig(format!(
-                                    "Value required for {}",
+                                return Err(KamError::InvalidConfig(trf!(
+                                    "init.interactive.value_required",
                                     var_name
                                 )));
                             }
@@ -423,12 +440,12 @@ fn prompt_template_variables(
                         // dialoguer failed (likely non-interactive): fallback to text-based flow
                         loop {
                             let response = prompt_input(
-                                &format!("Enter value for {} (index or value)", var_name),
+                                &trf!("init.interactive.enter_value_for_index_or_value", var_name),
                                 Some(&default),
                             )?;
                             if response.is_empty() && var_def.required {
                                 use crate::utils::Utils;
-                                Utils::warn(&format!("Value is required for {}", var_name));
+                                Utils::warn(&trf!("init.interactive.value_required", var_name));
                                 continue;
                             }
                             // numeric index allowed (1-based)
@@ -438,13 +455,13 @@ fn prompt_template_variables(
                                     break;
                                 } else {
                                     use crate::utils::Utils;
-                                    Utils::warn("Invalid selection index");
+                                    Utils::warn(&trf!("init.interactive.invalid_selection_index"));
                                     continue;
                                 }
                             }
                             if !choices.contains(&response) {
                                 if prompt_confirm(
-                                    "Value is not one of the choices. Use raw value anyway?",
+                                    &trf!("init.interactive.value_is_not_choice_prompt"),
                                     false,
                                 )? {
                                     existing.insert(var_name.clone(), response.clone());
@@ -479,15 +496,16 @@ fn prompt_template_variables(
                             // Fallback to text prompt for bool
                             loop {
                                 let resp = prompt_input(
-                                    &format!(
-                                        "Enter true/false for {} (default: {})",
-                                        var_name, default_bool
+                                    &trf!(
+                                        "init.interactive.enter_true_false_for",
+                                        var_name,
+                                        if default_bool { "true" } else { "false" }
                                     ),
                                     Some(if default_bool { "true" } else { "false" }),
                                 )?;
                                 if resp.is_empty() && var_def.required {
                                     use crate::utils::Utils;
-                                    Utils::warn(&format!("Value is required for {}", var_name));
+                                    Utils::warn(&trf!("init.interactive.value_required", var_name));
                                     continue;
                                 }
                                 let v = resp.to_lowercase();
@@ -499,7 +517,7 @@ fn prompt_template_variables(
                                     break;
                                 } else {
                                     use crate::utils::Utils;
-                                    Utils::warn("Please enter 'true' or 'false'");
+                                    Utils::warn(&trf!("init.interactive.enter_true_or_false"));
                                     continue;
                                 }
                             }
@@ -509,19 +527,19 @@ fn prompt_template_variables(
                     // String input via dialoguer Input, fallback to prompt_input
                     loop {
                         let resp = Input::<String>::with_theme(&ColorfulTheme::default())
-                            .with_prompt(format!("Enter value for {}", var_name))
+                            .with_prompt(&trf!("init.interactive.enter_value_for", var_name))
                             .allow_empty(true)
                             .default(default.clone())
                             .interact_text();
                         let response = match resp {
                             Ok(s) => s,
                             Err(_) => prompt_input(
-                                &format!("Enter value for {}", var_name),
+                                &trf!("init.interactive.enter_value_for", var_name),
                                 Some(&default),
                             )?,
                         };
                         if response.is_empty() && var_def.required {
-                            println!("Value is required for {}", var_name);
+                            Utils::warn(&trf!("init.interactive.value_required", var_name));
                             continue;
                         }
                         existing.insert(var_name.clone(), response.clone());
@@ -607,17 +625,14 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
         })
         .collect();
     // Add control items at the end
-    display_items.push("-- Continue --".to_string());
-    display_items.push("-- Exit preview --".to_string());
+    display_items.push(trf!("init.interactive.preview_continue"));
+    display_items.push(trf!("init.interactive.preview_exit"));
 
     // Interactive selection loop
     loop {
         // Interactive select (arrow keys). If it fails (non TTY / CI), fallback to text listing.
         match Select::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!(
-                "Template preview ({} entries): (Enter to preview; select '-- Continue --' to proceed)",
-                entries.len()
-            ))
+            .with_prompt(&trf!("init.interactive.template_preview", entries.len()))
             .items(&display_items)
             .default(0)
             .interact()
@@ -640,7 +655,14 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
                     let full_path = template_dir.join(rel_path);
                     if !is_file {
                         // Directory selected: list immediate children as a small preview
-                        println!("\n--- Directory: {} ---", rel_path.display().to_string().cyan());
+                        println!(
+                            "\n{}",
+                            trf!(
+                                "init.interactive.directory_preview_header",
+                                rel_path.display()
+                            )
+                            .cyan()
+                        );
                         if let Ok(children) = fs::read_dir(&full_path) {
                             let mut cvec: Vec<_> = children.filter_map(|e| e.ok()).collect();
                             cvec.sort_by_key(|d| d.path());
@@ -655,15 +677,18 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
                                     }
                                 }
                             }
-                            println!("--- End of directory preview ---\n");
+                            println!("{}\n", trf!("init.interactive.end_of_directory_preview"));
                         } else {
-                            println!("  (unable to read directory contents)\n");
+                            println!("{}\n", trf!("init.interactive.preview_failed_read_dir"));
                         }
                         // Continue loop for further selection
                         continue;
                     } else {
                         // File selected -> display a small content preview (first N lines)
-                        println!("\n--- Preview: {} ---", rel_path.display());
+                        println!(
+                            "\n{}",
+                            trf!("init.interactive.preview_header", rel_path.display())
+                        );
                         match fs::read_to_string(&full_path) {
                             Ok(content) => {
                                 let mut count = 0usize;
@@ -671,27 +696,37 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
                                     println!("{}", line);
                                     count += 1;
                                     if count >= 50 {
-                                        println!("[... preview truncated after 50 lines ...]");
+                                        println!(
+                                            "{}",
+                                            trf!("init.interactive.preview_file_truncated")
+                                        );
                                         break;
                                     }
                                 }
                                 if count == 0 {
-                                    println!("(file is empty)");
+                                    println!("{}", trf!("init.interactive.preview_file_empty"));
                                 }
                             }
                             Err(_) => {
-                                println!("(failed to read file for preview)");
+                                println!("{}", trf!("init.interactive.preview_failed_read_file"));
                             }
                         }
-                        println!("--- End of preview: {} ---\n", rel_path.display());
+                        println!(
+                            "{}\n",
+                            trf!("init.interactive.preview_end", rel_path.display())
+                        );
 
                         // Ask whether to preview another file (interactive)
                         let cont = match Confirm::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Preview another file?")
+                            .with_prompt(&trf!("init.interactive.preview_another_file"))
                             .default(true)
-                            .interact() {
+                            .interact()
+                        {
                             Ok(v) => v,
-                            Err(_) => prompt_confirm("Preview another file?", false)?,
+                            Err(_) => prompt_confirm(
+                                &trf!("init.interactive.preview_another_file"),
+                                false,
+                            )?,
                         };
                         if cont {
                             continue;
@@ -707,14 +742,20 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
             Err(_) => {
                 // Non-interactive: fallback to simple listing (no arrows)
                 use crate::utils::Utils;
-            println!();
-            Utils::section(&format!("Template Contents (showing up to {} files)", limit));
+                println!();
+                Utils::section(&trf!(
+                    "init.interactive.template_contents_showing_up_to_files",
+                    limit
+                ));
                 for (i, (_, rel, is_file)) in entries.iter().enumerate().take(limit) {
                     let suffix = if *is_file { "" } else { "/" };
                     println!("  {}) {}{}", i + 1, rel.display(), suffix);
                 }
                 if entries.len() > limit {
-                    println!("  ... and {} more files", entries.len() - limit);
+                    println!(
+                        "{}",
+                        trf!("init.interactive.and_more_files", entries.len() - limit)
+                    );
                 }
                 println!();
                 return Ok(());
@@ -826,7 +867,10 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
 
     // Path selection: allow changing target path
     let cur_path_str = data.path.to_string_lossy().to_string();
-    let new_path_str = prompt_input("Path to create project", Some(&cur_path_str))?;
+    let new_path_str = prompt_input(
+        &trf!("init.interactive.path_to_create_project"),
+        Some(&cur_path_str),
+    )?;
     if new_path_str != cur_path_str {
         // Normalize to an absolute path, respecting '.' and relative paths
         let final_path = if new_path_str.trim().is_empty() || new_path_str == "." {
@@ -858,10 +902,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
                     data.id = candidate;
                 } else {
                     use crate::utils::Utils;
-                    Utils::warn(&format!(
-                        "Inferred module id '{}' from path contains invalid characters.",
-                        candidate
-                    ));
+                    Utils::warn(&trf!("init.interactive.inferred_id_invalid", candidate));
 
                     // Suggest a sanitized version (replace spaces with underscore)
                     let suggested = candidate.replace(' ', "_");
@@ -870,21 +911,24 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
                         .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
                     {
                         if prompt_confirm(
-                            &format!("Use sanitized module id '{}'?", suggested),
+                            &trf!("init.interactive.use_sanitized_module_id", suggested),
                             true,
                         )? {
                             data.id = suggested;
                         } else {
                             // Ask the user to input a valid ID
-                            let id_input = prompt_input("Module ID", Some(&data.id))?;
+                            let id_input = prompt_input(
+                                &trf!("init.interactive.module_id_prompt"),
+                                Some(&data.id),
+                            )?;
                             data.id = id_input;
                             if !data
                                 .id
                                 .chars()
                                 .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
                             {
-                                return Err(KamError::InvalidConfig(format!(
-                                    "Invalid module ID '{}': ID must contain only alphanumeric characters, dots, dashes, and underscores",
+                                return Err(KamError::InvalidConfig(trf!(
+                                    "init.interactive.invalid_module_id",
                                     data.id
                                 )));
                             }
@@ -917,15 +961,17 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .unwrap_or(&data.id)
         .to_string();
     if path_basename != data.id {
-        Utils::warn(&format!(
-            "Module id '{}' does not match folder basename '{}'.",
-            data.id, path_basename
+        Utils::warn(&trf!(
+            "init.interactive.module_id_mismatch",
+            data.id,
+            path_basename
         ));
-        if prompt_confirm("Set module id to folder basename?", true)? {
+        if prompt_confirm(&trf!("init.interactive.set_module_id_to_basename"), true)? {
             data.id = path_basename.clone();
         } else {
             // Let user input a custom id
-            let id_input = prompt_input("Module ID", Some(&data.id))?;
+            let id_input =
+                prompt_input(&trf!("init.interactive.module_id_prompt"), Some(&data.id))?;
             data.id = id_input;
             // re-validate
             if !data
@@ -933,8 +979,8 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
                 .chars()
                 .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
             {
-                return Err(KamError::InvalidConfig(format!(
-                    "Invalid module ID '{}': ID must contain only alphanumeric characters, dots, dashes, and underscores",
+                return Err(KamError::InvalidConfig(trf!(
+                    "init.interactive.invalid_module_id",
                     data.id
                 )));
             }
@@ -942,28 +988,28 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     }
 
     // Base params (name, version, author, description)
-    data.name = prompt_input("Project name", Some(&data.name))?;
-    data.version = prompt_input("Version", Some(&data.version))?;
-    data.author = prompt_input("Author", Some(&data.author))?;
-    data.description = prompt_input("Description", Some(&data.description))?;
+    data.name = prompt_input(&trf!("init.interactive.project_name"), Some(&data.name))?;
+    data.version = prompt_input(&trf!("init.interactive.version"), Some(&data.version))?;
+    data.author = prompt_input(&trf!("init.interactive.author"), Some(&data.author))?;
+    data.description = prompt_input(
+        &trf!("init.interactive.description"),
+        Some(&data.description),
+    )?;
 
     // Ask to persist defaults to global config (~/.kam/config.toml)
-    if prompt_confirm(
-        "Save these base values to global config (~/.kam/config.toml)?",
-        false,
-    )? {
+    if prompt_confirm(&trf!("init.interactive.save_base_values"), false)? {
         save_global_config(Some(&data.author), Some(&data.name), Some(&data.version))?;
-        Utils::success("Saved base configuration to ~/.kam/config.toml");
+        Utils::success(&trf!("init.interactive.saved_base_values"));
     }
 
     // Template variables: find template kam.toml then prompt for variables
     let (kt_path, maybe_tmp) = resolve_template_kam_toml(&data.impl_template)?;
     // `maybe_tmp` kept here to keep tempdir alive while we inspect its files
     if let Some(tmp) = &maybe_tmp {
-        println!(
-            "Loaded template from temporary extraction at: {}",
+        Utils::info(&trf!(
+            "init.interactive.loaded_template_from_temp",
             tmp.path().display()
-        );
+        ));
     }
 
     // Ensure data.template_vars contains default fallbacks from pre_init
@@ -982,10 +1028,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .map(|o| o.status.success())
         .unwrap_or(false);
     if !gh_present {
-        if prompt_confirm(
-            "GitHub CLI (gh) not found. Would you like to view instructions to install it?",
-            true,
-        )? {
+        if prompt_confirm(&trf!("init.interactive.gh_not_found"), true)? {
             use crate::utils::Utils;
             Utils::info(&trf!("init.interactive.recommend_github_cli"));
             Utils::info(&trf!("init.interactive.helper_script"));
@@ -999,36 +1042,38 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .map(|o| o.status.success())
         .unwrap_or(false);
     if !cz_present {
-        if prompt_confirm(
-            "Commitizen (cz) not found. Would you like to view instructions to install it?",
-            false,
-        )? {
+        if prompt_confirm(&trf!("init.interactive.cz_not_found"), false)? {
             use crate::utils::Utils;
-            Utils::info(&trf!(
-                "Recommended: python -m pip install --user commitizen  (or npm/yarn global install)"
-            ));
+            Utils::info(&trf!("init.interactive.recommend_cz_install"));
             Utils::info(&trf!("init.interactive.helper_script"));
         }
     }
 
     // Present a summary and confirm before creating files
     println!();
-    Utils::section("Summary");
-    Utils::kv("Path", &data.path.display().to_string());
-    Utils::kv("Module ID", &data.id);
-    Utils::kv("Project name", &data.name);
-    Utils::kv("Version", &data.version);
-    Utils::kv("Author", &data.author);
-    Utils::kv("Template", &data.impl_template);
+    Utils::section("init.interactive.summary_title");
+    Utils::kv(
+        "init.interactive.summary.path",
+        &data.path.display().to_string(),
+    );
+    Utils::kv("init.interactive.summary.module_id", &data.id);
+    Utils::kv("init.interactive.summary.project_name", &data.name);
+    Utils::kv("init.interactive.summary.version", &data.version);
+    Utils::kv("init.interactive.summary.author", &data.author);
+    Utils::kv("init.interactive.summary.template", &data.impl_template);
     if !data.template_vars.is_empty() {
-        println!("  {} Template variables:", "•".cyan());
+        println!(
+            "  {} {}",
+            "•".cyan(),
+            crate::i18n::tr_key("init.interactive.template_variables").bold()
+        );
         for (k, v) in &data.template_vars {
             println!("    {} {} = {}", "→".blue().dimmed(), k.bold(), v.dimmed());
         }
     }
 
-    if !prompt_confirm("Proceed and create project with these settings?", true)? {
-        Utils::warn("Aborted.");
+    if !prompt_confirm(&trf!("init.interactive.confirm_proceed_create"), true)? {
+        Utils::warn(&trf!("init.interactive.aborted"));
         return Err(KamError::CommandFailed(
             "User aborted interactive init".to_string(),
         ));

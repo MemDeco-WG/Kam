@@ -263,6 +263,11 @@ const BUILTIN_KEYS: &[BuiltinConfigKey] = &[
         description_key: "Default version for new projects (saved during init)",
         example: "1.0.0",
     },
+    BuiltinConfigKey {
+        key: "root.manager",
+        description_key: "Preferred root manager for device installs (Magisk|KernelSU|APatchSU)",
+        example: "Magisk",
+    },
 ];
 
 fn show_builtin_keys() {

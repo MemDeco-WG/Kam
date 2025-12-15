@@ -18,21 +18,20 @@
 
 #[macro_export]
 macro_rules! trf {
-    ($key:expr) => {
-        crate::i18n::tr_key($key).to_string()
-    };
-    ($key:expr, $($args:expr),+ $(,)?) => {
-        {
-            // Build a slice of &dyn Display that can be passed to the runtime formatter.
-            // We can't call `format!(template, ..)` because `format!` requires a
-            // compile-time string literal for the format, so we delegate to a
-            // runtime function `crate::i18n::tr_fmt` which handles formatting.
-            let args_slice: &[&dyn std::fmt::Display] = &[
-                $( &($args) as &dyn std::fmt::Display ),+
-            ];
-            crate::i18n::tr_fmt($key, args_slice)
-        }
-    };
+    ($key:expr $(, $args:expr )* $(,)?) => {{
+        // Avoid holding references to temporaries by collecting owned Strings first.
+        // This prevents `E0716: temporary value dropped while borrowed` when
+        // callers pass temporary values like `path.display()` or format! results.
+        let mut __trf_store: Vec<String> = Vec::new();
+        $(
+            __trf_store.push(format!("{}", $args));
+        )*
+        // Build a vector of references to the owned strings. These references
+        // live for the duration of this block and are safe to pass to `tr_fmt`.
+        let __trf_refs: Vec<&dyn std::fmt::Display> =
+            __trf_store.iter().map(|s| s as &dyn std::fmt::Display).collect();
+        crate::i18n::tr_fmt($key, &__trf_refs)
+    }};
 }
 
 pub mod assets;

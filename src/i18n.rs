@@ -303,28 +303,61 @@ fn parse_toml_string_to_map(inp: &str) -> HashMap<String, String> {
 }
 
 fn try_load_runtime_i18n() {
-    // Attempt to override compile-time translations by reading runtime i18n tOML files.
+    // Attempt to override compile-time translations by reading runtime i18n TOML files.
     // 1. Prefer directory pointed to by KAM_I18N_DIR
     // 2. Fallback to ./i18n folder within the current working dir
+    //
+    // Additional feature:
+    // - Support granular area files under `cli/` (e.g., `cli/en.toml` and `cli/zh.toml`)
+    //   and merge their keys into the main runtime map. This lets packaging or deploy
+    //   overrides target only CLI-specific translations without requiring a full locale dump.
+    //
     // Only attempts to set a map once. Failures (I/O / parse) are ignored silently to keep init robust.
     if let Ok(dir_str) = std::env::var("KAM_I18N_DIR") {
         let dir = std::path::PathBuf::from(dir_str);
         if dir.is_dir() {
-            let en_path = dir.join("en.toml");
-            if en_path.exists() {
-                if let Ok(s) = std::fs::read_to_string(&en_path) {
-                    let map = parse_toml_string_to_map(&s);
-                    // Ignoring set result; it may already be initialized.
-                    let _ = KEYED_EN.set(map);
+            // Build a combined EN map from en.toml + cli/en.toml (cli overlay overrides)
+            {
+                let mut combined_en: std::collections::HashMap<String, String> =
+                    std::collections::HashMap::new();
+                let en_path = dir.join("en.toml");
+                if en_path.exists() {
+                    if let Ok(s) = std::fs::read_to_string(&en_path) {
+                        combined_en.extend(parse_toml_string_to_map(&s));
+                    }
+                }
+                let en_cli_path = dir.join("cli").join("en.toml");
+                if en_cli_path.exists() {
+                    if let Ok(s) = std::fs::read_to_string(&en_cli_path) {
+                        combined_en.extend(parse_toml_string_to_map(&s));
+                    }
+                }
+                if !combined_en.is_empty() {
+                    let _ = KEYED_EN.set(combined_en);
                 }
             }
-            let zh_path = dir.join("zh.toml");
-            if zh_path.exists() {
-                if let Ok(s) = std::fs::read_to_string(&zh_path) {
-                    let map = parse_toml_string_to_map(&s);
-                    let _ = KEYED_ZH.set(map);
+
+            // Build a combined ZH map from zh.toml + cli/zh.toml (cli overlay overrides)
+            {
+                let mut combined_zh: std::collections::HashMap<String, String> =
+                    std::collections::HashMap::new();
+                let zh_path = dir.join("zh.toml");
+                if zh_path.exists() {
+                    if let Ok(s) = std::fs::read_to_string(&zh_path) {
+                        combined_zh.extend(parse_toml_string_to_map(&s));
+                    }
+                }
+                let zh_cli_path = dir.join("cli").join("zh.toml");
+                if zh_cli_path.exists() {
+                    if let Ok(s) = std::fs::read_to_string(&zh_cli_path) {
+                        combined_zh.extend(parse_toml_string_to_map(&s));
+                    }
+                }
+                if !combined_zh.is_empty() {
+                    let _ = KEYED_ZH.set(combined_zh);
                 }
             }
+
             // If KAM_I18N_DIR was used, do not attempt other fallback paths.
             return;
         }
@@ -334,18 +367,45 @@ fn try_load_runtime_i18n() {
     if let Ok(cwd) = std::env::current_dir() {
         let dir = cwd.join("i18n");
         if dir.is_dir() {
-            let en_path = dir.join("en.toml");
-            if en_path.exists() {
-                if let Ok(s) = std::fs::read_to_string(&en_path) {
-                    let map = parse_toml_string_to_map(&s);
-                    let _ = KEYED_EN.set(map);
+            // EN: merge en.toml and cli/en.toml (cli overlay)
+            {
+                let mut combined_en: std::collections::HashMap<String, String> =
+                    std::collections::HashMap::new();
+                let en_path = dir.join("en.toml");
+                if en_path.exists() {
+                    if let Ok(s) = std::fs::read_to_string(&en_path) {
+                        combined_en.extend(parse_toml_string_to_map(&s));
+                    }
+                }
+                let en_cli_path = dir.join("cli").join("en.toml");
+                if en_cli_path.exists() {
+                    if let Ok(s) = std::fs::read_to_string(&en_cli_path) {
+                        combined_en.extend(parse_toml_string_to_map(&s));
+                    }
+                }
+                if !combined_en.is_empty() {
+                    let _ = KEYED_EN.set(combined_en);
                 }
             }
-            let zh_path = dir.join("zh.toml");
-            if zh_path.exists() {
-                if let Ok(s) = std::fs::read_to_string(&zh_path) {
-                    let map = parse_toml_string_to_map(&s);
-                    let _ = KEYED_ZH.set(map);
+
+            // ZH: merge zh.toml and cli/zh.toml (cli overlay)
+            {
+                let mut combined_zh: std::collections::HashMap<String, String> =
+                    std::collections::HashMap::new();
+                let zh_path = dir.join("zh.toml");
+                if zh_path.exists() {
+                    if let Ok(s) = std::fs::read_to_string(&zh_path) {
+                        combined_zh.extend(parse_toml_string_to_map(&s));
+                    }
+                }
+                let zh_cli_path = dir.join("cli").join("zh.toml");
+                if zh_cli_path.exists() {
+                    if let Ok(s) = std::fs::read_to_string(&zh_cli_path) {
+                        combined_zh.extend(parse_toml_string_to_map(&s));
+                    }
+                }
+                if !combined_zh.is_empty() {
+                    let _ = KEYED_ZH.set(combined_zh);
                 }
             }
         }

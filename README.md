@@ -9,6 +9,41 @@ English | [中文](README.zh-CN.md)
 
 ## 📖 Overview
 
+## 🔤 i18n Tooling
+
+Kam includes a lightweight i18n workflow to keep CLI and WebUI translations consistent and easy to maintain.
+
+Key files and scripts:
+- `src/i18n/en.toml` and `src/i18n/zh.toml`: the canonical CLI translations (compiled into the binary).
+- `Kam/scripts/export_cli_i18n.py`: export the `cli` subtree from the TOML files into
+  `Kam/KamWEBUI/src/data/cli/en.json` and `Kam/KamWEBUI/src/data/cli/zh.json`.
+  Usage: `python3 Kam/scripts/export_cli_i18n.py`.
+- `Kam/scripts/generate_cli_i18n_skeleton.py`: scan `src/cmds/**/args.rs` to detect missing i18n keys
+  (and optionally emit skeleton TOML for translators).
+  Usage examples:
+    - Print missing keys: `python3 Kam/scripts/generate_cli_i18n_skeleton.py`
+    - Write skeletons for review: `python3 Kam/scripts/generate_cli_i18n_skeleton.py --write`
+
+CI checks:
+- `.github/workflows/i18n-check.yml` runs the exporter and verifies localized `--help` outputs
+  (e.g., `kam build --help`, `kam tmpl import --help`) under `KAM_UI_LANGUAGE=zh`/`en` to ensure
+  that help text is translated and to catch regressions early.
+- The same workflow also verifies the exported JSON files are committed to the repository,
+  preventing drift between CLI TOML and WebUI data.
+
+Workflow goals:
+- Share CLI `cli.*` translations with the WebUI so there's a single source of truth.
+- Provide a maintenance script to discover missing translation keys and generate skeletons.
+- Use CI to detect accidental regressions in CLI help localization.
+
+If you want to update WebUI translations locally, run:
+```bash
+python3 Kam/scripts/export_cli_i18n.py
+# then commit the resulting files under Kam/KamWEBUI/src/data/cli/
+```
+
+Contributions to extend translations and improve coverage are welcome. Use the skeleton script to discover gaps, add keys to `src/i18n/en.toml` (and provide translations in `src/i18n/zh.toml`), then run the exporter and commit results.
+
 Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android module packages and templates (ksu/APU/Magisk/AnyTemplate). It focuses on rapid project initialization, reproducible builds, template management, and convenient repository/metadata export for module maintainers and distribution channels.
 
 ### ✨ Key Features

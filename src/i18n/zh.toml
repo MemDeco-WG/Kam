@@ -1,149 +1,507 @@
-# Chinese translation file for Kam CLI
-# Keys are dotted to represent namespaces and nested tables.
-# 保留 {} 作为简单格式化占位符
+[about]
+author = "作者"
+description = "描述"
+developer = "开发者"
+email = "邮箱"
+enjoy = "祝您使用愉快！"
+powered = "由 Kam CLI 提供支持 — 祝构建顺利！"
+repository = "仓库"
+thanks = "感谢使用 Kam"
 
-# Workspace summary / table headers
-workspace.summary.title = "✿ 工作区构建摘要 ✿"
-table.header.module = "模块"
-table.header.status = "状态"
-table.header.stat = "统计项"
-table.header.value = "值"
-common.file_fixed = "{}（已修复）"
+[about.info]
+command_informational = "此命令仅供参考，不会修改文件或注册表。"
+use_other_commands = "请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。"
 
-# Status strings
-status.success = "✓ 成功"
-status.failed = "✗ 失败: {}"
+[build]
+building_module_version = "构建模块：{} v{}"
+building_workspace_member = "构建工作区成员：{}"
+complete = "构建完成"
+concurrent_building_members = "正在并行构建 {} 个成员（使用 {} 个作业）"
+failed_to_build = "构建 {} 失败: {}"
+failed_workspace_members = "{} 个工作区成员构建失败"
+invalid_glob_pattern = "无效的 glob 模式 '{}': {}"
+packaging_artifacts = "正在打包制品..."
+skipping_failed_load_kam_toml = "跳过 {}：无法加载 kam.toml: {}"
+skipping_no_kam_toml = "跳过 {}：未找到 kam.toml"
+workspace_member_not_found = "工作区成员 {} 未找到"
 
-# Table stats
-table.stat.total = "总计"
-table.stat.succeeded = "成功"
-table.stat.failed = "失败"
-table.stat.total_duration = "总耗时"
+[cache]
+cleaned_successfully = "缓存已成功清理"
+directory_empty_or_not_exists = "缓存目录已为空或不存在。"
+local_cached_templates = "本地缓存模板"
+no_templates = "本地缓存中未找到模板。"
+template_added = "模板 '{}' 已从 {} 添加到缓存"
+template_removed = "模板 '{}' 已从缓存中删除"
 
-# Build and packaging
-build.packaging_artifacts = "正在打包制品..."
-build.complete = "构建完成"
-build.building_module_version = "构建模块：{} v{}"
-build.concurrent_building_members = "正在并行构建 {} 个成员（使用 {} 个作业）"
-build.invalid_glob_pattern = "无效的 glob 模式 '{}': {}"
-build.workspace_member_not_found = "工作区成员 {} 未找到"
-build.skipping_no_kam_toml = "跳过 {}：未找到 kam.toml"
-build.building_workspace_member = "构建工作区成员：{}"
-build.failed_to_build = "构建 {} 失败: {}"
-build.skipping_failed_load_kam_toml = "跳过 {}：无法加载 kam.toml: {}"
-build.failed_workspace_members = "{} 个工作区成员构建失败"
-packaging.source_directory_not_found = "源目录未找到: {}"
+[check]
+no_issues_found = "未发现问题。"
+some_issues_found = "发现问题。"
 
-# Hooks
-hooks.running_pre = "正在运行预构建钩子"
-hooks.running_post = "正在运行后构建钩子"
-hooks.skipping_template_packaging = "跳过用于模板打包的构建钩子"
-hooks.skipping_hooks_for_template_packaging = "跳过 {} 钩子（模板打包）"
-hooks.invalid_env_variable_name = "警告：无效的环境变量名 '{}'（第 {} 行，路径：{}）"
-hooks.malformed_env_line = "警告：第 {} 行在文件 {} 中格式错误：{}"
+# CLI 本地化（用于 `kam --help` 以及子命令帮助文本）
+[cli]
+about = "Kam — Kam 是一个用于脚手架、构建、打包与分发 Android 模块与模板（ksu/APU/Magisk/AnyTemplate）的命令行工具。支持项目初始化、打包、模板管理与仓库元数据导出。"
+long_about = "Kam 提供从模板初始化项目、构建与打包模块、管理模板与缓存、导出项目元数据等功能。使用 `kam help <COMMAND>` 查看子命令的详细帮助信息。"
 
-# Packaging / module files
-packaging.files = "正在打包文件..."
-packaging.generating_module_prop = "正在生成 module.prop"
-packaging.using_existing_module_prop_from_hook = "使用已有的 module.prop（来自 pre-build 钩子）"
-packaging.packaging = "打包"
-packaging.success_module_built = "✓ 成功构建模块: {}"
-packaging.success_template_built = "✓ 成功构建模板: {}"
-project.output_directory = "输出目录"
-project.header = "项目"
-project.build_time = "构建时间"
-project.package_size = "包大小"
-project.output_file = "输出文件"
-packaging.packaging_of = "打包中"
+# 全局选项（顶层）
+[cli.flags]
+help = "打印帮助（参考 '-h'）"
+version = "打印版本"
 
-# Cache / templates
-cache.no_templates = "本地缓存中未找到模板。"
-cache.local_cached_templates = "本地缓存模板"
-cache.cleaned_successfully = "缓存已成功清理"
-cache.directory_empty_or_not_exists = "缓存目录已为空或不存在。"
-cache.template_added = "模板 '{}' 已从 {} 添加到缓存"
-cache.template_removed = "模板 '{}' 已从缓存中删除"
+# -------------------------
+# init
+# -------------------------
+[cli.commands.init]
+summary = "从模板初始化一个新的 Kam 项目（支持 meta 与 kernel 模板）"
+description = "以交互或非交互方式从本地或内置模板创建新项目，并可预填常见元数据。"
 
-# Secret command keys
-secret.stored_secrets = "存储的 Secrets"
-secret.trusted_root_cas = "受信任的根 CA"
-secret.no_trusted_root_cas = "未找到受信任的根 CA。"
-secret.no_secrets_stored = "未存储任何机密。"
-secret.saved = "密钥 '{}' 已保存"
-secret.written_to = "密钥 '{}' 已写入到 {}"
-secret.removed = "密钥 '{}' 已移除"
-secret.exported = "密钥 '{}' 已导出到 {}"
-secret.imported = "密钥 '{}' 已导入"
-secret.public_key_exported = "密钥 '{}' 的公钥已导出到 {}"
-secret.cert_chain_imported = "证书链 '{}' 已成功导入"
-secret.encrypted = "（已加密）"
-secret.plain = "（未加密）"
-secret.failed_retrieve_public_key = "检索密钥 '{}' 的公钥失败: {}"
-secret.fetching_cert_from_github = "正在从 GitHub issue {} 获取证书..."
-secret.failed_fetch_ca = "获取 CA 失败: {}"
-secret.failed_read_ca = "读取 CA 失败: {}"
-secret.root_ca_added = "根证书 '{}' 已添加到信任存储"
-secret.root_ca_removed = "根证书 '{}' 已从信任存储移除"
+[cli.commands.init.flags]
+name = "项目路径（在交互模式下可留空以交互填写）"
+id = "模块 ID（默认为目录名）"
+project_name = "项目名称（默认示例：Example Module Name）"
+version = "项目版本（默认：1.0.0）"
+author = "作者姓名"
+update_json = "Update JSON 的 URL（默认：从 git 自动生成）"
+description = "项目描述"
+force = "强制覆盖已存在的文件"
+interactive = "以交互模式运行并提示必填项"
+var = "模板变量，key=value 格式（可重复）"
+template = "要使用的模板（内置 ID 或本地路径）"
+tmpl = "创建模板项目"
+
+# -------------------------
+# build
+# -------------------------
+[cli.commands.build]
+summary = "构建并打包模块为可分发的 ZIP 工件"
+description = "构建项目并在输出目录生成工件，支持工作区并行构建与签名等选项。"
+
+[cli.commands.build.flags]
+path = "项目路径（默认：当前目录）"
+all = "构建所有工作区成员"
+output = "输出目录（默认：dist）"
+bump = "启用版本自动 bump（KAM_BUMP_ENABLED）"
+release = "启用发布构建（KAM_RELEASE_ENABLED）"
+sign = "构建后进行签名（KAM_SIGN_ENABLE）"
+interactive = "以交互模式运行构建；对破坏性操作进行确认"
+pre_release = "启用预发布模式"
+quiet = "减少输出，仅显示警告与错误"
+jobs = "并行作业数（默认：CPU 核心数）"
+
+# -------------------------
+# version
+# -------------------------
+[cli.commands.version]
+summary = "管理模块版本与 bump 策略"
+
+# -------------------------
+# cache
+# -------------------------
+[cli.commands.cache]
+summary = "管理本地模板与工件缓存"
+description = "列出、添加、删除或清理缓存的模板，并可显示缓存路径。"
+
+[cli.commands.cache.list]
+summary = "列出已缓存的模板"
+
+[cli.commands.cache.clean]
+summary = "清理所有缓存的模板"
+
+[cli.commands.cache.add]
+summary = "从本地目录或归档添加模板到缓存"
+[cli.commands.cache.add.flags]
+name = "要注册的模板名称"
+path = "模板源路径（目录或归档）"
+
+[cli.commands.cache.remove]
+summary = "从缓存中移除模板"
+[cli.commands.cache.remove.flags]
+name = "要移除的模板名称"
+
+[cli.commands.cache.path]
+summary = "显示缓存目录路径"
+
+# -------------------------
+# tmpl
+# -------------------------
+[cli.commands.tmpl]
+summary = "管理模板：导入、导出、打包与列出"
+description = "管理模板资源，包括导入/导出、列出与路径查询等操作。"
+
+[cli.commands.tmpl.list]
+summary = "列出所有可用模板"
+
+[cli.commands.tmpl.import]
+summary = "从文件导入模板"
+[cli.commands.tmpl.import.flags]
+path = "模板归档路径（单个模板：.tar.gz；多个模板：.zip）"
+name = "模板名称（可选；默认使用文件名）"
+force = "若模板已存在则强制覆盖"
+
+[cli.commands.tmpl.export]
+summary = "导出模板到文件"
+[cli.commands.tmpl.export.flags]
+templates = "要导出的模板名称（可多次指定）"
+output = "输出文件路径（.tar.gz / .zip）"
+force = "若输出已存在则强制覆盖"
+
+[cli.commands.tmpl.remove]
+summary = "从缓存中移除模板"
+
+[cli.commands.tmpl.path]
+summary = "显示模板缓存目录路径"
+
+[cli.commands.tmpl.pull]
+summary = "从 URL 下载模板并导入"
+[cli.commands.tmpl.pull.flags]
+url = "下载 URL（默认：GitHub release 的 templates ZIP）"
+global = "此标志为一致性保留（无实际影响）"
+
+[cli.commands.tmpl.update]
+summary = "从配置中记录的 URL 重新下载并导入"
+[cli.commands.tmpl.update.flags]
+global = "此标志为一致性保留（无实际影响）"
+
+# -------------------------
+# validate
+# -------------------------
+[cli.commands.validate]
+summary = "验证 `kam.toml` 配置与模板"
+description = "对 kam.toml、模板与项目结构进行验证，报告错误和警告。"
+[cli.commands.validate.flags]
+path = "项目路径（默认：当前目录）"
+
+# -------------------------
+# completions
+# -------------------------
+[cli.commands.completions]
+summary = "生成常见 shell 的补全脚本"
+description = "为支持的 shell (bash, zsh, fish, powershell, elvish) 生成补全脚本。"
+[cli.commands.completions.flags]
+shell = "补全脚本类型（bash,zsh,fish,powershell,elvish）"
+out = "输出文件；若省略则打印到标准输出"
+
+# -------------------------
+# install
+# -------------------------
+[cli.commands.install]
+summary = "将模块包安装到连接的设备（使用配置的 root 管理器）"
+description = "将已构建的模块（.zip）安装到连接的设备，支持 Magisk/KernelSU/APatchSU。可通过 `kam config set root.manager <Manager>` 设置默认管理器。"
+
+[cli.commands.install.flags]
+path = "模块包路径（.zip）。若省略，Kam 会在项目的 dist/ 输出目录尝试查找产物"
+manager = "首选 root 管理器（Magisk、KernelSU、APatchSU）"
+dry_run = "打印将要执行的命令但不实际执行"
+quiet = "抑制非必要输出"
+
+# -------------------------
+# secret
+# -------------------------
+[cli.commands.secret]
+summary = "秘密（密钥）管理（用于签名/验证任务）"
+description = "管理存储的 secrets：添加、获取、列出、移除、导入/导出，以及受信任的根 CA 管理。"
+
+[cli.commands.secret.list]
+summary = "列出已保存的秘密"
+
+[cli.commands.secret.add]
+summary = "添加秘密（来自值或文件）"
+[cli.commands.secret.add.flags]
+name = "秘密的名称"
+file = "从文件读取秘密的路径"
+file_path = "可作为位置参数的文件路径（可替代 --file）"
+value = "直接提供秘密值"
+force_file = "强制以本地文件方式存储而非系统密钥环"
+password = "在命令行传递密码（不推荐）"
+with_backup = "同时在 ~/.kam/secrets 下创建本地备份"
+
+[cli.commands.secret.get]
+summary = "获取秘密并打印到标准输出（或写入文件）"
+[cli.commands.secret.get.flags]
+out = "写入文件而非打印到标准输出"
+password = "在命令行传递密码（不推荐）"
+
+[cli.commands.secret.remove]
+summary = "移除一个秘密"
+
+[cli.commands.secret.export]
+summary = "导出秘密到文件（默认导出明文；使用 --encrypted 导出加密 blob）"
+[cli.commands.secret.export.flags]
+encrypted = "若设置则以加密 blob 导出"
+
+[cli.commands.secret.import]
+summary = "从文件导入秘密"
+
+[cli.commands.secret.exportpub]
+summary = "从存储的私钥秘密导出公钥"
+[cli.commands.secret.exportpub.flags]
+name = "秘密名称（默认：main）"
+out = "输出文件路径（若省略则打印到标准输出）"
+
+[cli.commands.secret.importcert]
+summary = "从 GitHub issue 或文件导入开发者证书链"
+[cli.commands.secret.importcert.flags]
+repo = "GitHub 仓库（格式：owner/repo）"
+issue = "包含证书的 GitHub issue 编号"
+cert_chain = "证书链 PEM 文件路径"
+name = "存储时使用的名称"
+
+[cli.commands.secret.trust]
+summary = "管理受信任的根 CA"
+[cli.commands.secret.trust.flags]
+add_root = "从文件或 URL 添加根 CA"
+ca_name = "根 CA 的名称"
+list = "列出受信任的根 CA"
+remove = "按名称移除根 CA"
+
+# -------------------------
+# sign
+# -------------------------
+[cli.commands.sign]
+summary = "使用密钥环或 PEM 文件对工件进行签名"
+
+[cli.commands.sign.flags]
+src = "要签名的工件（zip）。若省略，请使用 --dist 或 --all 签名多个文件"
+secret = "密钥环中私钥的名称（默认：main）"
+out = "输出目录（默认：dist）"
+dist = "签名指定目录中的所有工件"
+all = "签名 dist 中的所有工件（等同于 --dist）"
+cert = "包含在签名元数据中的证书链 PEM 路径"
+key_path = "可选的私钥 PEM 路径（代替密钥环）"
+
+# -------------------------
+# verify
+# -------------------------
+[cli.commands.verify]
+summary = "验证工件签名（.sig）或 sigstore bundle（DSSE）"
+description = "验证数字签名或 sigstore bundle，支持多种验证选项。"
+
+# -------------------------
+# check
+# -------------------------
+[cli.commands.check]
+summary = "检查项目的 JSON/YAML/Markdown 文件（lint/格式/解析）"
+description = "静态检查项目中的文件，适用于 CI 或本地开发以尽早发现问题。"
+[cli.commands.check.flags]
+path = "项目路径（默认：当前目录）"
+json = "以 JSON 格式输出结果"
+fix = "尝试自动修复/格式化文件（如果可能）"
+
+# -------------------------
+# export
+# -------------------------
+[cli.commands.export]
+summary = "将 `kam.toml` 导出为常用格式 (module.prop, module.json, repo.json, track.json, config.json, update.json)"
+[cli.commands.export.flags]
+format = "导出格式：prop、json、update、repo、track、config"
+output = "输出文件路径（默认：在当前目录写入格式特定文件名）"
+
+# -------------------------
+# toml
+# -------------------------
+[cli.commands.toml]
+summary = "使用点路径键（get/set/unset/list）查看并编辑 `kam.toml`"
+[cli.commands.toml.flags]
+file = "指定文件而非项目中的 kam.toml"
+
+# -------------------------
+# about / help
+# -------------------------
+[cli.commands.about]
+summary = "显示 Kam 的关于信息与致谢"
+
+[cli.commands.config]
+summary = "管理项目级或全局 kam 配置（类似 git config）"
+
+[cli.commands.help]
+summary = "打印帮助信息或指定子命令的帮助"
 
 
-# Check command keys
-check.no_issues_found = "未发现问题。"
-check.some_issues_found = "发现问题。"
-check.errors.header = "错误："
-check.warnings.header = "警告："
+[check.errors]
+header = "错误："
 
-# Init command keys
-init.interactive.title = "交互式 Kam 初始化"
-init.interactive.press_enter = "你可以按回车以接受括号中显示的默认值"
-init.interactive.completed_successfully = "交互式初始化已成功完成。"
-init.interactive.next_steps = "下一步："
+[check.warnings]
+header = "警告："
 
-# Validate command keys
-validate.prop.id_required = "[prop] id 是必填项"
-validate.prop.id_invalid_characters = "[prop] id 包含非法字符（允许：a-z、A-Z、0-9、_, -, .）"
-validate.prop.name_required = "[prop] name 是必填项"
-validate.prop.version_required = "[prop] version 是必填项"
-validate.prop.version_code_should_be_positive = "[prop] versionCode 必须是正整数"
-validate.prop.description_required = "[prop] description 是必填项"
-validate.prop.author_empty_recommended = "[prop] author 为空（建议填写）"
-validate.mmrl.repo.license_recommended = "[mmrl.repo] 建议设置 license"
-validate.mmrl.repo.license_file = "[mmrl.repo] license_file"
-validate.mmrl.repo.readme_file = "[mmrl.repo] readme_file"
-validate.mmrl.repo.changelog_file = "[mmrl.repo] changelog_file"
-validate.no_issues_kam_toml_valid = "未发现问题，kam.toml 有效。"
-validate.errors.header = "错误："
-validate.warnings.header = "警告："
-validate.failed = "验证失败。请修复上面的错误。"
-validate.passed_with_warnings = "验证通过，但存在警告。"
+[common]
+file_fixed = "{}（已修复）"
 
-# Config command keys
-config.set_success = "设置 {} = {} 到 {}"
-config.unset_success = "'{}' 已在 {} 中取消设置"
-config.builtin_keys = "内置配置键："
-config.example = "示例："
-config.note_custom_keys = "注意：您也可以设置自定义键。使用 'kam config list' 查看所有配置项。"
+[config]
+builtin_keys = "内置配置键："
+example = "示例："
+note_custom_keys = "注意：您也可以设置自定义键。使用 'kam config list' 查看所有配置项。"
+set_success = "设置 {} = {} 到 {}"
+unset_success = "'{}' 已在 {} 中取消设置"
 
-# About command keys
-about.author = "作者"
-about.email = "邮箱"
-about.developer = "开发者"
-about.description = "描述"
-about.repository = "仓库"
-about.info.command_informational = "此命令仅供参考，不会修改文件或注册表。"
-about.info.use_other_commands = "请使用其他命令（例如 `kam init`, `kam build`）执行实际操作。"
-about.thanks = "感谢使用 Kam"
-about.enjoy = "祝您使用愉快！"
-about.powered = "由 Kam CLI 提供支持 — 祝构建顺利！"
+[export]
+config_json = "已导出 config.json 到 {}"
+module_json = "已导出 module.json 到 {}"
+module_prop = "已导出 module.prop 到 {}"
+repo_json = "已导出 repo.json 到 {}"
+track_json = "已导出 track.json 到 {}"
+update_json = "已导出 update.json 到 {}"
 
-# Export related
-export.module_prop = "已导出 module.prop 到 {}"
-export.module_json = "已导出 module.json 到 {}"
-export.repo_json = "已导出 repo.json 到 {}"
-export.track_json = "已导出 track.json 到 {}"
-export.config_json = "已导出 config.json 到 {}"
-export.update_json = "已导出 update.json 到 {}"
+[hooks]
+invalid_env_variable_name = "警告：无效的环境变量名 '{}'（第 {} 行，路径：{}）"
+malformed_env_line = "警告：第 {} 行在文件 {} 中格式错误：{}"
+running_post = "正在运行后构建钩子"
+running_pre = "正在运行预构建钩子"
+skipping_hooks_for_template_packaging = "跳过 {} 钩子（模板打包）"
+skipping_template_packaging = "跳过用于模板打包的构建钩子"
 
-# Sign related
-sign.signed = "已签名 '{}' -> {}"
-sign.failed_to_sign = "签名 {} 失败: {}"
-sign.no_src_or_dist = "请指定 'src' 或使用 --dist/--all 来签署制品"
+[init.interactive]
+aborted = "已中止。"
+author = "作者"
+choice_local_path = "<本地路径或压缩包>"
+choice_pull_default_templates = "<拉取默认模板>"
+choose_template = "选择要使用的模板"
+completed_successfully = "交互式初始化已成功完成。"
+confirm_proceed_create = "是否继续并使用这些设置创建项目？"
+custom_value_choice = "<自定义值>"
+cz_not_found = "未找到 Commitizen (cz)。是否查看安装说明？"
+default = "默认：{}"
+description = "描述"
+enter_custom_value_for = "输入 {} 的自定义值"
+enter_local_template_path = "输入本地模板路径或压缩文件（留空以下载默认模板）"
+enter_path_to_local_template = "输入本地模板路径（文件或目录）"
+enter_value_for = "输入 {} 的值"
+enter_value_for_index_or_value = "输入 {} 的值（编号或原始值）"
+enter_yes_no = "请输入 'y' 或 'n'。"
+example = "示例：{}"
+gh_not_found = "未找到 GitHub CLI (gh)。是否查看安装说明？"
+help = "说明：{}"
+helper_script = "查看辅助脚本：~/.kam/scripts/init_helper.sh"
+inferred_id_invalid = "从路径推断的模块 id '{}' 包含非法字符。"
+invalid_module_id = "无效的模块 ID '{}': ID 仅允许字母数字字符、点、短横和下划线"
+invalid_selection = "无效选择：{}"
+invalid_selection_index = "无效的选择编号"
+loaded_template_from_temp = "从临时解压目录加载模板：{}"
+module_id_mismatch = "模块 id '{}' 与文件夹基名 '{}' 不匹配。"
+module_id_prompt = "模块 ID"
+next_steps = "下一步："
+non_interactive_fallback = "回退到非交互式模板选择..."
+path_to_create_project = "创建项目的路径"
+press_enter = "你可以按回车以接受括号中显示的默认值"
+preview_another_file = "是否预览另一个文件？"
+preview_cancelled = "模板预览已取消"
+preview_continue = "-- 继续 --"
+preview_exit = "-- 退出预览 --"
+preview_failed_read_dir = "（无法读取目录内容）"
+preview_failed_read_file = "（预览文件读取失败）"
+preview_file_empty = "（文件为空）"
+preview_file_truncated = "[... 预览在 50 行后被截断 ...]"
+project_name = "项目名称"
+recommend_cz_install = "建议安装 Commitizen：python -m pip install --user commitizen（或使用 npm/yarn 全局安装）"
+recommend_github_cli = "请查看 GitHub CLI 的安装说明：https://github.com/cli/cli#installation"
+save_base_values = "是否将这些基础值保存到全局配置 (~/.kam/config.toml)？"
+saved_base_values = "已将基础配置保存到 ~/.kam/config.toml"
+select_by_name_or_number = "通过名称或编号选择模板（或提供本地路径）"
+select_value_for = "选择 '{}' 的值"
+set_module_id_to_basename = "将模块 id 设置为文件夹基名？"
+summary_title = "摘要"
+template_contents_showing_up_to_files = "模板内容（最多显示 {} 个文件）"
+template_directory_empty = "模板目录为空。"
+template_preview = "模板预览（{} 条目）：（回车预览；选择 '-- Continue --' 以继续）"
+template_variables = "模板变量"
+title = "交互式 Kam 初始化"
+use_sanitized_module_id = "使用建议的模块 id '{}' 吗？"
+value_is_not_choice_prompt = "该值不在可选项中。是否仍然使用原始值？"
+value_required = "{} 为必填项"
+variable = "变量：{}"
+variable_note = "变量：{} — 说明：{}"
+version = "版本"
+
+[init.interactive.summary]
+author = "作者"
+module_id = "模块 ID"
+path = "路径"
+project_name = "项目名称"
+template = "模板"
+version = "版本"
+
+[packaging]
+files = "正在打包文件..."
+generating_module_prop = "正在生成 module.prop"
+packaging = "打包"
+packaging_of = "打包中"
+source_directory_not_found = "源目录未找到: {}"
+success_module_built = "✓ 成功构建模块: {}"
+success_template_built = "✓ 成功构建模板: {}"
+using_existing_module_prop_from_hook = "使用已有的 module.prop（来自 pre-build 钩子）"
+
+[project]
+build_time = "构建时间"
+header = "项目"
+output_directory = "输出目录"
+output_file = "输出文件"
+package_size = "包大小"
+
+[secret]
+cert_chain_imported = "证书链 '{}' 已成功导入"
+encrypted = "（已加密）"
+exported = "密钥 '{}' 已导出到 {}"
+failed_fetch_ca = "获取 CA 失败: {}"
+failed_read_ca = "读取 CA 失败: {}"
+failed_retrieve_public_key = "检索密钥 '{}' 的公钥失败: {}"
+fetching_cert_from_github = "正在从 GitHub issue {} 获取证书..."
+imported = "密钥 '{}' 已导入"
+no_secrets_stored = "未存储任何机密。"
+no_trusted_root_cas = "未找到受信任的根 CA。"
+plain = "（未加密）"
+public_key_exported = "密钥 '{}' 的公钥已导出到 {}"
+removed = "密钥 '{}' 已移除"
+root_ca_added = "根证书 '{}' 已添加到信任存储"
+root_ca_removed = "根证书 '{}' 已从信任存储移除"
+saved = "密钥 '{}' 已保存"
+stored_secrets = "存储的 Secrets"
+trusted_root_cas = "受信任的根 CA"
+written_to = "密钥 '{}' 已写入到 {}"
+
+[sign]
+failed_to_sign = "签名 {} 失败: {}"
+no_src_or_dist = "请指定 'src' 或使用 --dist/--all 来签署制品"
+signed = "已签名 '{}' -> {}"
+
+[status]
+failed = "✗ 失败: {}"
+success = "✓ 成功"
+
+[table.header]
+module = "模块"
+stat = "统计项"
+status = "状态"
+value = "值"
+
+[table.stat]
+failed = "失败"
+succeeded = "成功"
+total = "总计"
+total_duration = "总耗时"
+
+[validate]
+failed = "验证失败。请修复上面的错误。"
+no_issues_kam_toml_valid = "未发现问题，kam.toml 有效。"
+passed_with_warnings = "验证通过，但存在警告。"
+
+[validate.errors]
+header = "错误："
+
+[validate.mmrl.repo]
+changelog_file = "[mmrl.repo] changelog_file"
+license_file = "[mmrl.repo] license_file"
+license_recommended = "[mmrl.repo] 建议设置 license"
+readme_file = "[mmrl.repo] readme_file"
+
+[validate.prop]
+author_empty_recommended = "[prop] author 为空（建议填写）"
+description_required = "[prop] description 是必填项"
+id_invalid_characters = "[prop] id 包含非法字符（允许：a-z、A-Z、0-9、_, -, .）"
+id_required = "[prop] id 是必填项"
+name_required = "[prop] name 是必填项"
+version_code_should_be_positive = "[prop] versionCode 必须是正整数"
+version_required = "[prop] version 是必填项"
+
+[validate.warnings]
+header = "警告："
+
+[workspace.summary]
+title = "✿ 工作区构建摘要 ✿"

@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.4.37 (2025-12-14)
+
 ### Feat
 
 - Introduce internationalization (i18n) support and enhance CLI output with improved tables and progress bars.
