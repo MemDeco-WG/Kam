@@ -149,7 +149,12 @@ fn main() {
     // - `-Ss <query>` performs a remote search
     // - `-S <moduleId>` downloads the latest release ZIP for the given module(s)
     if cli.sync || cli.search {
-        match kam::cmds::repo::handle_pacman_style(cli.sync, cli.search, cli.targets.clone()) {
+        match kam::cmds::repo::handle_pacman_style(
+            cli.sync,
+            cli.search,
+            cli.targets.clone(),
+            cli.assume_yes,
+        ) {
             Ok(()) => return,
             Err(e) => {
                 print_error_chain(&e);

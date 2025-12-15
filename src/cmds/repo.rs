@@ -50,7 +50,7 @@ pub struct RepoArgs {
 
 /// Entrypoint for `kam repo` subcommand.
 pub fn run(args: RepoArgs) -> Result<(), KamError> {
-    handle_pacman_style(args.sync, args.search, args.targets)
+    handle_pacman_style(args.sync, args.search, args.targets, args.yes)
 }
 
 #[derive(Debug, Deserialize)]
