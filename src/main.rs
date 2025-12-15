@@ -145,24 +145,40 @@ fn main() {
         }
     };
 
-    // Dispatch to subcommand handlers.
+    // Handle pacman-style top-level flags (-S / -s) before dispatching to subcommands.
+    // - `-Ss <query>` performs a remote search
+    // - `-S <moduleId>` downloads the latest release ZIP for the given module(s)
+    if cli.sync || cli.search {
+        match kam::cmds::repo::handle_pacman_style(cli.sync, cli.search, cli.targets.clone()) {
+            Ok(()) => return,
+            Err(e) => {
+                print_error_chain(&e);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // Dispatch to subcommand handlers (command is optional).
+    // If no subcommand is provided (None) we treat it as a no-op returning Ok(()).
     let res: Result<(), KamError> = match cli.command {
-        Commands::Init(args) => kam::cmds::init::run(args),
-        Commands::Build(args) => kam::cmds::build::run(args),
-        Commands::Version(args) => kam::cmds::version::run(args),
-        Commands::Cache(args) => kam::cmds::cache::run(args),
-        Commands::Tmpl(args) => kam::cmds::tmpl::run(args),
-        Commands::Validate(args) => kam::cmds::validate::run(args),
-        Commands::Completions(args) => kam::cmds::completion::run(args),
-        Commands::Secret(args) => kam::cmds::secret::run(args),
-        Commands::Sign(args) => kam::cmds::sign::run(args),
-        Commands::Verify(args) => kam::cmds::verify::run(args),
-        Commands::Check(args) => kam::cmds::check::run(args),
-        Commands::Export(args) => kam::cmds::export::run(args),
-        Commands::Config(args) => kam::cmds::config::run(args),
-        Commands::Toml(args) => kam::cmds::toml::run(args),
-        Commands::Install(args) => kam::cmds::install::run(args),
-        Commands::About(args) => kam::cmds::about::run(args),
+        Some(Commands::Init(args)) => kam::cmds::init::run(args),
+        Some(Commands::Build(args)) => kam::cmds::build::run(args),
+        Some(Commands::Version(args)) => kam::cmds::version::run(args),
+        Some(Commands::Cache(args)) => kam::cmds::cache::run(args),
+        Some(Commands::Tmpl(args)) => kam::cmds::tmpl::run(args),
+        Some(Commands::Validate(args)) => kam::cmds::validate::run(args),
+        Some(Commands::Completions(args)) => kam::cmds::completion::run(args),
+        Some(Commands::Secret(args)) => kam::cmds::secret::run(args),
+        Some(Commands::Sign(args)) => kam::cmds::sign::run(args),
+        Some(Commands::Verify(args)) => kam::cmds::verify::run(args),
+        Some(Commands::Check(args)) => kam::cmds::check::run(args),
+        Some(Commands::Export(args)) => kam::cmds::export::run(args),
+        Some(Commands::Config(args)) => kam::cmds::config::run(args),
+        Some(Commands::Toml(args)) => kam::cmds::toml::run(args),
+        Some(Commands::Install(args)) => kam::cmds::install::run(args),
+        Some(Commands::Repo(args)) => kam::cmds::repo::run(args),
+        Some(Commands::About(args)) => kam::cmds::about::run(args),
+        None => Ok(()),
     };
 
     if let Err(e) = res {

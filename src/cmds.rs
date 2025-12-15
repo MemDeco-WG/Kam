@@ -7,6 +7,7 @@ pub mod config;
 pub mod export;
 pub mod init;
 pub mod install;
+pub mod repo;
 pub mod secret;
 pub mod secret_crypto;
 pub mod sign;

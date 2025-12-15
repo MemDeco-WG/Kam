@@ -21,3 +21,6 @@
 [submodule "KamWEBUI"]
 	path = KamWEBUI
 	url = https://github.com/MemDeco-WG/KamWEBUI.git
+[submodule "Kamcp"]
+	path = Kamcp
+	url = https://github.com/MemDeco-WG/Kamcp.git

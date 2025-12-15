@@ -9,8 +9,24 @@ use clap::{Parser, Subcommand};
     help_template = "{bin} — {about}\n\nUsage: {usage}\n\nCommands:\n{subcommands}\n\nOptions:\n{options}\n"
 )]
 pub struct Cli {
+    /// Pacman-style sync (download) flag (equivalent to pacman -S)
+    #[arg(short = 'S', long = "sync", action = clap::ArgAction::SetTrue)]
+    pub sync: bool,
+
+    /// Pacman-style search modifier (use with -S as '-Ss' to search or '-s' alone to search)
+    #[arg(short = 's', long = "search", action = clap::ArgAction::SetTrue)]
+    pub search: bool,
+
+    /// Positional targets: module IDs or search terms (used with -S / -s)
+    #[arg(value_name = "TARGETS", num_args = 0..)]
+    pub targets: Vec<String>,
+
+    /// Assume "yes" to all confirmation prompts (equivalent to -y). Use `-y` or `--yes` to skip confirmation.
+    #[arg(short = 'y', long = "yes", action = clap::ArgAction::SetTrue, global = true)]
+    pub assume_yes: bool,
+
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -24,7 +40,7 @@ pub enum Commands {
     /// Manage module versions and bump policies
     Version(crate::cmds::version::VersionArgs),
 
-    /// Manage local template and artifact cache
+    /// Manage module versions and bump policies
     Cache(crate::cmds::cache::CacheArgs),
 
     /// Manage templates: import, export, package, and list
@@ -58,6 +74,9 @@ pub enum Commands {
 
     /// Install a module package to a connected device (using configured root manager)
     Install(crate::cmds::install::InstallArgs),
+
+    /// Interact with module repository (search/download)
+    Repo(crate::cmds::repo::RepoArgs),
 
     /// Display about information for Kam and credits
     About(crate::cmds::about::AboutArgs),
