@@ -91,17 +91,16 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
 
     // 邮箱的优先级：从author字符串提取 > 环境变量 KAM_AUTHOR_EMAIL > Cargo metadata > 没有
     let mut email = extract_email(&author_raw);
-    if email.is_none() {
-        if let Ok(val) = std::env::var("KAM_AUTHOR_EMAIL") {
-            if !val.trim().is_empty() {
-                email = Some(val);
-            }
-        }
+    if email.is_none()
+        && let Ok(val) = std::env::var("KAM_AUTHOR_EMAIL")
+        && !val.trim().is_empty()
+    {
+        email = Some(val);
     }
-    if email.is_none() {
-        if let Some(pkg_authors) = option_env!("CARGO_PKG_AUTHORS") {
-            email = extract_email(pkg_authors);
-        }
+    if email.is_none()
+        && let Some(pkg_authors) = option_env!("CARGO_PKG_AUTHORS")
+    {
+        email = extract_email(pkg_authors);
     }
 
     // 开发者网站链接
@@ -146,13 +145,13 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     }
 
     // 如果有仓库信息（从Cargo metadata）也显示出来
-    if let Some(repo) = option_env!("CARGO_PKG_REPOSITORY") {
-        if !repo.trim().is_empty() {
-            table.add_row(Row::from(vec![
-                Cell::new(crate::i18n::tr_key("about.repository")).add_attribute(Attribute::Bold),
-                Cell::new(repo),
-            ]));
-        }
+    if let Some(repo) = option_env!("CARGO_PKG_REPOSITORY")
+        && !repo.trim().is_empty()
+    {
+        table.add_row(Row::from(vec![
+            Cell::new(crate::i18n::tr_key("about.repository")).add_attribute(Attribute::Bold),
+            Cell::new(repo),
+        ]));
     }
 
     // 打印banner和表格，看起来比较专业（虽然其实没啥用）
