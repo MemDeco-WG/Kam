@@ -35,6 +35,10 @@ pub struct InstallArgs {
     #[arg(long)]
     pub dry_run: bool,
 
+    /// Verbose output showing install command output (stdout/stderr)
+    #[arg(short = 'v', long, conflicts_with = "quiet")]
+    pub verbose: bool,
+
     /// Suppress non-essential output
     #[arg(short, long)]
     pub quiet: bool,
@@ -55,8 +59,9 @@ pub fn get_root_manager() -> String {
     }
 
     // 2) global config (~/.kam/config.toml)
-    if let Some(home) = dirs::home_dir() {
-        let cfg = home.join(".kam").join("config.toml");
+    // Use `KAM_HOME` if provided; otherwise fall back to the default Kam home directory.
+    if let Ok(cfg_home) = crate::utils::kam_home_dir() {
+        let cfg = cfg_home.join("config.toml");
         if cfg.exists()
             && let Ok(content) = fs::read_to_string(&cfg)
             && let Ok(v) = toml::from_str::<toml::Value>(&content)
@@ -231,8 +236,10 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
 
     match Command::new(&cli_bin).args(&cli_args).output() {
         Ok(out) => {
-            // Print outputs nicely using central utility
-            Utils::print_cmd_output(&out.stdout, &out.stderr);
+            // Print outputs nicely using central utility (only when verbose is enabled)
+            if args.verbose {
+                Utils::print_cmd_output(&out.stdout, &out.stderr);
+            }
             if out.status.success() {
                 if !args.quiet {
                     Utils::success(&trf!("install.installed", artifact.display(), cli_bin));
@@ -298,7 +305,7 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
                     )))
                 } else {
                     Err(KamError::CommandFailed(format!(
-                        "Install command '{}' exited with status: {}",
+                        "Install command '{}' exited with status: {}. Re-run with -v/--verbose to see the command output.",
                         cli_bin, out.status
                     )))
                 }
@@ -358,6 +365,32 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
             } else {
                 Err(KamError::Io(e))
             }
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    #[test]
+    fn test_parsing_install_verbose_long() {
+        let cli = crate::cli::Cli::parse_from(["kam", "install", "--verbose", "pkg.zip"]);
+        match cli.command {
+            Some(crate::cli::Commands::Install(inst_args)) => {
+                assert!(inst_args.verbose, "expected --verbose to be true");
+            }
+            _ => panic!("expected Commands::Install"),
+        }
+    }
+
+    #[test]
+    fn test_parsing_install_verbose_short() {
+        let cli = crate::cli::Cli::parse_from(["kam", "install", "-v", "pkg.zip"]);
+        match cli.command {
+            Some(crate::cli::Commands::Install(inst_args)) => {
+                assert!(inst_args.verbose, "expected -v to be true");
+            }
+            _ => panic!("expected Commands::Install"),
         }
     }
 }

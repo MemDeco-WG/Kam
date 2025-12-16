@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn test_init_parses_short_interactive_flag() {
         // Short alias -i
-        let cli = Cli::try_parse_from(&["kam", "init", "-i", "my_test_module"]).unwrap();
+        let cli = Cli::try_parse_from(["kam", "init", "-i", "my_test_module"]).unwrap();
         match cli.command {
             Some(crate::cli::Commands::Init(args)) => assert!(args.interactive),
             _ => panic!("Expected init command"),
@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn test_init_parses_long_interactive_flag() {
         // Long alias --interactive (explicit PATH provided)
-        let cli = Cli::try_parse_from(&["kam", "init", "--interactive", "my_test_module"]).unwrap();
+        let cli = Cli::try_parse_from(["kam", "init", "--interactive", "my_test_module"]).unwrap();
         match cli.command {
             Some(crate::cli::Commands::Init(args)) => {
                 assert!(args.interactive);
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn test_init_parses_short_interactive_without_path() {
         // Short alias -i without PATH should be accepted when interactive mode is used
-        let cli = Cli::try_parse_from(&["kam", "init", "-i"]).unwrap();
+        let cli = Cli::try_parse_from(["kam", "init", "-i"]).unwrap();
         match cli.command {
             Some(crate::cli::Commands::Init(args)) => {
                 assert!(args.interactive);
@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn test_init_parses_long_interactive_without_path() {
         // Long alias --interactive without PATH should be accepted when interactive mode is used
-        let cli = Cli::try_parse_from(&["kam", "init", "--interactive"]).unwrap();
+        let cli = Cli::try_parse_from(["kam", "init", "--interactive"]).unwrap();
         match cli.command {
             Some(crate::cli::Commands::Init(args)) => {
                 assert!(args.interactive);

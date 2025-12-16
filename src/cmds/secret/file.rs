@@ -8,23 +8,20 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
-// 获取密钥目录（~/.kam/secrets）
+// 获取密钥目录（KAM_HOME/secrets，默认 ~/.kam/secrets）
 // 如果不存在就创建，并设置合适的权限（Unix系统）
 fn secrets_dir() -> Result<PathBuf, KamError> {
-    let home = dirs::home_dir().ok_or_else(|| {
-        KamError::InvalidDirectory("Could not determine home directory".to_string())
-    })?;
-    let dir = home.join(".kam").join("secrets");
+    // Respect KAM_HOME env var to override Kam home directory
+    let kam_home = crate::utils::kam_home_dir()?;
+    let dir = kam_home.join("secrets");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(KamError::Io)?;
         #[cfg(unix)]
         {
-            // 设置目录权限为700（只有所有者能访问）
-            let mut perm = fs::metadata(home.join(".kam"))
-                .map_err(KamError::Io)?
-                .permissions();
+            // Ensure the Kam home directory itself has permissions 700 (owner only)
+            let mut perm = fs::metadata(&kam_home).map_err(KamError::Io)?.permissions();
             perm.set_mode(0o700);
-            fs::set_permissions(home.join(".kam"), perm).map_err(KamError::Io)?;
+            fs::set_permissions(&kam_home, perm).map_err(KamError::Io)?;
         }
     }
     Ok(dir)

@@ -62,6 +62,30 @@ kam init my_meta_module -t meta_template
 kam init my_kernel_module -t ak3_template
 ```
 
+### Pacman 风格的顶层选项
+
+Kam 支持类似 pacman 的顶层选项，用于直接与远程模块注册表交互（无需进入 `repo` 子命令）：
+
+- `-Ss <关键字>` — 在远程模块注册表中搜索 `<关键字>`（例如：`kam -Ss foo`）。
+- `-S <模块ID>` — 下载指定模块的最新发布 ZIP（例如：`kam -S foo`）。
+- `-u`, `--update` — 在下载前刷新模块索引（等同于 `kam repo sync --force`）。  
+  这些选项可以组合使用，例如：`kam -Syu <模块ID>` 会先刷新索引，然后下载模块（配合 `-y` 可自动确认）。
+  
+示例：
+```bash
+kam -Ss some_keyword
+kam -S some_module_id
+kam -Syu some_module_id
+```
+
+### MCP 服务器与 AI 协助
+
+如果你不确定如何使用某个 `kam` 命令或希望获得交互式帮助，可以运行 MCP 服务器（Kamcp）。Kamcp 暴露了 `kam_exec` 工具并提供 AI 助手，可用于解释命令或代表你运行命令。详情与安装示例请参阅：
+
+- https://github.com/MemDeco-WG/Kamcp
+
+示例：通过 Kamcp 的客户端或 WebUI 调用 `kam_exec("-Ss <关键字>")` 进行搜索，或向 AI 询问如何使用 `kam tmpl pull` 等命令。
+
 
 ### 配置模块
 

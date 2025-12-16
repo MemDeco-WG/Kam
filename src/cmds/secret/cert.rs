@@ -5,12 +5,10 @@ use std::path::PathBuf;
 use x509_parser::prelude::*;
 
 // 获取信任的根CA证书目录
-// 在 ~/.kam/trusted-cas 下
+// 在 KAM_HOME（默认：~/.kam）/trusted-cas 下
 fn trusted_cas_dir() -> Result<PathBuf, KamError> {
-    let home = dirs::home_dir().ok_or_else(|| {
-        KamError::InvalidDirectory("Could not determine home directory".to_string())
-    })?;
-    let dir = home.join(".kam").join("trusted-cas");
+    let base = crate::utils::kam_home_dir()?;
+    let dir = base.join("trusted-cas");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(KamError::Io)?;
     }
@@ -19,10 +17,8 @@ fn trusted_cas_dir() -> Result<PathBuf, KamError> {
 
 // 获取缓存的证书目录
 fn certs_dir() -> Result<PathBuf, KamError> {
-    let home = dirs::home_dir().ok_or_else(|| {
-        KamError::InvalidDirectory("Could not determine home directory".to_string())
-    })?;
-    let dir = home.join(".kam").join("certs");
+    let base = crate::utils::kam_home_dir()?;
+    let dir = base.join("certs");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(KamError::Io)?;
     }

@@ -30,12 +30,10 @@ fn test_export_module_prop() {
         kt.prop.name,
         kt.prop.version,
         kt.prop.versionCode,
-        kt.prop.author.as_ref().map(|s| s.as_str()).unwrap_or(""),
+        kt.prop.author.as_deref().unwrap_or(""),
         kt.prop.description,
         kt.prop
-            .updateJson
-            .as_ref()
-            .map(|s| s.as_str())
+            .updateJson.as_deref()
             .unwrap_or("")
     );
 
@@ -136,7 +134,7 @@ fn test_export_repo_json() {
                 "name": kt.prop.name,
                 "version": kt.prop.version,
                 "versionCode": kt.prop.versionCode,
-                "author": kt.prop.author.as_ref().map(|s| s.as_str()).unwrap_or(""),
+                "author": kt.prop.author.as_deref().unwrap_or(""),
                 "description": kt.prop.description,
                 "repository": kt.mmrl.as_ref()
                     .and_then(|m| m.repo.as_ref())

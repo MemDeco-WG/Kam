@@ -18,10 +18,8 @@ const DEFAULT_TEMPLATES_URL: &str =
 
 fn get_project_or_global_config_path(global: bool) -> Result<std::path::PathBuf, KamError> {
     if global {
-        let home = dirs::home_dir().ok_or_else(|| {
-            KamError::CommandFailed("Cannot determine home directory for global config".to_string())
-        })?;
-        let dir = home.join(".kam");
+        // Respect KAM_HOME env var to override the Kam home directory (defaults to $HOME/.kam)
+        let dir = crate::utils::kam_home_dir()?;
         return Ok(dir.join("config.toml"));
     }
 

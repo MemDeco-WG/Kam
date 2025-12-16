@@ -99,6 +99,13 @@ Using AnyKernel3 template (kernel module):
 kam init my_kernel_module -t ak3_template
 ```
 
+Pacman-style top-level flags
+- `-Ss` — search the remote modules registry (example: `kam -Ss <term>`).
+- `-S`  — download a module by ID (example: `kam -S <moduleId>`).
+- `-u, --update` — refresh the modules index before downloading (equivalent to `kam repo sync --force`).
+- You can combine flags, e.g. `kam -Syu` will update the index (`-u`), assume yes (`-y`), then attempt downloads (`-S`).
+
+
 ### Configure Your Module
 
 Edit the `kam.toml` configuration file:
@@ -418,6 +425,8 @@ kam check [OPTIONS] [PATH]
 
 **Options:**
 - `--json` - Output results as JSON
+
+**Note:** If `shellcheck` is installed on your PATH, `kam check` will use it to lint shell scripts for more comprehensive results; otherwise a built-in checker is used. Installing `shellcheck` is recommended for better shell script diagnostics.
 - `--fix` - Try to automatically fix/format files
 
 **Examples:**
@@ -425,6 +434,29 @@ kam check [OPTIONS] [PATH]
 kam check
 kam check --json
 kam check --fix
+```
+
+### `kam install` - Install a module package to a connected device
+
+Install a built module (.zip) to a connected device using the configured root manager. Kam will attempt to run the preferred install CLI (e.g., `magisk`, `ksud`, `apd`) and, if necessary, will attempt privilege escalation via `su -c`. When escalation is used, output is streamed live and any interactive prompts are forwarded to your terminal.
+
+```bash
+kam install [OPTIONS] [PATH]
+```
+
+**Arguments:**
+- `[PATH]` - Path to the module package (.zip). If omitted, Kam will attempt to find the artifact in the project's `dist/` output directory.
+
+**Options:**
+- `--manager <Manager>` - Preferred root manager to use (Magisk, KernelSU, APatchSU). Overrides configured default.
+- `--dry-run` - Print the derived install command without executing it.
+- `-q, --quiet` - Suppress non-essential output.
+
+**Examples:**
+```bash
+kam install my_module.zip
+kam install --manager KernelSU my_module.zip
+kam install --dry-run my_module.zip
 ```
 
 ### `kam export` - Export Configuration
@@ -623,6 +655,8 @@ Kam supports optional network-backed functionality to increase security and conv
   Note: `kam sign` does not request an RFC3161 timestamp by default. Use `--timestamp` to enable timestamping when needed.
 - **Template downloads (planned)** — A `kam tmpl pull` command will be added to make it easy to fetch and import templates from remote repositories or template registries.
 
+If you're unsure how to run a particular `kam` command or want interactive help, you can run the Kamcp (MCP) server which exposes a `kam_exec` tool and an AI assistant that can explain commands or run them for you. See https://github.com/MemDeco-WG/Kamcp for installation and usage instructions. Example interactions include asking the AI "How do I use `kam tmpl pull`?" or using `kam_exec("-Ss <term>")` to search the modules registry.
+
 When possible, these features are optional and disabled by default.
 
 ### Build Options
@@ -710,9 +744,10 @@ Create scripts in the `hooks/post-build/` directory:
 
 ```bash
 hooks/post-build/
-├── 0.verify.sh                # Verify build
-├── 1.upload.sh                # Upload artifacts
-└── 2.notify.sh                # Send notifications
+├── 0.EXAMPLE.sh               # Example post-build hook (template)
+├── 1.VERIFY.sh                # Verify build
+├── 2.UPLOAD.sh                # Upload artifacts
+└── 3.NOTIFY.sh                # Send notifications
 ```
 
 #### Available Environment Variables
@@ -735,6 +770,7 @@ The following environment variables are available in hook scripts:
 | `KAM_MODULE_UPDATE_JSON` | The module updateJson URL |
 | `KAM_STAGE` | Current build stage: `pre-build` or `post-build` |
 | `KAM_DEBUG` | Set to `1` to enable debug output |
+| `KAM_HOME` | Override Kam's home directory (defaults to `~/.kam/`). This controls where global configuration, caches, and secrets are stored. |
 
 ### Auto-Sync
 

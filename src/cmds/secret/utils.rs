@@ -7,15 +7,17 @@ use chrono::Utc;
 use rpassword::prompt_password;
 
 pub fn global_with_backup_default() -> bool {
-    if let Some(home) = dirs::home_dir() {
-        let cfg = home.join(".kam").join("config.toml");
+    // Respect KAM_HOME env var (via utils::kam_home_dir) when looking up global config.
+    if let Ok(cfg_home) = crate::utils::kam_home_dir() {
+        let cfg = cfg_home.join("config.toml");
         if cfg.exists()
             && let Ok(s) = std::fs::read_to_string(&cfg)
-                && let Ok(v) = toml::from_str::<toml::Value>(&s)
-                    && let Some(sec) = v.get("secret")
-                        && let Some(b) = sec.get("with_backup").and_then(|x| x.as_bool()) {
-                            return b;
-                        }
+            && let Ok(v) = toml::from_str::<toml::Value>(&s)
+            && let Some(sec) = v.get("secret")
+            && let Some(b) = sec.get("with_backup").and_then(|x| x.as_bool())
+        {
+            return b;
+        }
     }
     false
 }
@@ -26,34 +28,38 @@ pub fn read_secret_blob(name: &str) -> Result<Vec<u8>, KamError> {
         Ok(b) => {
             // if stored as base64 string in file, decode
             if let Ok(s) = std::str::from_utf8(&b)
-                && let Ok(blob) = BASE64_ENGINE.decode(s) {
-                    // Update index last_probe/size/storage
-                    if let Ok(mut idx) = load_index()
-                        && let Some(meta) = idx.entries.get_mut(name) {
-                            meta.last_probe = Utc::now().timestamp_millis();
-                            meta.size = blob.len() as u64;
-                            meta.storage = "file".to_string();
-                            let _ = save_index(&idx);
-                        }
-                    return Ok(blob);
-                }
-            // else return raw bytes
-            if let Ok(mut idx) = load_index()
-                && let Some(meta) = idx.entries.get_mut(name) {
+                && let Ok(blob) = BASE64_ENGINE.decode(s)
+            {
+                // Update index last_probe/size/storage
+                if let Ok(mut idx) = load_index()
+                    && let Some(meta) = idx.entries.get_mut(name)
+                {
                     meta.last_probe = Utc::now().timestamp_millis();
-                    meta.size = b.len() as u64;
+                    meta.size = blob.len() as u64;
                     meta.storage = "file".to_string();
                     let _ = save_index(&idx);
                 }
+                return Ok(blob);
+            }
+            // else return raw bytes
+            if let Ok(mut idx) = load_index()
+                && let Some(meta) = idx.entries.get_mut(name)
+            {
+                meta.last_probe = Utc::now().timestamp_millis();
+                meta.size = b.len() as u64;
+                meta.storage = "file".to_string();
+                let _ = save_index(&idx);
+            }
             Ok(b)
         }
         Err(e) => {
             // Update index probe time if we have the entry
             if let Ok(mut idx) = load_index()
-                && let Some(meta) = idx.entries.get_mut(name) {
-                    meta.last_probe = Utc::now().timestamp_millis();
-                    let _ = save_index(&idx);
-                }
+                && let Some(meta) = idx.entries.get_mut(name)
+            {
+                meta.last_probe = Utc::now().timestamp_millis();
+                let _ = save_index(&idx);
+            }
             Err(e)
         }
     }

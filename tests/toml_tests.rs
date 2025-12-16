@@ -1,10 +1,10 @@
 /// TOML 操作测试模块
 /// 测试 kam toml 命令的功能
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-fn create_test_kam_toml(dir: &PathBuf) -> PathBuf {
+fn create_test_kam_toml(dir: &Path) -> PathBuf {
     let toml_path = dir.join("kam.toml");
     let content = r#"
 [prop]
@@ -32,7 +32,7 @@ changelog = "https://github.com/test/test_module/CHANGELOG.md"
 fn test_toml_get_value() {
     // 测试获取 TOML 值
     let temp_dir = TempDir::new().unwrap();
-    let toml_path = create_test_kam_toml(&temp_dir.path().to_path_buf());
+    let toml_path = create_test_kam_toml(temp_dir.path());
 
     // 读取 TOML
     let content = fs::read_to_string(&toml_path).unwrap();
@@ -51,7 +51,7 @@ fn test_toml_get_value() {
 fn test_toml_set_value() {
     // 测试设置 TOML 值
     let temp_dir = TempDir::new().unwrap();
-    let toml_path = create_test_kam_toml(&temp_dir.path().to_path_buf());
+    let toml_path = create_test_kam_toml(temp_dir.path());
 
     let mut content = fs::read_to_string(&toml_path).unwrap();
     let mut value: toml::Value = toml::from_str(&content).unwrap();
@@ -77,7 +77,7 @@ fn test_toml_set_value() {
 fn test_toml_path_traversal() {
     // 测试路径遍历（点分隔的键）
     let temp_dir = TempDir::new().unwrap();
-    let toml_path = create_test_kam_toml(&temp_dir.path().to_path_buf());
+    let toml_path = create_test_kam_toml(temp_dir.path());
 
     let content = fs::read_to_string(&toml_path).unwrap();
     let value: toml::Value = toml::from_str(&content).unwrap();
@@ -114,7 +114,7 @@ fn test_toml_path_traversal() {
 fn test_toml_set_nested_path() {
     // 测试设置嵌套路径
     let temp_dir = TempDir::new().unwrap();
-    let toml_path = create_test_kam_toml(&temp_dir.path().to_path_buf());
+    let toml_path = create_test_kam_toml(temp_dir.path());
 
     let mut content = fs::read_to_string(&toml_path).unwrap();
     let mut value: toml::Value = toml::from_str(&content).unwrap();
@@ -155,18 +155,17 @@ fn test_toml_set_nested_path() {
 fn test_toml_unset_value() {
     // 测试删除 TOML 值
     let temp_dir = TempDir::new().unwrap();
-    let toml_path = create_test_kam_toml(&temp_dir.path().to_path_buf());
+    let toml_path = create_test_kam_toml(temp_dir.path());
 
     let mut content = fs::read_to_string(&toml_path).unwrap();
     let mut value: toml::Value = toml::from_str(&content).unwrap();
 
     // 删除一个键
-    if let Some(table) = value.as_table_mut() {
-        if let Some(prop) = table.get_mut("prop") {
-            if let Some(prop_table) = prop.as_table_mut() {
-                prop_table.remove("updateJson");
-            }
-        }
+    if let Some(table) = value.as_table_mut()
+        && let Some(prop) = table.get_mut("prop")
+        && let Some(prop_table) = prop.as_table_mut()
+    {
+        prop_table.remove("updateJson");
     }
 
     content = toml::to_string_pretty(&value).unwrap();

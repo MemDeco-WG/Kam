@@ -97,7 +97,8 @@ require_command() {
 # Check if a variable is set
 require_env() {
     var_name="$1"
-    eval value=\$$var_name
+    # Use indirect expansion to read the named environment variable safely (avoid eval).
+    local value="${!var_name:-}"
     if [ -z "$value" ]; then
         log_error "Environment variable '$var_name' is not set."
         exit 1
@@ -348,7 +349,8 @@ prompt() {
     # Non-interactive mode - prefer defaults or fail
     if [ "${KAM_NONINTERACTIVE:-}" = "1" ] || [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
         if [ -n "$default" ]; then
-            eval "$target_var=\"\$default\""
+            # Use printf -v to safely assign to a variable whose name is in $target_var
+            printf -v "$target_var" '%s' "$default"
             return 0
         else
             log_error "Non-interactive environment and no default for prompt: $prompt_msg"
@@ -385,8 +387,8 @@ prompt() {
         fi
 
         if [ -n "$value" ]; then
-            # assign to the requested variable name in the calling shell
-            eval "$target_var=\"\$value\""
+            # assign to the requested variable name in the calling shell (avoid eval)
+            printf -v "$target_var" '%s' "$value"
             return 0
         fi
 
@@ -448,7 +450,7 @@ choice() {
 
     # Non-interactive mode - choose the default automatically
     if [ "${KAM_NONINTERACTIVE:-}" = "1" ] || [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-        eval "$target_var=\"\$default_val\""
+        printf -v "$target_var" '%s' "$default_val"
         return 0
     fi
 
@@ -480,7 +482,7 @@ choice() {
                 cur=1
                 for opt in "$@"; do
                     if [ "$cur" -eq "$sel_idx" ]; then
-                        eval "$target_var=\"\$opt\""
+                        printf -v "$target_var" '%s' "$opt"
                         return 0
                     fi
                     cur=$((cur + 1))
@@ -491,7 +493,7 @@ choice() {
             cur=1
             for opt in "$@"; do
                 if [ "$opt" = "$ans" ]; then
-                    eval "$target_var=\"\$opt\""
+                    printf -v "$target_var" '%s' "$opt"
                     return 0
                 fi
                 cur=$((cur + 1))

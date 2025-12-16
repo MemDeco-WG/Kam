@@ -4,6 +4,7 @@ pub mod cache;
 pub mod check;
 pub mod completion;
 pub mod config;
+pub mod env;
 pub mod export;
 pub mod help;
 pub mod init;

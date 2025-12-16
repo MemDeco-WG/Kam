@@ -115,9 +115,9 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
                 }
             }
         }
-        Err(_) => {
-            // shellcheck运行失败，加个警告
-            fr.warnings.push("Failed to run shellcheck".to_string());
+        Err(e) => {
+            // shellcheck运行失败，加个警告，包含错误信息以便排查
+            fr.warnings.push(format!("Failed to run shellcheck: {}", e));
         }
     }
     // 如果要求修复且shfmt可用，就用shfmt格式化

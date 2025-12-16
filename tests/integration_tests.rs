@@ -90,8 +90,8 @@ fn test_version_bump_workflow() {
             ));
         }
         parts[index] += 1;
-        for i in index + 1..parts.len() {
-            parts[i] = 0;
+        for part in parts.iter_mut().skip(index + 1) {
+            *part = 0;
         }
         Ok(parts
             .iter()
@@ -153,13 +153,9 @@ fn test_config_export_workflow() {
         kt.prop.name,
         kt.prop.version,
         kt.prop.versionCode,
-        kt.prop.author.as_ref().map(|s| s.as_str()).unwrap_or(""),
+        kt.prop.author.as_deref().unwrap_or(""),
         kt.prop.description,
-        kt.prop
-            .updateJson
-            .as_ref()
-            .map(|s| s.as_str())
-            .unwrap_or("")
+        kt.prop.updateJson.as_deref().unwrap_or("")
     );
 
     let prop_path = project_dir.join("module.prop");

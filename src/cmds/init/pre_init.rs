@@ -83,42 +83,47 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     if let Ok(repo) = Repository::discover(&current_dir) {
         // 获取 git user.name
         if let Ok(cfg) = repo.config()
-            && let Ok(name) = cfg.get_string("user.name") {
-                git_author = Some(name);
-            }
+            && let Ok(name) = cfg.get_string("user.name")
+        {
+            git_author = Some(name);
+        }
 
         // 获取 remote URL
         if let Ok(remote) = repo.find_remote("origin")
-            && let Some(url) = remote.url() {
-                git_repo_url = Some(url.to_string());
-            }
+            && let Some(url) = remote.url()
+        {
+            git_repo_url = Some(url.to_string());
+        }
         // 如果没找到origin，就用第一个可用的remote
         if git_repo_url.is_none()
             && let Ok(remotes) = repo.remotes()
-                && let Some(name) = remotes.get(0)
-                    && let Ok(remote) = repo.find_remote(name)
-                        && let Some(url) = remote.url() {
-                            git_repo_url = Some(url.to_string());
-                        }
+            && let Some(name) = remotes.get(0)
+            && let Ok(remote) = repo.find_remote(name)
+            && let Some(url) = remote.url()
+        {
+            git_repo_url = Some(url.to_string());
+        }
 
         // 从 remote URL 解析 owner 和 repo name
         if let Some(ref url) = git_repo_url
-            && let Some((owner, repo_name)) = parse_git_remote_url(url) {
-                git_owner = Some(owner);
-                git_repo_name = Some(repo_name);
-            }
+            && let Some((owner, repo_name)) = parse_git_remote_url(url)
+        {
+            git_owner = Some(owner);
+            git_repo_name = Some(repo_name);
+        }
 
         // 获取当前分支名
         if let Ok(head) = repo.head()
-            && let Some(name) = head.name() {
-                // 尝试从 refs/heads/xxx 提取分支名
-                if let Some(stripped) = name.strip_prefix("refs/heads/") {
-                    git_branch = Some(stripped.to_string());
-                } else if let Some(branch_name) = head.shorthand() {
-                    // 如果已经是简短名称，直接使用
-                    git_branch = Some(branch_name.to_string());
-                }
+            && let Some(name) = head.name()
+        {
+            // 尝试从 refs/heads/xxx 提取分支名
+            if let Some(stripped) = name.strip_prefix("refs/heads/") {
+                git_branch = Some(stripped.to_string());
+            } else if let Some(branch_name) = head.shorthand() {
+                // 如果已经是简短名称，直接使用
+                git_branch = Some(branch_name.to_string());
             }
+        }
     }
 
     // 默认分支名，如果无法获取则使用 "main"
@@ -271,18 +276,19 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     }
 
     // 确定author，优先级：命令行参数 > git user.name > 全局配置 > 默认值
-    // 全局配置在 ~/.kam/config.toml
+    // 全局配置位于 Kam 家目录下的 config.toml (可通过 `KAM_HOME` 环境变量覆盖，默认为 ~/.kam)
     let mut global_author: Option<String> = None;
-    if let Some(home) = dirs::home_dir() {
-        let cfg_path = home.join(".kam").join("config.toml");
+    if let Ok(cfg_home) = crate::utils::kam_home_dir() {
+        let cfg_path = cfg_home.join("config.toml");
         if cfg_path.exists()
             && let Ok(content) = std::fs::read_to_string(&cfg_path)
-                && let Ok(v) = toml::from_str::<toml::Value>(&content)
-                    && let Some(prop) = v.get("prop")
-                        && let Some(author_val) = prop.get("author")
-                            && let Some(s) = author_val.as_str() {
-                                global_author = Some(s.to_string());
-                            }
+            && let Ok(v) = toml::from_str::<toml::Value>(&content)
+            && let Some(prop) = v.get("prop")
+            && let Some(author_val) = prop.get("author")
+            && let Some(s) = author_val.as_str()
+        {
+            global_author = Some(s.to_string());
+        }
     }
 
     let author = if let Some(a) = args.author.as_deref() {

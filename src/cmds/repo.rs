@@ -350,11 +350,8 @@ pub(crate) fn cache_root_dir() -> Result<PathBuf, KamError> {
         return Ok(p);
     }
 
-    // Default to user-level Kam directory (~/.kam) so module cache is colocated with templates.
-    let home = dirs::home_dir().ok_or_else(|| {
-        KamError::InvalidDirectory("Could not determine home directory".to_string())
-    })?;
-    let base = home.join(".kam");
+    // Default to user-level Kam directory (defaults to ~/.kam). Respect KAM_HOME via crate::utils::kam_home_dir().
+    let base = crate::utils::kam_home_dir()?;
     std::fs::create_dir_all(&base)?;
     Ok(base)
 }
@@ -838,8 +835,8 @@ fn effective_base_url(override_url: Option<&str>) -> String {
     {
         return env;
     }
-    if let Some(home) = dirs::home_dir() {
-        let cfg = home.join(".kam").join("config.toml");
+    if let Ok(cfg_home) = crate::utils::kam_home_dir() {
+        let cfg = cfg_home.join("config.toml");
         if cfg.exists()
             && let Ok(content) = std::fs::read_to_string(&cfg)
             && let Ok(v) = toml::from_str::<toml::Value>(&content)
@@ -1066,7 +1063,7 @@ mod tests {
         let resp = client.get(&url).send().unwrap();
         assert!(resp.status().is_success());
         let md: ModuleDetail = resp.json().unwrap();
-        assert!(md.module_id == "asl" || md.module_id == "asl"); // sanity check
+        assert_eq!(md.module_id, "asl"); // sanity check
         assert!(md.releases.is_some());
         let rels = md.releases.unwrap();
         assert!(!rels.is_empty());
@@ -1102,7 +1099,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let entries = fetch_index_cached(&client, &base).unwrap();
+        let entries = fetch_index_cached(&client, base).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "testpkg");
 
@@ -1156,11 +1153,39 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_cache_root_dir_respects_kam_home_env() {
+        // Ensure cache_root_dir() uses KAM_HOME when provided.
+        let _guard = TEST_LOCK.lock().unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        // Preserve original KAM_HOME and set our test value
+        let orig = std::env::var_os("KAM_HOME");
+        unsafe {
+            std::env::set_var("KAM_HOME", tmp.path().to_str().unwrap());
+        }
+
+        // cache_root_dir should return the directory pointed to by KAM_HOME
+        let base = cache_root_dir().expect("cache_root_dir should succeed");
+        assert_eq!(base, tmp.path().to_path_buf());
+
+        // Restore original KAM_HOME
+        if let Some(v) = orig {
+            unsafe {
+                std::env::set_var("KAM_HOME", v);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("KAM_HOME");
+            }
+        }
+    }
+
     // ---- Added parsing tests for `kam repo sync` ----
 
     #[test]
     fn test_parsing_repo_sync_sets_subcommand() {
-        let cli = crate::cli::Cli::parse_from(&["kam", "repo", "sync"]);
+        let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync"]);
         match cli.command {
             Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
                 Some(RepoCommand::Sync(sync_args)) => {
@@ -1174,7 +1199,7 @@ mod tests {
 
     #[test]
     fn test_parsing_repo_sync_force_sets_force() {
-        let cli = crate::cli::Cli::parse_from(&["kam", "repo", "sync", "--force"]);
+        let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync", "--force"]);
         match cli.command {
             Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
                 Some(RepoCommand::Sync(sync_args)) => {
@@ -1189,7 +1214,7 @@ mod tests {
     #[test]
     fn test_parsing_repo_sync_modules_url() {
         let url = "https://example.test";
-        let cli = crate::cli::Cli::parse_from(&["kam", "repo", "sync", "--modules-url", url]);
+        let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync", "--modules-url", url]);
         match cli.command {
             Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
                 Some(RepoCommand::Sync(sync_args)) => {

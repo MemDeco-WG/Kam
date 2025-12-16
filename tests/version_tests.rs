@@ -48,8 +48,8 @@ fn bump_version(current: &str, index: usize) -> Result<String, KamError> {
     }
 
     parts[index] += 1;
-    for i in index + 1..parts.len() {
-        parts[i] = 0;
+    for part in parts.iter_mut().skip(index + 1) {
+        *part = 0;
     }
 
     Ok(parts

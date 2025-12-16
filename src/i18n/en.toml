@@ -558,12 +558,15 @@ file = "Operate on this file instead of project's kam.toml"
 
 # -------------------------
 # Misc / about / help
-# -------------------------
 [cli.commands.about]
 summary = "Display about information for Kam and credits"
 
 [cli.commands.config]
 summary = "Manage per-project or global kam configuration (similar to git config)"
+
+[cli.commands.env]
+summary = "Print environment variables starting with KAM_"
+description = "Print all environment variables whose names start with KAM_, useful for debugging."
 
 [cli.commands.help]
 summary = "Print this message or the help of the given subcommand(s)"

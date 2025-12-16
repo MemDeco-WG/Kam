@@ -520,7 +520,7 @@ module_type = "template"
 
         // Change current directory so that init_template's local search picks up tmpl/
         let prev_cwd = env::current_dir().expect("cwd");
-        env::set_current_dir(&project_root).expect("set cwd");
+        env::set_current_dir(project_root).expect("set cwd");
 
         // Destination for initialization
         let dest_dir = project_root.join("my_module");

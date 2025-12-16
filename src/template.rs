@@ -21,56 +21,59 @@ impl TemplateCacheManager {
         // 1) 环境变量覆盖（最高优先级）
         //    允许临时或测试时覆盖，比如 KAM_TEMPLATE_CACHE_DIR=/tmp/kam_templates
         if let Ok(dir_str) = std::env::var("KAM_TEMPLATE_CACHE_DIR")
-            && !dir_str.trim().is_empty() {
-                let cache_dir = if dir_str.starts_with("~/") {
-                    if let Some(home) = dirs::home_dir() {
-                        let rel = dir_str.trim_start_matches("~/");
-                        home.join(rel)
-                    } else {
-                        PathBuf::from(dir_str)
-                    }
+            && !dir_str.trim().is_empty()
+        {
+            let cache_dir = if dir_str.starts_with("~/") {
+                if let Some(home) = dirs::home_dir() {
+                    let rel = dir_str.trim_start_matches("~/");
+                    home.join(rel)
                 } else {
                     PathBuf::from(dir_str)
-                };
+                }
+            } else {
+                PathBuf::from(dir_str)
+            };
 
+            if !cache_dir.exists() {
+                fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
+            }
+            return Ok(cache_dir);
+        }
+
+        // 2) 全局配置覆盖（KAM_HOME/config.toml 或默认 ~/.kam/config.toml）
+        //    如果配置里有：
+        //      [tmpl]
+        //      cache_dir = "/some/path" (或 "~/somepath")
+        //    就用那个作为模板缓存目录
+        if let Ok(cfg_home) = crate::utils::kam_home_dir() {
+            let cfg_path = cfg_home.join("config.toml");
+            if cfg_path.exists()
+                && let Ok(cfg_str) = fs::read_to_string(&cfg_path)
+                && let Ok(cfg_v) = toml::from_str::<toml::Value>(&cfg_str)
+                && let Some(tmpl_table) = cfg_v.get("tmpl")
+                && let Some(cache_val) = tmpl_table.get("cache_dir").and_then(|v| v.as_str())
+            {
+                let cache_dir = if cache_val.starts_with("~/") {
+                    // Keep tilde-expansion semantics relative to the user's HOME
+                    if let Some(home) = dirs::home_dir() {
+                        home.join(cache_val.trim_start_matches("~/"))
+                    } else {
+                        PathBuf::from(cache_val)
+                    }
+                } else {
+                    PathBuf::from(cache_val)
+                };
                 if !cache_dir.exists() {
                     fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
                 }
                 return Ok(cache_dir);
             }
-
-        // 2) 全局配置覆盖（~/.kam/config.toml）
-        //    如果配置里有：
-        //      [tmpl]
-        //      cache_dir = "/some/path" (或 "~/somepath")
-        //    就用那个作为模板缓存目录
-        if let Some(home) = dirs::home_dir() {
-            let cfg_path = home.join(".kam").join("config.toml");
-            if cfg_path.exists()
-                && let Ok(cfg_str) = fs::read_to_string(&cfg_path)
-                    && let Ok(cfg_v) = toml::from_str::<toml::Value>(&cfg_str)
-                        && let Some(tmpl_table) = cfg_v.get("tmpl")
-                            && let Some(cache_val) =
-                                tmpl_table.get("cache_dir").and_then(|v| v.as_str())
-                            {
-                                let cache_dir = if cache_val.starts_with("~/") {
-                                    home.join(cache_val.trim_start_matches("~/"))
-                                } else {
-                                    PathBuf::from(cache_val)
-                                };
-                                if !cache_dir.exists() {
-                                    fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
-                                }
-                                return Ok(cache_dir);
-                            }
         }
 
-        // 3) 默认回退到 ~/.kam/templates
+        // 3) 默认回退到 Kam home 的 templates 目录（KAM_HOME 默认为 $HOME/.kam）
         //    如果前面都没找到，就用这个
-        let home = dirs::home_dir().ok_or_else(|| {
-            KamError::InvalidDirectory("Could not determine home directory".to_string())
-        })?;
-        let cache_dir = home.join(".kam").join("templates");
+        let base = crate::utils::kam_home_dir()?;
+        let cache_dir = base.join("templates");
         if !cache_dir.exists() {
             fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
         }
@@ -90,64 +93,69 @@ impl TemplateCacheManager {
                     templates.insert(name.to_string());
                 }
             } else if filename.ends_with(".zip")
-                && let Some(name) = filename.strip_suffix(".zip") {
-                    templates.insert(name.to_string());
-                }
+                && let Some(name) = filename.strip_suffix(".zip")
+            {
+                templates.insert(name.to_string());
+            }
         }
 
         // 2. 本地缓存的模板
         //    遍历缓存目录，找出所有模板文件
         if let Ok(cache_dir) = Self::get_cache_dir()
-            && let Ok(entries) = fs::read_dir(cache_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        // 处理.tar.gz的特殊情况，file_stem会返回"template.tar"
-                        // 需要再去掉.tar后缀
-                        let name = if path.to_string_lossy().ends_with(".tar.gz") {
-                            stem.strip_suffix(".tar").unwrap_or(stem)
-                        } else {
-                            stem
-                        };
-                        templates.insert(name.to_string());
-                    }
+            && let Ok(entries) = fs::read_dir(cache_dir)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    // 处理.tar.gz的特殊情况，file_stem会返回"template.tar"
+                    // 需要再去掉.tar后缀
+                    let name = if path.to_string_lossy().ends_with(".tar.gz") {
+                        stem.strip_suffix(".tar").unwrap_or(stem)
+                    } else {
+                        stem
+                    };
+                    templates.insert(name.to_string());
                 }
             }
+        }
 
         // 3. Project-local templates (e.g., tmpl/ and templates/ directories in the project)
         //    Support both directory-based templates and archive files such as .tar.gz, .tgz, .zip, .tar
         let project_local_dirs = crate::utils::PROJECT_TEMPLATE_DIRS;
         for dir in project_local_dirs {
             let dir_path = Path::new(dir);
-            if dir_path.exists() && dir_path.is_dir()
-                && let Ok(entries) = fs::read_dir(dir_path) {
-                    for entry in entries.flatten() {
-                        let p = entry.path();
-                        if p.is_dir() {
-                            if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+            if dir_path.exists()
+                && dir_path.is_dir()
+                && let Ok(entries) = fs::read_dir(dir_path)
+            {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_dir() {
+                        if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                            templates.insert(name.to_string());
+                        }
+                    } else if let Some(filename) = p.file_name().and_then(|s| s.to_str()) {
+                        // Handle common archive extensions
+                        if filename.ends_with(".tar.gz") {
+                            if let Some(name) = filename.strip_suffix(".tar.gz") {
                                 templates.insert(name.to_string());
                             }
-                        } else if let Some(filename) = p.file_name().and_then(|s| s.to_str()) {
-                            // Handle common archive extensions
-                            if filename.ends_with(".tar.gz") {
-                                if let Some(name) = filename.strip_suffix(".tar.gz") {
-                                    templates.insert(name.to_string());
-                                }
-                            } else if filename.ends_with(".tgz") {
-                                if let Some(name) = filename.strip_suffix(".tgz") {
-                                    templates.insert(name.to_string());
-                                }
-                            } else if filename.ends_with(".zip") {
-                                if let Some(name) = filename.strip_suffix(".zip") {
-                                    templates.insert(name.to_string());
-                                }
-                            } else if filename.ends_with(".tar")
-                                && let Some(name) = filename.strip_suffix(".tar") {
-                                    templates.insert(name.to_string());
-                                }
+                        } else if filename.ends_with(".tgz") {
+                            if let Some(name) = filename.strip_suffix(".tgz") {
+                                templates.insert(name.to_string());
+                            }
+                        } else if filename.ends_with(".zip") {
+                            if let Some(name) = filename.strip_suffix(".zip") {
+                                templates.insert(name.to_string());
+                            }
+                        } else if filename.ends_with(".tar")
+                            && let Some(name) = filename.strip_suffix(".tar")
+                        {
+                            templates.insert(name.to_string());
                         }
                     }
                 }
+            }
         }
 
         let mut list: Vec<String> = templates.into_iter().collect();
@@ -348,26 +356,27 @@ impl TemplateVariableProcessor {
 
         // mmrl.repo.* fields (helpful template variables and env vars)
         if let Some(mmrl) = &kam_toml.mmrl
-            && let Some(repo) = &mmrl.repo {
-                if let Some(repository) = &repo.repository {
-                    vars.insert("mmrl.repo.repository".to_string(), repository.clone());
-                }
-                if let Some(homepage) = &repo.homepage {
-                    vars.insert("mmrl.repo.homepage".to_string(), homepage.clone());
-                }
-                if let Some(readme) = &repo.readme {
-                    vars.insert("mmrl.repo.readme".to_string(), readme.clone());
-                }
-                if let Some(documentation) = &repo.documentation {
-                    vars.insert("mmrl.repo.documentation".to_string(), documentation.clone());
-                }
-                if let Some(issues) = &repo.issues {
-                    vars.insert("mmrl.repo.issues".to_string(), issues.clone());
-                }
-                if let Some(cover) = &repo.cover {
-                    vars.insert("mmrl.repo.cover".to_string(), cover.clone());
-                }
+            && let Some(repo) = &mmrl.repo
+        {
+            if let Some(repository) = &repo.repository {
+                vars.insert("mmrl.repo.repository".to_string(), repository.clone());
             }
+            if let Some(homepage) = &repo.homepage {
+                vars.insert("mmrl.repo.homepage".to_string(), homepage.clone());
+            }
+            if let Some(readme) = &repo.readme {
+                vars.insert("mmrl.repo.readme".to_string(), readme.clone());
+            }
+            if let Some(documentation) = &repo.documentation {
+                vars.insert("mmrl.repo.documentation".to_string(), documentation.clone());
+            }
+            if let Some(issues) = &repo.issues {
+                vars.insert("mmrl.repo.issues".to_string(), issues.clone());
+            }
+            if let Some(cover) = &repo.cover {
+                vars.insert("mmrl.repo.cover".to_string(), cover.clone());
+            }
+        }
 
         // kam.build.*字段（target和hooks目录，可选）
         // 这些主要是给模板用的，让模板知道构建配置
@@ -481,9 +490,10 @@ impl TemplateCopier {
 
             // Also try to render filename with Tera if it contains {{
             if dest_rel_path_str.contains("{{")
-                && let Ok(rendered) = tera.render_str(&dest_rel_path_str, &context) {
-                    dest_rel_path_str = rendered;
-                }
+                && let Ok(rendered) = tera.render_str(&dest_rel_path_str, &context)
+            {
+                dest_rel_path_str = rendered;
+            }
 
             let dst_path = dst.join(&dest_rel_path_str);
 
@@ -642,6 +652,52 @@ fn is_binary(path: &Path) -> bool {
     false
 }
 
+pub struct TemplateManager;
+
+impl TemplateManager {
+    pub fn ensure_template(template: &str) -> Result<(), KamError> {
+        TemplateCacheManager::ensure_template(template)
+    }
+
+    pub fn list_builtin_templates() -> Vec<String> {
+        TemplateCacheManager::list_templates()
+    }
+
+    pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, KamError> {
+        TemplateVariableProcessor::parse_template_vars(vars)
+    }
+
+    pub fn copy_and_replace(
+        src: &Path,
+        dst: &Path,
+        vars: &HashMap<String, String>,
+        force: bool,
+        template_id: &str,
+    ) -> Result<(), KamError> {
+        TemplateCopier::copy_and_replace(src, dst, vars, force, template_id)
+    }
+
+    pub fn copy_and_replace_with_rules(
+        src: &Path,
+        dst: &Path,
+        vars: &HashMap<String, String>,
+        force: bool,
+        template_id: &str,
+        excludes: Option<Vec<String>>,
+        includes: Option<Vec<String>>,
+    ) -> Result<(), KamError> {
+        TemplateCopier::copy_and_replace_with_rules(
+            src,
+            dst,
+            vars,
+            force,
+            template_id,
+            excludes,
+            includes,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -719,6 +775,56 @@ mod tests {
         } else {
             unsafe {
                 std::env::remove_var("KAM_TEMPLATE_CACHE_DIR");
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_cache_dir_respects_kam_home_env() {
+        // Verify that setting KAM_HOME changes the default templates cache location.
+        // Save old envs to restore later.
+        let old_kam_home = std::env::var_os("KAM_HOME");
+        let old_cache = std::env::var_os("KAM_TEMPLATE_CACHE_DIR");
+
+        // Prepare a temporary directory to act as KAM_HOME
+        let home_tmp = tempdir().expect("kam_home tmpdir");
+
+        unsafe {
+            // Ensure env override isn't interfering
+            std::env::remove_var("KAM_TEMPLATE_CACHE_DIR");
+            // Point KAM_HOME to our tempdir
+            std::env::set_var("KAM_HOME", home_tmp.path().to_str().unwrap());
+        }
+
+        // Expected result should be KAM_HOME/templates
+        let expected = home_tmp.path().join("templates");
+
+        let dir = TemplateCacheManager::get_cache_dir().expect("get cache dir");
+        assert_eq!(dir, expected);
+
+        // Cleanup if created
+        if expected.exists() {
+            std::fs::remove_dir_all(&expected).expect("cleanup cache dir");
+        }
+
+        // Restore env vars
+        if let Some(orig) = old_cache {
+            unsafe {
+                std::env::set_var("KAM_TEMPLATE_CACHE_DIR", orig);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("KAM_TEMPLATE_CACHE_DIR");
+            }
+        }
+        if let Some(orig) = old_kam_home {
+            unsafe {
+                std::env::set_var("KAM_HOME", orig);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("KAM_HOME");
             }
         }
     }
@@ -828,10 +934,10 @@ cache_dir = "~/my_config_cache_dir"
         );
 
         // Set mmrl.repo.repository
-        if let Some(mmrl) = kt.mmrl.as_mut() {
-            if let Some(repo) = mmrl.repo.as_mut() {
-                repo.repository = Some("https://github.com/test/repo".to_string());
-            }
+        if let Some(mmrl) = kt.mmrl.as_mut()
+            && let Some(repo) = mmrl.repo.as_mut()
+        {
+            repo.repository = Some("https://github.com/test/repo".to_string());
         }
 
         // Ensure build section exists and set source_dir
@@ -947,51 +1053,5 @@ cache_dir = "~/my_config_cache_dir"
             "./.github/workflows",
             None
         ));
-    }
-}
-
-pub struct TemplateManager;
-
-impl TemplateManager {
-    pub fn ensure_template(template: &str) -> Result<(), KamError> {
-        TemplateCacheManager::ensure_template(template)
-    }
-
-    pub fn list_builtin_templates() -> Vec<String> {
-        TemplateCacheManager::list_templates()
-    }
-
-    pub fn parse_template_vars(vars: &[String]) -> Result<HashMap<String, String>, KamError> {
-        TemplateVariableProcessor::parse_template_vars(vars)
-    }
-
-    pub fn copy_and_replace(
-        src: &Path,
-        dst: &Path,
-        vars: &HashMap<String, String>,
-        force: bool,
-        template_id: &str,
-    ) -> Result<(), KamError> {
-        TemplateCopier::copy_and_replace(src, dst, vars, force, template_id)
-    }
-
-    pub fn copy_and_replace_with_rules(
-        src: &Path,
-        dst: &Path,
-        vars: &HashMap<String, String>,
-        force: bool,
-        template_id: &str,
-        excludes: Option<Vec<String>>,
-        includes: Option<Vec<String>>,
-    ) -> Result<(), KamError> {
-        TemplateCopier::copy_and_replace_with_rules(
-            src,
-            dst,
-            vars,
-            force,
-            template_id,
-            excludes,
-            includes,
-        )
     }
 }

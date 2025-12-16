@@ -90,6 +90,9 @@ pub enum Commands {
     /// Display about information for Kam and credits
     About(crate::cmds::about::AboutArgs),
 
+    /// Print environment variables starting with KAM_ (for debugging)
+    Env(crate::cmds::env::EnvArgs),
+
     /// Print this message or the help of the given subcommand(s)
     Help(crate::cmds::help::HelpArgs),
 }

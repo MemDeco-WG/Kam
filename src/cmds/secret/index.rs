@@ -47,10 +47,8 @@ pub struct SecretIndex {
 
 // 获取索引文件路径（~/.kam/secrets.json）
 fn index_path() -> Result<PathBuf, KamError> {
-    let home = dirs::home_dir().ok_or_else(|| {
-        KamError::InvalidDirectory("Could not determine home directory".to_string())
-    })?;
-    let dir = home.join(".kam");
+    // Respect KAM_HOME environment variable if provided; otherwise fall back to $HOME/.kam
+    let dir = crate::utils::kam_home_dir()?;
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(KamError::Io)?;
     }

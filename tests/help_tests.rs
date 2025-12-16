@@ -13,7 +13,7 @@ fn help_subcommand_present_in_command_definition() {
 
 #[test]
 fn parsing_help_as_subcommand_sets_variant() {
-    let cli = Cli::parse_from(&["kam", "help"]);
+    let cli = Cli::parse_from(["kam", "help"]);
     match cli.command {
         Some(Commands::Help(args)) => assert!(
             args.subcommand.is_empty(),
@@ -25,7 +25,7 @@ fn parsing_help_as_subcommand_sets_variant() {
 
 #[test]
 fn parsing_help_with_subcommand_path_populates_args() {
-    let cli = Cli::parse_from(&["kam", "help", "tmpl", "import"]);
+    let cli = Cli::parse_from(["kam", "help", "tmpl", "import"]);
     match cli.command {
         Some(Commands::Help(args)) => {
             assert_eq!(

@@ -769,10 +769,9 @@ fn save_global_config(
     name: Option<&str>,
     version: Option<&str>,
 ) -> Result<(), KamError> {
-    // Use `toml` to update or create a global config at ~/.kam/config.toml
-    let home = dirs::home_dir()
-        .ok_or_else(|| KamError::InvalidDirectory("Cannot determine home directory".to_string()))?;
-    let config_dir = home.join(".kam");
+    // Use `toml` to update or create a global config at Kam's home directory (defaults to ~/.kam/config.toml).
+    // The `KAM_HOME` environment variable can override the Kam home directory.
+    let config_dir = crate::utils::kam_home_dir()?;
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).map_err(KamError::Io)?;
     }

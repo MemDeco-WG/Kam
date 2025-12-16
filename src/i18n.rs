@@ -1203,7 +1203,7 @@ mod tests {
 
         // Because `dirs` may cache the home directory at process startup, confirm it changed.
         // If not, skip to avoid mutating the real user's home directory.
-        if dirs::home_dir().as_ref().map(|p| p.as_path()) != Some(htmp.as_path()) {
+        if dirs::home_dir().as_deref() != Some(htmp.as_path()) {
             // restore and cleanup, then skip by returning early
             if let Some(h) = orig_home {
                 unsafe {

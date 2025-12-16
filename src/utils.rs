@@ -146,9 +146,10 @@ pub fn command_exists(cmd: &str) -> bool {
                 #[cfg(unix)]
                 {
                     if let Ok(md) = candidate.metadata()
-                        && md.permissions().mode() & 0o111 != 0 {
-                            return true;
-                        }
+                        && md.permissions().mode() & 0o111 != 0
+                    {
+                        return true;
+                    }
                 }
                 #[cfg(not(unix))]
                 {
@@ -443,6 +444,53 @@ impl Utils {
     }
 }
 
+/// Resolve the Kam home directory (the root directory used by Kam for global
+/// configuration, caches, secrets, etc).
+///
+/// Behavior:
+/// - If the environment variable `KAM_HOME` is set and non-empty, its value
+///   is used as the Kam home directory. Leading `~` is expanded to the user's
+///   home directory when possible (e.g., `~/kam` -> `/home/user/kam`).
+/// - Otherwise the default is `$HOME/.kam`.
+///
+/// Returns `Ok(PathBuf)` on success or `Err(KamError::InvalidDirectory)` when the
+/// user's home directory cannot be determined (and no KAM_HOME is set).
+pub fn kam_home_dir() -> Result<PathBuf, KamError> {
+    // Prefer explicit KAM_HOME if provided
+    if let Ok(val) = std::env::var("KAM_HOME") {
+        let s = val.trim();
+        if !s.is_empty() {
+            // Expand leading `~` if present (best-effort)
+            if s.starts_with('~') {
+                // Handle "~" and "~/..." specially
+                if let Some(home) = dirs::home_dir() {
+                    if s == "~" {
+                        return Ok(home);
+                    }
+                    // Prefer using strip_prefix("~/") so we don't manually slice the string.
+                    if let Some(rest) = s.strip_prefix("~/") {
+                        return Ok(home.join(rest));
+                    }
+                    // Fallback for cases like "~username" — treat as a literal path.
+                    return Ok(PathBuf::from(s));
+                } else {
+                    return Err(KamError::InvalidDirectory(
+                        "Cannot resolve home directory to expand KAM_HOME".to_string(),
+                    ));
+                }
+            } else {
+                return Ok(PathBuf::from(s));
+            }
+        }
+    }
+
+    // Fallback: $HOME/.kam
+    let home = dirs::home_dir().ok_or_else(|| {
+        KamError::InvalidDirectory("Could not determine home directory".to_string())
+    })?;
+    Ok(home.join(".kam"))
+}
+
 /// Normalize a free-form root manager string into a canonical manager name.
 ///
 /// Returns one of: "Magisk", "KernelSU", "APatchSU", or "Unknown".
@@ -658,6 +706,10 @@ pub fn symlink_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use std::env;
+    use std::fs;
+    use std::path::PathBuf;
 
     #[test]
     fn test_normalize_root_manager() {
@@ -671,5 +723,73 @@ mod tests {
         assert_eq!(normalize_root_manager("APU"), "APatchSU");
         assert_eq!(normalize_root_manager("Iapu"), "APatchSU");
         assert_eq!(normalize_root_manager("something-else"), "Unknown");
+    }
+
+    #[test]
+    #[serial]
+    fn test_kam_home_dir_prefers_kam_home_env() {
+        // Preserve original KAM_HOME then set a test value
+        let orig = env::var("KAM_HOME").ok();
+        let tmp = env::temp_dir().join("kam_home_test_env");
+        unsafe { env::set_var("KAM_HOME", tmp.to_str().unwrap()) };
+        let got = kam_home_dir().unwrap();
+        assert_eq!(got, tmp);
+        // restore original
+        if let Some(v) = orig {
+            unsafe { env::set_var("KAM_HOME", v) };
+        } else {
+            unsafe { env::remove_var("KAM_HOME") };
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_kam_home_dir_defaults_to_home_dot_kam() {
+        // Ensure KAM_HOME is not set and the default is $HOME/.kam
+        let orig = env::var("KAM_HOME").ok();
+        unsafe { env::remove_var("KAM_HOME") };
+        if let Some(home) = dirs::home_dir() {
+            let expected = home.join(".kam");
+            let got = kam_home_dir().unwrap();
+            assert_eq!(got, expected);
+        } else {
+            // If home_dir() is not available on this platform, skip the assertion
+        }
+        if let Some(v) = orig {
+            unsafe { env::set_var("KAM_HOME", v) };
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_kam_home_dir_expands_tilde() {
+        // Save original envs
+        let orig_kam = env::var("KAM_HOME").ok();
+        let orig_home = env::var("HOME").ok();
+
+        // Prepare a fake HOME so tilde expansion can be validated
+        let fake_home = env::temp_dir().join("kam_home_tilde_test");
+        fs::create_dir_all(&fake_home).unwrap();
+        unsafe { env::set_var("HOME", fake_home.to_str().unwrap()) };
+        unsafe { env::set_var("KAM_HOME", "~/kam_tilde_test") };
+
+        // Only run the meaningful assertion if dirs::home_dir() actually reflects our fake HOME
+        if dirs::home_dir().as_deref() == Some(fake_home.as_path()) {
+            let expected = fake_home.join("kam_tilde_test");
+            let got = kam_home_dir().unwrap();
+            assert_eq!(got, expected);
+        }
+
+        // restore envs
+        if let Some(v) = orig_home {
+            unsafe { env::set_var("HOME", v) };
+        } else {
+            unsafe { env::remove_var("HOME") };
+        }
+        if let Some(v) = orig_kam {
+            unsafe { env::set_var("KAM_HOME", v) };
+        } else {
+            unsafe { env::remove_var("KAM_HOME") };
+        }
     }
 }

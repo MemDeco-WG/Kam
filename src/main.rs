@@ -150,23 +150,20 @@ fn main() {
             // immediate next token exists and is not an option and not a subcommand,
             // insert `--` before it.
             for i in 1..args.len() {
-                if let Some(tok) = args[i].to_str() {
-                    if tok == "-S"
+                if let Some(tok) = args[i].to_str()
+                    && (tok == "-S"
                         || tok == "-s"
                         || tok == "-Ss"
                         || tok == "-sS"
                         || tok == "--sync"
-                        || tok == "--search"
-                    {
-                        if i + 1 < args.len() {
-                            if let Some(next) = args[i + 1].to_str() {
-                                if !next.starts_with('-') && !sub_names.contains(next) {
-                                    args.insert(i + 1, std::ffi::OsString::from("--"));
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                        || tok == "--search")
+                    && i + 1 < args.len()
+                    && let Some(next) = args[i + 1].to_str()
+                    && !next.starts_with('-')
+                    && !sub_names.contains(next)
+                {
+                    args.insert(i + 1, std::ffi::OsString::from("--"));
+                    break;
                 }
             }
         }
@@ -278,6 +275,7 @@ fn main() {
                 Ok(())
             }
         }
+        Some(Commands::Env(args)) => kam::cmds::env::run(args),
         Some(Commands::About(args)) => kam::cmds::about::run(args),
         None => Ok(()),
     };

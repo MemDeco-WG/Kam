@@ -45,11 +45,8 @@ pub enum ConfigCommand {
 // 支持全局配置（~/.kam/config.toml）和本地配置（项目/.kam/config.toml）
 pub fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> {
     if global {
-        // 强制使用全局配置
-        let home = dirs::home_dir().ok_or_else(|| {
-            KamError::CommandFailed("Cannot determine home directory for global config".to_string())
-        })?;
-        let dir = home.join(".kam");
+        // 强制使用全局配置。支持 `KAM_HOME` 环境变量来控制 kam 的家目录（默认：$HOME/.kam）
+        let dir = crate::utils::kam_home_dir()?;
         Ok(dir.join("config.toml"))
     } else if local {
         // 强制使用本地配置
@@ -82,10 +79,7 @@ pub fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> 
             }
         }
         // 不在项目里，用全局配置
-        let home = dirs::home_dir().ok_or_else(|| {
-            KamError::CommandFailed("Cannot determine home directory for global config".to_string())
-        })?;
-        let dir = home.join(".kam");
+        let dir = crate::utils::kam_home_dir()?;
         Ok(dir.join("config.toml"))
     }
 }
@@ -99,33 +93,39 @@ pub fn read_language_from_config() -> Option<String> {
 
     // 1) Try forced local config (prefer a project-local setting)
     if let Ok(local_path) = get_config_paths(false, true)
-        && let Ok(local_toml) = read_toml(&local_path) {
-            // First check ui.language (preferred)
-            if let Some(val) = get_value_by_path(&local_toml, "ui.language")
-                && let Some(s) = val.as_str() {
-                    return Some(s.to_string());
-                }
-            // Fallback to `language`
-            if let Some(val) = get_value_by_path(&local_toml, "language")
-                && let Some(s) = val.as_str() {
-                    return Some(s.to_string());
-                }
+        && let Ok(local_toml) = read_toml(&local_path)
+    {
+        // First check ui.language (preferred)
+        if let Some(val) = get_value_by_path(&local_toml, "ui.language")
+            && let Some(s) = val.as_str()
+        {
+            return Some(s.to_string());
         }
+        // Fallback to `language`
+        if let Some(val) = get_value_by_path(&local_toml, "language")
+            && let Some(s) = val.as_str()
+        {
+            return Some(s.to_string());
+        }
+    }
 
     // 2) Fallback to global config if local didn't provide a language
     if let Ok(global_path) = get_config_paths(true, false)
-        && let Ok(global_toml) = read_toml(&global_path) {
-            // First check ui.language (preferred)
-            if let Some(val) = get_value_by_path(&global_toml, "ui.language")
-                && let Some(s) = val.as_str() {
-                    return Some(s.to_string());
-                }
-            // Fallback to `language`
-            if let Some(val) = get_value_by_path(&global_toml, "language")
-                && let Some(s) = val.as_str() {
-                    return Some(s.to_string());
-                }
+        && let Ok(global_toml) = read_toml(&global_path)
+    {
+        // First check ui.language (preferred)
+        if let Some(val) = get_value_by_path(&global_toml, "ui.language")
+            && let Some(s) = val.as_str()
+        {
+            return Some(s.to_string());
         }
+        // Fallback to `language`
+        if let Some(val) = get_value_by_path(&global_toml, "language")
+            && let Some(s) = val.as_str()
+        {
+            return Some(s.to_string());
+        }
+    }
 
     None
 }
@@ -532,7 +532,7 @@ mod tests {
         // Because the `dirs` crate may cache the first-observed home path for the process,
         // confirm that it actually returned our new home value; if it didn't, skip the test
         // to avoid writing into the real user's home directory during testing.
-        if dirs::home_dir().as_ref().map(|p| p.as_path()) != Some(htmp.as_path()) {
+        if dirs::home_dir().as_deref() != Some(htmp.as_path()) {
             // restore environment & perform cleanup, then skip the test
             restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
             let _ = fs::remove_dir_all(&htmp);
@@ -589,7 +589,7 @@ mod tests {
             env::set_var("HOME", htmp.to_str().unwrap());
         }
         // Ensure `dirs::home_dir()` reflects this change — otherwise skip to avoid mutating real home
-        if dirs::home_dir().as_ref().map(|p| p.as_path()) != Some(htmp.as_path()) {
+        if dirs::home_dir().as_deref() != Some(htmp.as_path()) {
             restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
             let _ = fs::remove_dir_all(&tmp);
             let _ = fs::remove_dir_all(&htmp);

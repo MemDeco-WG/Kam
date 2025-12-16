@@ -387,6 +387,10 @@ summary = "显示 Kam 的关于信息与致谢"
 [cli.commands.config]
 summary = "管理项目级或全局 kam 配置（类似 git config）"
 
+[cli.commands.env]
+summary = "打印以 KAM_ 前缀开头的环境变量"
+description = "打印所有以 KAM_ 开头的环境变量，便于调试。"
+
 [cli.commands.help]
 summary = "打印帮助信息或指定子命令的帮助"
 

@@ -148,6 +148,35 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         )));
     }
 
+    // Report shellcheck availability early so users can tell whether .sh files will
+    // be checked by shellcheck (preferred) or by the built-in Rust check fallback.
+    // Include any failure detail as a user-visible warning.
+    if !args.json {
+        match std::process::Command::new("shellcheck")
+            .arg("--version")
+            .output()
+        {
+            Ok(out) => {
+                if out.status.success() {
+                    let ver = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    crate::utils::Utils::info(&format!("shellcheck detected: {}", ver));
+                } else {
+                    let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                    crate::utils::Utils::warn(&format!(
+                        "shellcheck present but '--version' returned non-zero: {}",
+                        err
+                    ));
+                }
+            }
+            Err(e) => {
+                crate::utils::Utils::warn(&format!(
+                    "shellcheck not found or cannot be executed: {}",
+                    e
+                ));
+            }
+        }
+    }
+
     let mut results: Vec<FileResult> = Vec::new();
 
     // 检测项目类型：是否是 Kam 项目
