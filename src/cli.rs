@@ -1,4 +1,6 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use std::collections::HashSet;
+use std::ffi::OsString;
 
 #[derive(Parser)]
 #[command(
@@ -95,4 +97,164 @@ pub enum Commands {
 
     /// Print this message or the help of the given subcommand(s)
     Help(crate::cmds::help::HelpArgs),
+}
+
+impl Cli {
+    /// Parse an argv-like iterator while supporting pacman-style short-flag combinations
+    /// (e.g. `-Syu`) by injecting a `--` before positional `TARGETS` when appropriate.
+    ///
+    /// Accepts any iterator over items that can be borrowed as an `OsStr` (so `&str`,
+    /// `String`, `OsString`, etc. all work). Returns a `Result<Cli, clap::Error>`
+    /// mirroring clap's `try_parse_from` semantics.
+    pub fn try_parse_from_with_pacman<I, T>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<std::ffi::OsStr>,
+    {
+        // Collect into OsString for manipulation
+        let mut args_os: Vec<OsString> = args
+            .into_iter()
+            .map(|t| t.as_ref().to_os_string())
+            .collect();
+
+        // If the user already supplied `--` we don't touch the args.
+        if args_os.iter().any(|a| a == &OsString::from("--")) {
+            let matches = Cli::command().try_get_matches_from(args_os)?;
+            return Cli::from_arg_matches(&matches);
+        }
+
+        // Collect subcommand names so we don't mistakenly insert `--` before a real subcommand.
+        let sub_names: HashSet<String> = Cli::command()
+            .get_subcommands()
+            .map(|s| s.get_name().to_string())
+            .collect();
+
+        // Look for tokens that are either explicit sync/search tokens or combined short flags
+        // containing 'S' or 's' (e.g., `-Syu`, `-yuS`, `-Ss`) and insert `--` before the next
+        // non-option/non-subcommand token so positional `TARGETS` are parsed correctly.
+        for i in 1..args_os.len() {
+            if let Some(tok) = args_os[i].to_str() {
+                // Exact matches we historically supported.
+                let explicit = tok == "-S"
+                    || tok == "-s"
+                    || tok == "-Ss"
+                    || tok == "-sS"
+                    || tok == "--sync"
+                    || tok == "--search";
+
+                // Detect combined short flags like `-Syu` or `-yuS`. We only accept letters
+                // from the known set to avoid surprising behavior with unrelated flags.
+                let mut combined = false;
+                if tok.starts_with('-') && !tok.starts_with("--") {
+                    let rest = &tok[1..];
+                    let mut all_known = true;
+                    let mut contains_sync_or_search = false;
+                    for ch in rest.chars() {
+                        match ch {
+                            'S' | 's' => contains_sync_or_search = true,
+                            'y' | 'u' => {}
+                            _ => {
+                                all_known = false;
+                                break;
+                            }
+                        }
+                    }
+                    combined = all_known && contains_sync_or_search;
+                }
+
+                if (explicit || combined) && i + 1 < args_os.len() {
+                    if let Some(next) = args_os[i + 1].to_str() {
+                        if !next.starts_with('-') && !sub_names.contains(next) {
+                            args_os.insert(i + 1, OsString::from("--"));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Parse using the derived Command (mirrors clap's default parsing path).
+        let matches = Cli::command().try_get_matches_from(args_os)?;
+        Cli::from_arg_matches(&matches)
+    }
+
+    /// Convenience wrapper that panics on error (like clap's `parse_from`).
+    pub fn parse_from_with_pacman<I, T>(args: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<std::ffi::OsStr>,
+    {
+        Self::try_parse_from_with_pacman(args).unwrap()
+    }
+}
+
+/// Preprocess argv and insert `--` before pacman-style targets when appropriate.
+///
+/// This is a pure helper function that can be used by `main()` if it wants to
+/// apply the same heuristic used by `Cli::try_parse_from_with_pacman`. It accepts
+/// a mutable `Vec<OsString>` (as produced by `env::args_os().collect()`) and a
+/// mutable reference to a `clap::Command` so it can consult subcommand names.
+pub fn inject_double_dash_for_targets(
+    mut args: Vec<std::ffi::OsString>,
+    cmd: &mut clap::Command,
+) -> Vec<std::ffi::OsString> {
+    use std::collections::HashSet;
+
+    // If the user already supplied `--` do nothing.
+    if args.iter().any(|a| a == &std::ffi::OsString::from("--")) {
+        return args;
+    }
+
+    // Known subcommand names to avoid inserting `--` before a real subcommand.
+    let sub_names: HashSet<String> = cmd
+        .get_subcommands()
+        .map(|s| s.get_name().to_string())
+        .collect();
+
+    for i in 1..args.len() {
+        if let Some(tok) = args[i].to_str() {
+            let mut should_inject = false;
+
+            // Exact matches (long or simple short forms)
+            if tok == "-S"
+                || tok == "-s"
+                || tok == "-Ss"
+                || tok == "-sS"
+                || tok == "--sync"
+                || tok == "--search"
+            {
+                should_inject = true;
+            } else if tok.starts_with('-') && !tok.starts_with("--") {
+                // Potential combined short flags like `-Syu`, `-yuS`, `-Ss`.
+                // Only treat as combined short flags if every character after '-'
+                // is one of the known short options we support here (S, s, y, u).
+                let mut all_known = true;
+                let mut contains_sync_or_search = false;
+                for ch in tok.chars().skip(1) {
+                    match ch {
+                        'S' | 's' => contains_sync_or_search = true,
+                        'y' | 'u' => {}
+                        _ => {
+                            all_known = false;
+                            break;
+                        }
+                    }
+                }
+                if all_known && contains_sync_or_search {
+                    should_inject = true;
+                }
+            }
+
+            if should_inject && i + 1 < args.len() {
+                if let Some(next) = args[i + 1].to_str() {
+                    if !next.starts_with('-') && !sub_names.contains(next) {
+                        args.insert(i + 1, std::ffi::OsString::from("--"));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    args
 }

@@ -68,9 +68,9 @@ Kam 支持类似 pacman 的顶层选项，用于直接与远程模块注册表�
 
 - `-Ss <关键字>` — 在远程模块注册表中搜索 `<关键字>`（例如：`kam -Ss foo`）。
 - `-S <模块ID>` — 下载指定模块的最新发布 ZIP（例如：`kam -S foo`）。
-- `-u`, `--update` — 在下载前刷新模块索引（等同于 `kam repo sync --force`）。  
+- `-u`, `--update` — 在下载前刷新模块索引（等同于 `kam repo sync --force`）。
   这些选项可以组合使用，例如：`kam -Syu <模块ID>` 会先刷新索引，然后下载模块（配合 `-y` 可自动确认）。
-  
+
 示例：
 ```bash
 kam -Ss some_keyword
@@ -84,7 +84,7 @@ kam -Syu some_module_id
 
 - https://github.com/MemDeco-WG/Kamcp
 
-示例：通过 Kamcp 的客户端或 WebUI 调用 `kam_exec("-Ss <关键字>")` 进行搜索，或向 AI 询问如何使用 `kam tmpl pull` 等命令。
+示例：向 AI 询问如何使用 `kam tmpl` 等命令。
 
 
 ### 配置模块

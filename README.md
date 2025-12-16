@@ -9,20 +9,6 @@ English | [中文](README.zh-CN.md)
 
 ## 📖 Overview
 
-## 🔤 i18n Tooling
-
-Kam includes a lightweight i18n workflow to keep CLI and WebUI translations consistent and easy to maintain.
-
-Key files and scripts:
-- `src/i18n/en.toml` and `src/i18n/zh.toml`: the canonical CLI translations (compiled into the binary).
-- `Kam/scripts/export_cli_i18n.py`: export the `cli` subtree from the TOML files into
-  `Kam/KamWEBUI/src/data/cli/en.json` and `Kam/KamWEBUI/src/data/cli/zh.json`.
-  Usage: `python3 Kam/scripts/export_cli_i18n.py`.
-- `Kam/scripts/generate_cli_i18n_skeleton.py`: scan `src/cmds/**/args.rs` to detect missing i18n keys
-  (and optionally emit skeleton TOML for translators).
-  Usage examples:
-    - Print missing keys: `python3 Kam/scripts/generate_cli_i18n_skeleton.py`
-    - Write skeletons for review: `python3 Kam/scripts/generate_cli_i18n_skeleton.py --write`
 
 CI checks:
 - `.github/workflows/i18n-check.yml` runs the exporter and verifies localized `--help` outputs

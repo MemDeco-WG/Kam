@@ -134,39 +134,10 @@ fn main() {
     // (not an option and not a real subcommand) automatically insert `--` so
     // `kam -S <target>` works without the user having to type `--`.
     let matches = {
-        // Collect argv and attempt to inject `--` after -S/-s when appropriate.
-        let mut args: Vec<std::ffi::OsString> = std::env::args_os().collect();
-
-        // If the user already supplied `--` we don't touch the args.
-        if !args.iter().any(|a| a == &std::ffi::OsString::from("--")) {
-            // Build a set of known subcommand names so we don't insert `--`
-            // before a legitimate subcommand.
-            let sub_names: std::collections::HashSet<String> = cmd
-                .get_subcommands()
-                .map(|s| s.get_name().to_string())
-                .collect();
-
-            // Look for -S/-s (or common short-combos like -Ss) tokens and, if the
-            // immediate next token exists and is not an option and not a subcommand,
-            // insert `--` before it.
-            for i in 1..args.len() {
-                if let Some(tok) = args[i].to_str()
-                    && (tok == "-S"
-                        || tok == "-s"
-                        || tok == "-Ss"
-                        || tok == "-sS"
-                        || tok == "--sync"
-                        || tok == "--search")
-                    && i + 1 < args.len()
-                    && let Some(next) = args[i + 1].to_str()
-                    && !next.starts_with('-')
-                    && !sub_names.contains(next)
-                {
-                    args.insert(i + 1, std::ffi::OsString::from("--"));
-                    break;
-                }
-            }
-        }
+        // Collect argv and allow the CLI helper to insert `--` when appropriate so
+        // combined short flags like `-Syu` are handled consistently with runtime.
+        let args_os: Vec<std::ffi::OsString> = std::env::args_os().collect();
+        let args = kam::cli::inject_double_dash_for_targets(args_os, &mut cmd);
 
         // Parse from the (possibly modified) argv list so clap receives the `--`
         // we've injected when appropriate.

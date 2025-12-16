@@ -3,6 +3,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 #[cfg(test)]
 use std::fs;
 use std::io::IsTerminal;
+use std::io::Read;
 #[cfg(test)]
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -249,7 +250,33 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                 _ => continue,
             }
         } else {
-            continue;
+            // No extension: try to detect a shell shebang in the first few bytes
+            // so scripts without '.sh' extension are still checked.
+            if let Ok(mut f) = std::fs::File::open(path) {
+                let mut buf = [0u8; 256];
+                if let Ok(n) = f.read(&mut buf) {
+                    let s = String::from_utf8_lossy(&buf[..n]);
+                    if s.starts_with("#!") {
+                        let lower = s.to_lowercase();
+                        if lower.contains("sh")
+                            || lower.contains("bash")
+                            || lower.contains("dash")
+                            || lower.contains("env sh")
+                            || lower.contains("env bash")
+                        {
+                            "sh"
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            } else {
+                continue;
+            }
         };
 
         let res = check_file(path, kind, args.fix)?;
@@ -345,7 +372,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("bad.json");
         let mut f = File::create(&path).unwrap();
-        writeln!(f, "{{\"a\":1,\"b\":2,").unwrap();
+        writeln!(f, "{{ \"a\":1,\"b\":2,}}").unwrap();
         let args = CheckArgs {
             path: dir.path().to_string_lossy().to_string(),
             json: true,
@@ -355,6 +382,33 @@ mod tests {
         // Run
         let result = run(args);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn collects_shebang_scripts_without_extension() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("myscript");
+        let mut f = File::create(&path).unwrap();
+        writeln!(f, "#!/bin/sh").unwrap();
+        writeln!(f, "echo hi").unwrap();
+        // Ensure the file is collected as a shell script even without .sh extension
+        let files = collect_project_files(dir.path(), &[], false);
+        // Debug: print directory contents and collected files to help diagnose failures
+        eprintln!(
+            "DEBUG: dir entries: {:?}",
+            std::fs::read_dir(dir.path())
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .collect::<Vec<_>>()
+        );
+        eprintln!("DEBUG: collected files: {:?}", files);
+        assert!(
+            files
+                .iter()
+                .any(|p| p.file_name().and_then(|n| n.to_str()) == Some("myscript")),
+            "collected files: {:?}",
+            files
+        );
     }
 
     #[test]

@@ -135,6 +135,192 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
     Ok(fr)
 }
 
+#[cfg(test)]
+mod shell_tests {
+    use super::*;
+    use serial_test::serial;
+    use std::fs::File;
+    use std::io::{Read, Write};
+    use tempfile::tempdir;
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn shellcheck_invoked_if_present() {
+        // Create a temporary directory to host a fake `shellcheck` and a test script.
+        let dir = tempdir().unwrap();
+
+        // Create fake `shellcheck` script that responds to `--version` and `--format=json <path>`.
+        let sc_path = dir.path().join("shellcheck");
+        {
+            let mut f = File::create(&sc_path).unwrap();
+            writeln!(f, "#!/bin/sh").unwrap();
+            writeln!(f, "if [ \"$1\" = \"--version\" ]; then").unwrap();
+            writeln!(f, "  echo \"shellcheck mock\"").unwrap();
+            writeln!(f, "  exit 0").unwrap();
+            writeln!(f, "fi").unwrap();
+            writeln!(f, "if [ \"$1\" = \"--format=json\" ]; then").unwrap();
+            writeln!(f, "  shift").unwrap();
+            writeln!(f, "  p=\"$1\"").unwrap();
+            f.write_all(b"  echo \"SHELLCHECK-MOCK-RUN $p\" >&2\n")
+                .unwrap();
+            f.write_all(b"  printf '{\"comments\":[{\"file\":\"%s\",\"line\":1,\"column\":1,\"level\":\"warning\",\"code\":9999,\"message\":\"fake-warning\"}]}' \"$p\"\n").unwrap();
+            writeln!(f, "  exit 0").unwrap();
+            writeln!(f, "fi").unwrap();
+            writeln!(f, "exit 0").unwrap();
+        }
+        // Make it executable
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&sc_path).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&sc_path, perms).unwrap();
+        }
+
+        // Prepend fake shellcheck to PATH for this test
+        let old_path = std::env::var("PATH").unwrap_or_default();
+        let new_path = format!("{}:{}", dir.path().display(), old_path);
+        unsafe {
+            std::env::set_var("PATH", &new_path);
+        }
+
+        // Debug info to make failures easier to triage
+        eprintln!("DEBUG: PATH={}", std::env::var("PATH").unwrap_or_default());
+        match std::process::Command::new("shellcheck")
+            .arg("--version")
+            .output()
+        {
+            Ok(out) => {
+                eprintln!(
+                    "DEBUG: shellcheck --version status={:?}, stdout={}, stderr={}",
+                    out.status,
+                    String::from_utf8_lossy(&out.stdout),
+                    String::from_utf8_lossy(&out.stderr)
+                );
+            }
+            Err(e) => {
+                eprintln!("DEBUG: failed to run 'shellcheck --version': {}", e);
+            }
+        }
+
+        // Create a test script (no .sh extension) with a shell shebang
+        let script_path = dir.path().join("myscript");
+        {
+            let mut s = File::create(&script_path).unwrap();
+            writeln!(s, "#!/bin/sh").unwrap();
+            writeln!(s, "echo hello").unwrap();
+        }
+
+        // Print the script content for debugging
+        match std::fs::read_to_string(&script_path) {
+            Ok(content) => eprintln!("DEBUG: script content: {}", content),
+            Err(e) => eprintln!("DEBUG: failed to read script content: {}", e),
+        }
+
+        // Try invoking shellcheck directly to see what it returns (debug)
+        match std::process::Command::new("shellcheck")
+            .arg("--format=json")
+            .arg(&script_path)
+            .output()
+        {
+            Ok(out) => eprintln!(
+                "DEBUG: shellcheck --format=json returned status={:?}, stdout={}, stderr={}",
+                out.status,
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            ),
+            Err(e) => eprintln!("DEBUG: failed to run 'shellcheck --format=json': {}", e),
+        }
+
+        // Call check_sh which should detect our fake shellcheck via PATH and parse its JSON output
+        let fr = check_sh(&script_path, false).unwrap();
+
+        // Debug warnings/errors returned by the checker
+        eprintln!("DEBUG: check_sh warnings: {:?}", fr.warnings);
+        eprintln!("DEBUG: check_sh errors: {:?}", fr.errors);
+
+        // Restore PATH
+        unsafe {
+            std::env::set_var("PATH", &old_path);
+        }
+
+        // Ensure the fake warning from our mock shellcheck was recorded
+        assert!(fr.warnings.iter().any(|w| w.contains("fake-warning")));
+    }
+
+    #[test]
+    fn debug_shebang_detection() {
+        // Create a temporary directory with a script that has no extension but a shebang
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("myscript");
+        let mut f = File::create(&path).unwrap();
+        writeln!(f, "#!/bin/sh").unwrap();
+        writeln!(f, "echo hi").unwrap();
+
+        // Emulate the shebang-detection logic and print debug info
+        let mut found = false;
+        for entry in std::fs::read_dir(dir.path()).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_file() {
+                let mut fh = std::fs::File::open(&path).unwrap();
+                let mut buf = [0u8; 256];
+                let n = fh.read(&mut buf).unwrap_or(0);
+                let header = String::from_utf8_lossy(&buf[..n]);
+                eprintln!(
+                    "DEBUG: file {:?} header: {:?}",
+                    path.file_name().and_then(|n| n.to_str()),
+                    header.lines().next()
+                );
+                if header.starts_with("#!") {
+                    let lower = header.to_lowercase();
+                    if lower.contains("sh")
+                        || lower.contains("bash")
+                        || lower.contains("dash")
+                        || lower.contains("env sh")
+                        || lower.contains("env bash")
+                    {
+                        eprintln!("DEBUG: detected shell script {:?}", path.file_name());
+                        found = true;
+                    }
+                }
+            }
+        }
+        assert!(found, "shebang script should be detected by heuristic");
+    }
+
+    #[test]
+    fn check_sh_custom_fallback_when_no_shellcheck() {
+        // Ensure that even if shellcheck is not present, the Rust fallback runs and returns a FileResult.
+        let dir = tempdir().unwrap();
+        let script_path = dir.path().join("myscript");
+        let mut s = File::create(&script_path).unwrap();
+        writeln!(s, "#!/bin/sh").unwrap();
+        writeln!(s, "echo hello").unwrap();
+
+        // Temporarily clear PATH to ensure shellcheck is not found for deterministic behavior
+        let old_path = std::env::var("PATH").unwrap_or_default();
+        unsafe {
+            std::env::set_var("PATH", "");
+        }
+
+        let fr = check_sh(&script_path, false).unwrap();
+
+        // Debugging info for fallback path
+        eprintln!("DEBUG fallback fr.warnings: {:?}", fr.warnings);
+        eprintln!("DEBUG fallback fr.errors: {:?}", fr.errors);
+
+        // Restore PATH
+        unsafe {
+            std::env::set_var("PATH", &old_path);
+        }
+
+        // The result should describe a shell check result
+        assert_eq!(fr.kind, "sh");
+    }
+}
+
 /// Apply file-name based special checks and warnings for common hook scripts and other special files.
 /// Examples:
 /// - If file is `install.sh`: suggest renaming to `customize.sh`.

@@ -110,6 +110,7 @@ struct ModuleDetail {
     pub homepage_url: Option<String>,
     pub authors: Option<Vec<Author>>,
     pub latest_release: Option<String>,
+    pub latest_release_time: Option<String>,
     pub releases: Option<Vec<Release>>,
     pub summary: Option<String>,
 }
@@ -130,6 +131,11 @@ struct Release {
     release_assets: Option<Vec<Asset>>,
     version: Option<String>,
     version_code: Option<String>,
+    created_at: Option<String>,
+    published_at: Option<String>,
+    updated_at: Option<String>,
+    tag_name: Option<String>,
+    is_prerelease: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -491,6 +497,18 @@ fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry
     }
 }
 
+/// Resolve a possibly-relative entry URL to an absolute URL using the registry base URL.
+fn resolve_entry_url(base_url: &str, url: &str) -> String {
+    let u = url.trim();
+    if u.starts_with("http://") || u.starts_with("https://") {
+        return u.to_string();
+    }
+    if u.starts_with('/') {
+        return format!("{}{}", base_url.trim_end_matches('/'), u);
+    }
+    format!("{}/{}", base_url.trim_end_matches('/'), u)
+}
+
 pub fn repo_sync(base_url: &str, force: bool) -> Result<(), KamError> {
     // Always attempt to fetch the latest index from the remote and write it to cache.
     let client = Client::builder()
@@ -599,7 +617,7 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
     // Print top results
-    for (score, e) in scored.iter().take(50) {
+    for (i, (score, e)) in scored.iter().take(50).enumerate() {
         let desc = e.description.as_deref().unwrap_or("");
         let score_suffix = if (*score - 1.0).abs() > f64::EPSILON {
             crate::i18n::tr_fmt("repo.score_format", &[&format!("{:.2}", score)])
@@ -617,8 +635,41 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
             println!("    {}: {}", crate::i18n::tr_key("repo.authors"), a);
         }
         if let Some(u) = &e.url {
-            println!("    {}: {}", crate::i18n::tr_key("repo.url"), u);
+            let pretty = resolve_entry_url(base_url, u);
+            println!("    {}: {}", crate::i18n::tr_key("repo.url"), pretty);
         }
+
+        // Try to fetch module details for the top few results to show version/time info
+        if i < 5 {
+            if let Ok(md) = fetch_module_detail(&client, &e.name, base_url) {
+                // Version
+                if let Some(lr) = md.latest_release.as_deref() {
+                    println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
+                } else if let Some(rels) = md.releases.as_ref() {
+                    if let Some(first) = rels.get(0) {
+                        if let Some(v) = first.version.as_deref().or(first.name.as_deref()) {
+                            println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
+                        }
+                    }
+                }
+                // Time
+                if let Some(lt) = md.latest_release_time.as_deref() {
+                    println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
+                } else if let Some(rels) = md.releases.as_ref() {
+                    if let Some(first) = rels.get(0) {
+                        if let Some(pub_at) = first
+                            .published_at
+                            .as_deref()
+                            .or(first.updated_at.as_deref())
+                            .or(first.created_at.as_deref())
+                        {
+                            println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
+                        }
+                    }
+                }
+            }
+        }
+
         println!();
     }
 
@@ -727,8 +778,39 @@ pub(crate) fn search_remote_interactive(
             println!("    {}: {}", crate::i18n::tr_key("repo.authors"), a);
         }
         if let Some(u) = &e.url {
-            println!("    {}: {}", crate::i18n::tr_key("repo.url"), u);
+            let pretty = resolve_entry_url(base_url, u);
+            println!("    {}: {}", crate::i18n::tr_key("repo.url"), pretty);
         }
+
+        // Try to fetch module details for the top few results to show version/time info
+        if i < 5 {
+            if let Ok(md) = fetch_module_detail(&client, &e.name, base_url) {
+                if let Some(lr) = md.latest_release.as_deref() {
+                    println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
+                } else if let Some(rels) = md.releases.as_ref() {
+                    if let Some(first) = rels.get(0) {
+                        if let Some(v) = first.version.as_deref().or(first.name.as_deref()) {
+                            println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
+                        }
+                    }
+                }
+                if let Some(lt) = md.latest_release_time.as_deref() {
+                    println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
+                } else if let Some(rels) = md.releases.as_ref() {
+                    if let Some(first) = rels.get(0) {
+                        if let Some(pub_at) = first
+                            .published_at
+                            .as_deref()
+                            .or(first.updated_at.as_deref())
+                            .or(first.created_at.as_deref())
+                        {
+                            println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
+                        }
+                    }
+                }
+            }
+        }
+
         println!();
     }
 
@@ -1073,6 +1155,35 @@ mod tests {
                 .map(|a| !a.is_empty())
                 .unwrap_or(false)
         }));
+    }
+
+    #[test]
+    fn test_resolve_entry_url() {
+        // Ensure relative and absolute entry URLs are resolved correctly.
+        let base = "https://modules.kernelsu.org";
+        assert_eq!(
+            resolve_entry_url(base, "/module/asl"),
+            "https://modules.kernelsu.org/module/asl"
+        );
+        assert_eq!(
+            resolve_entry_url(base, "module/asl"),
+            "https://modules.kernelsu.org/module/asl"
+        );
+        assert_eq!(
+            resolve_entry_url(base, "https://example.org/test"),
+            "https://example.org/test"
+        );
+    }
+
+    #[test]
+    fn test_fetch_module_detail_latest_release_time() {
+        // Fetch module JSON for 'asl' and ensure latest_release and latest_release_time are parsed.
+        let client = Client::new();
+        let base = effective_base_url(None);
+        let md = fetch_module_detail(&client, "asl", &base).unwrap();
+        assert_eq!(md.module_id, "asl"); // sanity check
+        assert!(md.latest_release.is_some());
+        assert!(md.latest_release_time.is_some());
     }
 
     #[test]
