@@ -33,14 +33,12 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::{OnceLock, RwLock};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum Language {
     #[default]
     En,
     Zh,
 }
-
 
 // RwLock should be OK for a static global language setting.
 // We default to English and allow changing it at runtime via `set_language`.
@@ -66,15 +64,17 @@ pub fn init() {
     // - KAM_UI_LANGUAGE : explicit UI language (e.g. "en", "zh", "zh-CN")
     // - KAM_LANG        : a secondary option for legacy or convenience
     if let Ok(val) = std::env::var("KAM_UI_LANGUAGE")
-        && !val.trim().is_empty() {
-            let _ = set_language_str(&val);
-            return;
-        }
+        && !val.trim().is_empty()
+    {
+        let _ = set_language_str(&val);
+        return;
+    }
     if let Ok(val) = std::env::var("KAM_LANG")
-        && !val.trim().is_empty() {
-            let _ = set_language_str(&val);
-            return;
-        }
+        && !val.trim().is_empty()
+    {
+        let _ = set_language_str(&val);
+        return;
+    }
 
     // 1. Try to read config (local or global). Prefer a 'language' or 'ui.language' key.
     // We call into config::read_language_from_config which is expected to be
@@ -185,9 +185,10 @@ pub fn tr_key(key: &str) -> &str {
         // Last defensive attempt: try trim
         let trimmed = key.trim();
         if trimmed != key
-            && let Some(v) = lookup(trimmed) {
-                return Some(v);
-            }
+            && let Some(v) = lookup(trimmed)
+        {
+            return Some(v);
+        }
         None
     }
 
@@ -315,14 +316,16 @@ fn try_load_runtime_i18n() {
                     std::collections::HashMap::new();
                 let en_path = dir.join("en.toml");
                 if en_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&en_path) {
-                        combined_en.extend(parse_toml_string_to_map(&s));
-                    }
+                    && let Ok(s) = std::fs::read_to_string(&en_path)
+                {
+                    combined_en.extend(parse_toml_string_to_map(&s));
+                }
                 let en_cli_path = dir.join("cli").join("en.toml");
                 if en_cli_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&en_cli_path) {
-                        combined_en.extend(parse_toml_string_to_map(&s));
-                    }
+                    && let Ok(s) = std::fs::read_to_string(&en_cli_path)
+                {
+                    combined_en.extend(parse_toml_string_to_map(&s));
+                }
                 if !combined_en.is_empty() {
                     let _ = KEYED_EN.set(combined_en);
                 }
@@ -334,14 +337,16 @@ fn try_load_runtime_i18n() {
                     std::collections::HashMap::new();
                 let zh_path = dir.join("zh.toml");
                 if zh_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&zh_path) {
-                        combined_zh.extend(parse_toml_string_to_map(&s));
-                    }
+                    && let Ok(s) = std::fs::read_to_string(&zh_path)
+                {
+                    combined_zh.extend(parse_toml_string_to_map(&s));
+                }
                 let zh_cli_path = dir.join("cli").join("zh.toml");
                 if zh_cli_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&zh_cli_path) {
-                        combined_zh.extend(parse_toml_string_to_map(&s));
-                    }
+                    && let Ok(s) = std::fs::read_to_string(&zh_cli_path)
+                {
+                    combined_zh.extend(parse_toml_string_to_map(&s));
+                }
                 if !combined_zh.is_empty() {
                     let _ = KEYED_ZH.set(combined_zh);
                 }
@@ -362,14 +367,16 @@ fn try_load_runtime_i18n() {
                     std::collections::HashMap::new();
                 let en_path = dir.join("en.toml");
                 if en_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&en_path) {
-                        combined_en.extend(parse_toml_string_to_map(&s));
-                    }
+                    && let Ok(s) = std::fs::read_to_string(&en_path)
+                {
+                    combined_en.extend(parse_toml_string_to_map(&s));
+                }
                 let en_cli_path = dir.join("cli").join("en.toml");
                 if en_cli_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&en_cli_path) {
-                        combined_en.extend(parse_toml_string_to_map(&s));
-                    }
+                    && let Ok(s) = std::fs::read_to_string(&en_cli_path)
+                {
+                    combined_en.extend(parse_toml_string_to_map(&s));
+                }
                 if !combined_en.is_empty() {
                     let _ = KEYED_EN.set(combined_en);
                 }
@@ -381,14 +388,16 @@ fn try_load_runtime_i18n() {
                     std::collections::HashMap::new();
                 let zh_path = dir.join("zh.toml");
                 if zh_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&zh_path) {
-                        combined_zh.extend(parse_toml_string_to_map(&s));
-                    }
+                    && let Ok(s) = std::fs::read_to_string(&zh_path)
+                {
+                    combined_zh.extend(parse_toml_string_to_map(&s));
+                }
                 let zh_cli_path = dir.join("cli").join("zh.toml");
                 if zh_cli_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&zh_cli_path) {
-                        combined_zh.extend(parse_toml_string_to_map(&s));
-                    }
+                    && let Ok(s) = std::fs::read_to_string(&zh_cli_path)
+                {
+                    combined_zh.extend(parse_toml_string_to_map(&s));
+                }
                 if !combined_zh.is_empty() {
                     let _ = KEYED_ZH.set(combined_zh);
                 }

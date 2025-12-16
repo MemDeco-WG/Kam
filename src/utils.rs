@@ -56,8 +56,8 @@ pub fn default_exclude_dir_names() -> Vec<String> {
 
 fn matches_directory_prefix(pattern: &str, path: &str) -> bool {
     let prefix = pattern.trim_end_matches('/');
-    let path_norm = if path.starts_with("./") {
-        &path[2..]
+    let path_norm = if let Some(stripped) = path.strip_prefix("./") {
+        stripped
     } else {
         path
     };
@@ -93,34 +93,36 @@ pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -
     let rel = rel_path.trim();
 
     // 目录前缀匹配
-    if patt.ends_with('/')
-        && matches_directory_prefix(patt, rel) {
-            return true;
-        }
+    if patt.ends_with('/') && matches_directory_prefix(patt, rel) {
+        return true;
+    }
 
     // 后缀通配符匹配
     if let Some(fname) = file_name
-        && matches_suffix_wildcard(patt, fname) {
-            return true;
-        }
+        && matches_suffix_wildcard(patt, fname)
+    {
+        return true;
+    }
 
     // 通配符正则匹配
     if matches_wildcard(patt, rel) {
         return true;
     }
     if let Some(fname) = file_name
-        && matches_wildcard(patt, fname) {
-            return true;
-        }
+        && matches_wildcard(patt, fname)
+    {
+        return true;
+    }
 
     // 精确匹配
     if matches_exact(patt, rel) {
         return true;
     }
     if let Some(fname) = file_name
-        && matches_exact(patt, fname) {
-            return true;
-        }
+        && matches_exact(patt, fname)
+    {
+        return true;
+    }
 
     false
 }
@@ -428,9 +430,10 @@ pub fn normalize_root_manager(raw: &str) -> String {
 // 如果path没有父目录（比如是根目录），就什么都做
 pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
     if let Some(parent) = path.parent()
-        && !parent.exists() {
-            fs::create_dir_all(parent)?;
-        }
+        && !parent.exists()
+    {
+        fs::create_dir_all(parent)?;
+    }
     Ok(())
 }
 
