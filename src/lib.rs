@@ -30,7 +30,7 @@ macro_rules! trf {
         // live for the duration of this block and are safe to pass to `tr_fmt`.
         let __trf_refs: Vec<&dyn std::fmt::Display> =
             __trf_store.iter().map(|s| s as &dyn std::fmt::Display).collect();
-        crate::i18n::tr_fmt($key, &__trf_refs)
+        $crate::i18n::tr_fmt($key, &__trf_refs)
     }};
 }
 

@@ -365,6 +365,14 @@ summary = "Install a module package to a connected device using the configured r
 description = "Install a built module (.zip) to a connected device using Magisk/KernelSU/APatchSU. Configure the preferred manager with `kam config set root.manager <Manager>`"
 
 [cli.commands.install.flags]
+
+[cli.commands.repo]
+summary = "Interact with module repository (search/download)"
+description = "Search and download modules from the registry. Use `kam -Ss <term>` to search or `kam -S <moduleId>` to download a module."
+
+[cli.commands.repo.sync]
+summary = "Download and cache the modules index (like `pacman -Sy`)"
+description = "Refresh the registry index and save it to the local cache so subsequent searches won't need to re-download the index. Use `--force` to force a refresh."
 path = "Path to module package (.zip). If omitted, Kam will try to find an artifact in the project's dist/ output dir"
 manager = "Preferred root manager (Magisk, KernelSU, APatchSU)"
 dry_run = "Print the derived install command instead of executing it"

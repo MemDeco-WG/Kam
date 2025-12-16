@@ -16,21 +16,21 @@ use super::args::AboutArgs;
 // 优先找 <email@domain> 这种格式，没有就用正则匹配
 fn extract_email(text: &str) -> Option<String> {
     // 先找 <...> 格式的
-    if let Some(start) = text.find('<') {
-        if let Some(end_rel) = text[start..].find('>') {
-            let candidate = text[start + 1..start + end_rel].trim();
-            if !candidate.is_empty() {
-                return Some(candidate.to_string());
-            }
+    if let Some(start) = text.find('<')
+        && let Some(end_rel) = text[start..].find('>')
+    {
+        let candidate = text[start + 1..start + end_rel].trim();
+        if !candidate.is_empty() {
+            return Some(candidate.to_string());
         }
     }
 
     // 回退方案：用简单的邮箱正则匹配
     // 这个正则可能不够完善，但大部分情况够用了
-    if let Ok(re) = Regex::new(r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)") {
-        if let Some(cap) = re.captures(text) {
-            return Some(cap[1].to_string());
-        }
+    if let Ok(re) = Regex::new(r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)")
+        && let Some(cap) = re.captures(text)
+    {
+        return Some(cap[1].to_string());
     }
 
     None
@@ -39,12 +39,10 @@ fn extract_email(text: &str) -> Option<String> {
 // 从候选列表里选第一个非空的值，都没有就用fallback
 // 这个函数主要是为了处理各种可能的来源（kam.toml、Cargo metadata等）
 fn pick_first<'a>(candidates: Vec<Option<&'a str>>, fallback: &'a str) -> String {
-    for c in candidates {
-        if let Some(v) = c {
-            let vtrim = v.trim();
-            if !vtrim.is_empty() {
-                return vtrim.to_string();
-            }
+    for v in candidates.into_iter().flatten() {
+        let vtrim = v.trim();
+        if !vtrim.is_empty() {
+            return vtrim.to_string();
         }
     }
     fallback.to_string()
@@ -85,9 +83,7 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     // Author: prefer kam.toml prop.author, otherwise CARGO_PKG_AUTHORS
     let author_raw = pick_first(
         vec![
-            kam_toml
-                .as_ref()
-                .and_then(|k| k.prop.author.as_ref().map(|s| s.as_str())),
+            kam_toml.as_ref().and_then(|k| k.prop.author.as_deref()),
             option_env!("CARGO_PKG_AUTHORS"),
         ],
         "LIghJUNction",

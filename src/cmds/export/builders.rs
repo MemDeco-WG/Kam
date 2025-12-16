@@ -36,7 +36,7 @@ pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
                 .and_then(|m| m.repo.as_ref())
                 .and_then(|r| r.homepage.clone())
         })
-        .unwrap_or_else(|| "".to_string());
+        .unwrap_or_default();
 
     // 收集作者列表，从prop.author和mmrl.repo.maintainers里找
     let mut authors: Vec<serde_json::Value> = vec![];
@@ -129,7 +129,7 @@ pub fn build_update_json(kt: &KamToml) -> serde_json::Value {
                 .and_then(|m| m.repo.as_ref())
                 .and_then(|r| r.homepage.clone())
         })
-        .unwrap_or_else(|| "".to_string());
+        .unwrap_or_default();
 
     // 构建zip下载URL
     // 如果是GitHub就按GitHub的格式，否则用通用格式
@@ -177,7 +177,7 @@ pub fn build_update_json(kt: &KamToml) -> serde_json::Value {
                 Some("https://raw.githubusercontent.com/user/repo/main/CHANGELOG.md".to_string())
             }
         })
-        .unwrap_or_else(|| "".to_string());
+        .unwrap_or_default();
 
     let mut root = serde_json::Map::new();
     root.insert("version".to_string(), serde_json::Value::String(version));
@@ -395,7 +395,7 @@ pub fn build_track_json(kt: &KamToml) -> serde_json::Value {
                 .and_then(|r| r.homepage.clone())
         })
         .or_else(|| kt.prop.updateJson.clone())
-        .unwrap_or_else(|| "".to_string());
+        .unwrap_or_default();
     root.insert("source".to_string(), serde_json::Value::String(source));
 
     // update_to字段：优先updateJson，没有就根据repository推断，再没有就用版本号
@@ -479,7 +479,7 @@ pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
         .as_ref()
         .and_then(|m| m.repo.as_ref())
         .and_then(|r| r.repository.as_ref())
-        .map(|s| s.split('/').last().unwrap_or(s).to_string()) // 取URL最后一部分
+        .map(|s| s.split('/').next_back().unwrap_or(s).to_string()) // 取URL最后一部分
         .unwrap_or_else(|| kt.prop.id.clone());
     root.insert("id".to_string(), serde_json::Value::String(id));
 
@@ -500,7 +500,7 @@ pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
                 .as_ref()
                 .and_then(|m| m.repo.as_ref().and_then(|r| r.repository.clone()))
         })
-        .unwrap_or_else(|| String::new());
+        .unwrap_or_default();
     let mut base_url = base_url.clone();
     if !base_url.is_empty() && !base_url.ends_with('/') {
         base_url.push('/'); // 确保末尾有斜杠

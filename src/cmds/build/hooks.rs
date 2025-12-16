@@ -365,7 +365,7 @@ fn run_hooks(
                     .replace('-', "_")
             );
             // Default value may exist in variable definition, or fallback to empty string
-            let env_val = var_def.default.clone().unwrap_or_else(|| String::new());
+            let env_val = var_def.default.clone().unwrap_or_default();
             add_env(&env_key, env_val);
         }
     }

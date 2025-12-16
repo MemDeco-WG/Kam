@@ -122,19 +122,14 @@ fn main() {
     // Kick off recursive localization for subcommands under "cli.commands".
     localize_command(&mut cmd, "cli.commands");
 
-    // Disable clap's built-in 'help' subcommand so we can add a localized one if available.
+    // The `help` subcommand is provided as a real subcommand (see `Commands::Help`)
+    // and is localized above via `localize_command`. Disable clap's built-in `help`
+    // subcommand so it doesn't collide with the derived `Help` subcommand.
     cmd = cmd.clone().disable_help_subcommand(true);
 
-    // If a localized 'help' summary exists, explicitly create a localized 'help' subcommand.
-    let help_summary = kam::i18n::tr_key("cli.commands.help.summary");
-    if help_summary != "cli.commands.help.summary" {
-        cmd = cmd
-            .clone()
-            .subcommand(clap::Command::new("help").about(help_summary.to_string()));
-    }
-
     // Parse using the localized Command so help output is translated.
-    let matches = cmd.get_matches();
+    // Use a cloned `cmd` so we can still reference the original for printing help later.
+    let matches = cmd.clone().get_matches();
 
     // Convert ArgMatches to typed `Cli` (handling parse errors).
     let cli = match Cli::from_arg_matches(&matches) {
@@ -183,6 +178,42 @@ fn main() {
         Some(Commands::Toml(args)) => kam::cmds::toml::run(args),
         Some(Commands::Install(args)) => kam::cmds::install::run(args),
         Some(Commands::Repo(args)) => kam::cmds::repo::run(args),
+        Some(Commands::Help(args)) => {
+            // Print top-level or subcommand help using a cloned, mutable Command so
+            // we can traverse nested subcommand definitions and call `print_long_help()`.
+            if args.subcommand.is_empty() {
+                let mut tmp = cmd.clone();
+                if let Err(e) = tmp.print_long_help() {
+                    kam::utils::Utils::error(&format!("Failed to write help: {}", e));
+                    std::process::exit(1);
+                }
+                println!();
+                Ok(())
+            } else {
+                // Clone the command and traverse mutable references to subcommands so
+                // we can call the mutable `print_long_help()` API on the target.
+                let mut cur_owned = cmd.clone();
+                let mut cur = &mut cur_owned;
+                for name in &args.subcommand {
+                    match cur
+                        .get_subcommands_mut()
+                        .find(|s| s.get_name() == name.as_str())
+                    {
+                        Some(s) => cur = s,
+                        None => {
+                            kam::utils::Utils::error(&format!("Unknown subcommand: {}", name));
+                            std::process::exit(2);
+                        }
+                    }
+                }
+                if let Err(e) = cur.print_long_help() {
+                    kam::utils::Utils::error(&format!("Failed to write help: {}", e));
+                    std::process::exit(1);
+                }
+                println!();
+                Ok(())
+            }
+        }
         Some(Commands::About(args)) => kam::cmds::about::run(args),
         None => Ok(()),
     };

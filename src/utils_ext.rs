@@ -10,7 +10,7 @@ pub fn confirm(msg: &str) -> bool {
             .read_line(&mut input)
             .expect("Failed to read input");
         let trimmed = input.trim().to_lowercase();
-        match trimmed.to_lowercase().as_str() {
+        match trimmed.as_str() {
             "yes" | "y" => {
                 return true;
             }
@@ -18,7 +18,8 @@ pub fn confirm(msg: &str) -> bool {
                 return false;
             }
             _ => {
-                return false;
+                // Invalid input; re-prompt.
+                continue;
             }
         }
     }

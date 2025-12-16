@@ -103,7 +103,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
 
     // 注：不要切换全局 CWD（在并发环境下会导致竞态）。
     // 直接使用成员路径进行构建，避免修改进程级别的状态。
-    let result = match KamToml::load_from_dir(member_path.as_path()) {
+    match KamToml::load_from_dir(member_path.as_path()) {
         Ok(kt) => match build_project(member_path.as_path(), args, Some(kt)) {
             Ok(_) => BuildResult {
                 member: member.to_string(),
@@ -127,9 +127,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
                 error: Some(format!("failed to load kam.toml: {}", e)),
             }
         }
-    };
-
-    result
+    }
 }
 
 pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamError> {
@@ -361,7 +359,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
             .add_row(vec![
                 Cell::new(crate::i18n::tr_key("table.stat.total_duration"))
                     .fg(comfy_table::Color::Cyan),
-                Cell::new(&format!("{:.2}s", total_duration.as_secs_f64()))
+                Cell::new(format!("{:.2}s", total_duration.as_secs_f64()))
                     .fg(comfy_table::Color::White),
             ]);
 

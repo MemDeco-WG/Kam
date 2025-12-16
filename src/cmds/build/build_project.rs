@@ -112,7 +112,7 @@ pub fn build_project(
             ])
             .add_row(vec![
                 Cell::new(crate::i18n::tr_key("table.header.module")).fg(comfy_table::Color::Cyan),
-                Cell::new(&format!("{} v{}", module_id, version)).fg(comfy_table::Color::Green),
+                Cell::new(format!("{} v{}", module_id, version)).fg(comfy_table::Color::Green),
             ])
             .add_row(vec![
                 Cell::new(crate::i18n::tr_key("project.output_directory"))
@@ -217,7 +217,7 @@ pub fn build_project(
                 .add_row(vec![
                     Cell::new(crate::i18n::tr_key("project.build_time"))
                         .fg(comfy_table::Color::Cyan),
-                    Cell::new(&format!("{:.2}s", build_duration.as_secs_f64()))
+                    Cell::new(format!("{:.2}s", build_duration.as_secs_f64()))
                         .fg(comfy_table::Color::Green)
                         .add_attribute(comfy_table::Attribute::Bold),
                 ])
@@ -577,13 +577,13 @@ pub fn create_template_archive(
 
     // Compile exclude and include patterns as raw strings and use the central matcher at runtime
     let exclude_patterns: Vec<String> = if let Some(build) = _kam_toml.kam.build.as_ref() {
-        build.exclude.clone().unwrap_or_else(|| Vec::new())
+        build.exclude.clone().unwrap_or_default()
     } else {
         Vec::new()
     };
 
     let include_patterns: Vec<String> = if let Some(build) = _kam_toml.kam.build.as_ref() {
-        build.include.clone().unwrap_or_else(|| Vec::new())
+        build.include.clone().unwrap_or_default()
     } else {
         Vec::new()
     };

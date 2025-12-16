@@ -14,7 +14,7 @@ Notes:
 
 use crate::errors::KamError;
 use crate::utils::Utils;
-use clap::Args;
+use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
 use reqwest::header::USER_AGENT;
@@ -31,6 +31,10 @@ const MODULE_JSON_PREFIX: &str = "/module/"; // {id}.json appended
 /// CLI args for the `kam repo` subcommand
 #[derive(Args, Debug, Clone)]
 pub struct RepoArgs {
+    /// Subcommands for repo (e.g., `repo sync`)
+    #[command(subcommand)]
+    pub command: Option<RepoCommand>,
+
     /// Pacman-style sync (download) flag (equivalent to pacman -S)
     #[arg(short = 'S', long = "sync")]
     pub sync: bool,
@@ -39,17 +43,46 @@ pub struct RepoArgs {
     #[arg(short = 's', long = "search")]
     pub search: bool,
 
-    /// Override modules registry base URL for this invocation (e.g., https://example.org)
+    /// URL for the modules registry API (default: https://modules.kernelsu.org). Overrides the built-in modules endpoint.
     #[arg(long = "modules-url", value_name = "URL")]
     pub modules_url: Option<String>,
 
     /// Positional targets: module IDs or search terms (used with -S / -s)
-    #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
+    #[arg(value_name = "TARGETS", num_args = 0..)]
     pub targets: Vec<String>,
 }
 
 /// Entrypoint for `kam repo` subcommand.
+#[derive(Subcommand, Debug, Clone)]
+pub enum RepoCommand {
+    /// Sync (refresh) the index cache from remote (similar to pacman -Sy)
+    Sync(SyncArgs),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct SyncArgs {
+    /// Force refresh even if cached
+    #[arg(long = "force")]
+    pub force: bool,
+    /// Optional modules registry base url (override)
+    #[arg(long = "modules-url", value_name = "URL")]
+    pub modules_url: Option<String>,
+}
+
 pub fn run(args: RepoArgs) -> Result<(), KamError> {
+    // If a nested repo subcommand is provided, handle it first (e.g., `repo sync`)
+    if let Some(RepoCommand::Sync(sync_args)) = args.command {
+        // Determine effective base URL: priority - sync command arg -> repo arg -> default
+        let base = effective_base_url(
+            sync_args
+                .modules_url
+                .as_deref()
+                .or(args.modules_url.as_deref()),
+        );
+        return repo_sync(&base, sync_args.force);
+    }
+
+    // fallback to existing pacman-style handling (-S / -s)
     handle_pacman_style(
         args.sync,
         args.search,
@@ -247,16 +280,167 @@ pub fn handle_pacman_style(
 
 /// Search the remote catalog (search-index.json) for the provided query
 /// (case-insensitive substring match across name/description/summary/authors).
-pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
+fn cache_root_dir() -> Result<PathBuf, KamError> {
+    // Allow override for tests or custom installs via env var.
+    if let Ok(dir) = std::env::var("KAM_CACHE_DIR") {
+        let p = PathBuf::from(dir);
+        std::fs::create_dir_all(&p)?;
+        return Ok(p);
+    }
+
+    let mut base = dirs::cache_dir().unwrap_or(std::env::temp_dir());
+    base.push("kam");
+    std::fs::create_dir_all(&base)?;
+    Ok(base)
+}
+
+fn sanitize_filename(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
+fn index_cache_path(base_url: &str) -> Result<PathBuf, KamError> {
+    let mut p = cache_root_dir()?;
+    let fname = format!("index_{}.json", sanitize_filename(base_url));
+    p.push(fname);
+    Ok(p)
+}
+
+fn module_cache_path(module_id: &str) -> Result<PathBuf, KamError> {
+    let mut p = cache_root_dir()?;
+    p.push("modules");
+    std::fs::create_dir_all(&p)?;
+    p.push(format!("{}.json", module_id));
+    Ok(p)
+}
+
+fn is_fresh(path: &Path, ttl_secs: u64) -> bool {
+    match path.metadata().and_then(|m| m.modified()) {
+        Ok(modified) => match std::time::SystemTime::now().duration_since(modified) {
+            Ok(dur) => dur.as_secs() < ttl_secs,
+            Err(_) => false,
+        },
+        Err(_) => false,
+    }
+}
+
+fn write_atomic(path: &Path, contents: &str) -> Result<(), KamError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, contents)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+fn try_find_index_in_cache_dir(dir: &Path) -> Option<Vec<SearchEntry>> {
+    // Look for files matching index_*.json and pick the most recently modified one that parses.
+    let mut candidates: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_file() {
+                if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("index_") && name.ends_with(".json") {
+                        if let Ok(meta) = p.metadata() {
+                            if let Ok(m) = meta.modified() {
+                                candidates.push((m, p));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Sort by modified desc
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_mtime, p) in candidates {
+        if let Ok(buf) = std::fs::read_to_string(&p) {
+            if let Ok(entries) = serde_json::from_str::<Vec<SearchEntry>>(&buf) {
+                return Some(entries);
+            }
+        }
+    }
+    None
+}
+
+fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry>, KamError> {
+    let path = index_cache_path(base_url)?;
+    let force_refresh = std::env::var("KAM_FORCE_INDEX_REFRESH").is_ok();
+
+    // 1) If a cached index exists and no explicit force refresh is requested, try it first.
+    if path.exists() && !force_refresh {
+        if let Ok(buf) = std::fs::read_to_string(&path) {
+            if let Ok(entries) = serde_json::from_str::<Vec<SearchEntry>>(&buf) {
+                return Ok(entries);
+            } else {
+                // corrupted or incompatible cache; we'll try fallback scan or network below
+            }
+        }
+    }
+
+    // 2) Try to find an alternative cached index in the same cache directory (index_*.json)
+    if let Some(parent) = path.parent() {
+        if let Some(entries) = try_find_index_in_cache_dir(parent) {
+            return Ok(entries);
+        }
+    }
+
+    // 3) Attempt network fetch; if network fails or non-success status, try fallback cache scan before returning error.
+    let url = format!("{}{}", base_url, SEARCH_INDEX_PATH);
+    match client
+        .get(&url)
+        .header(USER_AGENT, "kam/repo-search")
+        .send()
+    {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                // network returned non-success; try fallback cache scan
+                if let Some(parent) = path.parent() {
+                    if let Some(entries) = try_find_index_in_cache_dir(parent) {
+                        return Ok(entries);
+                    }
+                }
+                return Err(KamError::FetchFailed(format!(
+                    "{} returned status {}",
+                    url,
+                    resp.status()
+                )));
+            }
+            let body = resp.text().map_err(|e| {
+                KamError::FetchFailed(format!("Failed to read {} body: {}", url, e))
+            })?;
+            let entries: Vec<SearchEntry> = serde_json::from_str(&body)
+                .map_err(|e| KamError::Json(format!("Failed to parse {} JSON: {}", url, e)))?;
+            // Write to primary cache path (atomic)
+            let _ = write_atomic(&path, &body);
+            Ok(entries)
+        }
+        Err(e) => {
+            // Network error - try fallback cache scan
+            if let Some(parent) = path.parent() {
+                if let Some(entries) = try_find_index_in_cache_dir(parent) {
+                    return Ok(entries);
+                }
+            }
+            Err(KamError::FetchFailed(format!("GET {} failed: {}", url, e)))
+        }
+    }
+}
+
+pub fn repo_sync(base_url: &str, force: bool) -> Result<(), KamError> {
+    // Always attempt to fetch the latest index from the remote and write it to cache.
     let client = Client::builder()
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
 
     let url = format!("{}{}", base_url, SEARCH_INDEX_PATH);
     let resp = client
         .get(&url)
-        .header(USER_AGENT, "kam/repo-search")
+        .header(USER_AGENT, "kam/repo-sync")
         .send()
         .map_err(|e| KamError::FetchFailed(format!("GET {} failed: {}", url, e)))?;
 
@@ -268,9 +452,33 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
         )));
     }
 
-    let entries: Vec<SearchEntry> = resp
-        .json()
-        .map_err(|e| KamError::Json(format!("Failed to parse {} JSON: {}", url, e)))?;
+    let body = resp
+        .text()
+        .map_err(|e| KamError::FetchFailed(format!("Failed to read {} body: {}", url, e)))?;
+
+    let path = index_cache_path(base_url)?;
+    let _ = write_atomic(&path, &body)?;
+
+    if force {
+        Utils::section(&format!(
+            "Index force-synced from {} -> {}",
+            url,
+            path.display()
+        ));
+    } else {
+        Utils::success(&format!("Index synced to {}", path.display()));
+    }
+    Ok(())
+}
+
+pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
+
+    // Use cached index if available & fresh; otherwise fetch and cache.
+    let entries = fetch_index_cached(&client, base_url)?;
 
     let q = query.to_lowercase().trim().to_string();
     if q.is_empty() {
@@ -458,23 +666,67 @@ fn fetch_module_detail(
     module_id: &str,
     base_url: &str,
 ) -> Result<ModuleDetail, KamError> {
+    let path = module_cache_path(module_id)?;
+    let force_refresh = std::env::var("KAM_FORCE_MODULE_REFRESH").is_ok();
+
+    // Prefer cached copy if present and not explicitly forced to refresh.
+    if path.exists() && !force_refresh {
+        // Try to read & parse cached module JSON; if successful, return it.
+        if let Ok(mut f) = File::open(&path) {
+            let mut buf = String::new();
+            if let Ok(_) = f.read_to_string(&mut buf) {
+                if let Ok(md) = serde_json::from_str::<ModuleDetail>(&buf) {
+                    return Ok(md);
+                } else {
+                    Utils::warn(&format!(
+                        "Cached module JSON for '{}' could not be parsed; will attempt to refresh from registry",
+                        module_id
+                    ));
+                }
+            } else {
+                Utils::warn(&format!(
+                    "Failed to read cached module JSON for '{}'; will attempt to refresh from registry",
+                    module_id
+                ));
+            }
+        } else {
+            // Could not open file; fall through to network fetch.
+            Utils::warn(&format!(
+                "Failed to open cached module JSON for '{}'; will attempt to refresh from registry",
+                module_id
+            ));
+        }
+    }
+
     let url = format!("{}{}{}.json", base_url, MODULE_JSON_PREFIX, module_id);
     let resp = client
         .get(&url)
         .header(USER_AGENT, "kam/repo-module")
         .send()
         .map_err(|e| KamError::FetchFailed(format!("GET {} failed: {}", url, e)))?;
+
     if !resp.status().is_success() {
-        return Err(KamError::FetchFailed(format!(
-            "{} returned status {}",
-            url,
-            resp.status()
-        )));
+        // Fallback to cached copy if available
+        if path.exists() {
+            let mut s = String::new();
+            File::open(&path)?.read_to_string(&mut s)?;
+            let md: ModuleDetail = serde_json::from_str(&s)?;
+            return Ok(md);
+        } else {
+            return Err(KamError::FetchFailed(format!(
+                "{} returned status {}",
+                url,
+                resp.status()
+            )));
+        }
     }
 
-    let md: ModuleDetail = resp
-        .json()
+    let body = resp
+        .text()
+        .map_err(|e| KamError::FetchFailed(format!("Failed to read {} body: {}", url, e)))?;
+    let md: ModuleDetail = serde_json::from_str(&body)
         .map_err(|e| KamError::Json(format!("Failed to parse {} JSON: {}", url, e)))?;
+    let _ = write_atomic(&path, &body);
     Ok(md)
 }
 
@@ -602,6 +854,8 @@ fn download_asset(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+    use tempfile;
 
     #[test]
     fn test_search_asl() {
@@ -628,5 +882,126 @@ mod tests {
                 .map(|a| !a.is_empty())
                 .unwrap_or(false)
         }));
+    }
+
+    #[test]
+    fn test_fetch_index_cached_uses_local_cache() {
+        // Create a temporary cache dir and write a fake index file, then ensure
+        // fetch_index_cached reads it (no network needed).
+        let tmp = tempfile::TempDir::new().unwrap();
+        unsafe {
+            std::env::set_var("KAM_CACHE_DIR", tmp.path().to_str().unwrap());
+        }
+
+        let base = "https://example.test";
+        let path = index_cache_path(base).unwrap();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+
+        let sample = r#"[{"name":"testpkg","description":"desc","summary":"sum","authors":"me","url":"https://example"}]"#;
+        std::fs::write(&path, sample).unwrap();
+
+        let client = Client::builder()
+            .timeout(Duration::from_secs(2))
+            .build()
+            .unwrap();
+
+        let entries = fetch_index_cached(&client, &base).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "testpkg");
+
+        // Clean up env
+        unsafe {
+            std::env::remove_var("KAM_CACHE_DIR");
+        }
+    }
+
+    #[test]
+    fn test_fetch_module_detail_cached_reads_local_file() {
+        // Create a temporary cache dir and write a fake module JSON, then ensure
+        // fetch_module_detail returns the cached content.
+        let tmp = tempfile::TempDir::new().unwrap();
+        unsafe {
+            std::env::set_var("KAM_CACHE_DIR", tmp.path().to_str().unwrap());
+        }
+
+        let base = effective_base_url(None);
+        let module_id = "testmodule";
+        let path = module_cache_path(module_id).unwrap();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+
+        // Use camelCase keys as the deserializer expects.
+        let sample = r#"{
+            "moduleId": "testmodule",
+            "moduleName": "Test Module",
+            "url": "https://example",
+            "authors": null,
+            "latestRelease": null,
+            "releases": [],
+            "summary": "a test module"
+        }"#;
+        std::fs::write(&path, sample).unwrap();
+
+        let client = Client::builder()
+            .timeout(Duration::from_secs(2))
+            .build()
+            .unwrap();
+
+        let md = fetch_module_detail(&client, module_id, &base).unwrap();
+        assert_eq!(md.module_id, "testmodule");
+        assert_eq!(md.module_name.unwrap(), "Test Module");
+
+        // Clean up env
+        unsafe {
+            std::env::remove_var("KAM_CACHE_DIR");
+        }
+    }
+
+    // ---- Added parsing tests for `kam repo sync` ----
+
+    #[test]
+    fn test_parsing_repo_sync_sets_subcommand() {
+        let cli = crate::cli::Cli::parse_from(&["kam", "repo", "sync"]);
+        match cli.command {
+            Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
+                Some(RepoCommand::Sync(sync_args)) => {
+                    assert!(!sync_args.force, "expected --force to be false by default");
+                }
+                _ => panic!("expected RepoCommand::Sync"),
+            },
+            _ => panic!("expected Commands::Repo"),
+        }
+    }
+
+    #[test]
+    fn test_parsing_repo_sync_force_sets_force() {
+        let cli = crate::cli::Cli::parse_from(&["kam", "repo", "sync", "--force"]);
+        match cli.command {
+            Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
+                Some(RepoCommand::Sync(sync_args)) => {
+                    assert!(sync_args.force, "expected --force to be true");
+                }
+                _ => panic!("expected RepoCommand::Sync"),
+            },
+            _ => panic!("expected Commands::Repo"),
+        }
+    }
+
+    #[test]
+    fn test_parsing_repo_sync_modules_url() {
+        let url = "https://example.test";
+        let cli = crate::cli::Cli::parse_from(&["kam", "repo", "sync", "--modules-url", url]);
+        match cli.command {
+            Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
+                Some(RepoCommand::Sync(sync_args)) => {
+                    assert_eq!(sync_args.modules_url.as_deref(), Some(url));
+                }
+                _ => panic!("expected RepoCommand::Sync"),
+            },
+            _ => panic!("expected Commands::Repo"),
+        }
     }
 }

@@ -5,6 +5,7 @@ pub mod check;
 pub mod completion;
 pub mod config;
 pub mod export;
+pub mod help;
 pub mod init;
 pub mod install;
 pub mod repo;

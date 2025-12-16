@@ -16,10 +16,10 @@ fn extract_archive(path: &Path, dst: &Path) -> Result<(), KamError> {
     if path_str.ends_with(".tar.gz") || path_str.ends_with(".tgz") {
         let tar = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(tar);
-        archive.unpack(dst).map_err(|e| KamError::Io(e))?;
+        archive.unpack(dst).map_err(KamError::Io)?;
     } else if path_str.ends_with(".zip") {
         let mut archive = zip::ZipArchive::new(file).map_err(KamError::Zip)?;
-        archive.extract(dst).map_err(|e| KamError::Zip(e))?;
+        archive.extract(dst).map_err(KamError::Zip)?;
     } else {
         return Err(KamError::UnsupportedArchive(format!(
             "Unsupported archive: {}",

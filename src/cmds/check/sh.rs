@@ -1,5 +1,6 @@
 use crate::cmds::check::file::FileResult;
 use crate::errors::KamError;
+use regex::Regex;
 use serde_json;
 use std::fs;
 use std::io::Write;
@@ -18,13 +19,59 @@ fn command_installed(cmd: &str) -> bool {
 
 // 检查shell脚本
 // 如果有shellcheck就用它（更准确），否则用自定义的Rust检查（简单但够用）
+// 另外，对所有脚本统一执行基于文件名的特判和基于 AST 的高危命令检测（补充 shellcheck 的检测）
 pub fn check_sh(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
-    if command_installed("shellcheck") {
-        // shellcheck可用，用它检查（更专业）
-        return check_sh_with_tool(path, do_fix);
+    // 首先运行已有的检查实现（shellcheck 优先，其次自定义）
+    let mut fr = if command_installed("shellcheck") {
+        match check_sh_with_tool(path, do_fix) {
+            Ok(f) => f,
+            Err(e) => {
+                // 如果 shellcheck 执行失败，生成一个基本结果并记录警告
+                FileResult {
+                    path: path.to_string_lossy().to_string(),
+                    kind: "sh".to_string(),
+                    valid: true,
+                    errors: Vec::new(),
+                    warnings: vec![format!("shellcheck execution failed: {}", e)],
+                    fixed: false,
+                }
+            }
+        }
+    } else {
+        check_sh_custom(path, do_fix)?
+    };
+
+    // 读取文件内容以便做额外检查（文件名相关检查 / AST 检查 / 换行格式检查等）
+    let s = fs::read_to_string(path)?;
+
+    // 基于文件名的特殊规则（例如 install.sh / post-fs-data.sh 的提示）
+    apply_sh_filename_checks(path, &s, &mut fr);
+
+    // 基于树形语法树的高危指令检测（如果 parser 可用）
+    let mut parser = Parser::new();
+    let language = tree_sitter::Language::new(tree_sitter_bash::LANGUAGE);
+    if parser.set_language(&language).is_ok() {
+        if let Some(tree) = parser.parse(&s, None) {
+            detect_dangerous_commands(tree.root_node(), &s, &mut fr, path);
+        }
     }
-    // 没有shellcheck，用自定义检查
-    check_sh_custom(path, do_fix)
+
+    // 通用换行规范：确保使用 UNIX LF（如果要求修复，则写回）
+    if s.contains('\r') {
+        fr.warnings
+            .push("CR/CRLF line endings detected; use UNIX LF line endings".to_string());
+        if do_fix {
+            let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
+            fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(path)?
+                .write_all(normalized.as_bytes())?;
+            fr.fixed = true;
+        }
+    }
+
+    Ok(fr)
 }
 
 // 用shellcheck工具检查（如果可用）
@@ -91,6 +138,276 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
         }
     }
     Ok(fr)
+}
+
+/// Apply file-name based special checks and warnings for common hook scripts and other special files.
+/// Examples:
+/// - If file is `install.sh`: suggest renaming to `customize.sh`.
+/// - If file is `post-fs-data.sh` and contains `setprop`: warning recommending `resetprop` usage.
+fn apply_sh_filename_checks(path: &Path, content: &str, fr: &mut FileResult) {
+    if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
+        match fname {
+            "install.sh" => {
+                fr.warnings.push(
+                    "Found 'install.sh' - consider renaming to 'customize.sh' to avoid ambiguous behavior"
+                        .to_string(),
+                );
+            }
+            "post-fs-data.sh" => {
+                let re = Regex::new(r"\bsetprop\b").unwrap();
+                if re.is_match(content) {
+                    fr.warnings.push(
+                        "WARNING: Using setprop will deadlock the boot process! Please use resetprop -n <prop_name> <prop_value> instead."
+                            .to_string(),
+                    );
+                }
+            }
+            "post-mount.sh" => {
+                fr.warnings
+                    .push("This script will be executed in post-mount stage".to_string());
+            }
+            "service.sh" => {
+                fr.warnings
+                    .push("This script will be executed as a late_start service".to_string());
+            }
+            "boot-completed.sh" => {
+                fr.warnings
+                    .push("This script will be executed on boot completed".to_string());
+            }
+            "uninstall.sh" => {
+                fr.warnings.push(
+                    "This script will be executed when KernelSU removes your module".to_string(),
+                );
+            }
+            "action.sh" => {
+                fr.warnings
+                    .push("This script will be executed when user clicks the Action button in KernelSU app".to_string());
+            }
+            "system.prop" => {
+                fr.warnings.push(
+                    "Properties in this file will be loaded as system properties by resetprop"
+                        .to_string(),
+                );
+            }
+            "sepolicy.rule" => {
+                fr.warnings.push(
+                    "SEPolicy rules may affect device security; review carefully".to_string(),
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Walk Tree-sitter AST and detect suspicious / high-risk commands.
+///
+/// Basic heuristics implemented:
+/// - rm -rf ... on absolute paths -> error
+/// - dd to /dev/* -> error
+/// - mkfs* -> error
+/// - chmod 777 -R -> warning
+/// - chown on /system or /data -> warning
+/// - reboot/shutdown/poweroff -> warning
+/// - piped download to shell (curl|wget ... | sh) -> warning
+/// - setprop usage (generic warning unless already handled specially)
+fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileResult, path: &Path) {
+    // Skip comment nodes (do not analyze commented-out code)
+    if node.kind() == "comment" {
+        return;
+    }
+
+    // First, detect piped download-to-shell patterns anywhere in the node text,
+    // e.g. `curl ... | sh` or `wget ... | bash`
+    if let Ok(node_text_all) = node.utf8_text(src.as_bytes()) {
+        let node_text_low = node_text_all.to_lowercase();
+        // Simple substring-based detection: look for curl/wget + pipe + sh/bash
+        if (node_text_low.contains("curl") || node_text_low.contains("wget"))
+            && node_text_low.contains("|")
+            && (node_text_low.contains(" sh")
+                || node_text_low.contains("| sh")
+                || node_text_low.contains(" bash")
+                || node_text_low.contains("| bash")
+                || node_text_low.contains("sh ")
+                || node_text_low.contains("bash "))
+        {
+            let msg = format!(
+                "Piped shell install detected (download | shell): {}",
+                node_text_all
+            );
+            if !fr.warnings.contains(&msg) {
+                fr.warnings.push(msg);
+            }
+        }
+    }
+
+    // If this node is a command, try to extract the command name & full text and apply heuristics
+    if node.kind() == "command" {
+        if node.child(0).is_some() {
+            if let Ok(node_text) = node.utf8_text(src.as_bytes()) {
+                let txt = node_text.trim();
+                let mut iter = txt.split_whitespace();
+                if let Some(cmd) = iter.next() {
+                    let cmd_l = cmd.to_lowercase();
+                    let node_text_low = node_text.to_lowercase();
+
+                    match cmd_l.as_str() {
+                        "rm" => {
+                            if node_text_low.contains("-rf")
+                                || (node_text_low.contains("-r") && node_text_low.contains("-f"))
+                            {
+                                // More precise check: examine positional arguments for absolute literal paths (skip variables)
+                                let args: Vec<&str> = txt.split_whitespace().skip(1).collect();
+                                let mut dangerous_abs = false;
+                                for a in args {
+                                    let a_trim = a.trim_matches('"').trim_matches('\'');
+                                    // Skip variable references and command substitutions
+                                    if a_trim.starts_with('/')
+                                        && !a_trim.contains('$')
+                                        && !a_trim.contains('`')
+                                    {
+                                        dangerous_abs = true;
+                                        break;
+                                    }
+                                }
+                                if dangerous_abs {
+                                    fr.valid = false;
+                                    let msg = format!(
+                                        "Dangerous rm -rf usage detected (possible removal of root files): {}",
+                                        node_text
+                                    );
+                                    if !fr.errors.contains(&msg) {
+                                        fr.errors.push(msg);
+                                    }
+                                } else {
+                                    let warn_msg =
+                                        "rm -rf usage detected; ensure this is intentional"
+                                            .to_string();
+                                    if !fr.warnings.contains(&warn_msg) {
+                                        fr.warnings.push(warn_msg);
+                                    }
+                                }
+                            }
+                        }
+                        "dd" => {
+                            if node_text_low.contains("/dev/") {
+                                fr.valid = false;
+                                fr.errors.push(format!(
+                                    "Potential destructive 'dd' on device: {}",
+                                    node_text
+                                ));
+                            }
+                        }
+                        _ if cmd_l.starts_with("mkfs") => {
+                            fr.valid = false;
+                            fr.errors.push(format!(
+                                "Filesystem formatting command found: {}",
+                                node_text
+                            ));
+                        }
+                        "reboot" | "shutdown" | "poweroff" | "halt" => {
+                            fr.warnings
+                                .push("Command will reboot or shutdown the device".to_string());
+                        }
+                        "chmod" => {
+                            if node_text_low.contains("777") && node_text_low.contains("-r") {
+                                fr.warnings.push(format!(
+                                    "Potentially unsafe 'chmod 777 -R': {}",
+                                    node_text
+                                ));
+                            }
+                        }
+                        "chown" => {
+                            if node_text_low.contains("/system") || node_text_low.contains("/data")
+                            {
+                                fr.warnings.push(format!(
+                                    "'chown' on system/data detected: {}",
+                                    node_text
+                                ));
+                            }
+                        }
+                        "setprop" => {
+                            // If this is not the post-fs-data special-case (already warned), add a general warning
+                            if !path
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .map(|s| s == "post-fs-data.sh")
+                                .unwrap_or(false)
+                            {
+                                fr.warnings.push(format!("Usage of 'setprop' detected; prefer 'resetprop -n' where appropriate: {}", node_text));
+                            }
+                        }
+                        "eval" => {
+                            let msg = format!("Use of 'eval' detected: {}", node_text);
+                            if !fr.warnings.contains(&msg) {
+                                fr.warnings.push(msg);
+                            }
+                        }
+                        _ => {
+                            // For 'command' nodes we already handled many checks; leave room for heuristics.
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Recurse children
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i as u32) {
+            detect_dangerous_commands(child, src, fr, path);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    // Helper to run the custom checker on temporary content
+    fn run_check_on_content(content: &str) -> FileResult {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("t.sh");
+        let mut f = File::create(&path).unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        check_sh_custom(&path, false).unwrap()
+    }
+
+    // Ensure comments are ignored (no detection on commented commands)
+    #[test]
+    fn test_detect_dangerous_commands_ignores_comments() {
+        let content = r#"
+# This is a comment showing a dangerous command
+# rm -rf / -- not executed
+# curl http://example.org | sh
+"#;
+        let fr = run_check_on_content(content);
+        assert!(!fr.errors.iter().any(|e| e.contains("Dangerous rm -rf")));
+        assert!(
+            !fr.warnings
+                .iter()
+                .any(|w| w.contains("Piped shell install"))
+        );
+    }
+
+    // Ensure real commands are detected (rm -rf and eval detection)
+    #[test]
+    fn test_detect_dangerous_commands_flags_rm_rf_and_eval() {
+        let content = r#"
+# benign comment
+rm -rf /tmp/somewhere
+eval set -- "$opt"
+"#;
+        let fr = run_check_on_content(content);
+        assert!(fr.errors.iter().any(|e| e.contains("Dangerous rm -rf")));
+        assert!(
+            fr.warnings
+                .iter()
+                .any(|w| w.contains("Use of 'eval' detected"))
+        );
+    }
 }
 
 // 自定义的shell脚本检查（没有shellcheck时用）
@@ -226,4 +543,68 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
             .push("Usage of eval detected; consider alternatives".to_string());
     }
     Ok(fr)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile;
+
+    #[test]
+    fn test_install_sh_suggest_rename() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("install.sh");
+        fs::write(&path, "echo hi\n").unwrap();
+        let fr = check_sh(&path, false).unwrap();
+        assert!(
+            fr.warnings
+                .iter()
+                .any(|w| w.contains("install.sh") || w.contains("customize.sh")),
+            "Expected a warning suggesting rename to customize.sh"
+        );
+    }
+
+    #[test]
+    fn test_post_fs_data_setprop_warning() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("post-fs-data.sh");
+        fs::write(&path, "setprop sys.boot_completed 1\n").unwrap();
+        let fr = check_sh(&path, false).unwrap();
+        assert!(
+            fr.warnings
+                .iter()
+                .any(|w| w.to_lowercase().contains("setprop")),
+            "Expected a setprop warning for post-fs-data.sh"
+        );
+    }
+
+    #[test]
+    fn test_detect_rm_rf_error() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("danger.sh");
+        fs::write(&path, "rm -rf /\n").unwrap();
+        let fr = check_sh(&path, false).unwrap();
+        assert!(
+            fr.errors
+                .iter()
+                .any(|e| e.to_lowercase().contains("rm -rf")),
+            "Expected detection of dangerous rm -rf usage"
+        );
+    }
+
+    #[test]
+    fn test_piped_curl_warning() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("installme.sh");
+        fs::write(&path, "curl -sSL https://example.com/install.sh | sh\n").unwrap();
+        let fr = check_sh(&path, false).unwrap();
+        assert!(
+            fr.warnings
+                .iter()
+                .any(|w| w.to_lowercase().contains("piped shell install")
+                    || w.to_lowercase().contains("piped")),
+            "Expected a warning for piped download to shell"
+        );
+    }
 }

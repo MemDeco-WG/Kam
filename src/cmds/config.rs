@@ -349,7 +349,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                         if final_key.contains('=') {
                             // Convert to owned Strings to avoid borrowing `final_key` while mutating it.
                             let parts: Vec<String> =
-                                final_key.splitn(2, '=').map(|s| s.to_string()).collect();
+                                final_key.splitn(2, '=').map(ToString::to_string).collect();
                             if parts.len() >= 2 {
                                 final_key = parts[0].clone();
                                 final_value = parts[1].clone();
@@ -369,7 +369,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                         if final_key.contains('=') {
                             // Convert to owned Strings to avoid borrowing `final_key` while mutating it.
                             let parts: Vec<String> =
-                                final_key.splitn(2, '=').map(|s| s.to_string()).collect();
+                                final_key.splitn(2, '=').map(ToString::to_string).collect();
                             if parts.len() >= 2 {
                                 let shorthand_key = parts[0].clone();
                                 let shorthand_val = parts[1].clone();

@@ -315,6 +315,16 @@ summary = "管理项目级或全局 kam 配置（类似 git config）"
 [cli.commands.help]
 summary = "打印帮助信息或指定子命令的帮助"
 
+[cli.commands.repo]
+summary = "与模块注册表交互（搜索/下载）"
+description = "从注册表搜索并下载模块。使用 `kam -Ss <term>` 搜索或 `kam -S <moduleId>` 下载模块。"
+
+[cli.commands.repo.sync]
+summary = "下载并缓存模块索引（类似 `pacman -Sy`）"
+description = "刷新注册表索引并保存到本地缓存，以便后续搜索无需重新下载索引。使用 `--force` 强制刷新。"
+
+[cli.commands.repo.sync.flags]
+force = "即使缓存仍然有效也强制刷新"
 
 [check.errors]
 header = "错误："

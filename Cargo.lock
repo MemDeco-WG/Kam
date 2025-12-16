@@ -1368,7 +1368,7 @@ dependencies = [
 
 [[package]]
 name = "kam"
-version = "0.5.2"
+version = "0.5.4"
 dependencies = [
  "base64",
  "chrono",

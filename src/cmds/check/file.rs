@@ -60,7 +60,7 @@ where
 }
 
 pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, KamError> {
-    let s = fs::read_to_string(path)?;
+    let mut s = fs::read_to_string(path)?;
     let mut fr = FileResult {
         path: path.to_string_lossy().to_string(),
         kind: kind.to_string(),
@@ -114,6 +114,27 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
             }
         }
         "toml" => {
+            // Ensure UNIX LF line endings are used in TOML files.
+            // If CR or CRLF are found, report an error; if --fix is requested, normalize to LF.
+            if s.contains('\r') {
+                fr.valid = false;
+                fr.errors.push(
+                    "TOML files must use UNIX (LF) line endings; please convert CRLF/CR to LF"
+                        .to_string(),
+                );
+                if do_fix {
+                    let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
+                    fs::OpenOptions::new()
+                        .write(true)
+                        .truncate(true)
+                        .open(path)?
+                        .write_all(normalized.as_bytes())?;
+                    // Update our working content so subsequent checks operate on normalized content
+                    s = normalized;
+                    fr.fixed = true;
+                }
+            }
+
             let parse_fn = |s: &str| -> Result<(), String> {
                 toml::from_str::<toml::Value>(s)
                     .map_err(|e| {
@@ -220,16 +241,15 @@ fn check_required_fields(kam_toml: &KamToml, fr: &mut FileResult) {
     if kam_toml.prop.id.trim().is_empty() {
         fr.valid = false;
         fr.errors.push("[prop] id is required".to_string());
-    } else if !kam_toml
-        .prop
-        .id
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
-    {
-        fr.valid = false;
-        fr.errors.push(
-            "[prop] id contains invalid characters (allowed: a-z, A-Z, 0-9, _, -, .)".to_string(),
-        );
+    } else {
+        // Enforce stricter id format: must start with a letter and contain only letters, digits, dot, underscore or hyphen.
+        // Regex: ^[a-zA-Z][a-zA-Z0-9._-]+$
+        let id_re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9._-]+$").unwrap();
+        if !id_re.is_match(&kam_toml.prop.id) {
+            fr.valid = false;
+            fr.errors
+                .push("[prop] id must match regex: ^[a-zA-Z][a-zA-Z0-9._-]+$".to_string());
+        }
     }
 
     if kam_toml.prop.name.trim().is_empty() {

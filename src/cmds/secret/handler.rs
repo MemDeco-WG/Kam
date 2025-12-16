@@ -116,7 +116,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 let mut s = String::new();
                 std::io::stdin()
                     .read_to_string(&mut s)
-                    .map_err(|e| KamError::Io(e))?;
+                    .map_err(KamError::Io)?;
                 s.into_bytes()
             };
 
