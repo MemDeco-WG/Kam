@@ -11,10 +11,7 @@ use tree_sitter::Parser;
 use tree_sitter_bash;
 
 fn command_installed(cmd: &str) -> bool {
-    match Command::new(cmd).arg("--version").output() {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    Command::new(cmd).arg("--version").output().is_ok()
 }
 
 // 检查shell脚本
@@ -50,10 +47,10 @@ pub fn check_sh(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
     // 基于树形语法树的高危指令检测（如果 parser 可用）
     let mut parser = Parser::new();
     let language = tree_sitter::Language::new(tree_sitter_bash::LANGUAGE);
-    if parser.set_language(&language).is_ok() {
-        if let Some(tree) = parser.parse(&s, None) {
-            detect_dangerous_commands(tree.root_node(), &s, &mut fr, path);
-        }
+    if parser.set_language(&language).is_ok()
+        && let Some(tree) = parser.parse(&s, None)
+    {
+        detect_dangerous_commands(tree.root_node(), &s, &mut fr, path);
     }
 
     // 通用换行规范：确保使用 UNIX LF（如果要求修复，则写回）
@@ -92,30 +89,28 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
         .output()
     {
         Ok(output) => {
-            if !output.stdout.is_empty() {
-                // 解析JSON输出，提取错误和警告
-                if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
-                    if let Some(comments) = v.get("comments").and_then(|x| x.as_array()) {
-                        for c in comments {
-                            // 提取shellcheck的检查结果
-                            let file = c.get("file").and_then(|x| x.as_str()).unwrap_or("");
-                            let line = c.get("line").and_then(|x| x.as_u64()).unwrap_or(0);
-                            let column = c.get("column").and_then(|x| x.as_u64()).unwrap_or(0);
-                            let level = c.get("level").and_then(|x| x.as_str()).unwrap_or("");
-                            let code = c.get("code").and_then(|x| x.as_u64()).unwrap_or(0);
-                            let message = c.get("message").and_then(|x| x.as_str()).unwrap_or("");
-                            let msg = format!(
-                                "shellcheck [{}] {}:{}:{} {}",
-                                code, file, line, column, message
-                            );
-                            // 根据级别分类：error或warning
-                            if level.eq_ignore_ascii_case("error") {
-                                fr.valid = false;
-                                fr.errors.push(msg.clone());
-                            } else {
-                                fr.warnings.push(msg.clone());
-                            }
-                        }
+            if !output.stdout.is_empty()
+                && let Ok(v) = serde_json::from_slice::<serde_json::Value>(&output.stdout)
+                && let Some(comments) = v.get("comments").and_then(|x| x.as_array())
+            {
+                for c in comments {
+                    // 提取shellcheck的检查结果
+                    let file = c.get("file").and_then(|x| x.as_str()).unwrap_or("");
+                    let line = c.get("line").and_then(|x| x.as_u64()).unwrap_or(0);
+                    let column = c.get("column").and_then(|x| x.as_u64()).unwrap_or(0);
+                    let level = c.get("level").and_then(|x| x.as_str()).unwrap_or("");
+                    let code = c.get("code").and_then(|x| x.as_u64()).unwrap_or(0);
+                    let message = c.get("message").and_then(|x| x.as_str()).unwrap_or("");
+                    let msg = format!(
+                        "shellcheck [{}] {}:{}:{} {}",
+                        code, file, line, column, message
+                    );
+                    // 根据级别分类：error或warning
+                    if level.eq_ignore_ascii_case("error") {
+                        fr.valid = false;
+                        fr.errors.push(msg.clone());
+                    } else {
+                        fr.warnings.push(msg.clone());
                     }
                 }
             }
@@ -475,25 +470,25 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
     let mut parser = Parser::new();
     // Some tree-sitter-bash bindings export `LANGUAGE` const instead of `language()` function.
     let language = tree_sitter::Language::new(tree_sitter_bash::LANGUAGE);
-    if parser.set_language(&language).is_ok() {
-        if let Some(tree) = parser.parse(&s, None) {
-            // Walk nodes to find ERROR nodes
-            fn walk_node(node: tree_sitter::Node, fr: &mut FileResult) {
-                if node.kind() == "ERROR" {
-                    fr.valid = false;
-                    let pos = node.start_position();
-                    fr.errors
-                        .push(format!("Parse error at {}:{}", pos.row + 1, pos.column + 1));
-                }
-                for i in 0..node.child_count() {
-                    if let Some(child) = node.child(i as u32) {
-                        walk_node(child, fr);
-                    }
+    if parser.set_language(&language).is_ok()
+        && let Some(tree) = parser.parse(&s, None)
+    {
+        // Walk nodes to find ERROR nodes
+        fn walk_node(node: tree_sitter::Node, fr: &mut FileResult) {
+            if node.kind() == "ERROR" {
+                fr.valid = false;
+                let pos = node.start_position();
+                fr.errors
+                    .push(format!("Parse error at {}:{}", pos.row + 1, pos.column + 1));
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(i as u32) {
+                    walk_node(child, fr);
                 }
             }
-            let root = tree.root_node();
-            walk_node(root, &mut fr);
         }
+        let root = tree.root_node();
+        walk_node(root, &mut fr);
     }
     // 基本内容修复（类似markdown）：CRLF、尾随空格、文件末尾换行
     // 这些虽然不影响功能，但统一格式比较好

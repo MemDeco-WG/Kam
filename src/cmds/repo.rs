@@ -457,7 +457,7 @@ pub fn repo_sync(base_url: &str, force: bool) -> Result<(), KamError> {
         .map_err(|e| KamError::FetchFailed(format!("Failed to read {} body: {}", url, e)))?;
 
     let path = index_cache_path(base_url)?;
-    let _ = write_atomic(&path, &body)?;
+    write_atomic(&path, &body)?;
 
     if force {
         Utils::section(&format!(
@@ -544,7 +544,7 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
             e.name,
             e.description.as_deref().unwrap_or(""),
             {
-                if (*score - 1.0).abs() > std::f64::EPSILON {
+                if (*score - 1.0).abs() > f64::EPSILON {
                     format!("  (score: {:.2})", score)
                 } else {
                     "".to_string()
