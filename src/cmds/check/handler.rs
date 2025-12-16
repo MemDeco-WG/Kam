@@ -113,6 +113,32 @@ fn collect_project_files(
     files
 }
 
+fn render_json_results(results: &Vec<FileResult>, verbose: bool) -> serde_json::Value {
+    if verbose {
+        serde_json::to_value(results).unwrap_or_else(|_| serde_json::json!([]))
+    } else {
+        let mut errors: Vec<serde_json::Value> = Vec::new();
+        let mut warnings: Vec<serde_json::Value> = Vec::new();
+        let mut error_count: usize = 0;
+        let mut warning_count: usize = 0;
+        for r in results {
+            if !r.errors.is_empty() {
+                error_count += r.errors.len();
+                errors.push(serde_json::json!({"path": r.path, "messages": r.errors}));
+            }
+            if !r.warnings.is_empty() {
+                warning_count += r.warnings.len();
+                warnings.push(serde_json::json!({"path": r.path, "messages": r.warnings}));
+            }
+        }
+        serde_json::json!({
+            "errors": errors,
+            "warnings": warnings,
+            "summary": {"error_count": error_count, "warning_count": warning_count},
+        })
+    }
+}
+
 pub fn run(args: CheckArgs) -> Result<(), KamError> {
     let project_path = Path::new(&args.path);
     if !project_path.exists() {
@@ -211,7 +237,14 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
 
     // Output
     if args.json {
-        let out = serde_json::to_string_pretty(&results).unwrap_or_else(|_| "[]".into());
+        // Compact by default to reduce token/output size; use -v / --verbose to get full pretty-printed results
+        let jv = render_json_results(&results, args.verbose);
+        let out = if args.verbose {
+            serde_json::to_string_pretty(&jv).unwrap_or_else(|_| "[]".into())
+        } else {
+            // Compact one-line JSON for minimal token consumption
+            serde_json::to_string(&jv).unwrap_or_else(|_| "{}".into())
+        };
         println!("{}", out);
         return Ok(());
     }
@@ -287,6 +320,7 @@ mod tests {
         let args = CheckArgs {
             path: dir.path().to_string_lossy().to_string(),
             json: true,
+            verbose: false,
             fix: false,
         };
         // Run
@@ -304,6 +338,7 @@ mod tests {
         let args = CheckArgs {
             path: dir.path().to_string_lossy().to_string(),
             json: false,
+            verbose: false,
             fix: true,
         };
         // Run
@@ -323,6 +358,7 @@ mod tests {
         let args = CheckArgs {
             path: dir.path().to_string_lossy().to_string(),
             json: true,
+            verbose: false,
             fix: false,
         };
         // Run
@@ -340,6 +376,7 @@ mod tests {
         let args = CheckArgs {
             path: dir.path().to_string_lossy().to_string(),
             json: false,
+            verbose: false,
             fix: true,
         };
         // Run
@@ -361,6 +398,7 @@ mod tests {
         let args = CheckArgs {
             path: dir.path().to_string_lossy().to_string(),
             json: false,
+            verbose: false,
             fix: true,
         };
         let result = run(args);
@@ -416,5 +454,59 @@ mod tests {
 
         let files = collect_project_files(dir.path(), &skip_dirs, false);
         assert!(files.is_empty());
+    }
+
+    #[test]
+    fn render_json_compact_only_shows_issues() {
+        let r1 = FileResult {
+            path: "a.json".to_string(),
+            kind: "json".to_string(),
+            valid: false,
+            errors: vec!["err1".to_string()],
+            warnings: vec![],
+            fixed: false,
+        };
+        let r2 = FileResult {
+            path: "b.json".to_string(),
+            kind: "json".to_string(),
+            valid: true,
+            errors: vec![],
+            warnings: vec!["warn1".to_string()],
+            fixed: false,
+        };
+        let results = vec![r1, r2];
+        let v = render_json_results(&results, false);
+        let errors = v.get("errors").and_then(|e| e.as_array()).unwrap();
+        let warnings = v.get("warnings").and_then(|w| w.as_array()).unwrap();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(
+            v.get("summary")
+                .and_then(|s| s.get("error_count"))
+                .and_then(|c| c.as_u64()),
+            Some(1)
+        );
+        assert_eq!(
+            v.get("summary")
+                .and_then(|s| s.get("warning_count"))
+                .and_then(|c| c.as_u64()),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn render_json_verbose_returns_full_results() {
+        let r = FileResult {
+            path: "x.json".to_string(),
+            kind: "json".to_string(),
+            valid: false,
+            errors: vec!["e".to_string()],
+            warnings: vec!["w".to_string()],
+            fixed: false,
+        };
+        let arr = vec![r];
+        let v_verbose = render_json_results(&arr, true);
+        let v_full = serde_json::to_value(&arr).unwrap();
+        assert_eq!(v_verbose, v_full);
     }
 }

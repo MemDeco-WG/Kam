@@ -27,4 +27,28 @@ pub enum CacheCommands {
     },
     /// Show cache directory path
     Path,
+
+    /// Manage module index cache (index_*.json and modules/<id>.json)
+    Modules(ModuleCacheArgs),
+}
+
+#[derive(Args)]
+pub struct ModuleCacheArgs {
+    #[command(subcommand)]
+    pub command: ModuleCacheCommands,
+}
+
+#[derive(Subcommand)]
+pub enum ModuleCacheCommands {
+    /// List module index and module detail cache files
+    List,
+    /// Clean module cache (remove index_*.json and modules/ directory)
+    Clean,
+    /// Show module cache directory path
+    Path,
+    /// Remove a specific cache file (exact filename or module id for modules/<id>.json)
+    Remove {
+        /// Filename or module id to remove
+        name: String,
+    },
 }

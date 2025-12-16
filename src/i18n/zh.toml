@@ -33,6 +33,17 @@ no_templates = "本地缓存中未找到模板。"
 template_added = "模板 '{}' 已从 {} 添加到缓存"
 template_removed = "模板 '{}' 已从缓存中删除"
 
+[cache.modules]
+index_files = "模块索引缓存文件："
+index_entry = "{}（{} 字节）"
+no_index_files = "未找到索引缓存文件"
+detail_cache = "模块详情缓存："
+cleaned_successfully = "模块缓存已成功清理"
+directory_empty_or_not_exists = "模块缓存目录为空或不存在"
+removed = "已删除 {}"
+removed_module_cache = "已删除模块缓存：{}"
+no_matching_cache_file = "未找到匹配的缓存文件：'{}'"
+
 [check]
 no_issues_found = "未发现问题。"
 some_issues_found = "发现问题。"
@@ -46,6 +57,10 @@ long_about = "提供从模板初始化项目、构建与打包模块、管理模
 [cli.flags]
 help = "打印帮助（参考 '-h'）"
 version = "打印版本"
+sync = "Pacman 风格同步（下载）标志（等同于 pacman -S）"
+search = "Pacman 风格搜索修饰符（与 -S 一起使用为 '-Ss' 进行搜索或单独使用 '-s' 搜索）"
+modules_url = "模块注册表 API 的 URL（默认：https://modules.kernelsu.org）。覆盖内置的模块端点"
+yes = "对所有确认提示假设为 \"yes\"（等同于 -y）。使用 `-y` 或 `--yes` 跳过确认"
 
 # -------------------------
 # init
@@ -120,6 +135,25 @@ name = "要移除的模板名称"
 [cli.commands.cache.path]
 summary = "显示缓存目录路径"
 
+# Module cache subcommands
+[cli.commands.cache.modules]
+summary = "管理模块索引缓存（index_*.json 和 modules/<id>.json）"
+description = "列出、清理、显示路径或移除特定模块缓存文件。"
+
+[cli.commands.cache.modules.list]
+summary = "列出模块索引和模块详情缓存文件"
+
+[cli.commands.cache.modules.clean]
+summary = "清理模块缓存（删除 index_*.json 和 modules/ 目录）"
+
+[cli.commands.cache.modules.path]
+summary = "显示模块缓存目录路径"
+
+[cli.commands.cache.modules.remove]
+summary = "移除特定缓存文件（精确文件名或模块 id 对应的 modules/<id>.json）"
+[cli.commands.cache.modules.remove.flags]
+name = "要移除的文件名或模块 id"
+
 # -------------------------
 # tmpl
 # -------------------------
@@ -185,7 +219,18 @@ out = "输出文件；若省略则打印到标准输出"
 # -------------------------
 [cli.commands.install]
 summary = "将模块包安装到连接的设备（使用配置的 root 管理器）"
-description = "将已构建的模块（.zip）安装到连接的设备，支持 Magisk/KernelSU/APatchSU。可通过 `kam config set root.manager <Manager>` 设置默认管理器。"
+description = "将已构建的模块（.zip）安装到连接的设备，支持 Magisk/KernelSU/APatchSU。可通过 `kam config set root.manager <Manager>` 设置默认管理器。注意：在 Android 上此命令可能需要 root（su）。Kam 会在需要时尝试使用 'su' 执行提权。"
+
+[install]
+section = "安装：{}"
+dry_run = "演示运行：将执行 '{} {}'"
+executing = "执行：{} {}"
+installed = "已安装 {}（通过 {}）"
+cli_not_found = "安装命令 '{}' 未在 PATH 中找到。请安装该命令或在 ~/.kam/config.toml 中设置 'root.manager'"
+trying_su = "尝试使用 'su -c' 执行：{}"
+su_not_found = "未找到 'su' 命令。无法进行提权（可能 root 管理器未授权）。"
+su_failed = "通过 'su' 提权失败：{}"
+unable_determine_cli = "无法确定安装 CLI。请在 ~/.kam/config.toml 中设置 'root.manager'，或使用 --manager 指定。"
 
 [cli.commands.install.flags]
 path = "模块包路径（.zip）。若省略，Kam 会在项目的 dist/ 输出目录尝试查找产物"

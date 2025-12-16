@@ -11,15 +11,15 @@ use clap::{Parser, Subcommand};
 )]
 pub struct Cli {
     /// Pacman-style sync (download) flag (equivalent to pacman -S)
-    #[arg(short = 'S', long = "sync", action = clap::ArgAction::SetTrue)]
+    #[arg(short = 'S', long = "sync", action = clap::ArgAction::SetTrue, overrides_with = "sync")]
     pub sync: bool,
 
     /// Pacman-style search modifier (use with -S as '-Ss' to search or '-s' alone to search)
-    #[arg(short = 's', long = "search", action = clap::ArgAction::SetTrue)]
+    #[arg(short = 's', long = "search", action = clap::ArgAction::SetTrue, overrides_with = "search")]
     pub search: bool,
 
     /// Positional targets: module IDs or search terms (used with -S / -s)
-    #[arg(value_name = "TARGETS", num_args = 0..)]
+    #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
     pub targets: Vec<String>,
 
     /// URL for the modules registry API (default: https://modules.kernelsu.org). Overrides the built-in modules endpoint.

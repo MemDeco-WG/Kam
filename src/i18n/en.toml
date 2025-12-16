@@ -33,6 +33,17 @@ no_templates = "No templates found in local cache."
 template_added = "Template '{}' added to cache from {}"
 template_removed = "Template '{}' removed from cache"
 
+[cache.modules]
+index_files = "Module index cache files:"
+index_entry = "{} ({} bytes)"
+no_index_files = "No index cache files found"
+detail_cache = "Module detail cache:"
+cleaned_successfully = "Module cache cleaned successfully"
+directory_empty_or_not_exists = "Module cache directory empty or not exists"
+removed = "Removed {}"
+removed_module_cache = "Removed module cache: {}"
+no_matching_cache_file = "No matching cache file found for '{}'"
+
 [check]
 no_issues_found = "No issues found."
 some_issues_found = "Some issues found."
@@ -230,6 +241,10 @@ long_about = "A CLI toolkit for scaffolding, building, packaging, and distributi
 [cli.flags]
 help = "Print help (see a summary with '-h')"
 version = "Print version"
+sync = "Pacman-style sync (download) flag (equivalent to pacman -S)"
+search = "Pacman-style search modifier (use with -S as '-Ss' to search or '-s' alone to search)"
+modules_url = "URL for the modules registry API (default: https://modules.kernelsu.org). Overrides the built-in modules endpoint"
+yes = "Assume \"yes\" to all confirmation prompts (equivalent to -y). Use `-y` or `--yes` to skip confirmation"
 
 # -------------------------
 # Command: init
@@ -301,6 +316,25 @@ name = "Name of the template to remove"
 [cli.commands.cache.path]
 summary = "Show cache directory path"
 
+# Module cache subcommands
+[cli.commands.cache.modules]
+summary = "Manage module index cache (index_*.json and modules/<id>.json)"
+description = "List, clean, show path, or remove specific module cache files."
+
+[cli.commands.cache.modules.list]
+summary = "List module index and module detail cache files"
+
+[cli.commands.cache.modules.clean]
+summary = "Clean module cache (remove index_*.json and modules/ directory)"
+
+[cli.commands.cache.modules.path]
+summary = "Show module cache directory path"
+
+[cli.commands.cache.modules.remove]
+summary = "Remove a specific cache file (exact filename or module id for modules/<id>.json)"
+[cli.commands.cache.modules.remove.flags]
+name = "Filename or module id to remove"
+
 # -------------------------
 # Command: tmpl
 # -------------------------
@@ -362,7 +396,18 @@ out = "Output file. If omitted, prints to STDOUT."
 # -------------------------
 [cli.commands.install]
 summary = "Install a module package to a connected device using the configured root manager"
-description = "Install a built module (.zip) to a connected device using Magisk/KernelSU/APatchSU. Configure the preferred manager with `kam config set root.manager <Manager>`"
+description = "Install a built module (.zip) to a connected device using Magisk/KernelSU/APatchSU. Configure the preferred manager with `kam config set root.manager <Manager>`. Note: On Android this command may require root (su). Kam will attempt to use 'su' to escalate if needed."
+
+[install]
+section = "Install: {}"
+dry_run = "Dry run: will execute '{} {}'"
+executing = "Executing: {} {}"
+installed = "Installed {} via {}"
+cli_not_found = "Install CLI '{}' not found on PATH. Please install it or set 'root.manager' in ~/.kam/config.toml"
+trying_su = "Attempting to execute via 'su -c': {}"
+su_not_found = "'su' command not found. Root privilege escalation is unavailable (root manager may not be authorized)."
+su_failed = "Privilege escalation via 'su' failed: {}"
+unable_determine_cli = "Unable to determine install CLI. Please set 'root.manager' in ~/.kam/config.toml or pass --manager"
 
 [cli.commands.install.flags]
 

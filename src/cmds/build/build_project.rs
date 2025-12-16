@@ -91,11 +91,21 @@ pub fn build_project(
     };
     let module_id = &kam_toml.prop.id;
     let version = &kam_toml.prop.version;
+    // Normalize displayed version to avoid double leading 'v' (e.g. avoid printing "vv1.2.3")
+    let display_version = if version.to_lowercase().starts_with('v') {
+        version.to_string()
+    } else {
+        format!("v{}", version)
+    };
 
     let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
 
     if !args.quiet {
-        Utils::section(&trf!("build.building_module_version", module_id, version));
+        Utils::section(&trf!(
+            "build.building_module_version",
+            module_id,
+            display_version
+        ));
 
         // Use a beautiful table to display build information
         let mut info_table = Table::new();
@@ -112,7 +122,8 @@ pub fn build_project(
             ])
             .add_row(vec![
                 Cell::new(crate::i18n::tr_key("table.header.module")).fg(comfy_table::Color::Cyan),
-                Cell::new(format!("{} v{}", module_id, version)).fg(comfy_table::Color::Green),
+                Cell::new(format!("{} {}", module_id, display_version))
+                    .fg(comfy_table::Color::Green),
             ])
             .add_row(vec![
                 Cell::new(crate::i18n::tr_key("project.output_directory"))
@@ -138,7 +149,11 @@ pub fn build_project(
         .progress_chars("█▉▊▋▌▍▎▏  ")
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
         pb.set_style(style);
-        pb.set_message(trf!("build.building_module_version", module_id, version));
+        pb.set_message(trf!(
+            "build.building_module_version",
+            module_id,
+            display_version
+        ));
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
         Some(pb)
     } else {

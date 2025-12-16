@@ -55,6 +55,134 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                 println!("{}", cache_dir.display());
             }
         }
+
+        CacheCommands::Modules(subargs) => {
+            use crate::utils::Utils;
+            // Module cache root (same logic as repo's cache_root_dir())
+            let cache_root = crate::cmds::repo::cache_root_dir()?;
+
+            match subargs.command {
+                super::args::ModuleCacheCommands::Path => {
+                    println!("{}", cache_root.display());
+                }
+
+                super::args::ModuleCacheCommands::List => {
+                    // List index_*.json files (search index) and modules/<id>.json (module caches)
+                    let mut found_index = false;
+                    if cache_root.exists()
+                        && let Ok(rd) = std::fs::read_dir(&cache_root)
+                    {
+                        for e in rd.flatten() {
+                            let p = e.path();
+                            if p.is_file()
+                                && let Some(name) = p.file_name().and_then(|n| n.to_str())
+                                && name.starts_with("index_")
+                                && name.ends_with(".json")
+                            {
+                                if !found_index {
+                                    Utils::section(crate::i18n::tr_key(
+                                        "cache.modules.index_files",
+                                    ));
+                                    found_index = true;
+                                }
+                                if let Ok(meta) = p.metadata() {
+                                    Utils::info(&trf!(
+                                        "cache.modules.index_entry",
+                                        name,
+                                        meta.len()
+                                    ));
+                                } else {
+                                    Utils::info(name);
+                                }
+                            }
+                        }
+                    }
+                    if !found_index {
+                        Utils::info(crate::i18n::tr_key("cache.modules.no_index_files"));
+                    }
+
+                    let modules_dir = cache_root.join("modules");
+                    if modules_dir.exists()
+                        && let Ok(rd) = std::fs::read_dir(&modules_dir)
+                    {
+                        Utils::section(crate::i18n::tr_key("cache.modules.detail_cache"));
+                        for e in rd.flatten() {
+                            let p = e.path();
+                            if p.is_file()
+                                && let Some(name) = p.file_name().and_then(|n| n.to_str())
+                            {
+                                Utils::info(name);
+                            }
+                        }
+                    }
+                }
+
+                super::args::ModuleCacheCommands::Clean => {
+                    if cache_root.exists()
+                        && let Ok(rd) = std::fs::read_dir(&cache_root)
+                    {
+                        // remove index_*.json files
+                        for e in rd.flatten() {
+                            let p = e.path();
+                            if p.is_file()
+                                && let Some(name) = p.file_name().and_then(|n| n.to_str())
+                                && name.starts_with("index_")
+                                && name.ends_with(".json")
+                            {
+                                let _ = std::fs::remove_file(&p);
+                            }
+                        }
+                        // remove modules directory if present
+                        let modules_dir = cache_root.join("modules");
+                        if modules_dir.exists() {
+                            let _ = std::fs::remove_dir_all(&modules_dir);
+                        }
+                        Utils::success(crate::i18n::tr_key("cache.modules.cleaned_successfully"));
+                    } else {
+                        Utils::info(crate::i18n::tr_key(
+                            "cache.modules.directory_empty_or_not_exists",
+                        ));
+                    }
+                }
+
+                super::args::ModuleCacheCommands::Remove { name } => {
+                    // Try exact filename in cache root
+                    let target = cache_root.join(&name);
+                    if target.exists() {
+                        std::fs::remove_file(&target).map_err(KamError::Io)?;
+                        Utils::success(&trf!("cache.modules.removed", name));
+                    } else {
+                        // Try modules/<name>.json
+                        let mpath = cache_root.join("modules").join(format!("{}.json", name));
+                        if mpath.exists() {
+                            std::fs::remove_file(&mpath).map_err(KamError::Io)?;
+                            Utils::success(&trf!("cache.modules.removed_module_cache", name));
+                        } else {
+                            // Fallback: try any file containing the name
+                            let mut removed = false;
+                            if cache_root.exists()
+                                && let Ok(rd) = std::fs::read_dir(&cache_root)
+                            {
+                                for e in rd.flatten() {
+                                    let p = e.path();
+                                    if p.is_file()
+                                        && let Some(fname) = p.file_name().and_then(|n| n.to_str())
+                                        && fname.contains(&name)
+                                    {
+                                        let _ = std::fs::remove_file(&p);
+                                        Utils::info(&trf!("cache.modules.removed", fname));
+                                        removed = true;
+                                    }
+                                }
+                            }
+                            if !removed {
+                                Utils::info(&trf!("cache.modules.no_matching_cache_file", name));
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Ok(())

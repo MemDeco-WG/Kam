@@ -4,6 +4,8 @@ use indicatif::ProgressBar;
 use regex::Regex;
 use std::fs;
 use std::io::{self, Write};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use terminal_size::{Width, terminal_size};
@@ -122,6 +124,39 @@ pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -
         && matches_exact(patt, fname)
     {
         return true;
+    }
+
+    false
+}
+
+/// Return true if a command with the given `cmd` name exists in the PATH and is executable.
+///
+/// This simple helper checks each entry from the `PATH` environment variable.
+/// On Unix-like platforms it additionally verifies the file is executable by inspecting
+/// the permission bits. On non-Unix platforms existence is considered sufficient.
+pub fn command_exists(cmd: &str) -> bool {
+    if cmd.trim().is_empty() {
+        return false;
+    }
+
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let candidate = dir.join(cmd);
+            if candidate.exists() {
+                #[cfg(unix)]
+                {
+                    if let Ok(md) = candidate.metadata()
+                        && md.permissions().mode() & 0o111 != 0 {
+                            return true;
+                        }
+                }
+                #[cfg(not(unix))]
+                {
+                    // On non-Unix platforms, existence is considered sufficient.
+                    return true;
+                }
+            }
+        }
     }
 
     false

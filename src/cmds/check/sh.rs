@@ -216,23 +216,111 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
     if (node.kind() == "pipeline" || node.kind() == "command")
         && let Ok(node_text_all) = node.utf8_text(src.as_bytes())
     {
-        let node_text_low = node_text_all.to_lowercase();
-        // Simple substring-based detection: look for curl/wget + pipe + sh/bash
-        if (node_text_low.contains("curl") || node_text_low.contains("wget"))
-            && node_text_low.contains("|")
-            && (node_text_low.contains(" sh")
-                || node_text_low.contains("| sh")
-                || node_text_low.contains(" bash")
-                || node_text_low.contains("| bash")
-                || node_text_low.contains("sh ")
-                || node_text_low.contains("bash "))
-        {
-            let msg = format!(
-                "Piped shell install detected (download | shell): {}",
-                node_text_all
-            );
-            if !fr.warnings.contains(&msg) {
-                fr.warnings.push(msg);
+        // If this file is the canonical 'install.sh' script, deliberately skip piped-download
+        // detection because installers commonly use `curl | sh` patterns and we don't want to flag them.
+        if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
+            if fname.eq_ignore_ascii_case("install.sh") {
+                // Skip piped-download warning for install.sh
+            } else {
+                let node_text_low = node_text_all.to_lowercase();
+                // Simple substring-based detection: look for curl/wget + pipe
+                if (node_text_low.contains("curl") || node_text_low.contains("wget"))
+                    && node_text_low.contains("|")
+                {
+                    // Prefer to show a concise snippet (the line containing the pipeline) instead of dumping the whole node
+                    let mut snippet: Option<String> = None;
+                    for line in node_text_all.lines() {
+                        let ll = line.to_lowercase();
+                        if (ll.contains("curl") || ll.contains("wget") || ll.contains("|"))
+                            && (ll.contains(" sh")
+                                || ll.contains("| sh")
+                                || ll.contains(" bash")
+                                || ll.contains("| bash")
+                                || ll.contains("sh ")
+                                || ll.contains("bash "))
+                        {
+                            snippet = Some(line.trim().to_string());
+                            break;
+                        }
+                    }
+                    // Fallback: extract around the pipe character
+                    if snippet.is_none() {
+                        if let Some(pipe_pos) = node_text_all.find('|') {
+                            let start = node_text_all[..pipe_pos]
+                                .rfind('\n')
+                                .map(|i| i + 1)
+                                .unwrap_or(0);
+                            let end = node_text_all[pipe_pos..]
+                                .find('\n')
+                                .map(|i| pipe_pos + i)
+                                .unwrap_or(node_text_all.len());
+                            snippet = Some(node_text_all[start..end].trim().to_string());
+                        } else {
+                            snippet = Some(node_text_all.trim().to_string());
+                        }
+                    }
+                    let snippet = snippet.unwrap_or_else(|| "<snippet unavailable>".to_string());
+                    let msg = format!(
+                        "Piped shell install detected (download | shell): {}",
+                        snippet
+                    );
+                    if !fr
+                        .warnings
+                        .iter()
+                        .any(|w| w.contains("Piped shell install detected"))
+                    {
+                        fr.warnings.push(msg);
+                    }
+                }
+            }
+        } else {
+            // No filename available; fall back to content-based detection as before
+            let node_text_low = node_text_all.to_lowercase();
+            if (node_text_low.contains("curl") || node_text_low.contains("wget"))
+                && node_text_low.contains("|")
+            {
+                let mut snippet: Option<String> = None;
+                for line in node_text_all.lines() {
+                    let ll = line.to_lowercase();
+                    if (ll.contains("curl") || ll.contains("wget") || ll.contains("|"))
+                        && (ll.contains(" sh")
+                            || ll.contains("| sh")
+                            || ll.contains(" bash")
+                            || ll.contains("| bash")
+                            || ll.contains("sh ")
+                            || ll.contains("bash "))
+                    {
+                        snippet = Some(line.trim().to_string());
+                        break;
+                    }
+                }
+                if snippet.is_none() {
+                    if let Some(pipe_pos) = node_text_all.find('|') {
+                        let start = node_text_all[..pipe_pos]
+                            .rfind('\n')
+                            .map(|i| i + 1)
+                            .unwrap_or(0);
+                        let end = node_text_all[pipe_pos..]
+                            .find('\n')
+                            .map(|i| pipe_pos + i)
+                            .unwrap_or(node_text_all.len());
+                        snippet = Some(node_text_all[start..end].trim().to_string());
+                    } else {
+                        snippet = Some(node_text_all.trim().to_string());
+                    }
+                }
+                let snippet = snippet.unwrap_or_else(|| "<snippet unavailable>".to_string());
+                let msg = format!(
+                    "Piped shell install detected (download | shell): {}",
+                    snippet
+                );
+                if !fr
+                    .warnings
+                    .iter()
+                    .any(|w| w.contains("Piped shell install detected"))
+                {
+                    fr.warnings.push(msg);
+                }
             }
         }
     }
@@ -396,6 +484,58 @@ eval set -- "$opt"
             fr.warnings
                 .iter()
                 .any(|w| w.contains("Use of 'eval' detected"))
+        );
+    }
+
+    #[test]
+    fn test_piped_curl_warning_snippet() {
+        let tmp = TempDir::new().unwrap();
+        // Use a non-canonical installer filename so content-based detection should trigger
+        let path = tmp.path().join("script.sh");
+        std::fs::write(
+            &path,
+            "#!/bin/bash\n# comment\ncurl -sSL https://example.com/install.sh | sh\n",
+        )
+        .unwrap();
+        let fr = check_sh_custom(&path, false).unwrap();
+        assert!(
+            fr.warnings
+                .iter()
+                .any(|w| w.to_lowercase().contains("piped shell install")
+                    && w.to_lowercase().contains("curl")),
+            "Expected piped curl warning with command snippet"
+        );
+    }
+
+    #[test]
+    fn test_shebang_only_no_piped_warning() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("install.sh");
+        std::fs::write(&path, "#!/bin/bash\n# Just a comment\n").unwrap();
+        let fr = check_sh_custom(&path, false).unwrap();
+        assert!(
+            !fr.warnings
+                .iter()
+                .any(|w| w.contains("Piped shell install"))
+        );
+    }
+
+    #[test]
+    fn test_install_sh_no_piped_warning_even_with_pipeline() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("install.sh");
+        std::fs::write(
+            &path,
+            "#!/bin/bash\ncurl -sSL https://sh.rustup.rs | sh -s -- -y\n",
+        )
+        .unwrap();
+        let fr = check_sh_custom(&path, false).unwrap();
+        // install.sh should not trigger a piped-download warning
+        assert!(
+            !fr.warnings
+                .iter()
+                .any(|w| w.contains("Piped shell install")),
+            "install.sh should not trigger piped-download warning"
         );
     }
 }

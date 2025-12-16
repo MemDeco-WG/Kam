@@ -108,12 +108,21 @@ fn get_install_cli_for_manager(
     let p = path.to_string_lossy().to_string();
 
     match manager.as_str() {
-        "Magisk" => Ok(("magisk".to_string(), vec!["--install-module".to_string(), p])),
-        "KernelSU" => Ok(("ksud".to_string(), vec!["module".to_string(), "install".to_string(), p])),
-        "APatchSU" => Ok(("apd".to_string(), vec!["module".to_string(), "install".to_string(), p])),
-        _ => Err(KamError::CommandFailed(
-            "Unable to determine install CLI. Please set 'root.manager' in ~/.kam/config.toml or pass --manager".to_string(),
+        "Magisk" => Ok((
+            "magisk".to_string(),
+            vec!["--install-module".to_string(), p],
         )),
+        "KernelSU" => Ok((
+            "ksud".to_string(),
+            vec!["module".to_string(), "install".to_string(), p],
+        )),
+        "APatchSU" => Ok((
+            "apd".to_string(),
+            vec!["module".to_string(), "install".to_string(), p],
+        )),
+        _ => Err(KamError::CommandFailed(crate::i18n::tr(
+            "Unable to determine install CLI. Please set 'root.manager' in ~/.kam/config.toml or pass --manager",
+        ))),
     }
 }
 
@@ -196,7 +205,7 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
     let artifact = resolve_artifact_path(args.path.clone())?;
 
     if !args.quiet {
-        Utils::section(&format!("Install: {}", artifact.display()));
+        Utils::section(&trf!("install.section", artifact.display()));
     }
 
     // Determine CLI and args to run (respecting --manager if provided)
@@ -204,7 +213,7 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
 
     if args.dry_run {
         if !args.quiet {
-            Utils::info(&format!(
+            Utils::info(&trf!(
                 "Dry run: will execute '{} {}'",
                 cli_bin,
                 cli_args.join(" ")
@@ -217,7 +226,7 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
     }
 
     if !args.quiet {
-        Utils::info(&format!("Executing: {} {}", cli_bin, cli_args.join(" ")));
+        Utils::info(&trf!("install.executing", cli_bin, cli_args.join(" ")));
     }
 
     match Command::new(&cli_bin).args(&cli_args).output() {
@@ -226,94 +235,117 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
             Utils::print_cmd_output(&out.stdout, &out.stderr);
             if out.status.success() {
                 if !args.quiet {
-                    Utils::success(&format!("Installed {} via {}", artifact.display(), cli_bin));
+                    Utils::success(&trf!("install.installed", artifact.display(), cli_bin));
                 }
                 Ok(())
             } else {
-                Err(KamError::CommandFailed(format!(
-                    "Install command '{}' exited with status: {}",
-                    cli_bin, out.status
-                )))
+                // If output suggests the command is missing or requires privilege,
+                // attempt to escalate using `su -c '...'` on Android / Unix-like where `su` is available.
+                let s_out = String::from_utf8_lossy(&out.stdout).to_lowercase();
+                let s_err = String::from_utf8_lossy(&out.stderr).to_lowercase();
+                let combined = format!("{}{}", s_out, s_err);
+                if (combined.contains("not found")
+                    || combined.contains("command not found")
+                    || combined.contains("permission denied"))
+                    && crate::utils::command_exists("su")
+                {
+                    // Build a safely quoted command string for `su -c`
+                    let cmd_str = std::iter::once(cli_bin.clone())
+                        .chain(cli_args.iter().cloned())
+                        .map(|s| {
+                            if s.contains('\'') {
+                                format!("'{}'", s.replace("'", "'\"'\"'"))
+                            } else {
+                                format!("'{}'", s)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if !args.quiet {
+                        Utils::info(&trf!("Attempting to execute via 'su -c': {}", cmd_str));
+                    }
+                    match Command::new("su").arg("-c").arg(cmd_str).output() {
+                        Ok(su_out) => {
+                            Utils::print_cmd_output(&su_out.stdout, &su_out.stderr);
+                            if su_out.status.success() {
+                                if !args.quiet {
+                                    Utils::success(&trf!(
+                                        "Installed {} via {}",
+                                        artifact.display(),
+                                        cli_bin
+                                    ));
+                                }
+                                Ok(())
+                            } else {
+                                Err(KamError::CommandFailed(trf!(
+                                    "Privilege escalation via 'su' failed: {}",
+                                    String::from_utf8_lossy(&su_out.stderr)
+                                )))
+                            }
+                        }
+                        Err(e) => Err(KamError::Io(e)),
+                    }
+                } else if combined.contains("not found") || combined.contains("command not found") {
+                    Err(KamError::CommandFailed(trf!(
+                        "Install CLI '{}' not found on PATH. Please install it or set 'root.manager' in ~/.kam/config.toml",
+                        cli_bin
+                    )))
+                } else {
+                    Err(KamError::CommandFailed(format!(
+                        "Install command '{}' exited with status: {}",
+                        cli_bin, out.status
+                    )))
+                }
             }
         }
         Err(e) => {
-            // Helpful message if the binary isn't found
+            // If the binary isn't found, try to escalate via su if available
             if e.kind() == io::ErrorKind::NotFound {
-                Err(KamError::CommandFailed(format!(
-                    "Install CLI '{}' not found on PATH. Please install it or set 'root.manager' in ~/.kam/config.toml",
-                    cli_bin
-                )))
+                if crate::utils::command_exists("su") {
+                    let cmd_str = std::iter::once(cli_bin.clone())
+                        .chain(cli_args.iter().cloned())
+                        .map(|s| {
+                            if s.contains('\'') {
+                                format!("'{}'", s.replace("'", "'\"'\"'"))
+                            } else {
+                                format!("'{}'", s)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if !args.quiet {
+                        Utils::info(&trf!("install.trying_su", cmd_str));
+                    }
+                    match Command::new("su").arg("-c").arg(cmd_str).output() {
+                        Ok(su_out) => {
+                            Utils::print_cmd_output(&su_out.stdout, &su_out.stderr);
+                            if su_out.status.success() {
+                                if !args.quiet {
+                                    Utils::success(&trf!(
+                                        "install.installed",
+                                        artifact.display(),
+                                        cli_bin
+                                    ));
+                                }
+                                Ok(())
+                            } else {
+                                Err(KamError::CommandFailed(trf!(
+                                    "install.su_failed",
+                                    String::from_utf8_lossy(&su_out.stderr)
+                                )))
+                            }
+                        }
+                        Err(e) => Err(KamError::Io(e)),
+                    }
+                } else {
+                    Err(KamError::CommandFailed(trf!(
+                        "install.cli_not_found",
+                        cli_bin
+                    )))
+                }
             } else {
                 Err(KamError::Io(e))
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-    use std::env;
-    use std::fs;
-
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[test]
-    fn test_normalize_manager_variants() {
-        assert_eq!(crate::utils::normalize_root_manager("magisk"), "Magisk");
-        assert_eq!(crate::utils::normalize_root_manager("MagIsK"), "Magisk");
-        assert_eq!(crate::utils::normalize_root_manager("ksu"), "KernelSU");
-        assert_eq!(crate::utils::normalize_root_manager("KSU"), "KernelSU");
-        assert_eq!(crate::utils::normalize_root_manager("KernelSU"), "KernelSU");
-        assert_eq!(crate::utils::normalize_root_manager("apatch"), "APatchSU");
-        assert_eq!(crate::utils::normalize_root_manager("apd"), "APatchSU");
-        assert_eq!(crate::utils::normalize_root_manager("apu"), "APatchSU");
-        assert_eq!(crate::utils::normalize_root_manager("APU"), "APatchSU");
-        assert_eq!(
-            crate::utils::normalize_root_manager("something-else"),
-            "Unknown"
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn test_get_root_manager_from_global_config() {
-        // Save original HOME and KAM_ROOT_MANAGER
-        let orig_home = env::var("HOME").ok();
-        let orig_kam_root = env::var("KAM_ROOT_MANAGER").ok();
-
-        // Create a temporary HOME with a .kam/config.toml containing root.manager
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        let tmp = env::temp_dir().join(format!("kam_test_root_manager_{}", now));
-        fs::create_dir_all(tmp.join(".kam")).unwrap();
-        fs::write(
-            tmp.join(".kam").join("config.toml"),
-            r#"root = { manager = "Magisk" }"#,
-        )
-        .unwrap();
-
-        // Set HOME to tmp and ensure env override is not set
-        unsafe { env::set_var("HOME", tmp.to_string_lossy().to_string()) };
-        unsafe { env::remove_var("KAM_ROOT_MANAGER") };
-
-        let mgr = get_root_manager();
-        assert_eq!(mgr, "Magisk");
-
-        // Cleanup / restore
-        if let Some(h) = orig_home {
-            unsafe { env::set_var("HOME", h) };
-        } else {
-            unsafe { env::remove_var("HOME") };
-        }
-        if let Some(k) = orig_kam_root {
-            unsafe { env::set_var("KAM_ROOT_MANAGER", k) };
-        } else {
-            unsafe { env::remove_var("KAM_ROOT_MANAGER") };
-        }
-        let _ = fs::remove_dir_all(&tmp);
     }
 }

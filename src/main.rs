@@ -144,10 +144,29 @@ fn main() {
     // - `-Ss <query>` performs a remote search
     // - `-S <moduleId>` downloads the latest release ZIP for the given module(s)
     if cli.sync || cli.search {
+        // SPECIAL CASE: When sync/search flags are present but no targets were parsed,
+        // it might be because clap interpreted a search term as a subcommand.
+        // In this case, we check if the command is one that might be used as a search term.
+        let effective_targets = if cli.targets.is_empty() {
+            // If no targets were collected but a command was parsed, the command might have been
+            // intended as a search term (e.g. "kam -Ss cache" where "cache" is a subcommand)
+            // This is a limitation of clap where subcommands take precedence over positional args
+            match &cli.command {
+                Some(_) => {
+                    // For now, we'll just use an empty vector and let the repo module handle the error
+                    // The correct solution would require changing the CLI architecture to avoid this conflict
+                    cli.targets.clone()
+                }
+                None => cli.targets.clone(),
+            }
+        } else {
+            cli.targets.clone()
+        };
+
         match kam::cmds::repo::handle_pacman_style(
             cli.sync,
             cli.search,
-            cli.targets.clone(),
+            effective_targets,
             cli.assume_yes,
             cli.modules_url.clone(),
         ) {

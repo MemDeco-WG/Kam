@@ -189,86 +189,29 @@ pub fn handle_pacman_style(
             Utils::section(&format!("Download: {}", module_id));
 
             // Fetch module details
-            let md = fetch_module_detail(&client, module_id, &base)?;
-            // Select an asset (first zip-like asset in releases)
-            let mut chosen_asset: Option<(&Asset, &str)> = None; // (asset, release_name)
-            if let Some(rels) = md.releases.as_ref() {
-                for r in rels.iter() {
-                    if let Some(assets) = r.release_assets.as_ref()
-                        && let Some(a) = assets.iter().find(|x| {
-                            x.content_type
-                                .as_deref()
-                                .map(|ct| ct.to_lowercase().contains("zip"))
-                                .unwrap_or(false)
-                                || x.name.to_lowercase().ends_with(".zip")
-                        })
-                    {
-                        let release_label = r
-                            .name
-                            .as_deref()
-                            .or(r.version.as_deref())
-                            .unwrap_or("latest");
-                        chosen_asset = Some((a, release_label));
-                        break;
-                    }
-                }
-            }
-
-            let (asset, release_label) = match chosen_asset {
-                Some((a, rname)) => (a, rname),
-                None => {
-                    Utils::warn(&format!(
-                        "No downloadable zip asset found for module {}",
-                        module_id
-                    ));
+            let _md = match fetch_module_detail(&client, module_id, &base) {
+                Ok(md) => {
+                    // Process the module normally
+                    process_module_download(&md, module_id, &client, assume_yes)?;
                     continue;
                 }
+                Err(KamError::FetchFailed(ref e)) if e.contains("404") || e.contains("not found") || e.contains("Not Found") => {
+                    // If the exact module wasn't found, suggest similar modules via interactive search
+                    Utils::warn(&format!("Module '{}' not found. Showing similar modules:", module_id));
+                    if let Some(selected_module) = search_remote_interactive(module_id, &base)? {
+                        Utils::info(&format!("Selected module: {}", selected_module));
+                        // Now fetch the details for the selected module
+                        let md = fetch_module_detail(&client, &selected_module, &base)?;
+                        // Continue with the download process using the selected module
+                        process_module_download(&md, &selected_module, &client, assume_yes)?;
+                        continue; // Skip to the next target
+                    } else {
+                        Utils::info("Skipped selection.");
+                        continue;
+                    }
+                }
+                Err(e) => return Err(e),
             };
-
-            // Print detailed info and ask for confirmation unless assume_yes
-            let size_str = asset
-                .size
-                .map(|s| format!(" ({})", format_size(s)))
-                .unwrap_or_default();
-            println!(
-                "Module: {} - {}",
-                module_id,
-                md.module_name.as_deref().unwrap_or("")
-            );
-            println!("Release: {}", release_label);
-            println!("Asset: {}{}", asset.name, size_str);
-            println!("Download URL: {}", asset.download_url);
-
-            let confirmed = if assume_yes {
-                true
-            } else {
-                print!(
-                    "Confirm download '{}' [{}] ? Type 'yes' or any non-empty input to confirm, press Enter to cancel: ",
-                    module_id, asset.name
-                );
-                stdout().flush().map_err(KamError::Io)?;
-                let mut input = String::new();
-                stdin().read_line(&mut input).map_err(KamError::Io)?;
-                let ok = !input.trim().is_empty();
-                if !ok {
-                    Utils::warn(&format!("Skipped download: {}", module_id));
-                }
-                ok
-            };
-
-            if !confirmed {
-                continue;
-            }
-
-            // Proceed to download
-            match download_asset(&client, asset, None) {
-                Ok(path) => {
-                    Utils::success(&format!("Saved: {}", path.display()));
-                }
-                Err(e) => {
-                    Utils::error(&format!("Failed to download {}: {}", module_id, e));
-                }
-            }
         }
 
         return Ok(());
@@ -278,9 +221,100 @@ pub fn handle_pacman_style(
     Ok(())
 }
 
+/// Helper function to process module download with asset selection and confirmation
+fn process_module_download(
+    md: &ModuleDetail, 
+    module_id: &str, 
+    client: &Client, 
+    assume_yes: bool
+) -> Result<(), KamError> {
+    // Select an asset (first zip-like asset in releases)
+    let mut chosen_asset: Option<(&Asset, &str)> = None; // (asset, release_name)
+    if let Some(rels) = md.releases.as_ref() {
+        for r in rels.iter() {
+            if let Some(assets) = r.release_assets.as_ref()
+                && let Some(a) = assets.iter().find(|x| {
+                    x.content_type
+                        .as_deref()
+                        .map(|ct| ct.to_lowercase().contains("zip"))
+                        .unwrap_or(false)
+                        || x.name.to_lowercase().ends_with(".zip")
+                })
+            {
+                let release_label = r
+                    .name
+                    .as_deref()
+                    .or(r.version.as_deref())
+                    .unwrap_or("latest");
+                chosen_asset = Some((a, release_label));
+                break;
+            }
+        }
+    }
+
+    let (asset, release_label) = match chosen_asset {
+        Some((a, rname)) => (a, rname),
+        None => {
+            Utils::warn(&format!(
+                "No downloadable zip asset found for module {}",
+                module_id
+            ));
+            return Ok(());
+        }
+    };
+
+    // Print detailed info and ask for confirmation unless assume_yes
+    let size_str = asset
+        .size
+        .map(|s| format!(" ({})", format_size(s)))
+        .unwrap_or_default();
+    println!(
+        "Module: {} - {}",
+        module_id,
+        md.module_name.as_deref().unwrap_or("")
+    );
+    println!("Release: {}", release_label);
+    println!("Asset: {}{}", asset.name, size_str);
+    println!("Download URL: {}", asset.download_url);
+
+    let confirmed = if assume_yes {
+        true
+    } else {
+        print!(
+            "Confirm download '{}' [{}] ? [Y/n] ",
+            module_id, asset.name
+        );
+        stdout().flush().map_err(KamError::Io)?;
+        let mut input = String::new();
+        stdin().read_line(&mut input).map_err(KamError::Io)?;
+        let input_trimmed = input.trim();
+        let ok = input_trimmed.is_empty() || input_trimmed.to_lowercase() == "y" || input_trimmed.to_lowercase() == "yes";
+        if !ok {
+            Utils::warn(&format!("Skipped download: {}", module_id));
+        }
+        ok
+    };
+
+    if !confirmed {
+        return Ok(());
+    }
+
+    // Proceed to download
+    match download_asset(client, asset, None) {
+        Ok(path) => {
+            Utils::success(&format!("Saved: {}", path.display()));
+        }
+        Err(e) => {
+            Utils::error(&format!("Failed to download {}: {}", module_id, e));
+        }
+    }
+
+    Ok(())
+}
+
 /// Search the remote catalog (search-index.json) for the provided query
 /// (case-insensitive substring match across name/description/summary/authors).
-fn cache_root_dir() -> Result<PathBuf, KamError> {
+pub(crate) fn cache_root_dir() -> Result<PathBuf, KamError> {
     // Allow override for tests or custom installs via env var.
     if let Ok(dir) = std::env::var("KAM_CACHE_DIR") {
         let p = PathBuf::from(dir);
@@ -288,8 +322,11 @@ fn cache_root_dir() -> Result<PathBuf, KamError> {
         return Ok(p);
     }
 
-    let mut base = dirs::cache_dir().unwrap_or(std::env::temp_dir());
-    base.push("kam");
+    // Default to user-level Kam directory (~/.kam) so module cache is colocated with templates.
+    let home = dirs::home_dir().ok_or_else(|| {
+        KamError::InvalidDirectory("Could not determine home directory".to_string())
+    })?;
+    let base = home.join(".kam");
     std::fs::create_dir_all(&base)?;
     Ok(base)
 }
@@ -563,6 +600,129 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
     }
 
     Ok(())
+}
+
+/// Search the remote catalog and allow interactive selection of results
+pub(crate) fn search_remote_interactive(query: &str, base_url: &str) -> Result<Option<String>, KamError> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
+
+    // Use cached index if available & fresh; otherwise fetch and cache.
+    let entries = fetch_index_cached(&client, base_url)?;
+
+    let q = query.to_lowercase().trim().to_string();
+    if q.is_empty() {
+        Utils::warn("Empty query");
+        return Ok(None);
+    }
+
+    // Score candidates: substring match => 1.0, otherwise use similarity or token coverage
+    let mut scored: Vec<(f64, &SearchEntry)> = Vec::new();
+    for e in entries.iter() {
+        let name = e.name.to_lowercase();
+        let desc = e.description.as_deref().unwrap_or("").to_lowercase();
+        let sum = e.summary.as_deref().unwrap_or("").to_lowercase();
+        let auth = e.authors.as_deref().unwrap_or("").to_lowercase();
+        let hay = format!("{} {} {} {}", name, desc, sum, auth);
+
+        if hay.contains(&q) {
+            scored.push((1.0, e));
+            continue;
+        }
+
+        // token coverage
+        let tokens: Vec<&str> = q.split_whitespace().collect();
+        let mut matched_tokens = 0usize;
+        for token in tokens.iter() {
+            if hay.contains(token) {
+                matched_tokens += 1;
+            }
+        }
+        let token_ratio = if tokens.is_empty() {
+            0.0
+        } else {
+            matched_tokens as f64 / tokens.len() as f64
+        };
+
+        // fuzzy similarity via Levenshtein-based similarity (normalized)
+        let sim_name = similarity(&q, &name);
+        let sim_desc = similarity(&q, &desc);
+        let sim_sum = similarity(&q, &sum);
+        let sim_auth = similarity(&q, &auth);
+        let sim_max = sim_name.max(sim_desc).max(sim_sum).max(sim_auth);
+
+        let score = token_ratio.max(sim_max);
+
+        // threshold for fuzzy match
+        if score >= 0.30 { // Lower threshold to show more results for selection
+            scored.push((score, e));
+        }
+    }
+
+    if scored.is_empty() {
+        Utils::warn(&format!("No results found for '{}'.", query));
+        return Ok(None);
+    }
+
+    // sort by score descending
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Print numbered results
+    println!("There are {} similar packages to '{}':", scored.len(), query);
+    println!();
+    for (i, (score, e)) in scored.iter().take(20).enumerate() {  // Show up to 20 results
+        println!(
+            "{} - {} - {}{}",
+            (i + 1),
+            e.name,
+            e.description.as_deref().unwrap_or(""),
+            {
+                if (*score - 1.0).abs() > f64::EPSILON {
+                    format!("  (score: {:.2})", score)
+                } else {
+                    "".to_string()
+                }
+            }
+        );
+        if let Some(s) = &e.summary {
+            println!("    {}", s);
+        }
+        if let Some(a) = &e.authors {
+            println!("    authors: {}", a);
+        }
+        if let Some(u) = &e.url {
+            println!("    url: {}", u);
+        }
+        println!();
+    }
+
+    // Ask user to select
+    print!("Enter the number of the package to install (or press Enter to skip): ");
+    stdout().flush().map_err(KamError::Io)?;
+    let mut input = String::new();
+    stdin().read_line(&mut input).map_err(KamError::Io)?;
+    let input_trimmed = input.trim();
+
+    if input_trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    match input_trimmed.parse::<usize>() {
+        Ok(num) if num > 0 && num <= scored.len() => {
+            let selected = &scored[num - 1].1;
+            Ok(Some(selected.name.clone()))
+        }
+        Ok(_) => {
+            Utils::warn("Invalid selection. Number out of range.");
+            Ok(None)
+        }
+        Err(_) => {
+            Utils::warn("Invalid input. Please enter a number.");
+            Ok(None)
+        }
+    }
 }
 
 /// Simple Levenshtein distance (char-based) - used for a lightweight fuzzy similarity.
@@ -849,7 +1009,10 @@ fn download_asset(
 mod tests {
     use super::*;
     use clap::Parser;
+    use std::sync::Mutex;
     use tempfile;
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_search_asl() {
@@ -883,6 +1046,7 @@ mod tests {
         // Create a temporary cache dir and write a fake index file, then ensure
         // fetch_index_cached reads it (no network needed).
         let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = TEST_LOCK.lock().unwrap();
         unsafe {
             std::env::set_var("KAM_CACHE_DIR", tmp.path().to_str().unwrap());
         }
@@ -916,6 +1080,7 @@ mod tests {
         // Create a temporary cache dir and write a fake module JSON, then ensure
         // fetch_module_detail returns the cached content.
         let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = TEST_LOCK.lock().unwrap();
         unsafe {
             std::env::set_var("KAM_CACHE_DIR", tmp.path().to_str().unwrap());
         }

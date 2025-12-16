@@ -72,6 +72,13 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
         "unknown",
     );
 
+    // Normalize display version to avoid double leading 'v' (e.g., avoid 'vv1.2.3')
+    let display_version = if version.to_lowercase().starts_with('v') {
+        version.clone()
+    } else {
+        format!("v{}", version)
+    };
+
     let description = pick_first(
         vec![
             kam_toml.as_ref().map(|k| k.prop.description.as_str()),
@@ -155,7 +162,7 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     }
 
     // 打印banner和表格，看起来比较专业（虽然其实没啥用）
-    Utils::banner(&format!("{} v{}", name, version));
+    Utils::banner(&format!("{} {}", name, display_version));
     println!("{}", table);
     println!(); // 空行，视觉上舒服点
 
