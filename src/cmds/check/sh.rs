@@ -89,29 +89,56 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
         .output()
     {
         Ok(output) => {
-            if !output.stdout.is_empty()
-                && let Ok(v) = serde_json::from_slice::<serde_json::Value>(&output.stdout)
-                && let Some(comments) = v.get("comments").and_then(|x| x.as_array())
-            {
-                for c in comments {
-                    // 提取shellcheck的检查结果
-                    let file = c.get("file").and_then(|x| x.as_str()).unwrap_or("");
-                    let line = c.get("line").and_then(|x| x.as_u64()).unwrap_or(0);
-                    let column = c.get("column").and_then(|x| x.as_u64()).unwrap_or(0);
-                    let level = c.get("level").and_then(|x| x.as_str()).unwrap_or("");
-                    let code = c.get("code").and_then(|x| x.as_u64()).unwrap_or(0);
-                    let message = c.get("message").and_then(|x| x.as_str()).unwrap_or("");
-                    let msg = format!(
-                        "shellcheck [{}] {}:{}:{} {}",
-                        code, file, line, column, message
-                    );
-                    // 根据级别分类：error或warning
-                    if level.eq_ignore_ascii_case("error") {
-                        fr.valid = false;
-                        fr.errors.push(msg.clone());
-                    } else {
-                        fr.warnings.push(msg.clone());
+            // Prefer parsing JSON from stdout; handle both legacy {"comments":[...]} and modern array form.
+            if !output.stdout.is_empty() {
+                match serde_json::from_slice::<serde_json::Value>(&output.stdout) {
+                    Ok(v) => {
+                        // helper to extract one issue entry into our FileResult
+                        let mut push_issue = |c: &serde_json::Value| {
+                            let file = c.get("file").and_then(|x| x.as_str()).unwrap_or("");
+                            let line = c.get("line").and_then(|x| x.as_u64()).unwrap_or(0);
+                            let column = c.get("column").and_then(|x| x.as_u64()).unwrap_or(0);
+                            let level = c.get("level").and_then(|x| x.as_str()).unwrap_or("");
+                            let code = c.get("code").and_then(|x| x.as_u64()).unwrap_or(0);
+                            let message = c.get("message").and_then(|x| x.as_str()).unwrap_or("");
+                            let msg = format!(
+                                "shellcheck [{}] {}:{}:{} {}",
+                                code, file, line, column, message
+                            );
+                            if level.eq_ignore_ascii_case("error") {
+                                fr.valid = false;
+                                fr.errors.push(msg.clone());
+                            } else {
+                                fr.warnings.push(msg.clone());
+                            }
+                        };
+
+                        // Legacy format: { "comments": [...] }
+                        if let Some(comments) = v.get("comments").and_then(|x| x.as_array()) {
+                            for c in comments {
+                                push_issue(c);
+                            }
+                        // Modern format: an array of issue objects
+                        } else if let Some(arr) = v.as_array() {
+                            for c in arr {
+                                push_issue(c);
+                            }
+                        } else {
+                            fr.warnings.push(format!(
+                                "shellcheck returned unexpected JSON structure: {}",
+                                String::from_utf8_lossy(&output.stdout)
+                            ));
+                        }
                     }
+                    Err(e) => {
+                        fr.warnings
+                            .push(format!("Failed to parse shellcheck JSON: {}", e));
+                    }
+                }
+            } else if !output.stderr.is_empty() {
+                let stde = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                if !stde.is_empty() {
+                    fr.warnings.push(format!("shellcheck stderr: {}", stde));
                 }
             }
         }
@@ -164,7 +191,7 @@ mod shell_tests {
             writeln!(f, "  p=\"$1\"").unwrap();
             f.write_all(b"  echo \"SHELLCHECK-MOCK-RUN $p\" >&2\n")
                 .unwrap();
-            f.write_all(b"  printf '{\"comments\":[{\"file\":\"%s\",\"line\":1,\"column\":1,\"level\":\"warning\",\"code\":9999,\"message\":\"fake-warning\"}]}' \"$p\"\n").unwrap();
+            f.write_all(b"  printf '[{\"file\":\"%s\",\"line\":1,\"column\":1,\"level\":\"warning\",\"code\":9999,\"message\":\"fake-warning\"}]' \"$p\"\n").unwrap();
             writeln!(f, "  exit 0").unwrap();
             writeln!(f, "fi").unwrap();
             writeln!(f, "exit 0").unwrap();
@@ -249,6 +276,78 @@ mod shell_tests {
         assert!(fr.warnings.iter().any(|w| w.contains("fake-warning")));
     }
 
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn custom_checks_run_even_with_shellcheck_present() {
+        // Create a temporary directory to host a fake `shellcheck` and a test script.
+        // The script will include a dangerous command (rm -rf ...) that should be
+        // detected by our custom checks in addition to any shellcheck warnings.
+        let dir = tempdir().unwrap();
+
+        // Create fake `shellcheck` script that responds to `--version` and `--format=json <path>`.
+        let sc_path = dir.path().join("shellcheck");
+        {
+            let mut f = File::create(&sc_path).unwrap();
+            writeln!(f, "#!/bin/sh").unwrap();
+            writeln!(f, "if [ \"$1\" = \"--version\" ]; then").unwrap();
+            writeln!(f, "  echo \"shellcheck mock\"").unwrap();
+            writeln!(f, "  exit 0").unwrap();
+            writeln!(f, "fi").unwrap();
+            writeln!(f, "if [ \"$1\" = \"--format=json\" ]; then").unwrap();
+            writeln!(f, "  shift").unwrap();
+            writeln!(f, "  p=\"$1\"").unwrap();
+            // Emit an array-form JSON (modern shellcheck format) with a fake warning.
+            f.write_all(b"  printf '[{\"file\":\"%s\",\"line\":1,\"column\":1,\"level\":\"warning\",\"code\":9999,\"message\":\"fake-warning\"}]' \"$p\"\n").unwrap();
+            writeln!(f, "  exit 0").unwrap();
+            writeln!(f, "fi").unwrap();
+            writeln!(f, "exit 0").unwrap();
+        }
+        // Make it executable
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&sc_path).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&sc_path, perms).unwrap();
+        }
+
+        // Prepend fake shellcheck to PATH for this test
+        let old_path = std::env::var("PATH").unwrap_or_default();
+        let new_path = format!("{}:{}", dir.path().display(), old_path);
+        unsafe {
+            std::env::set_var("PATH", &new_path);
+        }
+
+        // Create a test script that contains a dangerous rm -rf invocation
+        let script_path = dir.path().join("danger.sh");
+        {
+            let mut s = File::create(&script_path).unwrap();
+            writeln!(s, "#!/bin/sh").unwrap();
+            writeln!(s, "rm -rf /tmp/somewhere").unwrap();
+        }
+
+        // Call check_sh which should detect our fake shellcheck via PATH and also run custom checks
+        let fr = check_sh(&script_path, false).unwrap();
+
+        // Restore PATH
+        unsafe {
+            std::env::set_var("PATH", &old_path);
+        }
+
+        // Ensure both the fake shellcheck warning and the custom dangerous-rm detection were recorded
+        assert!(
+            fr.warnings.iter().any(|w| w.contains("fake-warning")),
+            "warnings: {:?}",
+            fr.warnings
+        );
+        assert!(
+            fr.errors.iter().any(|e| e.contains("Dangerous rm -rf")),
+            "errors: {:?}",
+            fr.errors
+        );
+    }
+
     #[test]
     fn debug_shebang_detection() {
         // Create a temporary directory with a script that has no extension but a shebang
@@ -291,6 +390,7 @@ mod shell_tests {
     }
 
     #[test]
+    #[serial]
     fn check_sh_custom_fallback_when_no_shellcheck() {
         // Ensure that even if shellcheck is not present, the Rust fallback runs and returns a FileResult.
         let dir = tempdir().unwrap();

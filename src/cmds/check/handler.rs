@@ -108,6 +108,24 @@ fn collect_project_files(
                 }
                 _ => {}
             }
+        } else {
+            // No extension: attempt to detect shell scripts via shebang
+            // Read a small prefix of the file and look for common shell shebangs
+            if let Ok(mut fh) = std::fs::File::open(path) {
+                let mut buf = [0u8; 256];
+                if let Ok(n) = fh.read(&mut buf) {
+                    let header = String::from_utf8_lossy(&buf[..n]).to_lowercase();
+                    if header.starts_with("#!")
+                        && (header.contains("sh")
+                            || header.contains("bash")
+                            || header.contains("dash")
+                            || header.contains("env sh")
+                            || header.contains("env bash"))
+                    {
+                        files.push(path.to_path_buf());
+                    }
+                }
+            }
         }
     }
 
