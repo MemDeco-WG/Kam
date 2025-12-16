@@ -34,11 +34,10 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
         .map_err(|e| KamError::CommandFailed(format!("Failed to parse issue JSON: {}", e)))?;
 
     // 先看看正文里有没有，没有的话再去评论里翻
-    if let Some(body) = &issue.body {
-        if let Some(cert) = extract_cert_chain(body) {
+    if let Some(body) = &issue.body
+        && let Some(cert) = extract_cert_chain(body) {
             return Ok(cert);
         }
-    }
 
     // 正文没有？那去评论里找找，说不定有人回复了
     if issue.comments > 0 {

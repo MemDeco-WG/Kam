@@ -121,16 +121,14 @@ fn unset_value_by_path(value: &mut toml::Value, path: &str) -> bool {
     for (i, &part) in parts.iter().enumerate() {
         if i == parts.len() - 1 {
             return current_tbl.remove(part).is_some();
-        } else {
-            if let Some(next) = current_tbl.get_mut(part) {
-                if next.is_table() {
-                    current_tbl = next.as_table_mut().unwrap();
-                } else {
-                    return false;
-                }
+        } else if let Some(next) = current_tbl.get_mut(part) {
+            if next.is_table() {
+                current_tbl = next.as_table_mut().unwrap();
             } else {
                 return false;
             }
+        } else {
+            return false;
         }
     }
     false
@@ -192,16 +190,14 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             } else {
                 // key不存在，但如果是已知的整数字段（如versionCode），强制要求整数
                 let parts: Vec<&str> = key.split('.').collect();
-                if let Some(last) = parts.last() {
-                    if *last == "versionCode" {
-                        if new_value.parse::<i64>().is_err() {
+                if let Some(last) = parts.last()
+                    && *last == "versionCode"
+                        && new_value.parse::<i64>().is_err() {
                             return Err(KamError::CommandFailed(format!(
                                 "Invalid value: '{}' is not an integer; {} must be an integer",
                                 new_value, key
                             )));
                         }
-                    }
-                }
             }
             set_value_by_path(&mut v, &key, &new_value);
             write_toml(&path, &v)?;

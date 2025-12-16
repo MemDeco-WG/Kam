@@ -82,42 +82,35 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     // 尝试发现git仓库
     if let Ok(repo) = Repository::discover(&current_dir) {
         // 获取 git user.name
-        if let Ok(cfg) = repo.config() {
-            if let Ok(name) = cfg.get_string("user.name") {
+        if let Ok(cfg) = repo.config()
+            && let Ok(name) = cfg.get_string("user.name") {
                 git_author = Some(name);
             }
-        }
 
         // 获取 remote URL
-        if let Ok(remote) = repo.find_remote("origin") {
-            if let Some(url) = remote.url() {
+        if let Ok(remote) = repo.find_remote("origin")
+            && let Some(url) = remote.url() {
                 git_repo_url = Some(url.to_string());
             }
-        }
         // 如果没找到origin，就用第一个可用的remote
-        if git_repo_url.is_none() {
-            if let Ok(remotes) = repo.remotes() {
-                if let Some(name) = remotes.get(0) {
-                    if let Ok(remote) = repo.find_remote(name) {
-                        if let Some(url) = remote.url() {
+        if git_repo_url.is_none()
+            && let Ok(remotes) = repo.remotes()
+                && let Some(name) = remotes.get(0)
+                    && let Ok(remote) = repo.find_remote(name)
+                        && let Some(url) = remote.url() {
                             git_repo_url = Some(url.to_string());
                         }
-                    }
-                }
-            }
-        }
 
         // 从 remote URL 解析 owner 和 repo name
-        if let Some(ref url) = git_repo_url {
-            if let Some((owner, repo_name)) = parse_git_remote_url(url) {
+        if let Some(ref url) = git_repo_url
+            && let Some((owner, repo_name)) = parse_git_remote_url(url) {
                 git_owner = Some(owner);
                 git_repo_name = Some(repo_name);
             }
-        }
 
         // 获取当前分支名
-        if let Ok(head) = repo.head() {
-            if let Some(name) = head.name() {
+        if let Ok(head) = repo.head()
+            && let Some(name) = head.name() {
                 // 尝试从 refs/heads/xxx 提取分支名
                 if let Some(stripped) = name.strip_prefix("refs/heads/") {
                     git_branch = Some(stripped.to_string());
@@ -126,7 +119,6 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                     git_branch = Some(branch_name.to_string());
                 }
             }
-        }
     }
 
     // 默认分支名，如果无法获取则使用 "main"
@@ -139,7 +131,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         // 将仓库名转换为更友好的显示名称（去掉下划线/横线，首字母大写等）
         let mut name = repo_name.clone();
         // 简单的美化：将下划线和横线替换为空格，并首字母大写
-        name = name.replace('_', " ").replace('-', " ");
+        name = name.replace(['_', '-'], " ");
         // 简单的首字母大写（只处理第一个单词）
         if let Some(first_char) = name.chars().next() {
             let mut chars: Vec<char> = name.chars().collect();
@@ -154,7 +146,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
             .and_then(|s| s.to_str())
             .unwrap_or(project_name_raw)
             .to_string();
-        let mut name = dir_name.replace('_', " ").replace('-', " ");
+        let mut name = dir_name.replace(['_', '-'], " ");
         if let Some(first_char) = name.chars().next() {
             let mut chars: Vec<char> = name.chars().collect();
             chars[0] = first_char.to_uppercase().next().unwrap_or(first_char);
@@ -168,7 +160,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
             .and_then(|s| s.to_str())
             .unwrap_or("Example Module Name")
             .to_string();
-        let mut name = dir_name.replace('_', " ").replace('-', " ");
+        let mut name = dir_name.replace(['_', '-'], " ");
         if let Some(first_char) = name.chars().next() {
             let mut chars: Vec<char> = name.chars().collect();
             chars[0] = first_char.to_uppercase().next().unwrap_or(first_char);
@@ -283,19 +275,14 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     let mut global_author: Option<String> = None;
     if let Some(home) = dirs::home_dir() {
         let cfg_path = home.join(".kam").join("config.toml");
-        if cfg_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&cfg_path) {
-                if let Ok(v) = toml::from_str::<toml::Value>(&content) {
-                    if let Some(prop) = v.get("prop") {
-                        if let Some(author_val) = prop.get("author") {
-                            if let Some(s) = author_val.as_str() {
+        if cfg_path.exists()
+            && let Ok(content) = std::fs::read_to_string(&cfg_path)
+                && let Ok(v) = toml::from_str::<toml::Value>(&content)
+                    && let Some(prop) = v.get("prop")
+                        && let Some(author_val) = prop.get("author")
+                            && let Some(s) = author_val.as_str() {
                                 global_author = Some(s.to_string());
                             }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     let author = if let Some(a) = args.author.as_deref() {

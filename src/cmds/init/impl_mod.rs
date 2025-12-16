@@ -124,11 +124,10 @@ pub fn init_impl(
     let mut kam_vars: Vec<(String, String)> = Vec::new();
     let keys: Vec<String> = template_vars.keys().cloned().collect();
     for k in keys {
-        if k.starts_with('#') {
-            if let Some(v) = template_vars.get(&k) {
+        if k.starts_with('#')
+            && let Some(v) = template_vars.get(&k) {
                 kam_vars.push((k.clone(), v.clone()));
             }
-        }
     }
     for (k, _) in &kam_vars {
         template_vars.remove(k);
@@ -288,7 +287,7 @@ pub fn init_impl(
     // 这样hooks就能访问到kam.toml里的所有配置了
     let kt_flatvars = crate::template::TemplateVariableProcessor::flatten_kam_toml(&kt);
     for (k, v) in kt_flatvars.iter() {
-        let base = k.to_ascii_uppercase().replace('.', "_").replace('-', "_");
+        let base = k.to_ascii_uppercase().replace(['.', '-'], "_");
         let key = format!("KAM_{}", base);
         let v_escaped = v.replace('"', "\\\""); // 转义引号
         env_lines.push(format!("{}=\"{}\"", key, v_escaped));
@@ -300,8 +299,7 @@ pub fn init_impl(
         for (var_name, var_def) in tmpl_section.variables.iter() {
             let nm = var_name
                 .to_ascii_uppercase()
-                .replace('.', "_")
-                .replace('-', "_");
+                .replace(['.', '-'], "_");
             let key = format!("KAM_TMPL_{}", nm);
             let val = template_vars
                 .get(var_name)
@@ -360,7 +358,7 @@ pub fn init_template(
         potential_names.push(format!("{}_template", template_spec));
     }
 
-    for (_name_idx, spec) in potential_names.iter().enumerate() {
+    for spec in potential_names.iter() {
         // 1. Direct local path (only for the first/raw spec, or if we really want to support 'foo_template' local dir)
         let spec_path = Path::new(spec);
         if spec_path.exists() {

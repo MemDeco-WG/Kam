@@ -158,10 +158,8 @@ pub fn build_project(
         if let Some(pb) = &build_pb {
             pb.inc(1);
         }
-    } else {
-        if !args.quiet {
-            Utils::info(crate::i18n::tr_key("hooks.skipping_template_packaging"));
-        }
+    } else if !args.quiet {
+        Utils::info(crate::i18n::tr_key("hooks.skipping_template_packaging"));
     }
 
     // For non-interactive environments, print a section separator for packaging; if we have a top-level build progress bar show its message
@@ -192,8 +190,8 @@ pub fn build_project(
     let build_duration = start_time.elapsed();
 
     // Display build statistics in a beautiful table
-    if !args.quiet {
-        if let Ok(metadata) = fs::metadata(&output_file) {
+    if !args.quiet
+        && let Ok(metadata) = fs::metadata(&output_file) {
             let size_kb = metadata.len() as f64 / 1024.0;
             let size_str = if size_kb < 1024.0 {
                 format!("{:.1} KB", size_kb)
@@ -236,7 +234,6 @@ pub fn build_project(
             println!("{}", table);
             println!();
         }
-    }
 
     // Run post-build hooks only for non-template modules
     if !is_template_build {
@@ -258,18 +255,16 @@ pub fn build_project(
 }
 
 pub fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
-    if let Some(build) = &kam_toml.kam.build {
-        if let Some(output_file) = &build.output_file {
-            if !output_file.is_empty() {
+    if let Some(build) = &kam_toml.kam.build
+        && let Some(output_file) = &build.output_file
+            && !output_file.is_empty() {
                 let mut name = output_file.clone();
                 name = name.replace("{{id}}", &kam_toml.prop.id);
                 name = name.replace("{{version}}", &kam_toml.prop.version);
                 name = name.replace("{{versionCode}}", &kam_toml.prop.versionCode.to_string());
-                name = name.replace("{{name}}", &kam_toml.prop.get_name());
+                name = name.replace("{{name}}", kam_toml.prop.get_name());
                 return Ok(name);
             }
-        }
-    }
 
     Ok(format!(
         "{}-{}-{}",
@@ -297,15 +292,14 @@ pub fn create_kam_module_zip(
         project_path.join("src").join(module_id)
     };
 
-    if !src_dir.exists() {
-        if !args.quiet {
+    if !src_dir.exists()
+        && !args.quiet {
             Utils::warn(&trf!(
                 "packaging.source_directory_not_found",
                 src_dir.display()
             ));
         }
         // We allow building even if src dir is missing, but it might be empty
-    }
 
     let zip_file = File::create(&module_output_file).map_err(|e| {
         KamError::Io(std::io::Error::new(
@@ -509,30 +503,26 @@ pub fn create_kam_module_zip(
     }
 
     // Add other files if they exist (readme, license, changelog)
-    if let Some(mmrl) = &kam_toml.mmrl {
-        if let Some(repo) = &mmrl.repo {
+    if let Some(mmrl) = &kam_toml.mmrl
+        && let Some(repo) = &mmrl.repo {
             let mut candidates: Vec<String> = Vec::new();
-            if let Some(r) = &repo.readme {
-                if !r.trim().is_empty() {
+            if let Some(r) = &repo.readme
+                && !r.trim().is_empty() {
                     candidates.push(r.clone());
                 }
-            }
-            if let Some(l) = &repo.license {
-                if !l.trim().is_empty() {
+            if let Some(l) = &repo.license
+                && !l.trim().is_empty() {
                     candidates.push(l.clone());
                 }
-            }
-            if let Some(c) = &repo.changelog {
-                if !c.trim().is_empty() {
+            if let Some(c) = &repo.changelog
+                && !c.trim().is_empty() {
                     candidates.push(c.clone());
                 }
-            }
             // Also check for icon
-            if let Some(i) = &repo.icon {
-                if !i.trim().is_empty() {
+            if let Some(i) = &repo.icon
+                && !i.trim().is_empty() {
                     candidates.push(i.clone());
                 }
-            }
 
             for file_name in candidates {
                 let file_path = project_path.join(&file_name);
@@ -548,7 +538,6 @@ pub fn create_kam_module_zip(
                 }
             }
         }
-    }
 
     zip.finish()?;
 

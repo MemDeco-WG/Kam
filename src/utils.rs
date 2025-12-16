@@ -93,38 +93,34 @@ pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -
     let rel = rel_path.trim();
 
     // 目录前缀匹配
-    if patt.ends_with('/') {
-        if matches_directory_prefix(patt, rel) {
+    if patt.ends_with('/')
+        && matches_directory_prefix(patt, rel) {
             return true;
         }
-    }
 
     // 后缀通配符匹配
-    if let Some(fname) = file_name {
-        if matches_suffix_wildcard(patt, fname) {
+    if let Some(fname) = file_name
+        && matches_suffix_wildcard(patt, fname) {
             return true;
         }
-    }
 
     // 通配符正则匹配
     if matches_wildcard(patt, rel) {
         return true;
     }
-    if let Some(fname) = file_name {
-        if matches_wildcard(patt, fname) {
+    if let Some(fname) = file_name
+        && matches_wildcard(patt, fname) {
             return true;
         }
-    }
 
     // 精确匹配
     if matches_exact(patt, rel) {
         return true;
     }
-    if let Some(fname) = file_name {
-        if matches_exact(patt, fname) {
+    if let Some(fname) = file_name
+        && matches_exact(patt, fname) {
             return true;
         }
-    }
 
     false
 }
@@ -400,7 +396,7 @@ impl Utils {
     /// when converting kam.toml keys (e.g. `prop.id`) to environment variable fragments
     /// (e.g. `PROP_ID`).
     pub fn normalize_env_key(key: &str) -> String {
-        key.to_ascii_uppercase().replace('.', "_").replace('-', "_")
+        key.to_ascii_uppercase().replace(['.', '-'], "_")
     }
 
     /// Convert a Kam-style key (e.g. `prop.id`) into a full `KAM_` environment
@@ -431,11 +427,10 @@ pub fn normalize_root_manager(raw: &str) -> String {
 // 确保path的父目录存在
 // 如果path没有父目录（比如是根目录），就什么都做
 pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
+    if let Some(parent) = path.parent()
+        && !parent.exists() {
             fs::create_dir_all(parent)?;
         }
-    }
     Ok(())
 }
 
@@ -520,7 +515,7 @@ pub fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
         2 => index_base.join("2").join(&name_lower),
         3 => index_base
             .join("3")
-            .join(&chars[0].to_string())
+            .join(chars[0].to_string())
             .join(&name_lower),
         _ => {
             let prefix1 = chars[0..2].iter().collect::<String>();

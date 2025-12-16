@@ -98,40 +98,34 @@ pub fn read_language_from_config() -> Option<String> {
     // in the project's config will still allow a global preference to be used.
 
     // 1) Try forced local config (prefer a project-local setting)
-    if let Ok(local_path) = get_config_paths(false, true) {
-        if let Ok(local_toml) = read_toml(&local_path) {
+    if let Ok(local_path) = get_config_paths(false, true)
+        && let Ok(local_toml) = read_toml(&local_path) {
             // First check ui.language (preferred)
-            if let Some(val) = get_value_by_path(&local_toml, "ui.language") {
-                if let Some(s) = val.as_str() {
+            if let Some(val) = get_value_by_path(&local_toml, "ui.language")
+                && let Some(s) = val.as_str() {
                     return Some(s.to_string());
                 }
-            }
             // Fallback to `language`
-            if let Some(val) = get_value_by_path(&local_toml, "language") {
-                if let Some(s) = val.as_str() {
+            if let Some(val) = get_value_by_path(&local_toml, "language")
+                && let Some(s) = val.as_str() {
                     return Some(s.to_string());
                 }
-            }
         }
-    }
 
     // 2) Fallback to global config if local didn't provide a language
-    if let Ok(global_path) = get_config_paths(true, false) {
-        if let Ok(global_toml) = read_toml(&global_path) {
+    if let Ok(global_path) = get_config_paths(true, false)
+        && let Ok(global_toml) = read_toml(&global_path) {
             // First check ui.language (preferred)
-            if let Some(val) = get_value_by_path(&global_toml, "ui.language") {
-                if let Some(s) = val.as_str() {
+            if let Some(val) = get_value_by_path(&global_toml, "ui.language")
+                && let Some(s) = val.as_str() {
                     return Some(s.to_string());
                 }
-            }
             // Fallback to `language`
-            if let Some(val) = get_value_by_path(&global_toml, "language") {
-                if let Some(s) = val.as_str() {
+            if let Some(val) = get_value_by_path(&global_toml, "language")
+                && let Some(s) = val.as_str() {
                     return Some(s.to_string());
                 }
-            }
         }
-    }
 
     None
 }
@@ -215,16 +209,14 @@ fn unset_value_by_path(value: &mut toml::Value, path: &str) -> bool {
     for (i, &part) in parts.iter().enumerate() {
         if i == parts.len() - 1 {
             return current_tbl.remove(part).is_some();
-        } else {
-            if let Some(next) = current_tbl.get_mut(part) {
-                if next.is_table() {
-                    current_tbl = next.as_table_mut().unwrap();
-                } else {
-                    return false;
-                }
+        } else if let Some(next) = current_tbl.get_mut(part) {
+            if next.is_table() {
+                current_tbl = next.as_table_mut().unwrap();
             } else {
                 return false;
             }
+        } else {
+            return false;
         }
     }
     false

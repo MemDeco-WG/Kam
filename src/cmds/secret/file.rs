@@ -73,7 +73,7 @@ pub fn store_secret(
     // base64编码后存储（虽然可能有点冗余，但至少格式统一）
     let s = BASE64_ENGINE.encode(blob);
     // 只存储到本地安全文件存储
-    write_secret_file(name, &s.as_bytes())?;
+    write_secret_file(name, s.as_bytes())?;
 
     // 更新索引（记录元数据）
     let mut idx = load_index()?;

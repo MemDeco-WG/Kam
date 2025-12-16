@@ -57,18 +57,17 @@ pub fn get_root_manager() -> String {
     // 2) global config (~/.kam/config.toml)
     if let Some(home) = dirs::home_dir() {
         let cfg = home.join(".kam").join("config.toml");
-        if cfg.exists() {
-            if let Ok(content) = fs::read_to_string(&cfg) {
-                if let Ok(v) = toml::from_str::<toml::Value>(&content) {
+        if cfg.exists()
+            && let Ok(content) = fs::read_to_string(&cfg)
+                && let Ok(v) = toml::from_str::<toml::Value>(&content) {
                     // Try table: [root] manager = "Magisk"
-                    if let Some(root_tbl) = v.get("root") {
-                        if let Some(m) = root_tbl.get("manager").and_then(|x| x.as_str()) {
+                    if let Some(root_tbl) = v.get("root")
+                        && let Some(m) = root_tbl.get("manager").and_then(|x| x.as_str()) {
                             let n = crate::utils::normalize_root_manager(m);
                             if n != "Unknown" {
                                 return n;
                             }
                         }
-                    }
                     // Try fallback keys: root_manager or manager (looser)
                     if let Some(m) = v.get("root_manager").and_then(|x| x.as_str()) {
                         let n = crate::utils::normalize_root_manager(m);
@@ -83,8 +82,6 @@ pub fn get_root_manager() -> String {
                         }
                     }
                 }
-            }
-        }
     }
 
     "Unknown".to_string()
@@ -162,13 +159,11 @@ fn resolve_artifact_path(explicit: Option<PathBuf>) -> Result<PathBuf, KamError>
             for entry in fs::read_dir(dir).map_err(KamError::Io)? {
                 let e = entry.map_err(KamError::Io)?;
                 let p = e.path();
-                if p.is_file() {
-                    if let Some(ext) = p.extension().and_then(|x| x.to_str()) {
-                        if ext.eq_ignore_ascii_case("zip") {
+                if p.is_file()
+                    && let Some(ext) = p.extension().and_then(|x| x.to_str())
+                        && ext.eq_ignore_ascii_case("zip") {
                             candidates.push(p);
                         }
-                    }
-                }
             }
         }
     }

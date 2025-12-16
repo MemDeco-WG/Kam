@@ -218,7 +218,7 @@ fn extract_archive(path: &Path, dst: &Path) -> Result<(), KamError> {
         let mut archive = tar::Archive::new(tar);
         archive
             .unpack(dst)
-            .map_err(|e| KamError::Io(std::io::Error::new(io::ErrorKind::Other, e)))?;
+            .map_err(|e| KamError::Io(std::io::Error::other(e)))?;
     } else if path_str.ends_with(".zip") {
         let mut zip_arch = zip::ZipArchive::new(file).map_err(KamError::Zip)?;
         zip_arch.extract(dst).map_err(KamError::Zip)?;
@@ -591,12 +591,10 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
             } else {
                 format!("{}{}/", prefix, name)
             }
+        } else if is_file {
+            format!("{}{}", prefix, rel.display())
         } else {
-            if is_file {
-                format!("{}{}", prefix, rel.display())
-            } else {
-                format!("{}{}/", prefix, rel.display())
-            }
+            format!("{}{}/", prefix, rel.display())
         };
         entries.push((display_name, rel, is_file));
     }
@@ -891,8 +889,8 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         // to match the final folder basename. If the inferred id contains
         // invalid characters, prompt the user to accept a sanitized suggestion
         // or input a valid custom ID.
-        if args.id.is_none() {
-            if let Some(basename) = data.path.file_name().and_then(|s| s.to_str()) {
+        if args.id.is_none()
+            && let Some(basename) = data.path.file_name().and_then(|s| s.to_str()) {
                 let candidate = basename.to_string();
                 // Check ID validity (alphanumeric, '.', '-', '_')
                 if candidate
@@ -950,7 +948,6 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
                     }
                 }
             }
-        }
     }
 
     // Ensure module id matches path name
@@ -1027,13 +1024,12 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
-    if !gh_present {
-        if prompt_confirm(&trf!("init.interactive.gh_not_found"), true)? {
+    if !gh_present
+        && prompt_confirm(&trf!("init.interactive.gh_not_found"), true)? {
             use crate::utils::Utils;
             Utils::info(&trf!("init.interactive.recommend_github_cli"));
             Utils::info(&trf!("init.interactive.helper_script"));
         }
-    }
 
     // cz (commitizen)
     let cz_present = std::process::Command::new("cz")
@@ -1041,13 +1037,12 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
-    if !cz_present {
-        if prompt_confirm(&trf!("init.interactive.cz_not_found"), false)? {
+    if !cz_present
+        && prompt_confirm(&trf!("init.interactive.cz_not_found"), false)? {
             use crate::utils::Utils;
             Utils::info(&trf!("init.interactive.recommend_cz_install"));
             Utils::info(&trf!("init.interactive.helper_script"));
         }
-    }
 
     // Present a summary and confirm before creating files
     println!();

@@ -152,8 +152,8 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 openssl::pkey::PKey::private_key_from_pem_passphrase(&data, pw.as_bytes())
             });
 
-            if let Ok(pkey) = pkey_res {
-                if let Ok(pem) = pkey.public_key_to_pem() {
+            if let Ok(pkey) = pkey_res
+                && let Ok(pem) = pkey.public_key_to_pem() {
                     let pem_s = String::from_utf8_lossy(&pem).to_string();
                     pub_key_pem = Some(pem_s.clone());
 
@@ -163,15 +163,12 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                     use openssl::hash::MessageDigest;
                     use openssl::sign::Signer;
 
-                    if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey) {
-                        if signer.update(pem_s.as_bytes()).is_ok() {
-                            if let Ok(sig) = signer.sign_to_vec() {
+                    if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey)
+                        && signer.update(pem_s.as_bytes()).is_ok()
+                            && let Ok(sig) = signer.sign_to_vec() {
                                 pub_key_signature = Some(BASE64_ENGINE.encode(&sig));
                             }
-                        }
-                    }
                 }
-            }
 
             // Determine effective with_backup: CLI flag overrides global default
             let _default_with_backup = global_with_backup_default();
@@ -226,11 +223,10 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
         }
         SecretCommands::Remove { name } => {
             // Remove fallback file if any
-            if let Ok(p) = secret_file_path(&name) {
-                if p.exists() {
+            if let Ok(p) = secret_file_path(&name)
+                && p.exists() {
                     let _ = fs::remove_file(&p);
                 }
-            }
             let mut idx = load_index()?;
             idx.entries.remove(&name);
             save_index(&idx)?;

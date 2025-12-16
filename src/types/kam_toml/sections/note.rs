@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
 // 提示/通知结构（MMRL V4+不支持color字段）
+#[derive(Default)]
 pub struct NoteSection {
     // 通知标题
     pub title: String,
@@ -10,11 +11,3 @@ pub struct NoteSection {
     pub message: String,
 }
 
-impl Default for NoteSection {
-    fn default() -> Self {
-        NoteSection {
-            title: String::new(),
-            message: String::new(),
-        }
-    }
-}

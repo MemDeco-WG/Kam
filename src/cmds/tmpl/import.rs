@@ -132,16 +132,14 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
             imported_count += 1;
         } else {
             // Non .tar.gz entry - consider grouping by top-level directory name
-            if let Some(component) = outpath.components().next() {
-                if let std::path::Component::Normal(os_str) = component {
-                    if let Some(top) = os_str.to_str() {
+            if let Some(component) = outpath.components().next()
+                && let std::path::Component::Normal(os_str) = component
+                    && let Some(top) = os_str.to_str() {
                         dir_groups
                             .entry(top.to_string())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(i);
                     }
-                }
-            }
         }
     }
 
@@ -242,9 +240,7 @@ pub fn import_template(path: &Path, name: Option<String>, force: bool) -> Result
         }
         import_multiple_templates(path, force)
     } else {
-        Err(KamError::CommandFailed(format!(
-            "Unsupported file format. Use .tar.gz for single template or .zip for multiple templates"
-        )))
+        Err(KamError::CommandFailed("Unsupported file format. Use .tar.gz for single template or .zip for multiple templates".to_string()))
     }
 }
 

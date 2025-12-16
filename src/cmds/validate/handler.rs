@@ -75,8 +75,8 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
 
     // --- [mmrl.repo] Section ---
     // mmrl是可选的，有的话才检查
-    if let Some(mmrl) = &kam_toml.mmrl {
-        if let Some(repo) = &mmrl.repo {
+    if let Some(mmrl) = &kam_toml.mmrl
+        && let Some(repo) = &mmrl.repo {
             // 检查推荐字段（license建议填写）
             if repo.license.as_deref().unwrap_or("").is_empty() {
                 warnings.push(
@@ -104,7 +104,6 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
                 &mut errors,
             );
         }
-    }
 
     // --- [kam.build] Section ---
     // 检查构建相关配置
@@ -196,9 +195,8 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
 // 检查文件是否存在
 // 如果配置了文件路径但文件不存在，就加到错误列表里
 fn check_file_exists(base: &Path, file: &Option<String>, name: &str, errors: &mut Vec<String>) {
-    if let Some(f) = file {
-        if !f.is_empty() && !base.join(f).exists() {
+    if let Some(f) = file
+        && !f.is_empty() && !base.join(f).exists() {
             errors.push(trf!("{} '{}' not found", name, f));
         }
-    }
 }

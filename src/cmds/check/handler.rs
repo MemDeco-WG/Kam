@@ -43,14 +43,13 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     }
 
     // 如果是 Kam 项目，根据配置调整检查范围
-    if is_kam_project {
-        if let Ok(_kam_toml) = crate::types::kam_toml::KamToml::load_from_dir(project_path) {
+    if is_kam_project
+        && let Ok(_kam_toml) = crate::types::kam_toml::KamToml::load_from_dir(project_path) {
             // 如果配置了 source_dir，可以优先检查该目录
             // 但这里我们仍然检查整个项目，只是跳过一些不必要的目录
             // 可以添加基于 build 配置的智能过滤逻辑
             // 例如：如果配置了 exclude，可以跳过这些文件
         }
-    }
     // 虽然可能漏掉一些，但至少能跳过大部分不需要检查的目录
     // 第一遍：统计匹配支持扩展名的文件总数
     // 这样进度条才能显示准确的进度

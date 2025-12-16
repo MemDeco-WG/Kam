@@ -199,11 +199,9 @@ fn run_hooks(
             .arg("HEAD")
             .current_dir(project_root)
             .output()
-        {
-            if out.status.success() {
+            && out.status.success() {
                 detected_ref = String::from_utf8_lossy(&out.stdout).trim().to_string();
             }
-        }
     }
 
     // 构建环境变量列表，跟踪key避免重复
@@ -361,8 +359,7 @@ fn run_hooks(
                 "KAM_TMPL_{}",
                 var_name
                     .to_ascii_uppercase()
-                    .replace('.', "_")
-                    .replace('-', "_")
+                    .replace(['.', '-'], "_")
             );
             // Default value may exist in variable definition, or fallback to empty string
             let env_val = var_def.default.clone().unwrap_or_default();
@@ -374,7 +371,7 @@ fn run_hooks(
     // For each flattened key (e.g. "prop.id") create KAM_PROP_ID to make input consistent.
     let kt_vars = crate::template::TemplateVariableProcessor::flatten_kam_toml(kam_toml);
     for (k, v) in kt_vars {
-        let env_key_base = k.to_ascii_uppercase().replace('.', "_").replace('-', "_");
+        let env_key_base = k.to_ascii_uppercase().replace(['.', '-'], "_");
         let env_key = format!("KAM_{}", env_key_base);
         add_env(&env_key, v);
     }

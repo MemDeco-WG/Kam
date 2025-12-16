@@ -34,16 +34,13 @@ use std::fmt::Display;
 use std::sync::{OnceLock, RwLock};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub enum Language {
+    #[default]
     En,
     Zh,
 }
 
-impl Default for Language {
-    fn default() -> Self {
-        Language::En
-    }
-}
 
 // RwLock should be OK for a static global language setting.
 // We default to English and allow changing it at runtime via `set_language`.
@@ -68,18 +65,16 @@ pub fn init() {
     // Supported keys:
     // - KAM_UI_LANGUAGE : explicit UI language (e.g. "en", "zh", "zh-CN")
     // - KAM_LANG        : a secondary option for legacy or convenience
-    if let Ok(val) = std::env::var("KAM_UI_LANGUAGE") {
-        if !val.trim().is_empty() {
+    if let Ok(val) = std::env::var("KAM_UI_LANGUAGE")
+        && !val.trim().is_empty() {
             let _ = set_language_str(&val);
             return;
         }
-    }
-    if let Ok(val) = std::env::var("KAM_LANG") {
-        if !val.trim().is_empty() {
+    if let Ok(val) = std::env::var("KAM_LANG")
+        && !val.trim().is_empty() {
             let _ = set_language_str(&val);
             return;
         }
-    }
 
     // 1. Try to read config (local or global). Prefer a 'language' or 'ui.language' key.
     // We call into config::read_language_from_config which is expected to be
@@ -101,7 +96,6 @@ pub fn init() {
     // 3. Fallback to checking LANG env var.
     if let Ok(lang_env) = std::env::var("LANG") {
         let _ = set_language_str(&lang_env);
-        return;
     }
 
     // 4. Otherwise default (already set to English)
@@ -163,7 +157,7 @@ fn detect_language_system() -> Option<String> {
 ///
 /// If no translation mapping exists for the given string, it returns the
 /// original string.
-pub fn tr_key<'a>(key: &'a str) -> &'a str {
+pub fn tr_key(key: &str) -> &str {
     // Helper that tries a simple, deterministic normalization: ascii <-> full-width colon.
     // The goal is to try the most-likely variant keys only (avoids overly aggressive normalization).
     fn tr_try_with_colon_variants<F>(key: &str, lookup: F) -> Option<&'static str>
@@ -190,11 +184,10 @@ pub fn tr_key<'a>(key: &'a str) -> &'a str {
         }
         // Last defensive attempt: try trim
         let trimmed = key.trim();
-        if trimmed != key {
-            if let Some(v) = lookup(trimmed) {
+        if trimmed != key
+            && let Some(v) = lookup(trimmed) {
                 return Some(v);
             }
-        }
         None
     }
 
@@ -205,7 +198,7 @@ pub fn tr_key<'a>(key: &'a str) -> &'a str {
                 kv
             } else {
                 // Fallback: try literal mappings (legacy behavior with colon variants)
-                if let Some(en) = tr_try_with_colon_variants(key, |k| zh_to_en(k)) {
+                if let Some(en) = tr_try_with_colon_variants(key, zh_to_en) {
                     en
                 } else {
                     key
@@ -218,7 +211,7 @@ pub fn tr_key<'a>(key: &'a str) -> &'a str {
                 kv
             } else {
                 // Fallback: try literal mappings (legacy behavior with colon variants)
-                if let Some(zh) = tr_try_with_colon_variants(key, |k| en_to_zh(k)) {
+                if let Some(zh) = tr_try_with_colon_variants(key, en_to_zh) {
                     zh
                 } else {
                     key
@@ -321,17 +314,15 @@ fn try_load_runtime_i18n() {
                 let mut combined_en: std::collections::HashMap<String, String> =
                     std::collections::HashMap::new();
                 let en_path = dir.join("en.toml");
-                if en_path.exists() {
-                    if let Ok(s) = std::fs::read_to_string(&en_path) {
+                if en_path.exists()
+                    && let Ok(s) = std::fs::read_to_string(&en_path) {
                         combined_en.extend(parse_toml_string_to_map(&s));
                     }
-                }
                 let en_cli_path = dir.join("cli").join("en.toml");
-                if en_cli_path.exists() {
-                    if let Ok(s) = std::fs::read_to_string(&en_cli_path) {
+                if en_cli_path.exists()
+                    && let Ok(s) = std::fs::read_to_string(&en_cli_path) {
                         combined_en.extend(parse_toml_string_to_map(&s));
                     }
-                }
                 if !combined_en.is_empty() {
                     let _ = KEYED_EN.set(combined_en);
                 }
@@ -342,17 +333,15 @@ fn try_load_runtime_i18n() {
                 let mut combined_zh: std::collections::HashMap<String, String> =
                     std::collections::HashMap::new();
                 let zh_path = dir.join("zh.toml");
-                if zh_path.exists() {
-                    if let Ok(s) = std::fs::read_to_string(&zh_path) {
+                if zh_path.exists()
+                    && let Ok(s) = std::fs::read_to_string(&zh_path) {
                         combined_zh.extend(parse_toml_string_to_map(&s));
                     }
-                }
                 let zh_cli_path = dir.join("cli").join("zh.toml");
-                if zh_cli_path.exists() {
-                    if let Ok(s) = std::fs::read_to_string(&zh_cli_path) {
+                if zh_cli_path.exists()
+                    && let Ok(s) = std::fs::read_to_string(&zh_cli_path) {
                         combined_zh.extend(parse_toml_string_to_map(&s));
                     }
-                }
                 if !combined_zh.is_empty() {
                     let _ = KEYED_ZH.set(combined_zh);
                 }
@@ -372,17 +361,15 @@ fn try_load_runtime_i18n() {
                 let mut combined_en: std::collections::HashMap<String, String> =
                     std::collections::HashMap::new();
                 let en_path = dir.join("en.toml");
-                if en_path.exists() {
-                    if let Ok(s) = std::fs::read_to_string(&en_path) {
+                if en_path.exists()
+                    && let Ok(s) = std::fs::read_to_string(&en_path) {
                         combined_en.extend(parse_toml_string_to_map(&s));
                     }
-                }
                 let en_cli_path = dir.join("cli").join("en.toml");
-                if en_cli_path.exists() {
-                    if let Ok(s) = std::fs::read_to_string(&en_cli_path) {
+                if en_cli_path.exists()
+                    && let Ok(s) = std::fs::read_to_string(&en_cli_path) {
                         combined_en.extend(parse_toml_string_to_map(&s));
                     }
-                }
                 if !combined_en.is_empty() {
                     let _ = KEYED_EN.set(combined_en);
                 }
@@ -393,17 +380,15 @@ fn try_load_runtime_i18n() {
                 let mut combined_zh: std::collections::HashMap<String, String> =
                     std::collections::HashMap::new();
                 let zh_path = dir.join("zh.toml");
-                if zh_path.exists() {
-                    if let Ok(s) = std::fs::read_to_string(&zh_path) {
+                if zh_path.exists()
+                    && let Ok(s) = std::fs::read_to_string(&zh_path) {
                         combined_zh.extend(parse_toml_string_to_map(&s));
                     }
-                }
                 let zh_cli_path = dir.join("cli").join("zh.toml");
-                if zh_cli_path.exists() {
-                    if let Ok(s) = std::fs::read_to_string(&zh_cli_path) {
+                if zh_cli_path.exists()
+                    && let Ok(s) = std::fs::read_to_string(&zh_cli_path) {
                         combined_zh.extend(parse_toml_string_to_map(&s));
                     }
-                }
                 if !combined_zh.is_empty() {
                     let _ = KEYED_ZH.set(combined_zh);
                 }
@@ -986,7 +971,7 @@ fn get_language_from_config() -> Option<String> {
 // This duplicate definition was removed from i18n.rs to avoid conflicts.
 
 // Also provide a simple `tr` function to translate a single key.
-pub fn tr<'a>(s: &'a str) -> String {
+pub fn tr(s: &str) -> String {
     tr_key(s).to_string()
 }
 

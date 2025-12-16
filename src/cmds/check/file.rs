@@ -328,8 +328,8 @@ fn check_version_format(version: &str, fr: &mut FileResult) {
 /// 检查文件引用是否存在
 fn check_file_references(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileResult) {
     // 检查 [mmrl.repo] 中的文件引用
-    if let Some(mmrl) = &kam_toml.mmrl {
-        if let Some(repo) = &mmrl.repo {
+    if let Some(mmrl) = &kam_toml.mmrl
+        && let Some(repo) = &mmrl.repo {
             check_file_exists(
                 project_dir,
                 &repo.license_file,
@@ -350,20 +350,18 @@ fn check_file_references(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileRe
             );
 
             // 检查图标文件
-            if let Some(icon) = &repo.icon {
-                if !icon.is_empty() && !project_dir.join(icon).exists() {
+            if let Some(icon) = &repo.icon
+                && !icon.is_empty() && !project_dir.join(icon).exists() {
                     fr.warnings
                         .push(format!("[mmrl.repo] icon file '{}' not found", icon));
                 }
-            }
         }
-    }
 }
 
 /// 检查单个文件是否存在
 fn check_file_exists(base: &Path, file: &Option<String>, name: &str, fr: &mut FileResult) {
-    if let Some(f) = file {
-        if !f.is_empty() {
+    if let Some(f) = file
+        && !f.is_empty() {
             let file_path = base.join(f);
             if !file_path.exists() {
                 fr.valid = false;
@@ -372,7 +370,6 @@ fn check_file_exists(base: &Path, file: &Option<String>, name: &str, fr: &mut Fi
                 fr.warnings.push(format!("{} '{}' is empty", name, f));
             }
         }
-    }
 }
 
 /// 检查配置一致性
@@ -399,8 +396,8 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
         }
 
         // 检查 hooks 目录
-        if let Some(hooks_dir) = &build.hooks_dir {
-            if hooks_dir != "hooks" {
+        if let Some(hooks_dir) = &build.hooks_dir
+            && hooks_dir != "hooks" {
                 let hooks_path = project_dir.join(hooks_dir);
                 if !hooks_path.exists() {
                     fr.warnings.push(format!(
@@ -409,7 +406,6 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
                     ));
                 }
             }
-        }
     } else {
         // 没有 build 配置，检查默认源码目录
         let default_src = project_dir.join("src").join(&kam_toml.prop.id);
@@ -422,28 +418,25 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
     }
 
     // 检查 [mmrl.repo] 中的 license 字段
-    if let Some(mmrl) = &kam_toml.mmrl {
-        if let Some(repo) = &mmrl.repo {
-            if repo.license.as_deref().unwrap_or("").is_empty() {
+    if let Some(mmrl) = &kam_toml.mmrl
+        && let Some(repo) = &mmrl.repo
+            && repo.license.as_deref().unwrap_or("").is_empty() {
                 fr.warnings
                     .push("[mmrl.repo] license is recommended".to_string());
             }
-        }
-    }
 }
 
 /// 从错误消息中提取行号信息，使错误信息更友好
 fn extract_line_number(err_msg: &str, content: &str) -> String {
     // TOML 错误通常包含 "line X" 或 "at line X"
     let line_re = Regex::new(r"(?i)(?:at\s+)?line\s+(\d+)").unwrap();
-    if let Some(cap) = line_re.captures(err_msg) {
-        if let Ok(line_num) = cap[1].parse::<usize>() {
+    if let Some(cap) = line_re.captures(err_msg)
+        && let Ok(line_num) = cap[1].parse::<usize>() {
             // 尝试获取该行的内容
             if let Some(line_content) = content.lines().nth(line_num.saturating_sub(1)) {
                 return format!("{} (line {}: {})", err_msg, line_num, line_content.trim());
             }
             return format!("{} (line {})", err_msg, line_num);
         }
-    }
     err_msg.to_string()
 }

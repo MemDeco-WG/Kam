@@ -229,8 +229,6 @@ pub fn export_template(
             "Multiple templates require .zip output format".to_string(),
         ))
     } else {
-        Err(KamError::CommandFailed(format!(
-            "Unsupported output format. Use .tar.gz for single template or .zip for multiple templates"
-        )))
+        Err(KamError::CommandFailed("Unsupported output format. Use .tar.gz for single template or .zip for multiple templates".to_string()))
     }
 }

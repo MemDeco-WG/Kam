@@ -236,9 +236,9 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
     }
 
     // If this node is a command, try to extract the command name & full text and apply heuristics
-    if node.kind() == "command" {
-        if node.child(0).is_some() {
-            if let Ok(node_text) = node.utf8_text(src.as_bytes()) {
+    if node.kind() == "command"
+        && node.child(0).is_some()
+            && let Ok(node_text) = node.utf8_text(src.as_bytes()) {
                 let txt = node_text.trim();
                 let mut iter = txt.split_whitespace();
                 if let Some(cmd) = iter.next() {
@@ -343,8 +343,6 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
                     }
                 }
             }
-        }
-    }
 
     // Recurse children
     for i in 0..node.child_count() {

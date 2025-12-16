@@ -53,12 +53,11 @@ fn expand_member_pattern(
                     };
 
                     // 只包含有 kam.toml 的目录
-                    if abs_entry.is_dir() && abs_entry.join("kam.toml").exists() {
-                        if let Ok(rel_path) = abs_entry.strip_prefix(project_path) {
+                    if abs_entry.is_dir() && abs_entry.join("kam.toml").exists()
+                        && let Ok(rel_path) = abs_entry.strip_prefix(project_path) {
                             let rel_str = rel_path.to_string_lossy().to_string();
                             expanded.push(rel_str);
                         }
-                    }
                 }
             }
             Err(e) => {

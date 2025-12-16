@@ -194,8 +194,8 @@ pub fn handle_pacman_style(
             let mut chosen_asset: Option<(&Asset, &str)> = None; // (asset, release_name)
             if let Some(rels) = md.releases.as_ref() {
                 for r in rels.iter() {
-                    if let Some(assets) = r.release_assets.as_ref() {
-                        if let Some(a) = assets.iter().find(|x| {
+                    if let Some(assets) = r.release_assets.as_ref()
+                        && let Some(a) = assets.iter().find(|x| {
                             x.content_type
                                 .as_deref()
                                 .map(|ct| ct.to_lowercase().contains("zip"))
@@ -210,7 +210,6 @@ pub fn handle_pacman_style(
                             chosen_asset = Some((a, release_label));
                             break;
                         }
-                    }
                 }
             }
 
@@ -341,27 +340,22 @@ fn try_find_index_in_cache_dir(dir: &Path) -> Option<Vec<SearchEntry>> {
     if let Ok(rd) = std::fs::read_dir(dir) {
         for e in rd.flatten() {
             let p = e.path();
-            if p.is_file() {
-                if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
-                    if name.starts_with("index_") && name.ends_with(".json") {
-                        if let Ok(meta) = p.metadata() {
-                            if let Ok(m) = meta.modified() {
+            if p.is_file()
+                && let Some(name) = p.file_name().and_then(|n| n.to_str())
+                    && name.starts_with("index_") && name.ends_with(".json")
+                        && let Ok(meta) = p.metadata()
+                            && let Ok(m) = meta.modified() {
                                 candidates.push((m, p));
                             }
-                        }
-                    }
-                }
-            }
         }
     }
     // Sort by modified desc
     candidates.sort_by(|a, b| b.0.cmp(&a.0));
     for (_mtime, p) in candidates {
-        if let Ok(buf) = std::fs::read_to_string(&p) {
-            if let Ok(entries) = serde_json::from_str::<Vec<SearchEntry>>(&buf) {
+        if let Ok(buf) = std::fs::read_to_string(&p)
+            && let Ok(entries) = serde_json::from_str::<Vec<SearchEntry>>(&buf) {
                 return Some(entries);
             }
-        }
     }
     None
 }
@@ -371,22 +365,20 @@ fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry
     let force_refresh = std::env::var("KAM_FORCE_INDEX_REFRESH").is_ok();
 
     // 1) If a cached index exists and no explicit force refresh is requested, try it first.
-    if path.exists() && !force_refresh {
-        if let Ok(buf) = std::fs::read_to_string(&path) {
+    if path.exists() && !force_refresh
+        && let Ok(buf) = std::fs::read_to_string(&path) {
             if let Ok(entries) = serde_json::from_str::<Vec<SearchEntry>>(&buf) {
                 return Ok(entries);
             } else {
                 // corrupted or incompatible cache; we'll try fallback scan or network below
             }
         }
-    }
 
     // 2) Try to find an alternative cached index in the same cache directory (index_*.json)
-    if let Some(parent) = path.parent() {
-        if let Some(entries) = try_find_index_in_cache_dir(parent) {
+    if let Some(parent) = path.parent()
+        && let Some(entries) = try_find_index_in_cache_dir(parent) {
             return Ok(entries);
         }
-    }
 
     // 3) Attempt network fetch; if network fails or non-success status, try fallback cache scan before returning error.
     let url = format!("{}{}", base_url, SEARCH_INDEX_PATH);
@@ -398,11 +390,10 @@ fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry
         Ok(resp) => {
             if !resp.status().is_success() {
                 // network returned non-success; try fallback cache scan
-                if let Some(parent) = path.parent() {
-                    if let Some(entries) = try_find_index_in_cache_dir(parent) {
+                if let Some(parent) = path.parent()
+                    && let Some(entries) = try_find_index_in_cache_dir(parent) {
                         return Ok(entries);
                     }
-                }
                 return Err(KamError::FetchFailed(format!(
                     "{} returned status {}",
                     url,
@@ -420,11 +411,10 @@ fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry
         }
         Err(e) => {
             // Network error - try fallback cache scan
-            if let Some(parent) = path.parent() {
-                if let Some(entries) = try_find_index_in_cache_dir(parent) {
+            if let Some(parent) = path.parent()
+                && let Some(entries) = try_find_index_in_cache_dir(parent) {
                     return Ok(entries);
                 }
-            }
             Err(KamError::FetchFailed(format!("GET {} failed: {}", url, e)))
         }
     }
@@ -632,31 +622,26 @@ fn format_size(bytes: u64) -> String {
 /// 3) `~/.kam/config.toml` -> `[modules] base_url = "..."`
 /// 4) default builtin URL
 fn effective_base_url(override_url: Option<&str>) -> String {
-    if let Some(u) = override_url {
-        if !u.trim().is_empty() {
+    if let Some(u) = override_url
+        && !u.trim().is_empty() {
             return u.to_string();
         }
-    }
-    if let Ok(env) = std::env::var("KAM_MODULES_URL") {
-        if !env.trim().is_empty() {
+    if let Ok(env) = std::env::var("KAM_MODULES_URL")
+        && !env.trim().is_empty() {
             return env;
         }
-    }
     if let Some(home) = dirs::home_dir() {
         let cfg = home.join(".kam").join("config.toml");
-        if cfg.exists() {
-            if let Ok(content) = std::fs::read_to_string(&cfg) {
-                if let Ok(v) = toml::from_str::<toml::Value>(&content) {
-                    if let Some(m) = v
+        if cfg.exists()
+            && let Ok(content) = std::fs::read_to_string(&cfg)
+                && let Ok(v) = toml::from_str::<toml::Value>(&content)
+                    && let Some(m) = v
                         .get("modules")
                         .and_then(|m| m.get("base_url"))
                         .and_then(|x| x.as_str())
                     {
                         return m.to_string();
                     }
-                }
-            }
-        }
     }
     "https://modules.kernelsu.org".to_string()
 }
@@ -674,7 +659,7 @@ fn fetch_module_detail(
         // Try to read & parse cached module JSON; if successful, return it.
         if let Ok(mut f) = File::open(&path) {
             let mut buf = String::new();
-            if let Ok(_) = f.read_to_string(&mut buf) {
+            if f.read_to_string(&mut buf).is_ok() {
                 if let Ok(md) = serde_json::from_str::<ModuleDetail>(&buf) {
                     return Ok(md);
                 } else {
@@ -813,7 +798,7 @@ fn download_asset(
     // Try to determine size for progress
     let size = asset
         .size
-        .or_else(|| resp.content_length().map(|s| s as u64));
+        .or_else(|| resp.content_length().map(|s| s));
 
     let pb = match size {
         Some(s) => ProgressBar::new(s),

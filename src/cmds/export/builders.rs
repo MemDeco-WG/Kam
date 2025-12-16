@@ -40,8 +40,8 @@ pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
 
     // 收集作者列表，从prop.author和mmrl.repo.maintainers里找
     let mut authors: Vec<serde_json::Value> = vec![];
-    if let Some(author) = &kt.prop.author {
-        if !author.trim().is_empty() {
+    if let Some(author) = &kt.prop.author
+        && !author.trim().is_empty() {
             let mut author_obj = serde_json::Map::new();
             author_obj.insert(
                 "type".to_string(),
@@ -53,12 +53,11 @@ pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
             );
             authors.push(serde_json::Value::Object(author_obj));
         }
-    }
     // 从mmrl.repo.maintainers里也收集作者
     // maintainers可以是字符串或对象，需要分别处理
-    if let Some(mmrl) = &kt.mmrl {
-        if let Some(repo) = &mmrl.repo {
-            if let Some(maintainers) = &repo.maintainers {
+    if let Some(mmrl) = &kt.mmrl
+        && let Some(repo) = &mmrl.repo
+            && let Some(maintainers) = &repo.maintainers {
                 for maint in maintainers {
                     match maint {
                         crate::types::kam_toml::sections::repo::MaintainerEntry::Name(s) => {
@@ -91,8 +90,6 @@ pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
                     }
                 }
             }
-        }
-    }
 
     let mut root = serde_json::Map::new();
     root.insert(
@@ -196,35 +193,32 @@ pub fn build_repo_json(kt: &KamToml) -> serde_json::Value {
     let mut root = serde_json::Map::new();
 
     // 如果有mmrl配置，就提取相关字段
-    if let Some(mmrl) = &kt.mmrl {
-        if let Some(repo) = &mmrl.repo {
+    if let Some(mmrl) = &kt.mmrl
+        && let Some(repo) = &mmrl.repo {
             // license字段
-            if let Some(license) = &repo.license {
-                if !license.is_empty() {
+            if let Some(license) = &repo.license
+                && !license.is_empty() {
                     root.insert(
                         "license".to_string(),
                         serde_json::Value::String(license.clone()),
                     );
                 }
-            }
 
-            if let Some(home) = &repo.homepage {
-                if !home.is_empty() {
+            if let Some(home) = &repo.homepage
+                && !home.is_empty() {
                     root.insert(
                         "homepage".to_string(),
                         serde_json::Value::String(home.clone()),
                     );
                 }
-            }
 
-            if let Some(readme) = &repo.readme {
-                if !readme.is_empty() {
+            if let Some(readme) = &repo.readme
+                && !readme.is_empty() {
                     root.insert(
                         "readme".to_string(),
                         serde_json::Value::String(readme.clone()),
                     );
                 }
-            }
 
             if let Some(screens) = &repo.screenshots {
                 root.insert(
@@ -285,38 +279,34 @@ pub fn build_repo_json(kt: &KamToml) -> serde_json::Value {
                 );
             }
 
-            if let Some(donate) = &repo.donate {
-                if !donate.is_empty() {
+            if let Some(donate) = &repo.donate
+                && !donate.is_empty() {
                     root.insert(
                         "donate".to_string(),
                         serde_json::Value::String(donate.clone()),
                     );
                 }
-            }
 
-            if let Some(support) = &repo.support {
-                if !support.is_empty() {
+            if let Some(support) = &repo.support
+                && !support.is_empty() {
                     root.insert(
                         "support".to_string(),
                         serde_json::Value::String(support.clone()),
                     );
                 }
-            }
 
-            if let Some(cover) = &repo.cover {
-                if !cover.is_empty() {
+            if let Some(cover) = &repo.cover
+                && !cover.is_empty() {
                     root.insert(
                         "cover".to_string(),
                         serde_json::Value::String(cover.clone()),
                     );
                 }
-            }
 
-            if let Some(icon) = &repo.icon {
-                if !icon.is_empty() {
+            if let Some(icon) = &repo.icon
+                && !icon.is_empty() {
                     root.insert("icon".to_string(), serde_json::Value::String(icon.clone()));
                 }
-            }
 
             // maintainers字段：支持字符串或对象格式
             if let Some(maintainers) = &repo.maintainers {
@@ -355,19 +345,16 @@ pub fn build_repo_json(kt: &KamToml) -> serde_json::Value {
                 root.insert("maintainers".to_string(), serde_json::Value::Array(arr));
             }
 
-            if let Some(note) = &repo.note {
-                if let Ok(v) = serde_json::to_value(note) {
+            if let Some(note) = &repo.note
+                && let Ok(v) = serde_json::to_value(note) {
                     root.insert("note".to_string(), v);
                 }
-            }
 
-            if let Some(manager) = &repo.manager {
-                if let Ok(v) = serde_json::to_value(manager) {
+            if let Some(manager) = &repo.manager
+                && let Ok(v) = serde_json::to_value(manager) {
                     root.insert("manager".to_string(), v);
                 }
-            }
         }
-    }
     serde_json::Value::Object(root)
 }
 
@@ -425,7 +412,7 @@ pub fn build_track_json(kt: &KamToml) -> serde_json::Value {
         serde_json::Value::String(update_to),
     );
 
-    let repo_json = build_repo_json(&kt);
+    let repo_json = build_repo_json(kt);
     if let Some(map) = repo_json.as_object() {
         for (k, v) in map {
             root.insert(k.clone(), v.clone());
@@ -507,42 +494,37 @@ pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
     }
     root.insert("base_url".to_string(), serde_json::Value::String(base_url));
 
-    if let Some(mmrl) = &kt.mmrl {
-        if let Some(repo) = &mmrl.repo {
-            if let Some(website) = &repo.homepage {
-                if !website.is_empty() {
+    if let Some(mmrl) = &kt.mmrl
+        && let Some(repo) = &mmrl.repo {
+            if let Some(website) = &repo.homepage
+                && !website.is_empty() {
                     root.insert(
                         "website".to_string(),
                         serde_json::Value::String(website.clone()),
                     );
                 }
-            }
-            if let Some(support) = &repo.support {
-                if !support.is_empty() {
+            if let Some(support) = &repo.support
+                && !support.is_empty() {
                     root.insert(
                         "support".to_string(),
                         serde_json::Value::String(support.clone()),
                     );
                 }
-            }
-            if let Some(donate) = &repo.donate {
-                if !donate.is_empty() {
+            if let Some(donate) = &repo.donate
+                && !donate.is_empty() {
                     root.insert(
                         "donate".to_string(),
                         serde_json::Value::String(donate.clone()),
                     );
                 }
-            }
-            if let Some(sub) = &repo.documentation {
-                if !sub.is_empty() {
+            if let Some(sub) = &repo.documentation
+                && !sub.is_empty() {
                     root.insert(
                         "submission".to_string(),
                         serde_json::Value::String(sub.clone()),
                     );
                 }
-            }
         }
-    }
 
     if !kt.prop.description.trim().is_empty() {
         root.insert(
@@ -551,13 +533,11 @@ pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
         );
     }
 
-    if let Some(mmrl) = &kt.mmrl {
-        if let Some(repo) = &mmrl.repo {
-            if let Some(max) = repo.max_num {
+    if let Some(mmrl) = &kt.mmrl
+        && let Some(repo) = &mmrl.repo
+            && let Some(max) = repo.max_num {
                 root.insert("max_num".to_string(), serde_json::Value::Number(max.into()));
             }
-        }
-    }
 
     root.insert("enable_log".to_string(), serde_json::Value::Bool(true));
     root.insert(

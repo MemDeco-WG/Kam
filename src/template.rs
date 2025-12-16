@@ -20,8 +20,8 @@ impl TemplateCacheManager {
     pub fn get_cache_dir() -> Result<PathBuf, KamError> {
         // 1) 环境变量覆盖（最高优先级）
         //    允许临时或测试时覆盖，比如 KAM_TEMPLATE_CACHE_DIR=/tmp/kam_templates
-        if let Ok(dir_str) = std::env::var("KAM_TEMPLATE_CACHE_DIR") {
-            if !dir_str.trim().is_empty() {
+        if let Ok(dir_str) = std::env::var("KAM_TEMPLATE_CACHE_DIR")
+            && !dir_str.trim().is_empty() {
                 let cache_dir = if dir_str.starts_with("~/") {
                     if let Some(home) = dirs::home_dir() {
                         let rel = dir_str.trim_start_matches("~/");
@@ -38,7 +38,6 @@ impl TemplateCacheManager {
                 }
                 return Ok(cache_dir);
             }
-        }
 
         // 2) 全局配置覆盖（~/.kam/config.toml）
         //    如果配置里有：
@@ -47,11 +46,11 @@ impl TemplateCacheManager {
         //    就用那个作为模板缓存目录
         if let Some(home) = dirs::home_dir() {
             let cfg_path = home.join(".kam").join("config.toml");
-            if cfg_path.exists() {
-                if let Ok(cfg_str) = fs::read_to_string(&cfg_path) {
-                    if let Ok(cfg_v) = toml::from_str::<toml::Value>(&cfg_str) {
-                        if let Some(tmpl_table) = cfg_v.get("tmpl") {
-                            if let Some(cache_val) =
+            if cfg_path.exists()
+                && let Ok(cfg_str) = fs::read_to_string(&cfg_path)
+                    && let Ok(cfg_v) = toml::from_str::<toml::Value>(&cfg_str)
+                        && let Some(tmpl_table) = cfg_v.get("tmpl")
+                            && let Some(cache_val) =
                                 tmpl_table.get("cache_dir").and_then(|v| v.as_str())
                             {
                                 let cache_dir = if cache_val.starts_with("~/") {
@@ -64,10 +63,6 @@ impl TemplateCacheManager {
                                 }
                                 return Ok(cache_dir);
                             }
-                        }
-                    }
-                }
-            }
         }
 
         // 3) 默认回退到 ~/.kam/templates
@@ -94,17 +89,16 @@ impl TemplateCacheManager {
                 if let Some(name) = filename.strip_suffix(".tar.gz") {
                     templates.insert(name.to_string());
                 }
-            } else if filename.ends_with(".zip") {
-                if let Some(name) = filename.strip_suffix(".zip") {
+            } else if filename.ends_with(".zip")
+                && let Some(name) = filename.strip_suffix(".zip") {
                     templates.insert(name.to_string());
                 }
-            }
         }
 
         // 2. 本地缓存的模板
         //    遍历缓存目录，找出所有模板文件
-        if let Ok(cache_dir) = Self::get_cache_dir() {
-            if let Ok(entries) = fs::read_dir(cache_dir) {
+        if let Ok(cache_dir) = Self::get_cache_dir()
+            && let Ok(entries) = fs::read_dir(cache_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
@@ -119,15 +113,14 @@ impl TemplateCacheManager {
                     }
                 }
             }
-        }
 
         // 3. Project-local templates (e.g., tmpl/ and templates/ directories in the project)
         //    Support both directory-based templates and archive files such as .tar.gz, .tgz, .zip, .tar
         let project_local_dirs = crate::utils::PROJECT_TEMPLATE_DIRS;
         for dir in project_local_dirs {
             let dir_path = Path::new(dir);
-            if dir_path.exists() && dir_path.is_dir() {
-                if let Ok(entries) = fs::read_dir(dir_path) {
+            if dir_path.exists() && dir_path.is_dir()
+                && let Ok(entries) = fs::read_dir(dir_path) {
                     for entry in entries.flatten() {
                         let p = entry.path();
                         if p.is_dir() {
@@ -148,15 +141,13 @@ impl TemplateCacheManager {
                                 if let Some(name) = filename.strip_suffix(".zip") {
                                     templates.insert(name.to_string());
                                 }
-                            } else if filename.ends_with(".tar") {
-                                if let Some(name) = filename.strip_suffix(".tar") {
+                            } else if filename.ends_with(".tar")
+                                && let Some(name) = filename.strip_suffix(".tar") {
                                     templates.insert(name.to_string());
                                 }
-                            }
                         }
                     }
                 }
-            }
         }
 
         let mut list: Vec<String> = templates.into_iter().collect();
@@ -356,8 +347,8 @@ impl TemplateVariableProcessor {
         );
 
         // mmrl.repo.* fields (helpful template variables and env vars)
-        if let Some(mmrl) = &kam_toml.mmrl {
-            if let Some(repo) = &mmrl.repo {
+        if let Some(mmrl) = &kam_toml.mmrl
+            && let Some(repo) = &mmrl.repo {
                 if let Some(repository) = &repo.repository {
                     vars.insert("mmrl.repo.repository".to_string(), repository.clone());
                 }
@@ -377,7 +368,6 @@ impl TemplateVariableProcessor {
                     vars.insert("mmrl.repo.cover".to_string(), cover.clone());
                 }
             }
-        }
 
         // kam.build.*字段（target和hooks目录，可选）
         // 这些主要是给模板用的，让模板知道构建配置
@@ -490,11 +480,10 @@ impl TemplateCopier {
             }
 
             // Also try to render filename with Tera if it contains {{
-            if dest_rel_path_str.contains("{{") {
-                if let Ok(rendered) = tera.render_str(&dest_rel_path_str, &context) {
+            if dest_rel_path_str.contains("{{")
+                && let Ok(rendered) = tera.render_str(&dest_rel_path_str, &context) {
                     dest_rel_path_str = rendered;
                 }
-            }
 
             let dst_path = dst.join(&dest_rel_path_str);
 

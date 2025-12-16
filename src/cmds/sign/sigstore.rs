@@ -62,8 +62,8 @@ pub fn write_sigstore_bundle(
             serde_json::Value::Array(rfc_arr),
         );
         // Insert into verificationMaterial in the bundle
-        if let Some(obj) = bundle.as_object_mut() {
-            if let Some(vm) = obj.get_mut("verificationMaterial") {
+        if let Some(obj) = bundle.as_object_mut()
+            && let Some(vm) = obj.get_mut("verificationMaterial") {
                 if vm.is_null() {
                     // replace Null with an object containing timestampVerificationData
                     let mut new_vm = serde_json::Map::new();
@@ -82,7 +82,6 @@ pub fn write_sigstore_bundle(
                     );
                 }
             }
-        }
     }
 
     let bundle_path = out_dir.join(format!("{}.sigstore.json", filename));
