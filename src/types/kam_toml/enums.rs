@@ -82,13 +82,25 @@ impl fmt::Display for SupportedArch {
 // 允许SupportedArch和String双向比较，这样现有代码（比如Vec<String>::contains）还能用
 impl PartialEq<String> for SupportedArch {
     fn eq(&self, other: &String) -> bool {
-        self.to_string() == *other
+        match self {
+            SupportedArch::Arm => other == "arm",
+            SupportedArch::Arm64 => other == "arm64",
+            SupportedArch::X86 => other == "x86",
+            SupportedArch::X86_64 => other == "x86_64",
+            SupportedArch::Other(s) => s == other,
+        }
     }
 }
 
 impl PartialEq<SupportedArch> for String {
     fn eq(&self, other: &SupportedArch) -> bool {
-        *self == other.to_string()
+        match other {
+            SupportedArch::Arm => self == "arm",
+            SupportedArch::Arm64 => self == "arm64",
+            SupportedArch::X86 => self == "x86",
+            SupportedArch::X86_64 => self == "x86_64",
+            SupportedArch::Other(s) => self == s,
+        }
     }
 }
 

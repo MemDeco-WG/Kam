@@ -890,64 +890,65 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         // invalid characters, prompt the user to accept a sanitized suggestion
         // or input a valid custom ID.
         if args.id.is_none()
-            && let Some(basename) = data.path.file_name().and_then(|s| s.to_str()) {
-                let candidate = basename.to_string();
-                // Check ID validity (alphanumeric, '.', '-', '_')
-                if candidate
+            && let Some(basename) = data.path.file_name().and_then(|s| s.to_str())
+        {
+            let candidate = basename.to_string();
+            // Check ID validity (alphanumeric, '.', '-', '_')
+            if candidate
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
+            {
+                data.id = candidate;
+            } else {
+                use crate::utils::Utils;
+                Utils::warn(&trf!("init.interactive.inferred_id_invalid", candidate));
+
+                // Suggest a sanitized version (replace spaces with underscore)
+                let suggested = candidate.replace(' ', "_");
+                if suggested
                     .chars()
                     .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
                 {
-                    data.id = candidate;
-                } else {
-                    use crate::utils::Utils;
-                    Utils::warn(&trf!("init.interactive.inferred_id_invalid", candidate));
-
-                    // Suggest a sanitized version (replace spaces with underscore)
-                    let suggested = candidate.replace(' ', "_");
-                    if suggested
-                        .chars()
-                        .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
-                    {
-                        if prompt_confirm(
-                            &trf!("init.interactive.use_sanitized_module_id", suggested),
-                            true,
-                        )? {
-                            data.id = suggested;
-                        } else {
-                            // Ask the user to input a valid ID
-                            let id_input = prompt_input(
-                                &trf!("init.interactive.module_id_prompt"),
-                                Some(&data.id),
-                            )?;
-                            data.id = id_input;
-                            if !data
-                                .id
-                                .chars()
-                                .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
-                            {
-                                return Err(KamError::InvalidConfig(trf!(
-                                    "init.interactive.invalid_module_id",
-                                    data.id
-                                )));
-                            }
-                        }
+                    if prompt_confirm(
+                        &trf!("init.interactive.use_sanitized_module_id", suggested),
+                        true,
+                    )? {
+                        data.id = suggested;
                     } else {
-                        // If we couldn't create a valid suggestion, force the user to input
-                        let id_input = prompt_input("Module ID", Some(&data.id))?;
+                        // Ask the user to input a valid ID
+                        let id_input = prompt_input(
+                            &trf!("init.interactive.module_id_prompt"),
+                            Some(&data.id),
+                        )?;
                         data.id = id_input;
                         if !data
                             .id
                             .chars()
                             .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
                         {
-                            return Err(KamError::InvalidConfig(format!(
-                                "Invalid module ID '{}': ID must contain only alphanumeric characters, dots, dashes, and underscores",
+                            return Err(KamError::InvalidConfig(trf!(
+                                "init.interactive.invalid_module_id",
                                 data.id
                             )));
                         }
                     }
+                } else {
+                    // If we couldn't create a valid suggestion, force the user to input
+                    let id_input = prompt_input("Module ID", Some(&data.id))?;
+                    data.id = id_input;
+                    if !data
+                        .id
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
+                    {
+                        return Err(KamError::InvalidConfig(format!(
+                            "Invalid module ID '{}': ID must contain only alphanumeric characters, dots, dashes, and underscores",
+                            data.id
+                        )));
+                    }
                 }
             }
+        }
     }
 
     // Ensure module id matches path name
@@ -1024,12 +1025,11 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
-    if !gh_present
-        && prompt_confirm(&trf!("init.interactive.gh_not_found"), true)? {
-            use crate::utils::Utils;
-            Utils::info(&trf!("init.interactive.recommend_github_cli"));
-            Utils::info(&trf!("init.interactive.helper_script"));
-        }
+    if !gh_present && prompt_confirm(&trf!("init.interactive.gh_not_found"), true)? {
+        use crate::utils::Utils;
+        Utils::info(&trf!("init.interactive.recommend_github_cli"));
+        Utils::info(&trf!("init.interactive.helper_script"));
+    }
 
     // cz (commitizen)
     let cz_present = std::process::Command::new("cz")
@@ -1037,12 +1037,11 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
-    if !cz_present
-        && prompt_confirm(&trf!("init.interactive.cz_not_found"), false)? {
-            use crate::utils::Utils;
-            Utils::info(&trf!("init.interactive.recommend_cz_install"));
-            Utils::info(&trf!("init.interactive.helper_script"));
-        }
+    if !cz_present && prompt_confirm(&trf!("init.interactive.cz_not_found"), false)? {
+        use crate::utils::Utils;
+        Utils::info(&trf!("init.interactive.recommend_cz_install"));
+        Utils::info(&trf!("init.interactive.helper_script"));
+    }
 
     // Present a summary and confirm before creating files
     println!();
@@ -1085,16 +1084,18 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // Call the same init_template as non-interactive run
     impl_mod::init_template(
         &data.path,
-        &data.id,
-        data.name.clone(),
-        &data.version,
-        &data.author,
-        data.description.clone(),
-        &merged_var_vec,
-        Some(data.impl_template.clone()),
-        args.force,
-        data.module_type,
-        data.update_json.clone(),
+        impl_mod::InitTemplateParams {
+            id: &data.id,
+            name: data.name.clone(),
+            version: &data.version,
+            author: &data.author,
+            description: data.description.clone(),
+            var: &merged_var_vec,
+            impl_template: Some(data.impl_template.clone()),
+            force: args.force,
+            module_type: data.module_type,
+            update_json: data.update_json.clone(),
+        },
     )?;
 
     // Post-process

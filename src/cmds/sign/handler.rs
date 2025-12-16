@@ -113,11 +113,11 @@ pub fn run(args: SignArgs) -> Result<(), KamError> {
         if !p.is_file() {
             continue;
         }
-        if let Some(ext) = p.extension().and_then(|s| s.to_str()) {
-            match ext {
-                "sig" | "tsr" | "json" => continue,
-                _ => (),
-            }
+        if matches!(
+            p.extension().and_then(|s| s.to_str()),
+            Some("sig" | "tsr" | "json")
+        ) {
+            continue;
         }
         if let Err(e) = sign_single_file(&p, &args) {
             use crate::utils::Utils;

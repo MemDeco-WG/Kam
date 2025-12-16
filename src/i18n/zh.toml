@@ -39,8 +39,8 @@ some_issues_found = "发现问题。"
 
 # CLI 本地化（用于 `kam --help` 以及子命令帮助文本）
 [cli]
-about = "Kam — Kam 是一个用于脚手架、构建、打包与分发 Android 模块与模板（ksu/APU/Magisk/AnyTemplate）的命令行工具。支持项目初始化、打包、模板管理与仓库元数据导出。"
-long_about = "Kam 提供从模板初始化项目、构建与打包模块、管理模板与缓存、导出项目元数据等功能。使用 `kam help <COMMAND>` 查看子命令的详细帮助信息。"
+about = "一个用于脚手架、构建、打包与分发 Android 模块与模板（ksu/APU/Magisk/AnyTemplate）的命令行工具。支持项目初始化、打包、模板管理与仓库元数据导出。"
+long_about = "提供从模板初始化项目、构建与打包模块、管理模板与缓存、导出项目元数据等功能。使用 `kam help <COMMAND>` 查看子命令的详细帮助信息。"
 
 # 全局选项（顶层）
 [cli.flags]

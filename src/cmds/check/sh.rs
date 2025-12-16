@@ -211,9 +211,11 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
         return;
     }
 
-    // First, detect piped download-to-shell patterns anywhere in the node text,
-    // e.g. `curl ... | sh` or `wget ... | bash`
-    if let Ok(node_text_all) = node.utf8_text(src.as_bytes()) {
+    // Detect piped download-to-shell patterns only within command-like nodes (command/pipeline),
+    // to avoid false positives coming from comments or other non-command nodes.
+    if (node.kind() == "pipeline" || node.kind() == "command")
+        && let Ok(node_text_all) = node.utf8_text(src.as_bytes())
+    {
         let node_text_low = node_text_all.to_lowercase();
         // Simple substring-based detection: look for curl/wget + pipe + sh/bash
         if (node_text_low.contains("curl") || node_text_low.contains("wget"))
@@ -238,111 +240,106 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
     // If this node is a command, try to extract the command name & full text and apply heuristics
     if node.kind() == "command"
         && node.child(0).is_some()
-            && let Ok(node_text) = node.utf8_text(src.as_bytes()) {
-                let txt = node_text.trim();
-                let mut iter = txt.split_whitespace();
-                if let Some(cmd) = iter.next() {
-                    let cmd_l = cmd.to_lowercase();
-                    let node_text_low = node_text.to_lowercase();
+        && let Ok(node_text) = node.utf8_text(src.as_bytes())
+    {
+        let txt = node_text.trim();
+        let mut iter = txt.split_whitespace();
+        if let Some(cmd) = iter.next() {
+            let cmd_l = cmd.to_lowercase();
+            let node_text_low = node_text.to_lowercase();
 
-                    match cmd_l.as_str() {
-                        "rm" => {
-                            if node_text_low.contains("-rf")
-                                || (node_text_low.contains("-r") && node_text_low.contains("-f"))
+            match cmd_l.as_str() {
+                "rm" => {
+                    if node_text_low.contains("-rf")
+                        || (node_text_low.contains("-r") && node_text_low.contains("-f"))
+                    {
+                        // More precise check: examine positional arguments for absolute literal paths (skip variables)
+                        let args: Vec<&str> = txt.split_whitespace().skip(1).collect();
+                        let mut dangerous_abs = false;
+                        for a in args {
+                            let a_trim = a.trim_matches('"').trim_matches('\'');
+                            // Skip variable references and command substitutions
+                            if a_trim.starts_with('/')
+                                && !a_trim.contains('$')
+                                && !a_trim.contains('`')
                             {
-                                // More precise check: examine positional arguments for absolute literal paths (skip variables)
-                                let args: Vec<&str> = txt.split_whitespace().skip(1).collect();
-                                let mut dangerous_abs = false;
-                                for a in args {
-                                    let a_trim = a.trim_matches('"').trim_matches('\'');
-                                    // Skip variable references and command substitutions
-                                    if a_trim.starts_with('/')
-                                        && !a_trim.contains('$')
-                                        && !a_trim.contains('`')
-                                    {
-                                        dangerous_abs = true;
-                                        break;
-                                    }
-                                }
-                                if dangerous_abs {
-                                    fr.valid = false;
-                                    let msg = format!(
-                                        "Dangerous rm -rf usage detected (possible removal of root files): {}",
-                                        node_text
-                                    );
-                                    if !fr.errors.contains(&msg) {
-                                        fr.errors.push(msg);
-                                    }
-                                } else {
-                                    let warn_msg =
-                                        "rm -rf usage detected; ensure this is intentional"
-                                            .to_string();
-                                    if !fr.warnings.contains(&warn_msg) {
-                                        fr.warnings.push(warn_msg);
-                                    }
-                                }
+                                dangerous_abs = true;
+                                break;
                             }
                         }
-                        "dd" => {
-                            if node_text_low.contains("/dev/") {
-                                fr.valid = false;
-                                fr.errors.push(format!(
-                                    "Potential destructive 'dd' on device: {}",
-                                    node_text
-                                ));
-                            }
-                        }
-                        _ if cmd_l.starts_with("mkfs") => {
+                        if dangerous_abs {
                             fr.valid = false;
-                            fr.errors.push(format!(
-                                "Filesystem formatting command found: {}",
+                            let msg = format!(
+                                "Dangerous rm -rf usage detected (possible removal of root files): {}",
                                 node_text
-                            ));
-                        }
-                        "reboot" | "shutdown" | "poweroff" | "halt" => {
-                            fr.warnings
-                                .push("Command will reboot or shutdown the device".to_string());
-                        }
-                        "chmod" => {
-                            if node_text_low.contains("777") && node_text_low.contains("-r") {
-                                fr.warnings.push(format!(
-                                    "Potentially unsafe 'chmod 777 -R': {}",
-                                    node_text
-                                ));
+                            );
+                            if !fr.errors.contains(&msg) {
+                                fr.errors.push(msg);
                             }
-                        }
-                        "chown" => {
-                            if node_text_low.contains("/system") || node_text_low.contains("/data")
-                            {
-                                fr.warnings.push(format!(
-                                    "'chown' on system/data detected: {}",
-                                    node_text
-                                ));
+                        } else {
+                            let warn_msg =
+                                "rm -rf usage detected; ensure this is intentional".to_string();
+                            if !fr.warnings.contains(&warn_msg) {
+                                fr.warnings.push(warn_msg);
                             }
-                        }
-                        "setprop" => {
-                            // If this is not the post-fs-data special-case (already warned), add a general warning
-                            if !path
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .map(|s| s == "post-fs-data.sh")
-                                .unwrap_or(false)
-                            {
-                                fr.warnings.push(format!("Usage of 'setprop' detected; prefer 'resetprop -n' where appropriate: {}", node_text));
-                            }
-                        }
-                        "eval" => {
-                            let msg = format!("Use of 'eval' detected: {}", node_text);
-                            if !fr.warnings.contains(&msg) {
-                                fr.warnings.push(msg);
-                            }
-                        }
-                        _ => {
-                            // For 'command' nodes we already handled many checks; leave room for heuristics.
                         }
                     }
                 }
+                "dd" => {
+                    if node_text_low.contains("/dev/") {
+                        fr.valid = false;
+                        fr.errors.push(format!(
+                            "Potential destructive 'dd' on device: {}",
+                            node_text
+                        ));
+                    }
+                }
+                _ if cmd_l.starts_with("mkfs") => {
+                    fr.valid = false;
+                    fr.errors.push(format!(
+                        "Filesystem formatting command found: {}",
+                        node_text
+                    ));
+                }
+                "reboot" | "shutdown" | "poweroff" | "halt" => {
+                    fr.warnings
+                        .push("Command will reboot or shutdown the device".to_string());
+                }
+                "chmod" => {
+                    if node_text_low.contains("777") && node_text_low.contains("-r") {
+                        fr.warnings
+                            .push(format!("Potentially unsafe 'chmod 777 -R': {}", node_text));
+                    }
+                }
+                "chown" => {
+                    if node_text_low.contains("/system") || node_text_low.contains("/data") {
+                        fr.warnings
+                            .push(format!("'chown' on system/data detected: {}", node_text));
+                    }
+                }
+                "setprop" => {
+                    // If this is not the post-fs-data special-case (already warned), add a general warning
+                    if !path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|s| s == "post-fs-data.sh")
+                        .unwrap_or(false)
+                    {
+                        fr.warnings.push(format!("Usage of 'setprop' detected; prefer 'resetprop -n' where appropriate: {}", node_text));
+                    }
+                }
+                "eval" => {
+                    let msg = format!("Use of 'eval' detected: {}", node_text);
+                    if !fr.warnings.contains(&msg) {
+                        fr.warnings.push(msg);
+                    }
+                }
+                _ => {
+                    // For 'command' nodes we already handled many checks; leave room for heuristics.
+                }
             }
+        }
+    }
 
     // Recurse children
     for i in 0..node.child_count() {
@@ -487,6 +484,10 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
         }
         let root = tree.root_node();
         walk_node(root, &mut fr);
+
+        // Also run the AST-based dangerous command detection so the custom checker
+        // reports the same high-risk commands as the main `check_sh` wrapper.
+        detect_dangerous_commands(root, &s, &mut fr, path);
     }
     // 基本内容修复（类似markdown）：CRLF、尾随空格、文件末尾换行
     // 这些虽然不影响功能，但统一格式比较好
@@ -538,66 +539,59 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
     Ok(fr)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile;
+#[test]
+fn test_install_sh_suggest_rename() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let path = tmp.path().join("install.sh");
+    fs::write(&path, "echo hi\n").unwrap();
+    let fr = check_sh(&path, false).unwrap();
+    assert!(
+        fr.warnings
+            .iter()
+            .any(|w| w.contains("install.sh") || w.contains("customize.sh")),
+        "Expected a warning suggesting rename to customize.sh"
+    );
+}
 
-    #[test]
-    fn test_install_sh_suggest_rename() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = tmp.path().join("install.sh");
-        fs::write(&path, "echo hi\n").unwrap();
-        let fr = check_sh(&path, false).unwrap();
-        assert!(
-            fr.warnings
-                .iter()
-                .any(|w| w.contains("install.sh") || w.contains("customize.sh")),
-            "Expected a warning suggesting rename to customize.sh"
-        );
-    }
+#[test]
+fn test_post_fs_data_setprop_warning() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let path = tmp.path().join("post-fs-data.sh");
+    fs::write(&path, "setprop sys.boot_completed 1\n").unwrap();
+    let fr = check_sh(&path, false).unwrap();
+    assert!(
+        fr.warnings
+            .iter()
+            .any(|w| w.to_lowercase().contains("setprop")),
+        "Expected a setprop warning for post-fs-data.sh"
+    );
+}
 
-    #[test]
-    fn test_post_fs_data_setprop_warning() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = tmp.path().join("post-fs-data.sh");
-        fs::write(&path, "setprop sys.boot_completed 1\n").unwrap();
-        let fr = check_sh(&path, false).unwrap();
-        assert!(
-            fr.warnings
-                .iter()
-                .any(|w| w.to_lowercase().contains("setprop")),
-            "Expected a setprop warning for post-fs-data.sh"
-        );
-    }
+#[test]
+fn test_detect_rm_rf_error() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let path = tmp.path().join("danger.sh");
+    fs::write(&path, "rm -rf /\n").unwrap();
+    let fr = check_sh(&path, false).unwrap();
+    assert!(
+        fr.errors
+            .iter()
+            .any(|e| e.to_lowercase().contains("rm -rf")),
+        "Expected detection of dangerous rm -rf usage"
+    );
+}
 
-    #[test]
-    fn test_detect_rm_rf_error() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = tmp.path().join("danger.sh");
-        fs::write(&path, "rm -rf /\n").unwrap();
-        let fr = check_sh(&path, false).unwrap();
-        assert!(
-            fr.errors
-                .iter()
-                .any(|e| e.to_lowercase().contains("rm -rf")),
-            "Expected detection of dangerous rm -rf usage"
-        );
-    }
-
-    #[test]
-    fn test_piped_curl_warning() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = tmp.path().join("installme.sh");
-        fs::write(&path, "curl -sSL https://example.com/install.sh | sh\n").unwrap();
-        let fr = check_sh(&path, false).unwrap();
-        assert!(
-            fr.warnings
-                .iter()
-                .any(|w| w.to_lowercase().contains("piped shell install")
-                    || w.to_lowercase().contains("piped")),
-            "Expected a warning for piped download to shell"
-        );
-    }
+#[test]
+fn test_piped_curl_warning() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let path = tmp.path().join("installme.sh");
+    fs::write(&path, "curl -sSL https://example.com/install.sh | sh\n").unwrap();
+    let fr = check_sh(&path, false).unwrap();
+    assert!(
+        fr.warnings
+            .iter()
+            .any(|w| w.to_lowercase().contains("piped shell install")
+                || w.to_lowercase().contains("piped")),
+        "Expected a warning for piped download to shell"
+    );
 }

@@ -961,13 +961,11 @@ fn get_language_from_config() -> Option<String> {
     // Note: This function expects `cmds::config::read_language_from_config()` to be
     // public and return `Option<String>`. If you changed `config.rs` keep an eye on
     // compilation errors and export a tiny helper there.
-    match std::panic::catch_unwind(|| {
+    std::panic::catch_unwind(|| {
         // Use fully-qualified absolute path to call function in case `cfg` differs:
         crate::cmds::config::read_language_from_config()
-    }) {
-        Ok(v) => v,
-        Err(_) => None,
-    }
+    })
+    .unwrap_or_default()
 }
 
 // --- Macros -----------------------------------------------------------------

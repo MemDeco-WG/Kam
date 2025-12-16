@@ -27,16 +27,18 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // 用模板初始化项目，传clone避免move（Rust的ownership真是...）
     impl_mod::init_template(
         &data.path,
-        &data.id,
-        data.name.clone(),
-        &data.version,
-        &data.author,
-        data.description.clone(),
-        &merged_var_vec,
-        Some(data.impl_template.clone()),
-        args.force,
-        data.module_type,
-        data.update_json.clone(),
+        impl_mod::InitTemplateParams {
+            id: &data.id,
+            name: data.name.clone(),
+            version: &data.version,
+            author: &data.author,
+            description: data.description.clone(),
+            var: &merged_var_vec,
+            impl_template: Some(data.impl_template.clone()),
+            force: args.force,
+            module_type: data.module_type,
+            update_json: data.update_json.clone(),
+        },
     )?;
 
     // 后处理，比如生成一些额外的文件啥的

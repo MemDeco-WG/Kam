@@ -47,21 +47,36 @@ fn merge_template_defaults(
     Ok(())
 }
 
-pub fn init_impl(
-    path: &Path,
-    id: &str,
-    name: String,
-    version: &str,
-    author: &str,
-    description: String,
-    impl_source: &Path,
-    template_vars: &mut HashMap<String, String>,
-    force: bool,
-    explicit_template_id: Option<&str>,
-) -> Result<(), KamError> {
+pub struct InitImplParams<'a> {
+    pub id: &'a str,
+    pub name: String,
+    pub version: &'a str,
+    pub author: &'a str,
+    pub description: String,
+    pub impl_source: &'a Path,
+    pub template_vars: &'a mut HashMap<String, String>,
+    pub force: bool,
+    pub explicit_template_id: Option<&'a str>,
+}
+
+// Parameters for init_template grouped into a struct to satisfy Clippy's too_many_arguments lint.
+pub struct InitTemplateParams<'a> {
+    pub id: &'a str,
+    pub name: String,
+    pub version: &'a str,
+    pub author: &'a str,
+    pub description: String,
+    pub var: &'a [String],
+    pub impl_template: Option<String>,
+    pub force: bool,
+    pub module_type: ModuleType,
+    pub update_json: Option<String>,
+}
+
+pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError> {
     // 如果需要解压，先准备个临时目录
     let temp_dir = tempfile::tempdir().map_err(KamError::Io)?;
-    let mut template_path = impl_source.to_path_buf();
+    let mut template_path = params.impl_source.to_path_buf();
 
     if template_path.exists() {
         if template_path.is_file() {
@@ -74,7 +89,7 @@ pub fn init_impl(
     } else {
         return Err(KamError::InvalidDirectory(format!(
             "Template source not found: {}",
-            impl_source.display()
+            params.impl_source.display()
         )));
     }
 
@@ -93,7 +108,7 @@ pub fn init_impl(
     }
 
     // 确定模板ID，如果用户没指定就用默认的"template"
-    let archive_id = if let Some(eid) = explicit_template_id {
+    let archive_id = if let Some(eid) = params.explicit_template_id {
         eid.to_string()
     } else {
         "template".to_string() // 默认值，虽然可能不太有用
@@ -102,16 +117,16 @@ pub fn init_impl(
     // Load template variables from template's kam.toml
     let template_kam_path = template_path.join("kam.toml");
     if template_kam_path.exists() {
-        merge_template_defaults(&template_kam_path, template_vars)?;
+        merge_template_defaults(&template_kam_path, params.template_vars)?;
     }
 
     // Prepare KamToml
     let mut kt = KamToml::new_with_current_timestamp(
-        id.to_string(),
-        name.clone(),
-        version.to_string(),
-        Some(author.to_string()),
-        description.clone(),
+        params.id.to_string(),
+        params.name.clone(),
+        params.version.to_string(),
+        Some(params.author.to_string()),
+        params.description.clone(),
         None,
         None,
     );
@@ -122,15 +137,16 @@ pub fn init_impl(
 
     // Extract # vars
     let mut kam_vars: Vec<(String, String)> = Vec::new();
-    let keys: Vec<String> = template_vars.keys().cloned().collect();
+    let keys: Vec<String> = params.template_vars.keys().cloned().collect();
     for k in keys {
         if k.starts_with('#')
-            && let Some(v) = template_vars.get(&k) {
-                kam_vars.push((k.clone(), v.clone()));
-            }
+            && let Some(v) = params.template_vars.get(&k)
+        {
+            kam_vars.push((k.clone(), v.clone()));
+        }
     }
     for (k, _) in &kam_vars {
-        template_vars.remove(k);
+        params.template_vars.remove(k);
     }
 
     if !kam_vars.is_empty() {
@@ -145,29 +161,35 @@ pub fn init_impl(
     // Merge kt vars into template_vars
     let kt_vars = crate::template::TemplateVariableProcessor::flatten_kam_toml(&kt);
     for (k, v) in kt_vars {
-        template_vars.entry(k).or_insert(v);
+        params.template_vars.entry(k).or_insert(v);
     }
 
     // Ensure shallow keys
-    template_vars
+    params
+        .template_vars
         .entry("id".to_string())
         .or_insert_with(|| kt.prop.id.clone());
-    template_vars
+    params
+        .template_vars
         .entry("version".to_string())
         .or_insert_with(|| kt.prop.version.clone());
-    template_vars
+    params
+        .template_vars
         .entry("versionCode".to_string())
         .or_insert_with(|| kt.prop.versionCode.to_string());
     // author现在是Option，需要处理None的情况
-    template_vars
+    params
+        .template_vars
         .entry("author".to_string())
         .or_insert_with(|| kt.prop.author.as_ref().unwrap_or(&String::new()).clone());
 
-    template_vars
+    params
+        .template_vars
         .entry("name".to_string())
         .or_insert_with(|| kt.prop.name.clone());
 
-    template_vars
+    params
+        .template_vars
         .entry("description".to_string())
         .or_insert_with(|| kt.prop.description.clone());
 
@@ -182,8 +204,8 @@ pub fn init_impl(
     crate::template::TemplateManager::copy_and_replace_with_rules(
         &template_path,
         path,
-        template_vars,
-        force,
+        params.template_vars,
+        params.force,
         &archive_id,
         excludes,
         includes,
@@ -196,10 +218,10 @@ pub fn init_impl(
 
     // Render kam.toml in place if it exists
     // Only process if force is set OR kam.toml was just created (didn't exist before copy_and_replace)
-    if kam_toml_path.exists() && (force || !kam_toml_existed_before_copy) {
+    if kam_toml_path.exists() && (params.force || !kam_toml_existed_before_copy) {
         let content = fs::read_to_string(&kam_toml_path).map_err(KamError::Io)?;
         let mut context = Context::new();
-        for (k, v) in template_vars.iter() {
+        for (k, v) in params.template_vars.iter() {
             context.insert(k, v);
         }
         let mut tera = Tera::default();
@@ -209,12 +231,12 @@ pub fn init_impl(
                 match toml::from_str::<KamToml>(&rendered) {
                     Ok(mut rendered_kt) => {
                         // Override with user-provided values
-                        rendered_kt.prop.id = id.to_string();
+                        rendered_kt.prop.id = params.id.to_string();
                         // 更新渲染后的kam.toml，用实际的值替换模板变量
-                        rendered_kt.prop.name = name.clone();
-                        rendered_kt.prop.version = version.to_string();
-                        rendered_kt.prop.author = Some(author.to_string()); // author现在是Option了
-                        rendered_kt.prop.description = description.clone();
+                        rendered_kt.prop.name = params.name.clone();
+                        rendered_kt.prop.version = params.version.to_string();
+                        rendered_kt.prop.author = Some(params.author.to_string()); // author现在是Option了
+                        rendered_kt.prop.description = params.description.clone();
                         rendered_kt.prop.versionCode = kt.prop.versionCode;
 
                         // Reset template-specific build settings to sane defaults
@@ -297,11 +319,10 @@ pub fn init_impl(
     // 优先用用户提供的值，没有就用默认值
     if let Some(tmpl_section) = &kt.kam.tmpl {
         for (var_name, var_def) in tmpl_section.variables.iter() {
-            let nm = var_name
-                .to_ascii_uppercase()
-                .replace(['.', '-'], "_");
+            let nm = var_name.to_ascii_uppercase().replace(['.', '-'], "_");
             let key = format!("KAM_TMPL_{}", nm);
-            let val = template_vars
+            let val = params
+                .template_vars
                 .get(var_name)
                 .cloned()
                 .or_else(|| var_def.default.clone())
@@ -319,22 +340,14 @@ pub fn init_impl(
     // 终于写完了，这个函数有点长，但暂时不想拆分
 }
 
-pub fn init_template(
-    path: &Path,
-    id: &str,
-    name: String,
-    version: &str,
-    author: &str,
-    description: String,
-    var: &[String],
-    impl_template: Option<String>,
-    force: bool,
-    _module_type: ModuleType,
-    _update_json: Option<String>,
-) -> Result<(), KamError> {
-    let mut template_vars = crate::template::TemplateManager::parse_template_vars(var)?;
+/* legacy wrapper removed - use `InitTemplateParams`-based signature:
+`init_template(path, InitTemplateParams { ... })` */
 
-    let template_spec = impl_template
+pub fn init_template(path: &Path, params: InitTemplateParams<'_>) -> Result<(), KamError> {
+    let mut template_vars = crate::template::TemplateManager::parse_template_vars(params.var)?;
+
+    let template_spec = params
+        .impl_template
         .as_deref()
         .unwrap_or("kam_template")
         .to_string();
@@ -364,15 +377,17 @@ pub fn init_template(
         if spec_path.exists() {
             return init_impl(
                 path,
-                id,
-                name,
-                version,
-                author,
-                description,
-                spec_path,
-                &mut template_vars,
-                force,
-                Some(spec.as_str()),
+                InitImplParams {
+                    id: params.id,
+                    name: params.name.clone(),
+                    version: params.version,
+                    author: params.author,
+                    description: params.description.clone(),
+                    impl_source: spec_path,
+                    template_vars: &mut template_vars,
+                    force: params.force,
+                    explicit_template_id: Some(spec.as_str()),
+                },
             );
         }
 
@@ -387,15 +402,17 @@ pub fn init_template(
 
             return init_impl(
                 path,
-                id,
-                name,
-                version,
-                author,
-                description,
-                &temp_path,
-                &mut template_vars,
-                force,
-                Some(spec.as_str()),
+                InitImplParams {
+                    id: params.id,
+                    name: params.name.clone(),
+                    version: params.version,
+                    author: params.author,
+                    description: params.description.clone(),
+                    impl_source: &temp_path,
+                    template_vars: &mut template_vars,
+                    force: params.force,
+                    explicit_template_id: Some(spec.as_str()),
+                },
             );
         }
 
@@ -405,15 +422,17 @@ pub fn init_template(
         {
             return init_impl(
                 path,
-                id,
-                name,
-                version,
-                author,
-                description,
-                &cached_path,
-                &mut template_vars,
-                force,
-                Some(spec.as_str()),
+                InitImplParams {
+                    id: params.id,
+                    name: params.name.clone(),
+                    version: params.version,
+                    author: params.author,
+                    description: params.description.clone(),
+                    impl_source: &cached_path,
+                    template_vars: &mut template_vars,
+                    force: params.force,
+                    explicit_template_id: Some(spec.as_str()),
+                },
             );
         }
 
@@ -438,15 +457,17 @@ pub fn init_template(
             if candidate.exists() {
                 return init_impl(
                     path,
-                    id,
-                    name.clone(),
-                    version,
-                    author,
-                    description.clone(),
-                    &candidate,
-                    &mut template_vars,
-                    force,
-                    Some(spec.as_str()),
+                    InitImplParams {
+                        id: params.id,
+                        name: params.name.clone(),
+                        version: params.version,
+                        author: params.author,
+                        description: params.description.clone(),
+                        impl_source: &candidate,
+                        template_vars: &mut template_vars,
+                        force: params.force,
+                        explicit_template_id: Some(spec.as_str()),
+                    },
                 );
             }
         }
@@ -509,16 +530,18 @@ module_type = "template"
 
         let res = init_template(
             &dest_dir,
-            "com.example.test",
-            "Example Test".to_string(),
-            "0.1.0",
-            "Author",
-            "Description".to_string(),
-            &vars,
-            Some("kam_template".to_string()),
-            true,
-            ModuleType::Kam,
-            None,
+            InitTemplateParams {
+                id: "com.example.test",
+                name: "Example Test".to_string(),
+                version: "0.1.0",
+                author: "Author",
+                description: "Description".to_string(),
+                var: &vars,
+                impl_template: Some("kam_template".to_string()),
+                force: true,
+                module_type: ModuleType::Kam,
+                update_json: None,
+            },
         );
 
         // restore cwd

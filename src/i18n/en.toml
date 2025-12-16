@@ -223,8 +223,8 @@ title = "✿ Workspace Build Summary ✿"
 # CLI help / commands (used to localize `kam --help` and subcommand help)
 # --------------------------------------------------------------------------
 [cli]
-about = "Kam — Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repo metadata exports."
-long_about = "Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repository metadata exports. Use `kam help <COMMAND>` for more details about a specific command."
+about = "A CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repo metadata exports."
+long_about = "A CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repository metadata exports. Use `kam help <COMMAND>` for more details about a specific command."
 
 # Global flags (top-level)
 [cli.flags]

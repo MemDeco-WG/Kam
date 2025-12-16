@@ -3,8 +3,8 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(
     name = "kam",
-    about = "Kam — A CLI toolkit for scaffolding, building, and distributing ksu/APU/Magisk/AnyTemplate modules",
-    long_about = "Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repo metadata exports.",
+    about = "A CLI toolkit for scaffolding, building, and distributing ksu/APU/Magisk/AnyTemplate modules",
+    long_about = "A CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repo metadata exports.",
     version,
     disable_help_subcommand = true,
     help_template = "{bin} — {about}\n\nUsage: {usage}\n\nCommands:\n{subcommands}\n\nOptions:\n{options}\n"

@@ -44,7 +44,7 @@ pub struct InstallArgs {
 /// Priority:
 /// 1) KAM_ROOT_MANAGER environment variable
 /// 2) ~/.kam/config.toml -> root.manager (or root_manager / manager fallback)
-/// Returns normalized manager name: "Magisk", "KernelSU", "APatchSU", or "Unknown"
+///    Returns normalized manager name: "Magisk", "KernelSU", "APatchSU", or "Unknown"
 pub fn get_root_manager() -> String {
     // 1) env override
     if let Ok(env_val) = std::env::var("KAM_ROOT_MANAGER") {
@@ -59,29 +59,31 @@ pub fn get_root_manager() -> String {
         let cfg = home.join(".kam").join("config.toml");
         if cfg.exists()
             && let Ok(content) = fs::read_to_string(&cfg)
-                && let Ok(v) = toml::from_str::<toml::Value>(&content) {
-                    // Try table: [root] manager = "Magisk"
-                    if let Some(root_tbl) = v.get("root")
-                        && let Some(m) = root_tbl.get("manager").and_then(|x| x.as_str()) {
-                            let n = crate::utils::normalize_root_manager(m);
-                            if n != "Unknown" {
-                                return n;
-                            }
-                        }
-                    // Try fallback keys: root_manager or manager (looser)
-                    if let Some(m) = v.get("root_manager").and_then(|x| x.as_str()) {
-                        let n = crate::utils::normalize_root_manager(m);
-                        if n != "Unknown" {
-                            return n;
-                        }
-                    }
-                    if let Some(m) = v.get("manager").and_then(|x| x.as_str()) {
-                        let n = crate::utils::normalize_root_manager(m);
-                        if n != "Unknown" {
-                            return n;
-                        }
-                    }
+            && let Ok(v) = toml::from_str::<toml::Value>(&content)
+        {
+            // Try table: [root] manager = "Magisk"
+            if let Some(root_tbl) = v.get("root")
+                && let Some(m) = root_tbl.get("manager").and_then(|x| x.as_str())
+            {
+                let n = crate::utils::normalize_root_manager(m);
+                if n != "Unknown" {
+                    return n;
                 }
+            }
+            // Try fallback keys: root_manager or manager (looser)
+            if let Some(m) = v.get("root_manager").and_then(|x| x.as_str()) {
+                let n = crate::utils::normalize_root_manager(m);
+                if n != "Unknown" {
+                    return n;
+                }
+            }
+            if let Some(m) = v.get("manager").and_then(|x| x.as_str()) {
+                let n = crate::utils::normalize_root_manager(m);
+                if n != "Unknown" {
+                    return n;
+                }
+            }
+        }
     }
 
     "Unknown".to_string()
@@ -161,9 +163,10 @@ fn resolve_artifact_path(explicit: Option<PathBuf>) -> Result<PathBuf, KamError>
                 let p = e.path();
                 if p.is_file()
                     && let Some(ext) = p.extension().and_then(|x| x.to_str())
-                        && ext.eq_ignore_ascii_case("zip") {
-                            candidates.push(p);
-                        }
+                    && ext.eq_ignore_ascii_case("zip")
+                {
+                    candidates.push(p);
+                }
             }
         }
     }

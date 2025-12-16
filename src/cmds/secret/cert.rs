@@ -157,21 +157,16 @@ fn parse_x509_pem_chain(pem: &str) -> Result<(), KamError> {
     let mut remaining = pem.as_bytes();
     let mut count = 0;
 
-    loop {
-        match parse_x509_pem(remaining) {
-            Ok((rest, pem_cert)) => {
-                pem_cert.parse_x509().map_err(|e| {
-                    KamError::CommandFailed(format!("Failed to parse X.509 certificate: {}", e))
-                })?;
-                count += 1;
+    while let Ok((rest, pem_cert)) = parse_x509_pem(remaining) {
+        pem_cert.parse_x509().map_err(|e| {
+            KamError::CommandFailed(format!("Failed to parse X.509 certificate: {}", e))
+        })?;
+        count += 1;
 
-                if rest.is_empty() {
-                    break;
-                }
-                remaining = rest;
-            }
-            Err(_) => break,
+        if rest.is_empty() {
+            break;
         }
+        remaining = rest;
     }
 
     if count == 0 {
@@ -183,28 +178,23 @@ fn parse_x509_pem_chain(pem: &str) -> Result<(), KamError> {
     Ok(())
 }
 
-// 验证证书链（对信任的CA）并提取公钥
+// 验证证书链（对信任的CA）并提取公钥}
 // 这个函数有点复杂，主要是处理证书链的验证逻辑
 pub fn verify_cert_chain(chain_pem: &str, trusted_cas_pem: &[String]) -> Result<String, KamError> {
     // 先解析证书链，转成DER格式
     let mut der_blobs: Vec<Vec<u8>> = Vec::new();
     let mut remaining = chain_pem.as_bytes();
 
-    loop {
-        match parse_x509_pem(remaining) {
-            Ok((rest, pem_cert)) => {
-                // 把DER内容复制到owned buffer，避免生命周期问题
-                // Rust的ownership真是...不过这样更安全
-                let der_vec = pem_cert.contents.to_vec();
-                der_blobs.push(der_vec);
+    while let Ok((rest, pem_cert)) = parse_x509_pem(remaining) {
+        // 把DER内容复制到owned buffer，避免生命周期问题
+        // Rust的ownership真是...不过这样更安全
+        let der_vec = pem_cert.contents.to_vec();
+        der_blobs.push(der_vec);
 
-                if rest.is_empty() {
-                    break;
-                }
-                remaining = rest;
-            }
-            Err(_) => break,
+        if rest.is_empty() {
+            break;
         }
+        remaining = rest;
     }
 
     if der_blobs.is_empty() {

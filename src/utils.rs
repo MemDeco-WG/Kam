@@ -394,9 +394,9 @@ impl Utils {
     ///
     /// - Upper-cases the input.
     /// - Replaces '.' and '-' with underscores.
-    /// This helper centralizes the normalization logic used across the codebase
-    /// when converting kam.toml keys (e.g. `prop.id`) to environment variable fragments
-    /// (e.g. `PROP_ID`).
+    ///   This helper centralizes the normalization logic used across the codebase
+    ///   when converting kam.toml keys (e.g. `prop.id`) to environment variable fragments
+    ///   (e.g. `PROP_ID`).
     pub fn normalize_env_key(key: &str) -> String {
         key.to_ascii_uppercase().replace(['.', '-'], "_")
     }

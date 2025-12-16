@@ -191,49 +191,47 @@ pub fn build_project(
 
     // Display build statistics in a beautiful table
     if !args.quiet
-        && let Ok(metadata) = fs::metadata(&output_file) {
-            let size_kb = metadata.len() as f64 / 1024.0;
-            let size_str = if size_kb < 1024.0 {
-                format!("{:.1} KB", size_kb)
-            } else {
-                format!("{:.1} MB", size_kb / 1024.0)
-            };
+        && let Ok(metadata) = fs::metadata(&output_file)
+    {
+        let size_kb = metadata.len() as f64 / 1024.0;
+        let size_str = if size_kb < 1024.0 {
+            format!("{:.1} KB", size_kb)
+        } else {
+            format!("{:.1} MB", size_kb / 1024.0)
+        };
 
-            println!();
-            let mut table = Table::new();
-            table
-                .load_preset(comfy_table::presets::UTF8_FULL)
-                .set_content_arrangement(comfy_table::ContentArrangement::Dynamic)
-                .set_header(vec![
-                    Cell::new(crate::i18n::tr_key("project.header"))
-                        .fg(comfy_table::Color::Cyan)
-                        .add_attribute(comfy_table::Attribute::Bold),
-                    Cell::new(crate::i18n::tr_key("table.header.value"))
-                        .fg(comfy_table::Color::Cyan)
-                        .add_attribute(comfy_table::Attribute::Bold),
-                ])
-                .add_row(vec![
-                    Cell::new(crate::i18n::tr_key("project.build_time"))
-                        .fg(comfy_table::Color::Cyan),
-                    Cell::new(format!("{:.2}s", build_duration.as_secs_f64()))
-                        .fg(comfy_table::Color::Green)
-                        .add_attribute(comfy_table::Attribute::Bold),
-                ])
-                .add_row(vec![
-                    Cell::new(crate::i18n::tr_key("project.package_size"))
-                        .fg(comfy_table::Color::Cyan),
-                    Cell::new(&size_str)
-                        .fg(comfy_table::Color::Green)
-                        .add_attribute(comfy_table::Attribute::Bold),
-                ])
-                .add_row(vec![
-                    Cell::new(crate::i18n::tr_key("project.output_file"))
-                        .fg(comfy_table::Color::Cyan),
-                    Cell::new(output_file.display().to_string()).fg(comfy_table::Color::White),
-                ]);
-            println!("{}", table);
-            println!();
-        }
+        println!();
+        let mut table = Table::new();
+        table
+            .load_preset(comfy_table::presets::UTF8_FULL)
+            .set_content_arrangement(comfy_table::ContentArrangement::Dynamic)
+            .set_header(vec![
+                Cell::new(crate::i18n::tr_key("project.header"))
+                    .fg(comfy_table::Color::Cyan)
+                    .add_attribute(comfy_table::Attribute::Bold),
+                Cell::new(crate::i18n::tr_key("table.header.value"))
+                    .fg(comfy_table::Color::Cyan)
+                    .add_attribute(comfy_table::Attribute::Bold),
+            ])
+            .add_row(vec![
+                Cell::new(crate::i18n::tr_key("project.build_time")).fg(comfy_table::Color::Cyan),
+                Cell::new(format!("{:.2}s", build_duration.as_secs_f64()))
+                    .fg(comfy_table::Color::Green)
+                    .add_attribute(comfy_table::Attribute::Bold),
+            ])
+            .add_row(vec![
+                Cell::new(crate::i18n::tr_key("project.package_size")).fg(comfy_table::Color::Cyan),
+                Cell::new(&size_str)
+                    .fg(comfy_table::Color::Green)
+                    .add_attribute(comfy_table::Attribute::Bold),
+            ])
+            .add_row(vec![
+                Cell::new(crate::i18n::tr_key("project.output_file")).fg(comfy_table::Color::Cyan),
+                Cell::new(output_file.display().to_string()).fg(comfy_table::Color::White),
+            ]);
+        println!("{}", table);
+        println!();
+    }
 
     // Run post-build hooks only for non-template modules
     if !is_template_build {
@@ -257,14 +255,15 @@ pub fn build_project(
 pub fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
     if let Some(build) = &kam_toml.kam.build
         && let Some(output_file) = &build.output_file
-            && !output_file.is_empty() {
-                let mut name = output_file.clone();
-                name = name.replace("{{id}}", &kam_toml.prop.id);
-                name = name.replace("{{version}}", &kam_toml.prop.version);
-                name = name.replace("{{versionCode}}", &kam_toml.prop.versionCode.to_string());
-                name = name.replace("{{name}}", kam_toml.prop.get_name());
-                return Ok(name);
-            }
+        && !output_file.is_empty()
+    {
+        let mut name = output_file.clone();
+        name = name.replace("{{id}}", &kam_toml.prop.id);
+        name = name.replace("{{version}}", &kam_toml.prop.version);
+        name = name.replace("{{versionCode}}", &kam_toml.prop.versionCode.to_string());
+        name = name.replace("{{name}}", kam_toml.prop.get_name());
+        return Ok(name);
+    }
 
     Ok(format!(
         "{}-{}-{}",
@@ -292,14 +291,13 @@ pub fn create_kam_module_zip(
         project_path.join("src").join(module_id)
     };
 
-    if !src_dir.exists()
-        && !args.quiet {
-            Utils::warn(&trf!(
-                "packaging.source_directory_not_found",
-                src_dir.display()
-            ));
-        }
-        // We allow building even if src dir is missing, but it might be empty
+    if !src_dir.exists() && !args.quiet {
+        Utils::warn(&trf!(
+            "packaging.source_directory_not_found",
+            src_dir.display()
+        ));
+    }
+    // We allow building even if src dir is missing, but it might be empty
 
     let zip_file = File::create(&module_output_file).map_err(|e| {
         KamError::Io(std::io::Error::new(
@@ -489,11 +487,7 @@ pub fn create_kam_module_zip(
 
                 count += 1;
                 if let Some(p) = &pb {
-                    if file_count > 0 {
-                        p.set_position(count);
-                    } else {
-                        p.set_position(count);
-                    }
+                    p.set_position(count);
                 }
             }
         }
@@ -504,40 +498,45 @@ pub fn create_kam_module_zip(
 
     // Add other files if they exist (readme, license, changelog)
     if let Some(mmrl) = &kam_toml.mmrl
-        && let Some(repo) = &mmrl.repo {
-            let mut candidates: Vec<String> = Vec::new();
-            if let Some(r) = &repo.readme
-                && !r.trim().is_empty() {
-                    candidates.push(r.clone());
-                }
-            if let Some(l) = &repo.license
-                && !l.trim().is_empty() {
-                    candidates.push(l.clone());
-                }
-            if let Some(c) = &repo.changelog
-                && !c.trim().is_empty() {
-                    candidates.push(c.clone());
-                }
-            // Also check for icon
-            if let Some(i) = &repo.icon
-                && !i.trim().is_empty() {
-                    candidates.push(i.clone());
-                }
+        && let Some(repo) = &mmrl.repo
+    {
+        let mut candidates: Vec<String> = Vec::new();
+        if let Some(r) = &repo.readme
+            && !r.trim().is_empty()
+        {
+            candidates.push(r.clone());
+        }
+        if let Some(l) = &repo.license
+            && !l.trim().is_empty()
+        {
+            candidates.push(l.clone());
+        }
+        if let Some(c) = &repo.changelog
+            && !c.trim().is_empty()
+        {
+            candidates.push(c.clone());
+        }
+        // Also check for icon
+        if let Some(i) = &repo.icon
+            && !i.trim().is_empty()
+        {
+            candidates.push(i.clone());
+        }
 
-            for file_name in candidates {
-                let file_path = project_path.join(&file_name);
-                if file_path.exists() {
-                    zip.start_file(&file_name, options)?;
-                    let mut file = File::open(&file_path)?;
-                    let mut buffer = Vec::new();
-                    file.read_to_end(&mut buffer)?;
-                    zip.write_all(&buffer)?;
-                    if !args.quiet {
-                        Utils::info(&file_name);
-                    }
+        for file_name in candidates {
+            let file_path = project_path.join(&file_name);
+            if file_path.exists() {
+                zip.start_file(&file_name, options)?;
+                let mut file = File::open(&file_path)?;
+                let mut buffer = Vec::new();
+                file.read_to_end(&mut buffer)?;
+                zip.write_all(&buffer)?;
+                if !args.quiet {
+                    Utils::info(&file_name);
                 }
             }
         }
+    }
 
     zip.finish()?;
 
@@ -706,11 +705,7 @@ pub fn create_template_archive(
 
             count += 1;
             if let Some(p) = &pb {
-                if file_count > 0 {
-                    p.set_position(count);
-                } else {
-                    p.set_position(count);
-                }
+                p.set_position(count);
             }
         }
     }
