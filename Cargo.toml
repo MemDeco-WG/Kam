@@ -89,6 +89,13 @@ serial_test = "3.2.0"
 default = []
 sys-locale = ["dep:sys-locale"]
 
+[profile.release]
+opt-level = "z"
+debug = false
+lto = 'fat'
+codegen-units = 1
+panic = "abort"
+
 [package]
 authors = ["LightJunction"]
 categories = [
@@ -118,4 +125,4 @@ keywords = [
 license = "GPL-3.0"
 name = "kam"
 repository = "https://github.com/MemDeco-WG/Kam"
-version = "0.5.4"
+version = "0.5.6"

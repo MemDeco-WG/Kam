@@ -186,7 +186,8 @@ pub fn handle_pacman_style(
             .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
 
         for module_id in targets.iter() {
-            Utils::section(&format!("Download: {}", module_id));
+            let section_title = crate::i18n::tr_fmt("repo.download", &[&module_id]);
+            Utils::section(&section_title);
 
             // Fetch module details
             let _md = match fetch_module_detail(&client, module_id, &base) {
@@ -195,18 +196,26 @@ pub fn handle_pacman_style(
                     process_module_download(&md, module_id, &client, assume_yes)?;
                     continue;
                 }
-                Err(KamError::FetchFailed(ref e)) if e.contains("404") || e.contains("not found") || e.contains("Not Found") => {
+                Err(KamError::FetchFailed(ref e))
+                    if e.contains("404") || e.contains("not found") || e.contains("Not Found") =>
+                {
                     // If the exact module wasn't found, suggest similar modules via interactive search
-                    Utils::warn(&format!("Module '{}' not found. Showing similar modules:", module_id));
+                    Utils::warn(&crate::i18n::tr_fmt(
+                        "repo.module_not_found_showing_similar",
+                        &[&module_id],
+                    ));
                     if let Some(selected_module) = search_remote_interactive(module_id, &base)? {
-                        Utils::info(&format!("Selected module: {}", selected_module));
+                        Utils::info(&crate::i18n::tr_fmt(
+                            "repo.selected_module",
+                            &[&selected_module],
+                        ));
                         // Now fetch the details for the selected module
                         let md = fetch_module_detail(&client, &selected_module, &base)?;
                         // Continue with the download process using the selected module
                         process_module_download(&md, &selected_module, &client, assume_yes)?;
                         continue; // Skip to the next target
                     } else {
-                        Utils::info("Skipped selection.");
+                        Utils::info(crate::i18n::tr_key("repo.skipped_selection"));
                         continue;
                     }
                 }
@@ -223,10 +232,10 @@ pub fn handle_pacman_style(
 
 /// Helper function to process module download with asset selection and confirmation
 fn process_module_download(
-    md: &ModuleDetail, 
-    module_id: &str, 
-    client: &Client, 
-    assume_yes: bool
+    md: &ModuleDetail,
+    module_id: &str,
+    client: &Client,
+    assume_yes: bool,
 ) -> Result<(), KamError> {
     // Select an asset (first zip-like asset in releases)
     let mut chosen_asset: Option<(&Asset, &str)> = None; // (asset, release_name)
@@ -255,9 +264,9 @@ fn process_module_download(
     let (asset, release_label) = match chosen_asset {
         Some((a, rname)) => (a, rname),
         None => {
-            Utils::warn(&format!(
-                "No downloadable zip asset found for module {}",
-                module_id
+            Utils::warn(&crate::i18n::tr_fmt(
+                "repo.no_downloadable_zip_asset",
+                &[&module_id],
             ));
             return Ok(());
         }
@@ -269,28 +278,41 @@ fn process_module_download(
         .map(|s| format!(" ({})", format_size(s)))
         .unwrap_or_default();
     println!(
-        "Module: {} - {}",
-        module_id,
-        md.module_name.as_deref().unwrap_or("")
+        "{}",
+        crate::i18n::tr_fmt(
+            "repo.module_detail.title",
+            &[&module_id, &md.module_name.as_deref().unwrap_or("")]
+        )
     );
-    println!("Release: {}", release_label);
-    println!("Asset: {}{}", asset.name, size_str);
-    println!("Download URL: {}", asset.download_url);
+    println!(
+        "{}",
+        crate::i18n::tr_fmt("repo.module_detail.release", &[&release_label])
+    );
+    println!(
+        "{}",
+        crate::i18n::tr_fmt("repo.module_detail.asset", &[&asset.name, &size_str])
+    );
+    println!(
+        "{}",
+        crate::i18n::tr_fmt("repo.module_detail.download_url", &[&asset.download_url])
+    );
 
     let confirmed = if assume_yes {
         true
     } else {
         print!(
-            "Confirm download '{}' [{}] ? [Y/n] ",
-            module_id, asset.name
+            "{}",
+            crate::i18n::tr_fmt("repo.confirm_download", &[&module_id, &asset.name])
         );
         stdout().flush().map_err(KamError::Io)?;
         let mut input = String::new();
         stdin().read_line(&mut input).map_err(KamError::Io)?;
         let input_trimmed = input.trim();
-        let ok = input_trimmed.is_empty() || input_trimmed.to_lowercase() == "y" || input_trimmed.to_lowercase() == "yes";
+        let ok = input_trimmed.is_empty()
+            || input_trimmed.to_lowercase() == "y"
+            || input_trimmed.to_lowercase() == "yes";
         if !ok {
-            Utils::warn(&format!("Skipped download: {}", module_id));
+            Utils::warn(&crate::i18n::tr_fmt("repo.skipped_download", &[&module_id]));
         }
         ok
     };
@@ -302,10 +324,16 @@ fn process_module_download(
     // Proceed to download
     match download_asset(client, asset, None) {
         Ok(path) => {
-            Utils::success(&format!("Saved: {}", path.display()));
+            Utils::success(&crate::i18n::tr_fmt(
+                "repo.saved",
+                &[&path.display().to_string()],
+            ));
         }
         Err(e) => {
-            Utils::error(&format!("Failed to download {}: {}", module_id, e));
+            Utils::error(&crate::i18n::tr_fmt(
+                "repo.failed_to_download",
+                &[&module_id, &e.to_string()],
+            ));
         }
     }
 
@@ -566,7 +594,7 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
     }
 
     if scored.is_empty() {
-        Utils::warn(&format!("No results found for '{}'.", query));
+        Utils::warn(&crate::i18n::tr_fmt("repo.no_results_for", &[&query]));
         return Ok(());
     }
 
@@ -575,26 +603,24 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
 
     // Print top results
     for (score, e) in scored.iter().take(50) {
+        let desc = e.description.as_deref().unwrap_or("");
+        let score_suffix = if (*score - 1.0).abs() > f64::EPSILON {
+            crate::i18n::tr_fmt("repo.score_format", &[&format!("{:.2}", score)])
+        } else {
+            "".to_string()
+        };
         println!(
-            "{} - {}{}",
-            e.name,
-            e.description.as_deref().unwrap_or(""),
-            {
-                if (*score - 1.0).abs() > f64::EPSILON {
-                    format!("  (score: {:.2})", score)
-                } else {
-                    "".to_string()
-                }
-            }
+            "{}",
+            crate::i18n::tr_fmt("repo.result_line_simple", &[&e.name, &desc, &score_suffix])
         );
         if let Some(s) = &e.summary {
             println!("    {}", s);
         }
         if let Some(a) = &e.authors {
-            println!("    authors: {}", a);
+            println!("    {}: {}", crate::i18n::tr_key("repo.authors"), a);
         }
         if let Some(u) = &e.url {
-            println!("    url: {}", u);
+            println!("    {}: {}", crate::i18n::tr_key("repo.url"), u);
         }
         println!();
     }
@@ -603,7 +629,10 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
 }
 
 /// Search the remote catalog and allow interactive selection of results
-pub(crate) fn search_remote_interactive(query: &str, base_url: &str) -> Result<Option<String>, KamError> {
+pub(crate) fn search_remote_interactive(
+    query: &str,
+    base_url: &str,
+) -> Result<Option<String>, KamError> {
     let client = Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
@@ -656,13 +685,14 @@ pub(crate) fn search_remote_interactive(query: &str, base_url: &str) -> Result<O
         let score = token_ratio.max(sim_max);
 
         // threshold for fuzzy match
-        if score >= 0.30 { // Lower threshold to show more results for selection
+        if score >= 0.30 {
+            // Lower threshold to show more results for selection
             scored.push((score, e));
         }
     }
 
     if scored.is_empty() {
-        Utils::warn(&format!("No results found for '{}'.", query));
+        Utils::warn(&crate::i18n::tr_fmt("repo.no_results_for", &[&query]));
         return Ok(None);
     }
 
@@ -670,36 +700,43 @@ pub(crate) fn search_remote_interactive(query: &str, base_url: &str) -> Result<O
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
     // Print numbered results
-    println!("There are {} similar packages to '{}':", scored.len(), query);
+    println!(
+        "{}",
+        crate::i18n::tr_fmt(
+            "repo.similar_packages_header",
+            &[&scored.len().to_string(), &query]
+        )
+    );
     println!();
-    for (i, (score, e)) in scored.iter().take(20).enumerate() {  // Show up to 20 results
+    for (i, (score, e)) in scored.iter().take(20).enumerate() {
+        // Show up to 20 results
+        let desc = e.description.as_deref().unwrap_or("");
+        let score_suffix = if (*score - 1.0).abs() > f64::EPSILON {
+            crate::i18n::tr_fmt("repo.score_format", &[&format!("{:.2}", score)])
+        } else {
+            "".to_string()
+        };
         println!(
-            "{} - {} - {}{}",
-            (i + 1),
-            e.name,
-            e.description.as_deref().unwrap_or(""),
-            {
-                if (*score - 1.0).abs() > f64::EPSILON {
-                    format!("  (score: {:.2})", score)
-                } else {
-                    "".to_string()
-                }
-            }
+            "{}",
+            crate::i18n::tr_fmt(
+                "repo.result_line",
+                &[&(i + 1).to_string(), &e.name, &desc, &score_suffix]
+            )
         );
         if let Some(s) = &e.summary {
             println!("    {}", s);
         }
         if let Some(a) = &e.authors {
-            println!("    authors: {}", a);
+            println!("    {}: {}", crate::i18n::tr_key("repo.authors"), a);
         }
         if let Some(u) = &e.url {
-            println!("    url: {}", u);
+            println!("    {}: {}", crate::i18n::tr_key("repo.url"), u);
         }
         println!();
     }
 
     // Ask user to select
-    print!("Enter the number of the package to install (or press Enter to skip): ");
+    print!("{}", crate::i18n::tr_key("repo.prompt.enter_number"));
     stdout().flush().map_err(KamError::Io)?;
     let mut input = String::new();
     stdin().read_line(&mut input).map_err(KamError::Io)?;
@@ -715,11 +752,11 @@ pub(crate) fn search_remote_interactive(query: &str, base_url: &str) -> Result<O
             Ok(Some(selected.name.clone()))
         }
         Ok(_) => {
-            Utils::warn("Invalid selection. Number out of range.");
+            Utils::warn(crate::i18n::tr_key("repo.invalid_selection_out_of_range"));
             Ok(None)
         }
         Err(_) => {
-            Utils::warn("Invalid input. Please enter a number.");
+            Utils::warn(crate::i18n::tr_key("repo.invalid_input_number"));
             Ok(None)
         }
     }

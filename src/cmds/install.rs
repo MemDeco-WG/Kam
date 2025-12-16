@@ -17,7 +17,7 @@ use clap::Args;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
 /// CLI arguments for `kam install`
@@ -264,10 +264,16 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
                     if !args.quiet {
                         Utils::info(&trf!("Attempting to execute via 'su -c': {}", cmd_str));
                     }
-                    match Command::new("su").arg("-c").arg(cmd_str).output() {
-                        Ok(su_out) => {
-                            Utils::print_cmd_output(&su_out.stdout, &su_out.stderr);
-                            if su_out.status.success() {
+                    match Command::new("su")
+                        .arg("-c")
+                        .arg(cmd_str)
+                        .stdin(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .stderr(Stdio::inherit())
+                        .status()
+                    {
+                        Ok(status) => {
+                            if status.success() {
                                 if !args.quiet {
                                     Utils::success(&trf!(
                                         "Installed {} via {}",
@@ -278,8 +284,8 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
                                 Ok(())
                             } else {
                                 Err(KamError::CommandFailed(trf!(
-                                    "Privilege escalation via 'su' failed: {}",
-                                    String::from_utf8_lossy(&su_out.stderr)
+                                    "Privilege escalation via 'su' failed with status: {:?}",
+                                    status
                                 )))
                             }
                         }
@@ -316,10 +322,16 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
                     if !args.quiet {
                         Utils::info(&trf!("install.trying_su", cmd_str));
                     }
-                    match Command::new("su").arg("-c").arg(cmd_str).output() {
-                        Ok(su_out) => {
-                            Utils::print_cmd_output(&su_out.stdout, &su_out.stderr);
-                            if su_out.status.success() {
+                    match Command::new("su")
+                        .arg("-c")
+                        .arg(cmd_str)
+                        .stdin(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .stderr(Stdio::inherit())
+                        .status()
+                    {
+                        Ok(status) => {
+                            if status.success() {
                                 if !args.quiet {
                                     Utils::success(&trf!(
                                         "install.installed",
@@ -331,7 +343,7 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
                             } else {
                                 Err(KamError::CommandFailed(trf!(
                                     "install.su_failed",
-                                    String::from_utf8_lossy(&su_out.stderr)
+                                    format!("exit status: {:?}", status)
                                 )))
                             }
                         }

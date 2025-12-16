@@ -129,7 +129,52 @@ fn main() {
 
     // Parse using the localized Command so help output is translated.
     // Use a cloned `cmd` so we can still reference the original for printing help later.
-    let matches = cmd.clone().get_matches();
+    //
+    // Heuristic: when `-S`/`-s` is used and the next token looks like a target
+    // (not an option and not a real subcommand) automatically insert `--` so
+    // `kam -S <target>` works without the user having to type `--`.
+    let matches = {
+        // Collect argv and attempt to inject `--` after -S/-s when appropriate.
+        let mut args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+
+        // If the user already supplied `--` we don't touch the args.
+        if !args.iter().any(|a| a == &std::ffi::OsString::from("--")) {
+            // Build a set of known subcommand names so we don't insert `--`
+            // before a legitimate subcommand.
+            let sub_names: std::collections::HashSet<String> = cmd
+                .get_subcommands()
+                .map(|s| s.get_name().to_string())
+                .collect();
+
+            // Look for -S/-s (or common short-combos like -Ss) tokens and, if the
+            // immediate next token exists and is not an option and not a subcommand,
+            // insert `--` before it.
+            for i in 1..args.len() {
+                if let Some(tok) = args[i].to_str() {
+                    if tok == "-S"
+                        || tok == "-s"
+                        || tok == "-Ss"
+                        || tok == "-sS"
+                        || tok == "--sync"
+                        || tok == "--search"
+                    {
+                        if i + 1 < args.len() {
+                            if let Some(next) = args[i + 1].to_str() {
+                                if !next.starts_with('-') && !sub_names.contains(next) {
+                                    args.insert(i + 1, std::ffi::OsString::from("--"));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Parse from the (possibly modified) argv list so clap receives the `--`
+        // we've injected when appropriate.
+        cmd.clone().get_matches_from(args)
+    };
 
     // Convert ArgMatches to typed `Cli` (handling parse errors).
     let cli = match Cli::from_arg_matches(&matches) {

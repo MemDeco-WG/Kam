@@ -30,6 +30,10 @@ pub struct Cli {
     #[arg(short = 'y', long = "yes", action = clap::ArgAction::SetTrue, global = true)]
     pub assume_yes: bool,
 
+    /// Update (refresh) the modules registry index before sync/download (equivalent to `kam repo sync --force`). Use `-u` or `--update` to enable.
+    #[arg(short = 'u', long = "update", action = clap::ArgAction::SetTrue, global = true)]
+    pub update_index: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

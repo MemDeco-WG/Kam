@@ -1,10 +1,10 @@
 [prop]
 id = "Kam"
 name = "Kam"
-version = "v0.5.3"
+version = "v0.5.4"
 versionCode = 1765849221749
 author = "LightJunction"
-description = "Kam — A CLI toolkit for scaffolding, building, and distributing ksu/APU/Magisk/AnyTemplate modules"
+description = "This is a Example Module！ Do not install it!"
 updateJson = "https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json"
 metamodule = false
 

@@ -44,6 +44,36 @@ removed = "已删除 {}"
 removed_module_cache = "已删除模块缓存：{}"
 no_matching_cache_file = "未找到匹配的缓存文件：'{}'"
 
+# 模块搜索 / 下载相关的本地化消息 (用于 `kam -S / -s` 的交互)
+[repo]
+download = "下载：{}"
+module_not_found_showing_similar = "模块 '{}' 未找到。显示类似的模块："
+selected_module = "已选择模块：{}"
+skipped_selection = "已跳过选择。"
+no_results_for = "未找到与 '{}' 相关的结果。"
+similar_packages_header = "共有 {} 个与 '{}' 类似的软件包："
+authors = "作者"
+url = "网址"
+no_downloadable_zip_asset = "未找到模块 {} 的可下载 zip 资源"
+confirm_download = "确认下载 '{}' [{}] ? [Y/n] "
+skipped_download = "已跳过下载：{}"
+saved = "已保存：{}"
+failed_to_download = "下载失败 {}: {}"
+score_format = "  (得分：{:.2})"
+result_line_simple = "{} - {}{}"
+result_line = "{} - {} - {}{}"
+
+[repo.module_detail]
+title = "模块：{} - {}"
+release = "发行：{}"
+asset = "资源：{}{}"
+download_url = "下载 URL：{}"
+
+[repo.prompt]
+enter_number = "输入要安装的包的编号（或按回车跳过）："
+invalid_selection_out_of_range = "选择无效。编号超出范围。"
+invalid_input_number = "输入无效。请输入一个数字。"
+
 [check]
 no_issues_found = "未发现问题。"
 some_issues_found = "发现问题。"

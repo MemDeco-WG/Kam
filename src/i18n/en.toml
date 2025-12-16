@@ -44,6 +44,35 @@ removed = "Removed {}"
 removed_module_cache = "Removed module cache: {}"
 no_matching_cache_file = "No matching cache file found for '{}'"
 
+[repo]
+download = "Download: {}"
+module_not_found_showing_similar = "Module '{}' not found. Showing similar modules:"
+selected_module = "Selected module: {}"
+skipped_selection = "Skipped selection."
+no_results_for = "No results found for '{}'."
+similar_packages_header = "There are {} similar packages to '{}':"
+authors = "authors"
+url = "url"
+no_downloadable_zip_asset = "No downloadable zip asset found for module {}"
+confirm_download = "Confirm download '{}' [{}] ? [Y/n] "
+skipped_download = "Skipped download: {}"
+saved = "Saved: {}"
+failed_to_download = "Failed to download {}: {}"
+score_format = "  (score: {:.2})"
+result_line_simple = "{} - {}{}"
+result_line = "{} - {} - {}{}"
+
+[repo.module_detail]
+title = "Module: {} - {}"
+release = "Release: {}"
+asset = "Asset: {}{}"
+download_url = "Download URL: {}"
+
+[repo.prompt]
+enter_number = "Enter the number of the package to install (or press Enter to skip): "
+invalid_selection_out_of_range = "Invalid selection. Number out of range."
+invalid_input_number = "Invalid input. Please enter a number."
+
 [check]
 no_issues_found = "No issues found."
 some_issues_found = "Some issues found."
