@@ -1,8 +1,8 @@
 [prop]
 id = "Kam"
 name = "Kam"
-version = "v0.5.4"
-versionCode = 1765849221749
+version = "v0.5.6"
+versionCode = 1765889949500
 author = "LightJunction"
 description = "This is a Example Module！ Do not install it!"
 updateJson = "https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json"
