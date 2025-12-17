@@ -231,6 +231,44 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     // Collect files while respecting .gitignore and our skip list
     let files = collect_project_files(project_path, &skip_dirs, is_kam_project);
 
+    // 如果检测到 shell 脚本文件，确保 shellcheck 已安装并可执行；否则直接报错
+    let mut has_sh = false;
+    for p in &files {
+        let path = p.as_path();
+        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+            match ext.to_lowercase().as_str() {
+                "sh" | "bash" => {
+                    has_sh = true;
+                    break;
+                }
+                _ => {}
+            }
+        } else if let Ok(mut f) = std::fs::File::open(path) {
+            let mut buf = [0u8; 256];
+            if let Ok(n) = f.read(&mut buf) {
+                let header = String::from_utf8_lossy(&buf[..n]).to_lowercase();
+                if header.starts_with("#!")
+                    && (header.contains("sh")
+                        || header.contains("bash")
+                        || header.contains("dash")
+                        || header.contains("env sh")
+                        || header.contains("env bash"))
+                {
+                    has_sh = true;
+                    break;
+                }
+            }
+        }
+    }
+    if has_sh
+        && std::process::Command::new("shellcheck")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return Err(KamError::ShellcheckMissing);
+        }
+
     // 文件总数（包含已单独检查的 kam.toml）
     let mut total_files: usize = files.len();
     if is_kam_project {
@@ -382,6 +420,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::fs::File;
     use tempfile::tempdir;
 
@@ -400,6 +439,46 @@ mod tests {
         // Run
         let result = run(args);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn error_when_shell_scripts_present_and_shellcheck_missing() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("script.sh");
+        let mut f = File::create(&path).unwrap();
+        writeln!(f, "#!/bin/sh").unwrap();
+        writeln!(f, "echo hi").unwrap();
+
+        // Temporarily clear PATH to ensure shellcheck isn't found.
+        let old_path = std::env::var("PATH").ok();
+        unsafe {
+            std::env::set_var("PATH", "");
+        }
+
+        let args = CheckArgs {
+            path: dir.path().to_string_lossy().to_string(),
+            json: true,
+            verbose: false,
+            fix: false,
+        };
+
+        let res = run(args);
+
+        // Restore PATH
+        if let Some(p) = old_path {
+            unsafe {
+                std::env::set_var("PATH", p);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("PATH");
+            }
+        }
+
+        assert!(res.is_err());
+        let err = format!("{}", res.unwrap_err());
+        assert!(err.contains("请安装shellcheck"));
     }
 
     #[test]

@@ -1,5 +1,4 @@
-#!/system/bin/sh
-#
+# shellcheck shell=ash
 # service.sh
 #
 # This script runs in the "late_start service" stage of the boot process.
@@ -22,19 +21,5 @@
 # - Waiting for specific system properties (like sys.boot_completed).
 #
 # ---------------------------------------------------------------------------------------
-
 MODDIR=${0%/*}
-
-# Example: Log execution
-# echo "Executing service.sh for $KSU_MODULE" > /dev/kmsg
-
-# Example: Wait for boot to complete
-# until [ "$(getprop sys.boot_completed)" = "1" ]; do
-#     sleep 1
-# done
-
-# Example: Start a background process
-# nohup "$MODDIR/my_daemon" > /dev/null 2>&1 &
-
-# Example: Apply settings that need to happen late
-# resetprop my.late.prop value
+[ -f "$MODDIR/lib/kam-utils.sh" ] && . "$MODDIR/lib/kam-utils.sh" || abort '! File "kam-utils.sh" does not exist!'

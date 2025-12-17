@@ -15,13 +15,16 @@ Notes:
 use crate::errors::KamError;
 use crate::utils::Utils;
 use clap::{Args, Subcommand};
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
 use reqwest::header::USER_AGENT;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{Read, Write, stdin, stdout};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use std::time::Duration;
 
 const BASE_URL: &str = "https://modules.kernelsu.org";
@@ -64,6 +67,11 @@ pub struct SyncArgs {
     /// Force refresh even if cached
     #[arg(long = "force")]
     pub force: bool,
+
+    /// Number of concurrent module index fetch jobs (overrides env KAM_REPO_CONCURRENCY)
+    #[arg(short = 'j', long = "jobs", value_name = "N")]
+    pub jobs: Option<usize>,
+
     /// Optional modules registry base url (override)
     #[arg(long = "modules-url", value_name = "URL")]
     pub modules_url: Option<String>,
@@ -79,7 +87,8 @@ pub fn run(args: RepoArgs) -> Result<(), KamError> {
                 .as_deref()
                 .or(args.modules_url.as_deref()),
         );
-        return repo_sync(&base, sync_args.force);
+        // Use the CLI-provided jobs value (if any) to control concurrency for this sync.
+        return repo_sync_with_jobs(&base, sync_args.force, sync_args.jobs);
     }
 
     // fallback to existing pacman-style handling (-S / -s)
@@ -509,15 +518,21 @@ fn resolve_entry_url(base_url: &str, url: &str) -> String {
     format!("{}/{}", base_url.trim_end_matches('/'), u)
 }
 
-pub fn repo_sync(base_url: &str, force: bool) -> Result<(), KamError> {
+pub fn repo_sync_with_jobs(
+    base_url: &str,
+    force: bool,
+    jobs: Option<usize>,
+) -> Result<(), KamError> {
     // Always attempt to fetch the latest index from the remote and write it to cache.
+    // `jobs` overrides env var and default parallelism to control number of worker threads.
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
 
+    let op_start = std::time::Instant::now();
     let url = format!("{}{}", base_url, SEARCH_INDEX_PATH);
-    let resp = client
+    let mut resp = client
         .get(&url)
         .header(USER_AGENT, "kam/repo-sync")
         .send()
@@ -531,9 +546,35 @@ pub fn repo_sync(base_url: &str, force: bool) -> Result<(), KamError> {
         )));
     }
 
-    let body = resp
-        .text()
-        .map_err(|e| KamError::FetchFailed(format!("Failed to read {} body: {}", url, e)))?;
+    // Show a progress indicator while fetching the master index
+    let index_len = resp.content_length();
+    let index_pb = match index_len {
+        Some(len) => ProgressBar::new(len),
+        None => ProgressBar::new_spinner(),
+    };
+    index_pb.set_style(
+        ProgressStyle::with_template("{spinner} Fetching index {bytes}/{total_bytes} ({eta})")
+            .unwrap_or_else(|_| ProgressStyle::default_bar()),
+    );
+    index_pb.enable_steady_tick(Duration::from_millis(100));
+
+    // Read the response body in chunks so the progress bar moves
+    let mut buf: Vec<u8> = Vec::new();
+    let mut tmp = [0u8; 8 * 1024];
+    loop {
+        let n = resp
+            .read(&mut tmp)
+            .map_err(|e| KamError::FetchFailed(format!("Failed to read {} body: {}", url, e)))?;
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&tmp[..n]);
+        index_pb.inc(n as u64);
+    }
+    index_pb.finish();
+
+    let body = String::from_utf8(buf)
+        .map_err(|e| KamError::Json(format!("Failed to parse {} body as UTF-8: {}", url, e)))?;
 
     let path = index_cache_path(base_url)?;
     write_atomic(&path, &body)?;
@@ -547,6 +588,254 @@ pub fn repo_sync(base_url: &str, force: bool) -> Result<(), KamError> {
     } else {
         Utils::success(&format!("Index synced to {}", path.display()));
     }
+
+    // Parse the index and, if present, attempt to fetch each module's individual index with per-module progress
+    let entries: Vec<SearchEntry> = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(KamError::Json(format!(
+                "Failed to parse {} JSON: {}",
+                url, e
+            )));
+        }
+    };
+
+    if entries.is_empty() {
+        return Ok(());
+    }
+    // Report how long it took to resolve the index into module entries
+    let duration_ms = op_start.elapsed().as_millis();
+    Utils::info(&format!(
+        "Resolved {} modules in {}ms",
+        entries.len(),
+        duration_ms
+    ));
+
+    // MultiProgress will nicely render the master spinner above per-module bars.
+    let mp = MultiProgress::new();
+    let top_pb = mp.add(ProgressBar::new_spinner());
+    top_pb.set_style(
+        ProgressStyle::with_template("{spinner} Preparing modules... ({pos}/{len})")
+            .unwrap_or_else(|_| ProgressStyle::default_bar()),
+    );
+    top_pb.set_length(entries.len() as u64);
+    top_pb.enable_steady_tick(Duration::from_millis(80));
+
+    // Build per-module progress bars and a list of fetch tasks; cached modules are shown immediately,
+    // but limit visible items to MAX_VISIBLE (20). If nothing needs fetching, show 'Everything up to date'.
+    const MAX_VISIBLE: usize = 20;
+
+    // Count how many modules actually need fetching (not cached or forced)
+    let mut need_fetch_count: usize = 0;
+    for e in entries.iter() {
+        let module_cache = module_cache_path(&e.name);
+        if let Ok(p) = &module_cache
+            && !force
+            && p.exists()
+        {
+            continue;
+        }
+        need_fetch_count += 1;
+    }
+
+    // If nothing requires network fetch, show a concise 'Everything up to date' and return.
+    if need_fetch_count == 0 {
+        Utils::success("everything up to date");
+        top_pb.finish_with_message("everything up to date");
+        return Ok(());
+    }
+
+    // Prepare up to MAX_VISIBLE visible bars; subsequent modules are kept hidden (no visual).
+    // Determine number of workers (CLI `--jobs` > env `KAM_REPO_CONCURRENCY` > default=core count).
+    let default_workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let mut num_workers = match jobs {
+        Some(j) if j > 0 => j,
+        _ => std::env::var("KAM_REPO_CONCURRENCY")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(default_workers),
+    };
+    // Don't spawn more workers than modules
+    num_workers = std::cmp::min(num_workers, entries.len());
+    let display_limit = num_workers;
+
+    // Build per-module progress bars and a list of fetch tasks; visible entries limited to `display_limit`.
+    let mut tasks: Vec<(String, String, PathBuf, ProgressBar)> = Vec::with_capacity(entries.len());
+    let mut visible_cnt: usize = 0;
+    let updated_count = Arc::new(AtomicUsize::new(0));
+
+    for e in entries.iter() {
+        let module_id = e.name.clone();
+        let module_cache = module_cache_path(&module_id);
+
+        // Decide whether to skip fetching (cached & not forcing)
+        let cached = matches!((&module_cache, force), (Ok(p), false) if p.exists());
+
+        if visible_cnt < display_limit {
+            // visible progress bar
+            let pb = mp.add(ProgressBar::new_spinner());
+            pb.set_style(
+                ProgressStyle::with_template("{msg:20} {bar:40.cyan/blue} {bytes}/{total_bytes}")
+                    .unwrap_or_else(|_| ProgressStyle::default_bar()),
+            );
+            pb.set_message(format!("{:20}", module_id));
+
+            if cached {
+                // show cached as full bar immediately
+                pb.set_length(1);
+                pb.set_position(1);
+                pb.finish_with_message(format!("{:20} (cached)", module_id));
+                visible_cnt += 1;
+                top_pb.inc(1);
+                continue;
+            }
+
+            // needs fetch - add as visible task
+            let murl = format!("{}{}{}.json", base_url, MODULE_JSON_PREFIX, module_id);
+            if let Ok(p) = module_cache {
+                tasks.push((module_id, murl, p, pb));
+            } else {
+                // if we couldn't compute cache path, mark as done
+                pb.finish_with_message(format!("{:20}", module_id));
+                top_pb.inc(1);
+            }
+            visible_cnt += 1;
+        } else {
+            // hidden (not displayed) modules
+            if cached {
+                top_pb.inc(1);
+            } else {
+                // fetch but hide progress bar
+                let pb = ProgressBar::hidden();
+                let murl = format!("{}{}{}.json", base_url, MODULE_JSON_PREFIX, module_id);
+                if let Ok(p) = module_cache {
+                    tasks.push((module_id, murl, p, pb));
+                } else {
+                    top_pb.inc(1);
+                }
+            }
+        }
+    }
+
+    // Dispatch tasks to worker threads using a channel-backed thread-pool (dynamic scheduling).
+    if !tasks.is_empty() {
+        // `num_workers` was determined earlier and equals the visible count; ensure at least 1 worker
+        let num_workers = std::cmp::max(1, visible_cnt.min(entries.len()));
+
+        // Send all tasks into a channel consumed by workers (dynamic work-stealing via channel clones)
+        let (tx, rx) = crossbeam_channel::unbounded::<(String, String, PathBuf, ProgressBar)>();
+        for t in tasks.into_iter() {
+            let _ = tx.send(t);
+        }
+        // Close the sender to signal workers when done
+        drop(tx);
+
+        // Spawn exactly `num_workers` worker threads (one per visible slot), each consuming from the receiver.
+        let mut handles = Vec::new();
+        for _ in 0..num_workers {
+            let rx_clone = rx.clone();
+            let client_clone = client.clone();
+            let top = top_pb.clone();
+            let updated = Arc::clone(&updated_count);
+            let handle = std::thread::spawn(move || {
+                while let Ok((module_id, murl, ppath, pb)) = rx_clone.recv() {
+                    // Defensive check: if cache exists and not forcing, treat as cached
+                    if ppath.exists() && !force {
+                        pb.finish_with_message(format!("{:20} (cached)", module_id));
+                        top.inc(1);
+                        continue;
+                    }
+
+                    match client_clone
+                        .get(&murl)
+                        .header(USER_AGENT, "kam/repo-sync-module")
+                        .send()
+                    {
+                        Ok(mut r) => {
+                            if !r.status().is_success() {
+                                Utils::warn(&format!("{} returned status {}", murl, r.status()));
+                                pb.finish_with_message(format!("{:20} (failed)", module_id));
+                                top.inc(1);
+                                continue;
+                            }
+                            if let Some(len) = r.content_length() {
+                                pb.set_length(len);
+                            }
+
+                            let mut mbuf: Vec<u8> = Vec::new();
+                            let mut tmp2 = [0u8; 8 * 1024];
+                            loop {
+                                match r.read(&mut tmp2) {
+                                    Ok(n) if n > 0 => {
+                                        mbuf.extend_from_slice(&tmp2[..n]);
+                                        pb.inc(n as u64);
+                                    }
+                                    Ok(_) => break,
+                                    Err(e) => {
+                                        Utils::warn(&format!(
+                                            "Failed to read {} body: {}",
+                                            murl, e
+                                        ));
+                                        pb.finish_with_message(format!(
+                                            "{:20} (failed)",
+                                            module_id
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Validate and write cache atomically
+                            match String::from_utf8(mbuf) {
+                                Ok(s) => {
+                                    if let Err(e) = write_atomic(&ppath, &s) {
+                                        Utils::warn(&format!(
+                                            "Failed to write cache {}: {}",
+                                            module_id, e
+                                        ));
+                                        pb.finish_with_message(format!(
+                                            "{:20} (failed)",
+                                            module_id
+                                        ));
+                                    } else {
+                                        updated.fetch_add(1, Ordering::SeqCst);
+                                        pb.finish_with_message(format!("{:20}", module_id));
+                                    }
+                                }
+                                Err(_) => {
+                                    Utils::warn(&format!("Failed to parse {} body as UTF-8", murl));
+                                    pb.finish_with_message(format!("{:20} (invalid)", module_id));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            Utils::warn(&format!("GET {} failed: {}", murl, e));
+                            pb.finish_with_message(format!("{:20} (failed)", module_id));
+                        }
+                    }
+
+                    top.inc(1);
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all workers to finish
+        for h in handles {
+            let _ = h.join();
+        }
+    }
+
+    // If the workers did not actually update anything, tell the user that everything is up to date.
+    let updated_total = updated_count.load(Ordering::SeqCst);
+    if updated_total == 0 {
+        Utils::info("everything up to date");
+    }
+
+    top_pb.finish();
     Ok(())
 }
 
@@ -640,34 +929,30 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
         }
 
         // Try to fetch module details for the top few results to show version/time info
-        if i < 5 {
-            if let Ok(md) = fetch_module_detail(&client, &e.name, base_url) {
-                // Version
-                if let Some(lr) = md.latest_release.as_deref() {
-                    println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
-                } else if let Some(rels) = md.releases.as_ref() {
-                    if let Some(first) = rels.get(0) {
-                        if let Some(v) = first.version.as_deref().or(first.name.as_deref()) {
-                            println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
-                        }
+        if i < 5
+            && let Ok(md) = fetch_module_detail(&client, &e.name, base_url)
+        {
+            // Version
+            if let Some(lr) = md.latest_release.as_deref() {
+                println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
+            } else if let Some(rels) = md.releases.as_ref()
+                && let Some(first) = rels.first()
+                    && let Some(v) = first.version.as_deref().or(first.name.as_deref()) {
+                        println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
                     }
-                }
-                // Time
-                if let Some(lt) = md.latest_release_time.as_deref() {
-                    println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
-                } else if let Some(rels) = md.releases.as_ref() {
-                    if let Some(first) = rels.get(0) {
-                        if let Some(pub_at) = first
-                            .published_at
-                            .as_deref()
-                            .or(first.updated_at.as_deref())
-                            .or(first.created_at.as_deref())
-                        {
-                            println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
-                        }
+            // Time
+            if let Some(lt) = md.latest_release_time.as_deref() {
+                println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
+            } else if let Some(rels) = md.releases.as_ref()
+                && let Some(first) = rels.first()
+                    && let Some(pub_at) = first
+                        .published_at
+                        .as_deref()
+                        .or(first.updated_at.as_deref())
+                        .or(first.created_at.as_deref())
+                    {
+                        println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
                     }
-                }
-            }
         }
 
         println!();
@@ -783,22 +1068,20 @@ pub(crate) fn search_remote_interactive(
         }
 
         // Try to fetch module details for the top few results to show version/time info
-        if i < 5 {
-            if let Ok(md) = fetch_module_detail(&client, &e.name, base_url) {
+        if i < 5
+            && let Ok(md) = fetch_module_detail(&client, &e.name, base_url) {
                 if let Some(lr) = md.latest_release.as_deref() {
                     println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
-                } else if let Some(rels) = md.releases.as_ref() {
-                    if let Some(first) = rels.get(0) {
-                        if let Some(v) = first.version.as_deref().or(first.name.as_deref()) {
+                } else if let Some(rels) = md.releases.as_ref()
+                    && let Some(first) = rels.first()
+                        && let Some(v) = first.version.as_deref().or(first.name.as_deref()) {
                             println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
                         }
-                    }
-                }
                 if let Some(lt) = md.latest_release_time.as_deref() {
                     println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
-                } else if let Some(rels) = md.releases.as_ref() {
-                    if let Some(first) = rels.get(0) {
-                        if let Some(pub_at) = first
+                } else if let Some(rels) = md.releases.as_ref()
+                    && let Some(first) = rels.first()
+                        && let Some(pub_at) = first
                             .published_at
                             .as_deref()
                             .or(first.updated_at.as_deref())
@@ -806,10 +1089,7 @@ pub(crate) fn search_remote_interactive(
                         {
                             println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
                         }
-                    }
-                }
             }
-        }
 
         println!();
     }
@@ -906,7 +1186,7 @@ fn format_size(bytes: u64) -> String {
 /// 2) `KAM_MODULES_URL` environment variable
 /// 3) `~/.kam/config.toml` -> `[modules] base_url = "..."`
 /// 4) default builtin URL
-fn effective_base_url(override_url: Option<&str>) -> String {
+pub fn effective_base_url(override_url: Option<&str>) -> String {
     if let Some(u) = override_url
         && !u.trim().is_empty()
     {
@@ -1330,6 +1610,20 @@ mod tests {
             Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
                 Some(RepoCommand::Sync(sync_args)) => {
                     assert_eq!(sync_args.modules_url.as_deref(), Some(url));
+                }
+                _ => panic!("expected RepoCommand::Sync"),
+            },
+            _ => panic!("expected Commands::Repo"),
+        }
+    }
+
+    #[test]
+    fn test_parsing_repo_sync_jobs_sets_jobs() {
+        let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync", "--jobs", "4"]);
+        match cli.command {
+            Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
+                Some(RepoCommand::Sync(sync_args)) => {
+                    assert_eq!(sync_args.jobs, Some(4));
                 }
                 _ => panic!("expected RepoCommand::Sync"),
             },

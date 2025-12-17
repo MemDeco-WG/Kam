@@ -271,14 +271,9 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
                     if !args.quiet {
                         Utils::info(&trf!("Attempting to execute via 'su -c': {}", cmd_str));
                     }
-                    match Command::new("su")
-                        .arg("-c")
-                        .arg(cmd_str)
-                        .stdin(Stdio::inherit())
-                        .stdout(Stdio::inherit())
-                        .stderr(Stdio::inherit())
-                        .status()
-                    {
+                    let mut su_cmd = Command::new("su");
+                    su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
+                    match Utils::run_and_stream(su_cmd) {
                         Ok(status) => {
                             if status.success() {
                                 if !args.quiet {
@@ -329,14 +324,9 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
                     if !args.quiet {
                         Utils::info(&trf!("install.trying_su", cmd_str));
                     }
-                    match Command::new("su")
-                        .arg("-c")
-                        .arg(cmd_str)
-                        .stdin(Stdio::inherit())
-                        .stdout(Stdio::inherit())
-                        .stderr(Stdio::inherit())
-                        .status()
-                    {
+                    let mut su_cmd = Command::new("su");
+                    su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
+                    match Utils::run_and_stream(su_cmd) {
                         Ok(status) => {
                             if status.success() {
                                 if !args.quiet {

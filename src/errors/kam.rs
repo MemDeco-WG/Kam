@@ -25,6 +25,9 @@ pub enum KamError {
     #[error("Command failed: {0}")]
     CommandFailed(String),
 
+    #[error("请安装shellcheck")]
+    ShellcheckMissing,
+
     #[error("Invalid directory: {0}")]
     InvalidDirectory(String),
 

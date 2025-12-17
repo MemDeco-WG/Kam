@@ -32,4 +32,10 @@ pub struct CompletionArgs {
     /// Output file. If omitted, prints to STDOUT.
     #[arg(short, long)]
     pub out: Option<String>,
+
+    /// Install the generated completion into the standard shell completion directory.
+    /// When set, kam will attempt to write the generated completion into the
+    /// system- or user-level completion directory appropriate for the chosen shell.
+    #[arg(long = "install")]
+    pub install: bool,
 }

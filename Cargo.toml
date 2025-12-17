@@ -37,6 +37,7 @@ tree-sitter-bash = "0.25.1"
 walkdir = "2.3.3"
 x509-parser = "0.18.0"
 zip = "6.0.0"
+crossbeam-channel = "0.5"
 
 [dependencies.chrono]
 features = ["serde"]
@@ -125,4 +126,4 @@ keywords = [
 license = "GPL-3.0"
 name = "kam"
 repository = "https://github.com/MemDeco-WG/Kam"
-version = "0.5.12"
+version = "0.5.15"

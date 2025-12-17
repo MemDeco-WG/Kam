@@ -106,90 +106,11 @@
 # ---------------------------------------------------------------------------------------
 # CUSTOM INSTALLATION LOGIC
 # ---------------------------------------------------------------------------------------
-# ---------------------------------------------------------------------------------
-# Use Nga utils 👇
-# -----------------------------------------------------------------------------------
-# [ -f "$MODPATH/lib/nga-utils.sh" ] && . "$MODPATH/lib/nga-utils.sh" || abort '! File "nga-utils.sh" does not exist!'
-# nga_install_init # Don't write code before this line!
+[ -f "$MODPATH/lib/kam-utils.sh" ] && . "$MODPATH/lib/kam-utils.sh" || abort '! File "kam-utils.sh" does not exist!'
 
-# 🚨中文提示：如果需要启用nga-utils请取消以上注释
+kam_init
 
-# ---------------------------------------------------------------------------------
-# Use Nga utils 👆
-# -----------------------------------------------------------------------------------
+# 如果为 Magisk 环境，则用兼容模块把 boot 脚本转为 service 以兼容 Magisk
+boot2serviceif "magisk"
 
-
-ui_print "- Installing {{prop.name}}..."
-# Check environment
-if [ "$KSU" = "true" ]; then
-  ui_print "- Running in KernelSU environment"
-  ui_print "- KernelSU Version: $KSU_VER ($KSU_VER_CODE)"
-else
-  ui_print "- Running in Magisk/Other environment"
-fi
-
-# Example: Check Android Version
-# if [ "$API" -lt 26 ]; then
-#   abort "! Android 8.0+ required"
-# fi
-
-# Example: Check Architecture
-# if [ "$ARCH" != "arm64" ]; then
-#   abort "! Only arm64 is supported"
-# fi
-
-# If you have scripts, make them executable
-# set_perm "$MODPATH/service.sh" 0 0 0755
-# set_perm "$MODPATH/post-fs-data.sh" 0 0 0755
-# set_perm "$MODPATH/action.sh" 0 0 0755
-
-# 🚨中文提示：请记得安装脚本里面使用MODPATH环境变量
-
-# ---------------------------------------------------------------------------------------
-# FULL CONTROL (SKIPUNZIP)
-# ---------------------------------------------------------------------------------------
-# 🚨 不建议，开启后可以实现更加复杂的逻辑。
-# 比如：使用lib/verify.sh验证模块安装包
-#
-# If you want to handle extraction manually, uncomment the line below.
-# SKIPUNZIP=1
-#
-# If SKIPUNZIP=1 is set, you must extract files yourself:
-# unzip -o "$ZIPFILE" -x 'META-INF/*' -d "$MODPATH" >&2
-
-
-
-
-# ---------------------------------------------------------------------------------
-# 🔨code here
-
-# run2null echo "这句话将消失"
-# run22null echo "这句话不会消失" # 仅移除标准错误
-# echo $(until_key) # 输出按下的按键
-
-# 音量+	KEY_VOLUMEUP	up
-# 音量-	KEY_VOLUMEDOWN	down
-# 电源键	KEY_POWER	power
-# 静音键	KEY_MUTE	mute
-# 肩键等额外按键	KEY_FX	fX
-
-# echo $(until_key_up_down) # 输出按下的按键，只能为 up 或 down
-# echo $(until_key_up_down_power) # 输出按下的按键，只能为 up 或 down 或 power
-
-# echo $(until_key_up) # 输出按下的按键，只能为 up
-# echo $(until_key_down) # 输出按下的按键，只能为 down
-# echo $(until_key_power) # 输出按下的按键，只能为 power
-
-# goto_url "https://bilibili.com" # 跳转 bilibili
-# goto_app "ren.shiror.su/dev.oom_wg.ssu.SSUUI" # 打开app
-
-# echo "我现在在 '$(get_work_dir .)' 正好好待着呢" # 输出后将会是 “我现在在 '<当前目录的父目录路径>' 正好好待着呢”
-
-# newline # 不传入内容，默认打印一行空行
-
-# newline 3 # 传入内容，打印指定行数的空行
-
-
-# ---------------------------------------------------------------------------------
-# 🚨 中文提示：如果用nga-utils记得取消注释以下内容
-# nga_install_done # Don't write code after this line!
+kam_end

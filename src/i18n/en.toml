@@ -421,6 +421,7 @@ description = "Generate completion scripts for supported shells (bash, zsh, fish
 [cli.commands.completions.flags]
 shell = "Shell type for completion (bash,zsh,fish,powershell,elvish)"
 out = "Output file. If omitted, prints to STDOUT."
+install = "Install completion script into system/user completion directories (may require root)."
 
 # -------------------------
 # Command: install

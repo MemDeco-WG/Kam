@@ -1,5 +1,4 @@
-#!/system/bin/sh
-#
+# shellcheck shell=ash
 # boot-completed.sh
 #
 # 🚨这是ksu新增的，开机后执行，常规做法是service.sh里面等待开机。
@@ -26,11 +25,8 @@
 # ---------------------------------------------------------------------------------------
 
 MODDIR=${0%/*}
+[ -f "$MODDIR/lib/kam-utils.sh" ] && . "$MODDIR/lib/kam-utils.sh" || abort '! File "kam-utils.sh" does not exist!'
 
-#. "$MODDIR/lib/nga-utils.sh"
-
-
-
-
-
-
+kam_load wait
+# magisk
+wait_boot

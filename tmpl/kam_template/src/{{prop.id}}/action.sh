@@ -1,5 +1,4 @@
-#!/system/bin/sh
-#
+# shellcheck shell=ash
 # action.sh
 #
 # 🚨 模块卡片按钮点击时执行，需新版
@@ -50,74 +49,10 @@
 # ---------------------------------------------------------------------------------------
 
 MODDIR=${0%/*}
+[ -f "$MODDIR/lib/kam-utils.sh" ] && . "$MODDIR/lib/kam-utils.sh" || abort '! File "kam-utils.sh" does not exist!'
 
-# ---------------------------------------------------------------------------------------
-# EXAMPLE: Simple Feature Toggle
-# ---------------------------------------------------------------------------------------
-# This example toggles a feature flag and updates the module description.
-
-# Read current state (default to false if empty)
-# STATE=$(ksud module config get feature_enabled)
-# [ -z "$STATE" ] && STATE="false"
-
-# if [ "$STATE" = "true" ]; then
-#     # Disable feature
-#     ksud module config set feature_enabled "false"
-#     ksud module config set override.description "Feature is currently DISABLED"
-#     echo "Feature disabled"
-# else
-#     # Enable feature
-#     ksud module config set feature_enabled "true"
-#     ksud module config set override.description "Feature is currently ENABLED"
-#     echo "Feature enabled"
-# fi
-
-# ---------------------------------------------------------------------------------------
-# EXAMPLE: Managed Features
-# ---------------------------------------------------------------------------------------
-# Modules can control KernelSU internal features.
-# Supported keys: manage.su_compat, manage.kernel_umount, manage.enhanced_security
-
-# ksud module config set manage.su_compat true
-# ui_print "Enforced SU Compatibility"
-
-# ---------------------------------------------------------------------------------------
-# DEFAULT ACTION
-# ---------------------------------------------------------------------------------------
-
-ui_print "Action script executed!"
-ui_print "Edit action.sh to add custom logic."
-
-
-# ---------------------------------------------------------------------------------
-# Use Nga utils
-# -----------------------------------------------------------------------------------
-# run2null echo "这句话将消失"
-# run22null echo "这句话不会消失" # 仅移除标准错误
-# echo $(until_key) # 输出按下的按键
-
-# 音量+	KEY_VOLUMEUP	up
-# 音量-	KEY_VOLUMEDOWN	down
-# 电源键	KEY_POWER	power
-# 静音键	KEY_MUTE	mute
-# 肩键等额外按键	KEY_FX	fX
-
-# echo $(until_key_up_down) # 输出按下的按键，只能为 up 或 down
-# echo $(until_key_up_down_power) # 输出按下的按键，只能为 up 或 down 或 power
-
-# echo $(until_key_up) # 输出按下的按键，只能为 up
-# echo $(until_key_down) # 输出按下的按键，只能为 down
-# echo $(until_key_power) # 输出按下的按键，只能为 power
-
-# goto_url "https://bilibili.com" # 跳转 bilibili
-# goto_app "ren.shiror.su/dev.oom_wg.ssu.SSUUI" # 打开app
-
-# echo "我现在在 '$(get_work_dir .)' 正好好待着呢" # 输出后将会是 “我现在在 '<当前目录的父目录路径>' 正好好待着呢”
-
-# newline # 不传入内容，默认打印一行空行
-
-# newline 3 # 传入内容，打印指定行数的空行
-
-# ---------------------------------------------------------------------------------
-# Use Nga utils
-# -----------------------------------------------------------------------------------
+# kam_load ui
+# ask
+# choice
+# confirm
+#

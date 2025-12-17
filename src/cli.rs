@@ -162,13 +162,14 @@ impl Cli {
                     combined = all_known && contains_sync_or_search;
                 }
 
-                if (explicit || combined) && i + 1 < args_os.len() {
-                    if let Some(next) = args_os[i + 1].to_str() {
-                        if !next.starts_with('-') && !sub_names.contains(next) {
-                            args_os.insert(i + 1, OsString::from("--"));
-                            break;
-                        }
-                    }
+                if (explicit || combined)
+                    && i + 1 < args_os.len()
+                    && let Some(next) = args_os[i + 1].to_str()
+                    && !next.starts_with('-')
+                    && !sub_names.contains(next)
+                {
+                    args_os.insert(i + 1, OsString::from("--"));
+                    break;
                 }
             }
         }
@@ -245,13 +246,14 @@ pub fn inject_double_dash_for_targets(
                 }
             }
 
-            if should_inject && i + 1 < args.len() {
-                if let Some(next) = args[i + 1].to_str() {
-                    if !next.starts_with('-') && !sub_names.contains(next) {
-                        args.insert(i + 1, std::ffi::OsString::from("--"));
-                        break;
-                    }
-                }
+            if should_inject
+                && i + 1 < args.len()
+                && let Some(next) = args[i + 1].to_str()
+                && !next.starts_with('-')
+                && !sub_names.contains(next)
+            {
+                args.insert(i + 1, std::ffi::OsString::from("--"));
+                break;
             }
         }
     }

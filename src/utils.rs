@@ -3,7 +3,7 @@ use colored::{Color, Colorize};
 use indicatif::ProgressBar;
 use regex::Regex;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, BufRead, BufReader, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -366,13 +366,12 @@ impl Utils {
             }
         }
 
-        // Print stderr lines (treat as warnings/errors when applicable)
-        for line in s_err.lines() {
-            match Self::classify_log_line(line) {
-                LogLevel::Warn(msg) => Utils::warn(msg),
-                LogLevel::Error(msg) => Utils::error(msg),
-                LogLevel::Info(msg) => Utils::info(msg),
-                LogLevel::Empty => {}
+        // Print stderr lines in red to visually distinguish them from stdout.
+        // Use a red header and print each stderr line to the stderr stream in red.
+        if !s_err.is_empty() {
+            eprintln!("{}", "\n--- stderr ---".red().bold());
+            for line in s_err.lines() {
+                eprintln!("{}", line.red());
             }
         }
     }
@@ -418,30 +417,104 @@ impl Utils {
             // background updates interfering with output.
             pb.disable_steady_tick();
             let res = pb.suspend(op);
-            // Re-enable steady tick with a sensible default to maintain prior behavior.
-            pb.enable_steady_tick(Duration::from_millis(100));
-            res
-        } else {
-            op()
+            pb.enable_steady_tick(Duration::from_millis(120));
+            return res;
         }
+        op()
     }
 
-    /// Normalize a key into an environment-variable-friendly string.
+    /// Spawn a command with stdout/stderr piped and stream its output live.
     ///
-    /// - Upper-cases the input.
-    /// - Replaces '.' and '-' with underscores.
-    ///   This helper centralizes the normalization logic used across the codebase
-    ///   when converting kam.toml keys (e.g. `prop.id`) to environment variable fragments
-    ///   (e.g. `PROP_ID`).
-    pub fn normalize_env_key(key: &str) -> String {
-        key.to_ascii_uppercase().replace(['.', '-'], "_")
-    }
+    /// `cmd` should have stdin configured by the caller (e.g., inherit when
+    /// interactive input is required). This helper will forcibly set stdout
+    /// and stderr to piped and then spawn the process, streaming stdout lines
+    /// (via `Utils::print_cmd_line`) and stderr lines (printed in red to the
+    /// stderr stream). Returns the child's exit status when it finishes.
+    pub fn run_and_stream(mut cmd: std::process::Command) -> io::Result<std::process::ExitStatus> {
+        // Ensure we have pipes for reading
+        cmd.stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
 
-    /// Convert a Kam-style key (e.g. `prop.id`) into a full `KAM_` environment
-    /// variable name (e.g. `KAM_PROP_ID`).
-    pub fn kam_env_var(key: &str) -> String {
-        format!("KAM_{}", Self::normalize_env_key(key))
+        let mut child = cmd.spawn()?;
+
+        // Take pipes
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+
+        // stdout reader thread
+        let out_handle = std::thread::spawn(move || {
+            if let Some(out) = stdout {
+                let mut reader = BufReader::new(out);
+                let mut buf: Vec<u8> = Vec::new();
+                loop {
+                    buf.clear();
+                    match reader.read_until(b'\n', &mut buf) {
+                        Ok(0) => break, // EOF
+                        Ok(_) => {
+                            let s = String::from_utf8_lossy(&buf);
+                            // Trim trailing newline for consistent formatting
+                            let s_trim = s.trim_end_matches('\n');
+                            if !s_trim.is_empty() {
+                                Utils::print_cmd_line(s_trim);
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            }
+        });
+
+        // stderr reader thread (prints in red)
+        let err_handle = std::thread::spawn(move || {
+            if let Some(err) = stderr {
+                let mut reader = BufReader::new(err);
+                let mut buf: Vec<u8> = Vec::new();
+                // Only print header once before the first stderr line
+                let mut printed_header = false;
+                loop {
+                    buf.clear();
+                    match reader.read_until(b'\n', &mut buf) {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            let s = String::from_utf8_lossy(&buf);
+                            let s_trim = s.trim_end_matches('\n');
+                            if !s_trim.is_empty() {
+                                if !printed_header {
+                                    eprintln!("{}", "\n--- stderr ---".red().bold());
+                                    printed_header = true;
+                                }
+                                eprintln!("{}", s_trim.red());
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            }
+        });
+
+        // Wait for child to finish and for readers to complete
+        let status = child.wait()?;
+        let _ = out_handle.join();
+        let _ = err_handle.join();
+        Ok(status)
     }
+}
+
+/// Normalize a key into an environment-variable-friendly string.
+///
+/// - Upper-cases the input.
+/// - Replaces '.' and '-' with underscores.
+///   This helper centralizes the normalization logic used across the codebase
+///   when converting kam.toml keys (e.g. `prop.id`) to environment variable fragments
+///   (e.g. `PROP_ID`).
+pub fn normalize_env_key(key: &str) -> String {
+    key.to_ascii_uppercase().replace(['.', '-'], "_")
+}
+
+/// Convert a Kam-style key (e.g. `prop.id`) into a full `KAM_` environment
+/// variable name (e.g. `KAM_PROP_ID`).
+pub fn kam_env_var(key: &str) -> String {
+    format!("KAM_{}", normalize_env_key(key))
 }
 
 /// Resolve the Kam home directory (the root directory used by Kam for global
@@ -709,7 +782,6 @@ mod tests {
     use serial_test::serial;
     use std::env;
     use std::fs;
-    use std::path::PathBuf;
 
     #[test]
     fn test_normalize_root_manager() {
@@ -791,5 +863,37 @@ mod tests {
         } else {
             unsafe { env::remove_var("KAM_HOME") };
         }
+    }
+
+    #[test]
+    fn test_run_and_stream_basic() {
+        // Prepare a small script that writes to stdout, stderr, and exits with code 3.
+        let tmp = tempfile::tempdir().unwrap();
+        let script_path = tmp.path().join("echo_both.sh");
+
+        // Write script content in one shot to avoid requiring std::io::Write in scope.
+        fs::write(
+            &script_path,
+            "#!/bin/sh\n\
+             echo out\n\
+             echo err >&2\n\
+             exit 3\n",
+        )
+        .unwrap();
+
+        // Ensure executable on Unix platforms
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&script_path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&script_path, perms).unwrap();
+        }
+
+        let mut cmd = std::process::Command::new(&script_path);
+        // Keep stdin inherited so interactive commands continue to work when needed.
+        cmd.stdin(std::process::Stdio::inherit());
+        let status = Utils::run_and_stream(cmd).unwrap();
+        assert_eq!(status.code(), Some(3));
     }
 }

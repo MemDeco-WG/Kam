@@ -1,5 +1,4 @@
-#!/system/bin/sh
-#
+# shellcheck shell=ash
 # post-mount.sh
 #
 # This script runs in the "post-mount" stage of the boot process.

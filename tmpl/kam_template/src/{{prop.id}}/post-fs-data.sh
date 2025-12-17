@@ -1,5 +1,4 @@
-#!/system/bin/sh
-#
+# shellcheck shell=ash
 # post-fs-data.sh
 #
 # 🚨中文提示：一般情况不需要这个脚本

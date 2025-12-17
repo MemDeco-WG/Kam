@@ -566,11 +566,13 @@ kam completions [OPTIONS] <SHELL>
 
 **选项：**
 - `-o, --out <OUT>` - 输出文件。如果省略，打印到 STDOUT
+- `--install` - 将补全脚本安装到标准 shell 补全目录（可能需要 root 权限）
 
 **示例：**
 ```bash
 kam completions bash > /etc/bash_completion.d/kam
 kam completions fish -o ~/.config/fish/completions/kam.fish
+kam completions zsh --install
 ```
 
 ### `kam about` - 显示关于信息

@@ -245,6 +245,7 @@ description = "为支持的 shell (bash, zsh, fish, powershell, elvish) 生成�
 [cli.commands.completions.flags]
 shell = "补全脚本类型（bash,zsh,fish,powershell,elvish）"
 out = "输出文件；若省略则打印到标准输出"
+install = "将补全脚本安装到标准 shell 补全目录（可能需要 root 权限）"
 
 # -------------------------
 # install

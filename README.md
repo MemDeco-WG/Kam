@@ -412,7 +412,7 @@ kam check [OPTIONS] [PATH]
 **Options:**
 - `--json` - Output results as JSON
 
-**Note:** If `shellcheck` is installed on your PATH, `kam check` will use it to lint shell scripts for more comprehensive results; otherwise a built-in checker is used. Installing `shellcheck` is recommended for better shell script diagnostics.
+**Note:** `kam check` requires `shellcheck` to be installed on your PATH to check shell scripts. If `shellcheck` is not installed, `kam check` will fail with the message: 请安装shellcheck
 - `--fix` - Try to automatically fix/format files
 
 **Examples:**
@@ -618,11 +618,13 @@ kam completions [OPTIONS] <SHELL>
 
 **Options:**
 - `-o, --out <OUT>` - Output file. If omitted, prints to STDOUT
+- `--install` - Install the completion script into the shell's completion directory (may require root)
 
 **Examples:**
 ```bash
 kam completions bash > /etc/bash_completion.d/kam
 kam completions fish -o ~/.config/fish/completions/kam.fish
+kam completions zsh --install
 ```
 
 ### `kam about` - Display About Information

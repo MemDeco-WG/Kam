@@ -248,7 +248,17 @@ fn main() {
         }
         Some(Commands::Env(args)) => kam::cmds::env::run(args),
         Some(Commands::About(args)) => kam::cmds::about::run(args),
-        None => Ok(()),
+        None => {
+            // Default behavior: fetch the modules index when no subcommand is provided.
+            let base = kam::cmds::repo::effective_base_url(None);
+            match kam::cmds::repo::repo_sync_with_jobs(&base, false, None) {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    print_error_chain(&e);
+                    std::process::exit(1);
+                }
+            }
+        }
     };
 
     if let Err(e) = res {
