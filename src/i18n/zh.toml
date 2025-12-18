@@ -16,6 +16,9 @@ use_other_commands = "请使用其他命令（例如 `kam init`, `kam build`）�
 building_module_version = "构建模块：{} v{}"
 building_workspace_member = "构建工作区成员：{}"
 complete = "构建完成"
+no_kam_toml = "未找到 kam.toml"
+no_workspace_section = "未找到 workspace 段"
+no_workspace_members = "展开模式后未找到任何工作区成员"
 concurrent_building_members = "正在并行构建 {} 个成员（使用 {} 个作业）"
 failed_to_build = "构建 {} 失败: {}"
 failed_workspace_members = "{} 个工作区成员构建失败"
@@ -57,6 +60,7 @@ url = "网址"
 version = "版本"
 updated = "更新时间"
 no_downloadable_zip_asset = "未找到模块 {} 的可下载 zip 资源"
+everything_up_to_date = "已是最新"
 confirm_download = "确认下载 '{}' [{}] ? [Y/n] "
 skipped_download = "已跳过下载：{}"
 saved = "已保存：{}"
@@ -64,6 +68,9 @@ failed_to_download = "下载失败 {}: {}"
 score_format = "  (得分：{:.2})"
 result_line_simple = "{} - {}{}"
 result_line = "{} - {} - {}{}"
+
+[repo.search]
+empty_query = "查询为空"
 
 [repo.module_detail]
 title = "模块：{} - {}"
@@ -75,6 +82,9 @@ download_url = "下载 URL：{}"
 enter_number = "输入要安装的包的编号（或按回车跳过）："
 invalid_selection_out_of_range = "选择无效。编号超出范围。"
 invalid_input_number = "输入无效。请输入一个数字。"
+
+[env]
+no_kam_vars = "未发现以 KAM_ 开头的环境变量"
 
 [check]
 no_issues_found = "未发现问题。"
@@ -193,6 +203,15 @@ name = "要移除的文件名或模块 id"
 summary = "管理模板：导入、导出、打包与列出"
 description = "管理模板资源，包括导入/导出、列出与路径查询等操作。"
 
+[tmpl]
+no_templates_in_cache = "缓存中未找到模板"
+use_import_command = "使用 {} 导入模板"
+no_tar_gz_in_zip = "在 ZIP 文件中未找到 .tar.gz 模板"
+
+[tmpl.pull]
+could_not_determine_file_size = "无法确定文件大小，进度条将被禁用。"
+no_recorded_url = "未找到记录的 tmpl.pull.url。在全局配置中记录 URL 后再运行 'kam tmpl pull <url>'。"
+
 [cli.commands.tmpl.list]
 summary = "列出所有可用模板"
 
@@ -242,6 +261,7 @@ path = "项目路径（默认：当前目录）"
 [cli.commands.completions]
 summary = "生成常见 shell 的补全脚本"
 description = "为支持的 shell (bash, zsh, fish, powershell, elvish) 生成补全脚本。"
+no_install_candidates = "未找到可安装的补全项"
 [cli.commands.completions.flags]
 shell = "补全脚本类型（bash,zsh,fish,powershell,elvish）"
 out = "输出文件；若省略则打印到标准输出"
@@ -258,6 +278,7 @@ description = "将已构建的模块（.zip）安装到连接的设备，支持 
 section = "安装：{}"
 dry_run = "演示运行：将执行 '{} {}'"
 executing = "执行：{} {}"
+package_not_found = "在项目或 dist 目录中未找到 zip 包"
 installed = "已安装 {}（通过 {}）"
 cli_not_found = "安装命令 '{}' 未在 PATH 中找到。请安装该命令或在 ~/.kam/config.toml 中设置 'root.manager'"
 trying_su = "尝试使用 'su -c' 执行：{}"
@@ -397,6 +418,10 @@ description = "打印所有以 KAM_ 开头的环境变量，便于调试。"
 [cli.commands.help]
 summary = "打印帮助信息或指定子命令的帮助"
 
+[tmpl.export]
+no_templates_exported = "未导出任何模板"
+no_templates_specified = "未指定要导出的模板"
+
 [cli.commands.repo]
 summary = "与模块注册表交互（搜索/下载）"
 description = "从注册表搜索并下载模块。使用 `kam -Ss <term>` 搜索或 `kam -S <moduleId>` 下载模块。"
@@ -528,25 +553,27 @@ output_file = "输出文件"
 package_size = "包大小"
 
 [secret]
-cert_chain_imported = "证书链 '{}' 已成功导入"
-encrypted = "（已加密）"
-exported = "密钥 '{}' 已导出到 {}"
+cert_chain_imported = "证书链 '{}' 导入成功"
+encrypted = "(加密)"
+exported = "秘密 '{}' 已导出到 {}"
 failed_fetch_ca = "获取 CA 失败: {}"
 failed_read_ca = "读取 CA 失败: {}"
-failed_retrieve_public_key = "检索密钥 '{}' 的公钥失败: {}"
-fetching_cert_from_github = "正在从 GitHub issue {} 获取证书..."
-imported = "密钥 '{}' 已导入"
-no_secrets_stored = "未存储任何机密。"
-no_trusted_root_cas = "未找到受信任的根 CA。"
-plain = "（未加密）"
-public_key_exported = "密钥 '{}' 的公钥已导出到 {}"
-removed = "密钥 '{}' 已移除"
-root_ca_added = "根证书 '{}' 已添加到信任存储"
-root_ca_removed = "根证书 '{}' 已从信任存储移除"
-saved = "密钥 '{}' 已保存"
-stored_secrets = "存储的 Secrets"
+failed_retrieve_public_key = "检索密钥的公钥失败 '{}': {}"
+fetching_cert_from_github = "从 GitHub issue {} 获取证书..."
+imported = "秘密 '{}' 已导入"
+no_secrets_stored = "未存储任何秘密。"
+no_trusted_root_cas = "未发现受信任的根 CA。"
+no_valid_cert_in_chain = "在证书链中未找到有效证书"
+no_cert_chain_in_issue = "在 issue 或评论中未找到证书链"
+plain = "(明文)"
+public_key_exported = "秘密 '{}' 的公钥已导出到 {}"
+removed = "秘密 '{}' 已移除"
+root_ca_added = "根 CA '{}' 已添加到信任存储"
+root_ca_removed = "根 CA '{}' 已从信任存储中移除"
+saved = "秘密 '{}' 已保存"
+stored_secrets = "已保存的秘密"
 trusted_root_cas = "受信任的根 CA"
-written_to = "密钥 '{}' 已写入到 {}"
+written_to = "秘密 '{}' 写入到 {}"
 
 [sign]
 failed_to_sign = "签名 {} 失败: {}"

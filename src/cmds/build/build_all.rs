@@ -53,11 +53,13 @@ fn expand_member_pattern(
                     };
 
                     // 只包含有 kam.toml 的目录
-                    if abs_entry.is_dir() && abs_entry.join("kam.toml").exists()
-                        && let Ok(rel_path) = abs_entry.strip_prefix(project_path) {
-                            let rel_str = rel_path.to_string_lossy().to_string();
-                            expanded.push(rel_str);
-                        }
+                    if abs_entry.is_dir()
+                        && abs_entry.join("kam.toml").exists()
+                        && let Ok(rel_path) = abs_entry.strip_prefix(project_path)
+                    {
+                        let rel_str = rel_path.to_string_lossy().to_string();
+                        expanded.push(rel_str);
+                    }
                 }
             }
             Err(e) => {
@@ -132,11 +134,9 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
 pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamError> {
     let start_time = Instant::now();
     let root_kam_toml = KamToml::load_from_dir(project_path)?;
-    let workspace = root_kam_toml
-        .kam
-        .workspace
-        .as_ref()
-        .ok_or_else(|| KamError::InvalidConfig("No workspace section found".to_string()))?;
+    let workspace = root_kam_toml.kam.workspace.as_ref().ok_or_else(|| {
+        KamError::InvalidConfig(crate::i18n::tr_key("build.no_workspace_section").to_string())
+    })?;
 
     let mut results = Vec::new();
 
@@ -289,7 +289,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
 
         if results.is_empty() {
             return Err(KamError::InvalidConfig(
-                "No workspace members found after expanding patterns".to_string(),
+                crate::i18n::tr_key("build.no_workspace_members").to_string(),
             ));
         }
     } else {

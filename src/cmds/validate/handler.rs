@@ -76,34 +76,34 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
     // --- [mmrl.repo] Section ---
     // mmrl是可选的，有的话才检查
     if let Some(mmrl) = &kam_toml.mmrl
-        && let Some(repo) = &mmrl.repo {
-            // 检查推荐字段（license建议填写）
-            if repo.license.as_deref().unwrap_or("").is_empty() {
-                warnings.push(
-                    crate::i18n::tr_key("validate.mmrl.repo.license_recommended").to_string(),
-                );
-            }
-
-            // 检查文件是否存在（如果配置了但文件不存在就是错误）
-            check_file_exists(
-                project_path,
-                &repo.license_file,
-                crate::i18n::tr_key("validate.mmrl.repo.license_file"),
-                &mut errors,
-            );
-            check_file_exists(
-                project_path,
-                &repo.readme_file,
-                crate::i18n::tr_key("validate.mmrl.repo.readme_file"),
-                &mut errors,
-            );
-            check_file_exists(
-                project_path,
-                &repo.changelog_file,
-                crate::i18n::tr_key("validate.mmrl.repo.changelog_file"),
-                &mut errors,
-            );
+        && let Some(repo) = &mmrl.repo
+    {
+        // 检查推荐字段（license建议填写）
+        if repo.license.as_deref().unwrap_or("").is_empty() {
+            warnings
+                .push(crate::i18n::tr_key("validate.mmrl.repo.license_recommended").to_string());
         }
+
+        // 检查文件是否存在（如果配置了但文件不存在就是错误）
+        check_file_exists(
+            project_path,
+            &repo.license_file,
+            crate::i18n::tr_key("validate.mmrl.repo.license_file"),
+            &mut errors,
+        );
+        check_file_exists(
+            project_path,
+            &repo.readme_file,
+            crate::i18n::tr_key("validate.mmrl.repo.readme_file"),
+            &mut errors,
+        );
+        check_file_exists(
+            project_path,
+            &repo.changelog_file,
+            crate::i18n::tr_key("validate.mmrl.repo.changelog_file"),
+            &mut errors,
+        );
+    }
 
     // --- [kam.build] Section ---
     // 检查构建相关配置
@@ -155,12 +155,15 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
     } else {
         // 有错误或警告，打印出来
         if !errors.is_empty() {
+            let c = crate::utils::Utils::error_color();
             println!(
                 "{}",
-                crate::i18n::tr_key("validate.errors.header").red().bold()
+                crate::i18n::tr_key("validate.errors.header")
+                    .color(c)
+                    .bold()
             );
             for e in &errors {
-                println!("  {} {}", "✗".red().bold(), e.red());
+                println!("  {} {}", "✗".color(c).bold(), e.color(c));
             }
         }
         if !warnings.is_empty() {
@@ -196,7 +199,9 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
 // 如果配置了文件路径但文件不存在，就加到错误列表里
 fn check_file_exists(base: &Path, file: &Option<String>, name: &str, errors: &mut Vec<String>) {
     if let Some(f) = file
-        && !f.is_empty() && !base.join(f).exists() {
-            errors.push(trf!("{} '{}' not found", name, f));
-        }
+        && !f.is_empty()
+        && !base.join(f).exists()
+    {
+        errors.push(trf!("{} '{}' not found", name, f));
+    }
 }

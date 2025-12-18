@@ -149,7 +149,11 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
             Err(e) => {
                 // 下载失败
                 if let Some(pb) = pb.as_ref() {
-                    pb.finish_with_message("download failed".red().to_string());
+                    pb.finish_with_message(
+                        "download failed"
+                            .color(crate::utils::Utils::error_color())
+                            .to_string(),
+                    );
                 }
                 return Err(KamError::CommandFailed(format!(
                     "Failed to read response: {}",

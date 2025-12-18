@@ -1,7 +1,6 @@
 // Integration tests for CLI parsing of combined short flags (e.g. `-Syu`).
 // These ensure that multiple short options concatenated into a single token
 // are parsed as separate flags (sync, yes, update).
-use clap::Parser;
 use kam::cli::Cli;
 
 #[test]

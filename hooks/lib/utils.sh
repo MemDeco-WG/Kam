@@ -2,7 +2,20 @@
 # Common utility functions for Kam hooks
 
 # Colors
-RED=$(printf '\033[0;31m')
+# Error color: can be overridden via KAM_COLOR_ERROR env var (format: #RRGGBB or RRGGBB)
+_kam_color_err="${KAM_COLOR_ERROR:-#FF9150}"
+_kam_color_hex="${_kam_color_err#\#}"
+# Validate length, fallback to default if malformed
+if [ ${#_kam_color_hex} -ne 6 ]; then
+    _kam_color_hex="FF9150"
+fi
+_r_hex=$(printf "%s" "$_kam_color_hex" | cut -c1-2)
+_g_hex=$(printf "%s" "$_kam_color_hex" | cut -c3-4)
+_b_hex=$(printf "%s" "$_kam_color_hex" | cut -c5-6)
+_r_dec=$(printf "%d" "0x${_r_hex}" 2>/dev/null || printf "%d" "0xFF")
+_g_dec=$(printf "%d" "0x${_g_hex}" 2>/dev/null || printf "%d" "0x91")
+_b_dec=$(printf "%d" "0x${_b_hex}" 2>/dev/null || printf "%d" "0x50")
+RED=$(printf '\033[38;2;%d;%d;%dm' "$_r_dec" "$_g_dec" "$_b_dec")
 GREEN=$(printf '\033[0;32m')
 YELLOW=$(printf '\033[1;33m')
 BLUE=$(printf '\033[0;34m')
@@ -21,7 +34,7 @@ log_warn() {
 }
 
 log_error() {
-    printf "${RED}[ERROR]${NC} %s\n" "$1"
+    printf "${RED}[ERROR]${NC} %s\n" "$1" >&2
 }
 
 # exit_if_sudo [<message>] [--return]

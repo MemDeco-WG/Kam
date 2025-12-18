@@ -35,9 +35,10 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
 
     // 先看看正文里有没有，没有的话再去评论里翻
     if let Some(body) = &issue.body
-        && let Some(cert) = extract_cert_chain(body) {
-            return Ok(cert);
-        }
+        && let Some(cert) = extract_cert_chain(body)
+    {
+        return Ok(cert);
+    }
 
     // 正文没有？那去评论里找找，说不定有人回复了
     if issue.comments > 0 {
@@ -60,7 +61,7 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
     }
 
     Err(KamError::CommandFailed(
-        "No certificate chain found in issue or comments".to_string(),
+        crate::i18n::tr_key("secret.no_cert_chain_in_issue").to_string(),
     ))
 }
 

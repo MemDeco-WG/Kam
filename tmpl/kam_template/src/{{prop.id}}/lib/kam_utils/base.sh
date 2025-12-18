@@ -89,9 +89,21 @@ log() {
     message="$2"
     logfile="${LOG_FILE:-}"
 
-    # 定义颜色
+    # 定义颜色（错误色可通过环境变量 KAM_COLOR_ERROR 配置，格式: #RRGGBB 或 RRGGBB；默认日系暖橙 #FF9150）
     _log_normal="\033[0m"
-    _log_red="\033[1;31m"
+    # 读取并解析 KAM_COLOR_ERROR（支持 #RRGGBB 或 RRGGBB），解析失败回退到默认值 FF9150
+    _KAM_COLOR_ERR="${KAM_COLOR_ERROR:-#FF9150}"
+    _kam_color_hex="${_KAM_COLOR_ERR#\#}"
+    if [ "${#_kam_color_hex}" -ne 6 ]; then
+        _kam_color_hex="FF9150"
+    fi
+    _log_r_hex="$(printf "%s" "${_kam_color_hex}" | cut -c1-2)"
+    _log_g_hex="$(printf "%s" "${_kam_color_hex}" | cut -c3-4)"
+    _log_b_hex="$(printf "%s" "${_kam_color_hex}" | cut -c5-6)"
+    _log_r_dec=$(printf "%d" "0x${_log_r_hex}" 2>/dev/null || printf "%d" "0xFF")
+    _log_g_dec=$(printf "%d" "0x${_log_g_hex}" 2>/dev/null || printf "%d" "0x91")
+    _log_b_dec=$(printf "%d" "0x${_log_b_hex}" 2>/dev/null || printf "%d" "0x50")
+    _log_red=$(printf '\033[38;2;%d;%d;%dm' "${_log_r_dec}" "${_log_g_dec}" "${_log_b_dec}")
     _log_green="\033[1;32m"
     _log_yellow="\033[1;33m"
     _log_blue="\033[1;34m"

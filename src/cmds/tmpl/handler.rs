@@ -28,12 +28,9 @@ fn list_templates() -> Result<(), KamError> {
 
     use crate::utils::Utils;
     if templates.is_empty() {
-        Utils::warn("No templates found in cache");
+        Utils::warn(crate::i18n::tr_key("tmpl.no_templates_in_cache"));
         println!();
-        Utils::info(&format!(
-            "Use {} to import templates",
-            "kam tmpl import".bold()
-        ));
+        Utils::info(&trf!("tmpl.use_import_command", "kam tmpl import".bold()));
     } else {
         Utils::section("Templates in Cache");
         for template in &templates {

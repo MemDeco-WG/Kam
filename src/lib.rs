@@ -37,6 +37,7 @@ macro_rules! trf {
 pub mod assets;
 pub mod cli;
 pub mod cmds;
+pub mod colors;
 pub mod errors;
 pub mod i18n;
 pub mod template;

@@ -319,10 +319,15 @@ impl Utils {
         println!("  {} {}", "!".yellow(), translated.yellow());
     }
 
-    /// Print an error message in bold red with context.
+    /// Return the configured error color from the global theme.
+    pub(crate) fn error_color() -> Color {
+        crate::colors::get_theme().error
+    }
+
     pub fn error(msg: &str) {
         let translated = crate::i18n::tr(msg);
-        eprintln!("{} {}", "✗".red().bold(), translated.red());
+        let c = Self::error_color();
+        eprintln!("{} {}", "✗".color(c).bold(), translated.color(c));
     }
 
     /// Classify a log line and return its log level type.
@@ -366,12 +371,13 @@ impl Utils {
             }
         }
 
-        // Print stderr lines in red to visually distinguish them from stdout.
-        // Use a red header and print each stderr line to the stderr stream in red.
+        // Print stderr lines in 日系暖橙 (warm orange) to visually distinguish them from stdout.
+        // Use an orange header and print each stderr line to the stderr stream in warm orange.
         if !s_err.is_empty() {
-            eprintln!("{}", "\n--- stderr ---".red().bold());
+            let c = Self::error_color();
+            eprintln!("{}", "\n--- stderr ---".color(c).bold());
             for line in s_err.lines() {
-                eprintln!("{}", line.red());
+                eprintln!("{}", line.color(c));
             }
         }
     }
@@ -397,7 +403,10 @@ impl Utils {
     pub fn format_cmd_line(line: &str) -> String {
         match Self::classify_log_line(line) {
             LogLevel::Warn(msg) => format!("  {} {}", "!".yellow(), msg.yellow()),
-            LogLevel::Error(msg) => format!("{} {}", "✗".red().bold(), msg.red()),
+            LogLevel::Error(msg) => {
+                let c = Self::error_color();
+                format!("{} {}", "✗".color(c).bold(), msg.color(c))
+            }
             LogLevel::Info(msg) => format!("  {} {}", "•".cyan(), msg),
             LogLevel::Empty => String::new(),
         }
@@ -464,7 +473,8 @@ impl Utils {
             }
         });
 
-        // stderr reader thread (prints in red)
+        // stderr reader thread (prints in warm orange)
+        let err_color = Self::error_color();
         let err_handle = std::thread::spawn(move || {
             if let Some(err) = stderr {
                 let mut reader = BufReader::new(err);
@@ -480,10 +490,10 @@ impl Utils {
                             let s_trim = s.trim_end_matches('\n');
                             if !s_trim.is_empty() {
                                 if !printed_header {
-                                    eprintln!("{}", "\n--- stderr ---".red().bold());
+                                    eprintln!("{}", "\n--- stderr ---".color(err_color).bold());
                                     printed_header = true;
                                 }
-                                eprintln!("{}", s_trim.red());
+                                eprintln!("{}", s_trim.color(err_color));
                             }
                         }
                         Err(_) => break,
@@ -895,5 +905,45 @@ mod tests {
         cmd.stdin(std::process::Stdio::inherit());
         let status = Utils::run_and_stream(cmd).unwrap();
         assert_eq!(status.code(), Some(3));
+    }
+
+    #[test]
+    fn test_format_cmd_line_includes_error_marker_and_theme_color() {
+        // Ensure ANSI colors are enabled for this test so Colorize emits escape sequences.
+        colored::control::set_override(true);
+        let s = Utils::format_cmd_line("ERROR something");
+
+        // Basic sanity: has the error marker and the original message
+        assert!(s.contains("✗"), "expected error marker in formatted line");
+        assert!(
+            s.contains("something"),
+            "expected original message in formatted line"
+        );
+
+        // The repository is a workspace that can run crates/tests in parallel and the
+        // theme may be configured in workspace members. To make this test robust,
+        // check that the produced line contains the ANSI color fragment that
+        // corresponds to the currently configured theme color (whatever it is).
+        let c = crate::colors::get_theme().error.clone();
+        match c {
+            colored::Color::TrueColor { r, g, b } => {
+                // Match TrueColor SGR fragment like "38;2;R;G;B"
+                let frag = format!("38;2;{};{};{}", r, g, b);
+                assert!(
+                    s.contains(&frag),
+                    "expected theme truecolor fragment {} in output: {}",
+                    frag,
+                    s
+                );
+            }
+            // For palette colors ensure at least some ANSI SGR escape is present.
+            _ => {
+                assert!(
+                    s.contains("\x1b["),
+                    "expected some ANSI escape sequence in output: {}",
+                    s
+                );
+            }
+        }
     }
 }

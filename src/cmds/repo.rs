@@ -832,7 +832,7 @@ pub fn repo_sync_with_jobs(
     // If the workers did not actually update anything, tell the user that everything is up to date.
     let updated_total = updated_count.load(Ordering::SeqCst);
     if updated_total == 0 {
-        Utils::info("everything up to date");
+        Utils::info(crate::i18n::tr_key("repo.everything_up_to_date"));
     }
 
     top_pb.finish();
@@ -850,7 +850,7 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
 
     let q = query.to_lowercase().trim().to_string();
     if q.is_empty() {
-        Utils::warn("Empty query");
+        Utils::warn(crate::i18n::tr_key("repo.search.empty_query"));
         return Ok(());
     }
 
@@ -937,22 +937,23 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
                 println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
             } else if let Some(rels) = md.releases.as_ref()
                 && let Some(first) = rels.first()
-                    && let Some(v) = first.version.as_deref().or(first.name.as_deref()) {
-                        println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
-                    }
+                && let Some(v) = first.version.as_deref().or(first.name.as_deref())
+            {
+                println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
+            }
             // Time
             if let Some(lt) = md.latest_release_time.as_deref() {
                 println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
             } else if let Some(rels) = md.releases.as_ref()
                 && let Some(first) = rels.first()
-                    && let Some(pub_at) = first
-                        .published_at
-                        .as_deref()
-                        .or(first.updated_at.as_deref())
-                        .or(first.created_at.as_deref())
-                    {
-                        println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
-                    }
+                && let Some(pub_at) = first
+                    .published_at
+                    .as_deref()
+                    .or(first.updated_at.as_deref())
+                    .or(first.created_at.as_deref())
+            {
+                println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
+            }
         }
 
         println!();
@@ -976,7 +977,7 @@ pub(crate) fn search_remote_interactive(
 
     let q = query.to_lowercase().trim().to_string();
     if q.is_empty() {
-        Utils::warn("Empty query");
+        Utils::warn(crate::i18n::tr_key("repo.search.empty_query"));
         return Ok(None);
     }
 
@@ -1069,27 +1070,29 @@ pub(crate) fn search_remote_interactive(
 
         // Try to fetch module details for the top few results to show version/time info
         if i < 5
-            && let Ok(md) = fetch_module_detail(&client, &e.name, base_url) {
-                if let Some(lr) = md.latest_release.as_deref() {
-                    println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
-                } else if let Some(rels) = md.releases.as_ref()
-                    && let Some(first) = rels.first()
-                        && let Some(v) = first.version.as_deref().or(first.name.as_deref()) {
-                            println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
-                        }
-                if let Some(lt) = md.latest_release_time.as_deref() {
-                    println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
-                } else if let Some(rels) = md.releases.as_ref()
-                    && let Some(first) = rels.first()
-                        && let Some(pub_at) = first
-                            .published_at
-                            .as_deref()
-                            .or(first.updated_at.as_deref())
-                            .or(first.created_at.as_deref())
-                        {
-                            println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
-                        }
+            && let Ok(md) = fetch_module_detail(&client, &e.name, base_url)
+        {
+            if let Some(lr) = md.latest_release.as_deref() {
+                println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
+            } else if let Some(rels) = md.releases.as_ref()
+                && let Some(first) = rels.first()
+                && let Some(v) = first.version.as_deref().or(first.name.as_deref())
+            {
+                println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
             }
+            if let Some(lt) = md.latest_release_time.as_deref() {
+                println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
+            } else if let Some(rels) = md.releases.as_ref()
+                && let Some(first) = rels.first()
+                && let Some(pub_at) = first
+                    .published_at
+                    .as_deref()
+                    .or(first.updated_at.as_deref())
+                    .or(first.created_at.as_deref())
+            {
+                println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
+            }
+        }
 
         println!();
     }

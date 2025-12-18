@@ -265,9 +265,9 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             .arg("--version")
             .output()
             .is_err()
-        {
-            return Err(KamError::ShellcheckMissing);
-        }
+    {
+        return Err(KamError::ShellcheckMissing);
+    }
 
     // 文件总数（包含已单独检查的 kam.toml）
     let mut total_files: usize = files.len();
@@ -374,18 +374,19 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             }
             (false, false) => {
                 any_errors = true;
-                println!("{} {}", "✕".red(), path)
+                println!("{} {}", "✕".color(crate::utils::Utils::error_color()), path)
             }
         }
 
         if !r.errors.is_empty() {
+            let c = crate::utils::Utils::error_color();
             println!(
                 "  {} {}",
-                "✗".red().bold(),
-                crate::i18n::tr_key("check.errors.header").red().bold()
+                "✗".color(c).bold(),
+                crate::i18n::tr_key("check.errors.header").color(c).bold()
             );
             for e in &r.errors {
-                println!("    {} {}", "→".red().dimmed(), e.red());
+                println!("    {} {}", "→".color(c).dimmed(), e.color(c));
             }
         }
         if !r.warnings.is_empty() {
@@ -401,10 +402,11 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     }
 
     if any_errors {
+        let c = crate::utils::Utils::error_color();
         println!(
             "\n{} {}",
-            "✕".red().bold(),
-            crate::i18n::tr_key("check.some_issues_found").red()
+            "✕".color(c).bold(),
+            crate::i18n::tr_key("check.some_issues_found").color(c)
         );
     } else {
         println!(

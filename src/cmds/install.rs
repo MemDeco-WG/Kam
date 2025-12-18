@@ -187,7 +187,7 @@ fn resolve_artifact_path(explicit: Option<PathBuf>) -> Result<PathBuf, KamError>
 
     if candidates.is_empty() {
         return Err(KamError::PackageNotFound(
-            "No zip package found in project or dist directories".to_string(),
+            crate::i18n::tr_key("install.package_not_found").to_string(),
         ));
     }
 

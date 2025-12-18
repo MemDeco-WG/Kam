@@ -38,7 +38,8 @@ pub fn run(_args: EnvArgs) -> Result<(), KamError> {
     let vars = collect_kam_env();
 
     if vars.is_empty() {
-        Utils::info("No KAM_ environment variables found");
+        // Localized message for empty KAM_ environment
+        Utils::info(crate::i18n::tr_key("env.no_kam_vars"));
         return Ok(());
     }
 

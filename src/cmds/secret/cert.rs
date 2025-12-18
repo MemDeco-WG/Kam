@@ -167,7 +167,7 @@ fn parse_x509_pem_chain(pem: &str) -> Result<(), KamError> {
 
     if count == 0 {
         return Err(KamError::CommandFailed(
-            "No valid certificates found in chain".to_string(),
+            crate::i18n::tr_key("secret.no_valid_cert_in_chain").to_string(),
         ));
     }
 
@@ -195,7 +195,7 @@ pub fn verify_cert_chain(chain_pem: &str, trusted_cas_pem: &[String]) -> Result<
 
     if der_blobs.is_empty() {
         return Err(KamError::CommandFailed(
-            "Empty certificate chain".to_string(),
+            crate::i18n::tr_key("secret.no_valid_cert_in_chain").to_string(),
         ));
     }
 

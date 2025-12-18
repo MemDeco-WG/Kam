@@ -192,7 +192,7 @@ pub fn export_multiple_templates(
         ));
     } else {
         return Err(KamError::CommandFailed(
-            "No templates were exported".to_string(),
+            crate::i18n::tr_key("tmpl.export.no_templates_exported").to_string(),
         ));
     }
 
@@ -208,7 +208,7 @@ pub fn export_template(
 ) -> Result<(), KamError> {
     if template_names.is_empty() {
         return Err(KamError::CommandFailed(
-            "No templates specified for export".to_string(),
+            crate::i18n::tr_key("tmpl.export.no_templates_specified").to_string(),
         ));
     }
 
