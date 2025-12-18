@@ -40,17 +40,4 @@
 # ---------------------------------------------------------------------------------------
 
 MODDIR=${0%/*}
-
-# Example: Log execution
-# echo "Executing post-fs-data.sh for $KSU_MODULE" > /dev/kmsg
-
-# Example: Clear temporary runtime state on boot
-# ksud module config delete --temp runtime_state
-
-# Example: Dynamic mounting preparation
-# if [ -f "$MODDIR/enable_feature" ]; then
-#     # Do something
-# fi
-
-# WARNING: Do NOT use `setprop` here, it may deadlock boot. Use `resetprop`.
-# resetprop -n my.custom.prop value
+[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'

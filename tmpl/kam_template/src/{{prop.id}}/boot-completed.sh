@@ -25,8 +25,4 @@
 # ---------------------------------------------------------------------------------------
 
 MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kam-utils.sh" ] && . "$MODDIR/lib/kam-utils.sh" || abort '! File "kam-utils.sh" does not exist!'
-
-kam_load wait
-# magisk
-wait_boot
+[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'

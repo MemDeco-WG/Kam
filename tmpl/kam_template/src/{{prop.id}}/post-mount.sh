@@ -23,11 +23,4 @@
 # ---------------------------------------------------------------------------------------
 
 MODDIR=${0%/*}
-
-# Example: Log execution
-# echo "Executing post-mount.sh for $KSU_MODULE" > /dev/kmsg
-
-# Example: Check if a file from the module is visible in system
-# if [ -f "/system/bin/my_module_binary" ]; then
-#     echo "Module mounted successfully" > /dev/kmsg
-# fi
+[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'

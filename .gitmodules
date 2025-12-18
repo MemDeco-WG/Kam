@@ -24,3 +24,6 @@
 [submodule "Kamcp"]
 	path = Kamcp
 	url = https://github.com/MemDeco-WG/Kamcp.git
+[submodule "tmpl/kam_template/src/{{prop.id}}/lib/kamfw"]
+	path = tmpl/kam_template/src/{{prop.id}}/lib/kamfw
+	url = https://github.com/MemDeco-WG/kamfw.git

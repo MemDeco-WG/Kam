@@ -106,11 +106,4 @@
 # ---------------------------------------------------------------------------------------
 # CUSTOM INSTALLATION LOGIC
 # ---------------------------------------------------------------------------------------
-[ -f "$MODPATH/lib/kam-utils.sh" ] && . "$MODPATH/lib/kam-utils.sh" || abort '! File "kam-utils.sh" does not exist!'
-
-kam_init
-
-# 如果为 Magisk 环境，则用兼容模块把 boot 脚本转为 service 以兼容 Magisk
-boot2serviceif "magisk"
-
-kam_end
+[ -f "$MODPATH/lib/kamfw/.kamfwrc" ] && . "$MODPATH/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
