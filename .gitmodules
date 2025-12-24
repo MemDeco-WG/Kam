@@ -21,9 +21,12 @@
 [submodule "KamWEBUI"]
 	path = KamWEBUI
 	url = https://github.com/MemDeco-WG/KamWEBUI.git
+        branch = main
 [submodule "Kamcp"]
 	path = Kamcp
 	url = https://github.com/MemDeco-WG/Kamcp.git
+        branch = main
 [submodule "tmpl/kam_template/src/{{prop.id}}/lib/kamfw"]
 	path = tmpl/kam_template/src/{{prop.id}}/lib/kamfw
 	url = https://github.com/MemDeco-WG/kamfw.git
+        branch = main
