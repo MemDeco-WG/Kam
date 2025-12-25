@@ -119,7 +119,7 @@ homepage = "https://github.com/MemDeco-WG/Kam"
 keywords = [
     "magisk",
     "kernelsu",
-    "ap"
+    "ap",
     "android",
     "module",
     "cli",
