@@ -10,19 +10,19 @@ Notes:
   `run` so the top-level dispatcher can call it.
 */
 
+use crate::cmds::build::args::BuildArgs;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::utils::Utils;
 use clap::Args;
 use dialoguer::Confirm;
+use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::SystemTime;
 use tempfile::TempDir;
-use crate::cmds::build::args::BuildArgs;
-use std::env;
 
 /// CLI arguments for `kam install`
 #[derive(Args, Debug, Clone)]
@@ -242,7 +242,12 @@ fn looks_like_git_spec(s: &str) -> bool {
     }
 
     // Accept shorthand "owner/repo"
-    if s_trim.contains('/') && !s_trim.starts_with("./") && !s_trim.starts_with('/') && !s_trim.contains('\\') && !s_trim.contains(':') {
+    if s_trim.contains('/')
+        && !s_trim.starts_with("./")
+        && !s_trim.starts_with('/')
+        && !s_trim.contains('\\')
+        && !s_trim.contains(':')
+    {
         let parts: Vec<_> = s_trim.split('/').collect();
         if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty() {
             return true;
@@ -293,9 +298,16 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
             .trim_start_matches("+gh")
             .trim_start_matches('+')
             .trim_start_matches(':');
-        Utils::info(&format!("Cloning '{}' using 'gh' into: {}", gh_spec, dest.display()));
+        Utils::info(&format!(
+            "Cloning '{}' using 'gh' into: {}",
+            gh_spec,
+            dest.display()
+        ));
         let mut cmd = Command::new("gh");
-        cmd.arg("repo").arg("clone").arg(gh_spec).arg(dest.to_str().unwrap());
+        cmd.arg("repo")
+            .arg("clone")
+            .arg(gh_spec)
+            .arg(dest.to_str().unwrap());
         cmd.stdin(Stdio::inherit());
         match Utils::run_and_stream(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
@@ -313,13 +325,22 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
     // Fallback to git
     if crate::utils::command_exists("git") {
         let url = expand_git_shorthand(spec);
-        Utils::info(&format!("Cloning '{}' using 'git' into: {}", url, dest.display()));
+        Utils::info(&format!(
+            "Cloning '{}' using 'git' into: {}",
+            url,
+            dest.display()
+        ));
         let mut cmd = Command::new("git");
         cmd.arg("clone").arg(&url).arg(dest.to_str().unwrap());
         cmd.stdin(Stdio::inherit());
         match Utils::run_and_stream(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
-            Ok(status) => return Err(KamError::CommandFailed(format!("git clone failed with status: {:?}", status))),
+            Ok(status) => {
+                return Err(KamError::CommandFailed(format!(
+                    "git clone failed with status: {:?}",
+                    status
+                )));
+            }
             Err(e) => return Err(KamError::Io(e)),
         }
     }
@@ -357,7 +378,7 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                         .with_prompt("Execute 'kam.sh' from cloned repository?")
                         .default(false)
                         .interact()
-                        .map_err(|e| KamError::Io(e))?
+                        .map_err(|e| KamError::Io(e.into()))?
                 };
 
                 if run_script {
@@ -400,11 +421,12 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                             .with_prompt("Run 'kam build' in the repository to produce artifacts?")
                             .default(true)
                             .interact()
-                            .map_err(|e| KamError::Io(e))?
+                            .map_err(|e| KamError::Io(e.into()))?
                     };
                     if !run_build {
                         return Err(KamError::CommandFailed(
-                            "Aborted by user: did not run 'kam.sh' and declined to build.".to_string(),
+                            "Aborted by user: did not run 'kam.sh' and declined to build."
+                                .to_string(),
                         ));
                     }
                     // else fallthrough to build step below
@@ -635,7 +657,10 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         Err(e) => Err(KamError::Io(e)),
                     }
                 } else {
-                    Err(KamError::CommandFailed(trf!("install.cli_not_found", cli_bin)))
+                    Err(KamError::CommandFailed(trf!(
+                        "install.cli_not_found",
+                        cli_bin
+                    )))
                 }
             } else {
                 Err(KamError::Io(e))
@@ -697,20 +722,50 @@ mod tests {
     fn looks_like_git_spec_detects_shorthands() {
         use super::looks_like_git_spec;
 
-        assert!(looks_like_git_spec("owner/repo"), "owner/repo should be detected as git spec");
-        assert!(looks_like_git_spec("https://github.com/owner/repo.git"), "https URL should be detected");
-        assert!(looks_like_git_spec("git@github.com:owner/repo.git"), "ssh URL should be detected");
-        assert!(looks_like_git_spec("git+https://github.com/owner/repo"), "git+ prefix should be detected");
-        assert!(looks_like_git_spec("+git:owner/repo"), "+git:owner/repo should be detected");
-        assert!(looks_like_git_spec("+ghowner/repo"), "+ghowner/repo should be detected");
-        assert!(!looks_like_git_spec("./local/path.zip"), "local path should not be treated as git");
+        assert!(
+            looks_like_git_spec("owner/repo"),
+            "owner/repo should be detected as git spec"
+        );
+        assert!(
+            looks_like_git_spec("https://github.com/owner/repo.git"),
+            "https URL should be detected"
+        );
+        assert!(
+            looks_like_git_spec("git@github.com:owner/repo.git"),
+            "ssh URL should be detected"
+        );
+        assert!(
+            looks_like_git_spec("git+https://github.com/owner/repo"),
+            "git+ prefix should be detected"
+        );
+        assert!(
+            looks_like_git_spec("+git:owner/repo"),
+            "+git:owner/repo should be detected"
+        );
+        assert!(
+            looks_like_git_spec("+ghowner/repo"),
+            "+ghowner/repo should be detected"
+        );
+        assert!(
+            !looks_like_git_spec("./local/path.zip"),
+            "local path should not be treated as git"
+        );
     }
 
     #[test]
     fn expand_git_shorthand_strips_plus_git_prefix() {
         use super::expand_git_shorthand;
-        assert_eq!(expand_git_shorthand("+git:owner/repo"), "https://github.com/owner/repo.git");
-        assert_eq!(expand_git_shorthand("+gitowner/repo"), "https://github.com/owner/repo.git");
-        assert_eq!(expand_git_shorthand("git+owner/repo"), "https://github.com/owner/repo.git");
+        assert_eq!(
+            expand_git_shorthand("+git:owner/repo"),
+            "https://github.com/owner/repo.git"
+        );
+        assert_eq!(
+            expand_git_shorthand("+gitowner/repo"),
+            "https://github.com/owner/repo.git"
+        );
+        assert_eq!(
+            expand_git_shorthand("git+owner/repo"),
+            "https://github.com/owner/repo.git"
+        );
     }
 }
