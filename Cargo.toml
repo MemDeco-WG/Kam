@@ -119,6 +119,7 @@ homepage = "https://github.com/MemDeco-WG/Kam"
 keywords = [
     "magisk",
     "kernelsu",
+    "ap"
     "android",
     "module",
     "cli",
@@ -126,4 +127,4 @@ keywords = [
 license = "GPL-3.0"
 name = "kam"
 repository = "https://github.com/MemDeco-WG/Kam"
-version = "0.5.16"
+version = "0.5.17"
