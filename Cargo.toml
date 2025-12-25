@@ -120,8 +120,6 @@ keywords = [
     "magisk",
     "kernelsu",
     "ap",
-    "android",
-    "module",
     "cli",
 ]
 license = "GPL-3.0"
