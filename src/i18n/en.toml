@@ -103,16 +103,46 @@ kam_repo_ref = "Repository ref override for certain operations."
 kam_git_repo = "Git repository URL used for hooks/operations."
 kam_github_repo = "GitHub repository name from CI (GITHUB_REPOSITORY)."
 kam_release_tag = "Release tag used in release workflows."
+
+# Project / hook related vars
+kam_project_root = "Project root path (KAM_PROJECT_ROOT) used by hooks and scripts."
+kam_hooks_root = "Root directory for hooks (KAM_HOOKS_ROOT)."
+kam_module_root = "Module root directory (KAM_MODULE_ROOT) for module operations."
+kam_web_root = "Web root path within module (KAM_WEB_ROOT)."
+kam_dist_dir = "Distribution/output directory used during build (KAM_DIST_DIR)."
+
+# Per-module variables exported for hooks
+kam_module_id = "Module ID (KAM_MODULE_ID)."
+kam_module_version = "Module version (KAM_MODULE_VERSION)."
+kam_module_version_code = "Module version code (KAM_MODULE_VERSION_CODE)."
+kam_module_name = "Module name (KAM_MODULE_NAME)."
+kam_module_author = "Module author (KAM_MODULE_AUTHOR)."
+kam_module_description = "Module description (KAM_MODULE_DESCRIPTION)."
+kam_module_update_json = "Update JSON field for the module (KAM_MODULE_UPDATE_JSON)."
+
+# Per-prop exports
+kam_prop_id = "prop.id exported as KAM_PROP_ID for hooks."
+kam_prop_name = "prop.name exported as KAM_PROP_NAME for hooks."
+kam_prop_version = "prop.version exported as KAM_PROP_VERSION for hooks."
+kam_prop_version_code = "prop.versionCode exported as KAM_PROP_VERSION_CODE for hooks."
+kam_prop_author = "prop.author exported as KAM_PROP_AUTHOR for hooks."
+kam_prop_description = "prop.description exported as KAM_PROP_DESCRIPTION for hooks."
+
 kam_prop_prefix = "KAM_PROP_* variables reflect module properties (prop.*) exported for hooks."
 kam_tmpl_note = "Template variables (KAM_TMPL_*) are available to hooks when templates define variables."
+kam_tmpl_prefix = "Template variables are exported as KAM_TMPL_* for hooks."
 kam_module_prefix = "KAM_MODULE_* variables provide module metadata to hooks (id, version, author, ...)."
 kam_stage = "Stage name for hook execution (e.g., pre-build, post-build)."
+
+# Common system envs referenced
 home = "User HOME used when resolving user-level paths."
 path = "System PATH used to locate external tools."
 xdg_config_home = "XDG_CONFIG_HOME used for finding configs and completions."
 xdg_data_home = "XDG_DATA_HOME used for finding data directories."
 github_repository = "GITHUB_REPOSITORY in CI provides repository info."
 github_ref = "GITHUB_REF in CI provides branch/ref info."
+
+docs_example = "Example"
 
 [check]
 no_issues_found = "No issues found."
@@ -632,6 +662,9 @@ interactive = "Interactive mode: guide the user through common configuration (la
 
 [cli.commands.env]
 summary = "Print environment variables starting with KAM_"
+
+[cli.commands.env.flags]
+describe = "Show descriptions of environment variables used by Kam"
 description = "Print all environment variables whose names start with KAM_, useful for debugging."
 
 [cli.commands.help]

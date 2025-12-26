@@ -108,11 +108,9 @@ fn get_install_cli_for_manager(
     path: &Path,
     manager_override: Option<&str>,
 ) -> Result<(String, Vec<String>), KamError> {
-    let manager = if let Some(m) = manager_override {
+    let manager = manager_override.map_or_else(get_root_manager, |m| {
         crate::utils::normalize_root_manager(m)
-    } else {
-        get_root_manager()
-    };
+    });
 
     let p = path.to_string_lossy().to_string();
 
@@ -274,13 +272,14 @@ fn expand_git_shorthand(s: &str) -> String {
         }
     }
 
-    if s_trim.contains("://") || s_trim.contains('@') || s_trim.ends_with(".git") {
-        s_trim.to_string()
+    let result = if s_trim.contains("://") || s_trim.contains('@') || s_trim.ends_with(".git") {
+        s_trim
     } else if s_trim.contains('/') {
         format!("https://github.com/{}.git", s_trim)
     } else {
-        s_trim.to_string()
-    }
+        s_trim
+    };
+    result
 }
 
 /// Clone a repository into a temporary directory preferring `gh` then `git`.

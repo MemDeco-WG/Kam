@@ -57,8 +57,6 @@ jobs:
         shell: bash
         run: |
           git submodule update --init --recursive
-          git submodule update --remote --merge && git add . && git commit -m "Update all submodules to latest" && git push
-
           kam build --help
           rm -rf dist
           chmod +x hooks/**/* || echo "hooks not found! "

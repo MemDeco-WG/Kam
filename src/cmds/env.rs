@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn run_returns_ok() {
         // run should complete successfully even if there are no KAM_ env vars in the process env.
-        assert!(run(EnvArgs {}).is_ok());
+        assert!(run(EnvArgs { describe: false }).is_ok());
     }
 
     #[test]

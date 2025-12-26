@@ -510,7 +510,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         path: project_path,
         id,
         name: project_name_str,
-        version,
+        version: version.to_string(),
         // author可能是None，用空字符串作为默认值
         // 虽然可能不太优雅，但至少不会panic
         author: kam_toml
@@ -520,10 +520,10 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
             .unwrap_or(&String::new())
             .clone(),
         description: description_str,
+        update_json: kam_toml.prop.updateJson.clone(),
         template_vars,
         impl_template,
         module_type,
-        update_json,
         kam_toml,
     })
     // 这个函数终于写完了，虽然有点长但逻辑还算清晰

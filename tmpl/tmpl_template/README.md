@@ -41,6 +41,11 @@ Kam executes hook files by directly invoking the file and defers to the operatin
 ## Environment Variables
 [ACTION](https://docs.github.com/zh/actions/reference/workflows-and-actions/variables)
 
+Important: Do NOT hard-code module or artifact paths inside hooks. Use the environment variables injected by Kam so hooks continue to work even when a project's source directory or output directory is customized. In particular:
+- Use `$KAM_MODULE_ROOT` for the module source directory (do not assume `src/<id>`).
+- Use `$KAM_DIST_DIR` for the build artifacts/output directory (do not assume `dist/`).
+- Use `$KAM_HOOKS_ROOT` when sourcing shared hook utilities.
+
 When hooks are executed, Kam injects the following environment variables, which you can use in your scripts:
 
 | Variable | Description |

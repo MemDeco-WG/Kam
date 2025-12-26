@@ -108,11 +108,9 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
     }
 
     // 确定模板ID，如果用户没指定就用默认的"template"
-    let archive_id = if let Some(eid) = params.explicit_template_id {
-        eid.to_string()
-    } else {
-        "template".to_string() // 默认值，虽然可能不太有用
-    };
+    let archive_id = params
+        .explicit_template_id
+        .map_or_else(|| "template".to_string(), |eid| eid.to_string());
 
     // Load template variables from template's kam.toml
     let template_kam_path = template_path.join("kam.toml");

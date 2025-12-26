@@ -1,5 +1,4 @@
-#!/system/bin/sh
-
+# shellcheck shell=ash
 # {{prop.name}} customize.sh
 #
 # This script is sourced by the module installer script after all files are extracted
