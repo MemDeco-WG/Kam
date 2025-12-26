@@ -924,7 +924,7 @@ mod tests {
         // theme may be configured in workspace members. To make this test robust,
         // check that the produced line contains the ANSI color fragment that
         // corresponds to the currently configured theme color (whatever it is).
-        let c = crate::colors::get_theme().error.clone();
+        let c = crate::colors::get_theme().error;
         match c {
             colored::Color::TrueColor { r, g, b } => {
                 // Match TrueColor SGR fragment like "38;2;R;G;B"

@@ -16,6 +16,8 @@
 //   guaranteed, early-available definition.
 // kam library
 
+#![warn(clippy::all, clippy::nursery)]
+
 #[macro_export]
 macro_rules! trf {
     ($key:expr $(, $args:expr )* $(,)?) => {{
@@ -40,6 +42,7 @@ pub mod cmds;
 pub mod colors;
 pub mod errors;
 pub mod i18n;
+pub mod rules;
 pub mod template;
 pub mod types;
 pub mod utils;

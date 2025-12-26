@@ -964,7 +964,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             path_basename
         ));
         if prompt_confirm(&trf!("init.interactive.set_module_id_to_basename"), true)? {
-            data.id = path_basename.clone();
+            data.id = path_basename;
         } else {
             // Let user input a custom id
             let id_input =

@@ -85,9 +85,7 @@ fn install_completion(shell: shells::Shell, buf: &[u8]) -> Result<PathBuf, std::
     }
 
     Err(last_err.unwrap_or_else(|| {
-        std::io::Error::other(
-            "no completion installation candidates available",
-        )
+        std::io::Error::other("no completion installation candidates available")
     }))
 }
 
@@ -240,11 +238,11 @@ mod tests {
             .filter_map(Result::ok)
             .filter(|e| e.file_type().is_file())
         {
-            if let Ok(text) = std::fs::read_to_string(entry.path()) {
-                if text.contains("_kam()") {
-                    found_path = Some(entry.into_path());
-                    break;
-                }
+            if let Ok(text) = std::fs::read_to_string(entry.path())
+                && text.contains("_kam()")
+            {
+                found_path = Some(entry.into_path());
+                break;
             }
         }
         assert!(
@@ -353,11 +351,11 @@ mod tests {
             if !entry.file_type().is_file() {
                 continue;
             }
-            if let Ok(text) = std::fs::read_to_string(entry.path()) {
-                if text.contains("_kam()") {
-                    found = Some(entry.into_path());
-                    break;
-                }
+            if let Ok(text) = std::fs::read_to_string(entry.path())
+                && text.contains("_kam()")
+            {
+                found = Some(entry.into_path());
+                break;
             }
         }
         assert!(

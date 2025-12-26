@@ -129,7 +129,7 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     // Rows:
     table.add_row(Row::from(vec![
         Cell::new(crate::i18n::tr_key("about.author")).add_attribute(Attribute::Bold),
-        Cell::new(author_raw.clone()),
+        Cell::new(author_raw),
     ]));
 
     if let Some(email) = email {

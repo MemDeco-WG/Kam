@@ -87,6 +87,12 @@ mod tests {
         let kt = crate::types::kam_toml::KamToml::load_from_file(&kt_path).unwrap();
         assert_eq!(kt.prop.id, "my_test_module");
 
+        // Ensure default source_dir is present and uses the module id
+        assert_eq!(
+            kt.kam.build.as_ref().and_then(|b| b.source_dir.clone()),
+            Some("src/my_test_module".to_string())
+        );
+
         std::env::set_current_dir(orig).unwrap();
     }
 

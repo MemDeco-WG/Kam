@@ -43,7 +43,7 @@ impl crate::rules::Rule for Chmod777Rule {
         "Detect usages of `chmod 777` and recommend more restrictive permissions"
     }
 
-    fn run(&self, path: &Path, content: &str, fr: &mut FileResult) {
+    fn run(&self, _path: &Path, content: &str, fr: &mut FileResult) {
         // Scan line by line and report each match once (with the line snippet).
         for (i, line) in content.lines().enumerate() {
             if Chmod777Rule::pattern().is_match(line) {
@@ -64,6 +64,7 @@ pub fn create() -> Box<dyn crate::rules::Rule> {
 mod tests {
     use super::*;
     use crate::cmds::check::file::FileResult;
+    use crate::rules::Rule;
     use std::fs;
     use tempfile::TempDir;
 

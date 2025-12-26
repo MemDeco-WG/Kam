@@ -13,7 +13,7 @@ pub struct ExtraInclude {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[allow(non_snake_case)]
 // 打包/构建配置节
-// - source_dir：自定义源代码目录（默认为 src/<id>）
+// - source_dir：自定义源代码目录（默认为 "src/{{id}}"，初始化时会展开为实际模块 ID）
 // - target_dir：打包输出目录，默认 "dist"
 // - output_file：可选的输出文件名（为空时使用 <id>-<versionCode>-<version>.zip）
 // - hooks_dir：钩子脚本目录，默认 "hooks"
@@ -33,7 +33,7 @@ pub struct BuildSection {
 impl Default for BuildSection {
     fn default() -> Self {
         BuildSection {
-            source_dir: None,
+            source_dir: Some("src/{{id}}".to_string()),
             target_dir: Some("dist".to_string()),
             output_file: Some("{{id}}-{{versionCode}}-{{version}}".to_string()),
             hooks_dir: Some("hooks".to_string()),

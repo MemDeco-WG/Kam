@@ -71,10 +71,11 @@ fn set_config_value(global: bool, key: &str, value: &str) -> Result<(), KamError
     let args = ConfigArgs {
         global,
         local: false,
-        command: ConfigCommand::Set {
+        interactive: false,
+        command: Some(ConfigCommand::Set {
             key: key.to_string(),
             value: value.to_string(),
-        },
+        }),
     };
     config::run(args)
 }

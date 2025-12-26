@@ -164,9 +164,15 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
             }
         }
         "sh" => {
-            // Delegated to check_sh in sh.rs
+            // Delegated to check_sh in sh.rs. If shellcheck succeeds we still want
+            // to apply our Rust-based rules on top of the shellcheck result so that
+            // rules from rules.d/ are enforced regardless of shellcheck availability.
             match super::sh::check_sh(path, do_fix) {
-                Ok(p) => return Ok(p),
+                Ok(mut p) => {
+                    // Apply rules to the shellcheck result (mutating its warnings/errors)
+                    crate::rules::apply_all_rules(path, &s, &mut p);
+                    return Ok(p);
+                }
                 Err(e) => {
                     fr.warnings.push(format!("sh check failed: {}", e));
                 }
@@ -204,6 +210,9 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
         _ => {}
     }
 
+    // Apply rules as a final pass so that file-level rules (rules.d/*) can
+    // append warnings/errors irrespective of the structured checks above.
+    crate::rules::apply_all_rules(path, &s, &mut fr);
     Ok(fr)
 }
 
@@ -329,47 +338,51 @@ fn check_version_format(version: &str, fr: &mut FileResult) {
 fn check_file_references(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileResult) {
     // 检查 [mmrl.repo] 中的文件引用
     if let Some(mmrl) = &kam_toml.mmrl
-        && let Some(repo) = &mmrl.repo {
-            check_file_exists(
-                project_dir,
-                &repo.license_file,
-                "[mmrl.repo] license_file",
-                fr,
-            );
-            check_file_exists(
-                project_dir,
-                &repo.readme_file,
-                "[mmrl.repo] readme_file",
-                fr,
-            );
-            check_file_exists(
-                project_dir,
-                &repo.changelog_file,
-                "[mmrl.repo] changelog_file",
-                fr,
-            );
+        && let Some(repo) = &mmrl.repo
+    {
+        check_file_exists(
+            project_dir,
+            &repo.license_file,
+            "[mmrl.repo] license_file",
+            fr,
+        );
+        check_file_exists(
+            project_dir,
+            &repo.readme_file,
+            "[mmrl.repo] readme_file",
+            fr,
+        );
+        check_file_exists(
+            project_dir,
+            &repo.changelog_file,
+            "[mmrl.repo] changelog_file",
+            fr,
+        );
 
-            // 检查图标文件
-            if let Some(icon) = &repo.icon
-                && !icon.is_empty() && !project_dir.join(icon).exists() {
-                    fr.warnings
-                        .push(format!("[mmrl.repo] icon file '{}' not found", icon));
-                }
+        // 检查图标文件
+        if let Some(icon) = &repo.icon
+            && !icon.is_empty()
+            && !project_dir.join(icon).exists()
+        {
+            fr.warnings
+                .push(format!("[mmrl.repo] icon file '{}' not found", icon));
         }
+    }
 }
 
 /// 检查单个文件是否存在
 fn check_file_exists(base: &Path, file: &Option<String>, name: &str, fr: &mut FileResult) {
     if let Some(f) = file
-        && !f.is_empty() {
-            let file_path = base.join(f);
-            if !file_path.exists() {
-                fr.valid = false;
-                fr.errors.push(format!("{} '{}' not found", name, f));
-            } else if file_path.metadata().map(|m| m.len() == 0).unwrap_or(false) {
-                fr.warnings.push(format!("{} '{}' is empty", name, f));
-            }
+        && !f.is_empty()
+    {
+        let file_path = base.join(f);
+        if !file_path.exists() {
+            fr.valid = false;
+            fr.errors.push(format!("{} '{}' not found", name, f));
+        } else if file_path.metadata().map(|m| m.len() == 0).unwrap_or(false) {
+            fr.warnings.push(format!("{} '{}' is empty", name, f));
         }
+    }
 }
 
 /// 检查配置一致性
@@ -397,15 +410,16 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
 
         // 检查 hooks 目录
         if let Some(hooks_dir) = &build.hooks_dir
-            && hooks_dir != "hooks" {
-                let hooks_path = project_dir.join(hooks_dir);
-                if !hooks_path.exists() {
-                    fr.warnings.push(format!(
-                        "[kam.build] hooks_dir '{}' does not exist",
-                        hooks_dir
-                    ));
-                }
+            && hooks_dir != "hooks"
+        {
+            let hooks_path = project_dir.join(hooks_dir);
+            if !hooks_path.exists() {
+                fr.warnings.push(format!(
+                    "[kam.build] hooks_dir '{}' does not exist",
+                    hooks_dir
+                ));
             }
+        }
     } else {
         // 没有 build 配置，检查默认源码目录
         let default_src = project_dir.join("src").join(&kam_toml.prop.id);
@@ -420,10 +434,11 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
     // 检查 [mmrl.repo] 中的 license 字段
     if let Some(mmrl) = &kam_toml.mmrl
         && let Some(repo) = &mmrl.repo
-            && repo.license.as_deref().unwrap_or("").is_empty() {
-                fr.warnings
-                    .push("[mmrl.repo] license is recommended".to_string());
-            }
+        && repo.license.as_deref().unwrap_or("").is_empty()
+    {
+        fr.warnings
+            .push("[mmrl.repo] license is recommended".to_string());
+    }
 }
 
 /// 从错误消息中提取行号信息，使错误信息更友好
@@ -431,12 +446,13 @@ fn extract_line_number(err_msg: &str, content: &str) -> String {
     // TOML 错误通常包含 "line X" 或 "at line X"
     let line_re = Regex::new(r"(?i)(?:at\s+)?line\s+(\d+)").unwrap();
     if let Some(cap) = line_re.captures(err_msg)
-        && let Ok(line_num) = cap[1].parse::<usize>() {
-            // 尝试获取该行的内容
-            if let Some(line_content) = content.lines().nth(line_num.saturating_sub(1)) {
-                return format!("{} (line {}: {})", err_msg, line_num, line_content.trim());
-            }
-            return format!("{} (line {})", err_msg, line_num);
+        && let Ok(line_num) = cap[1].parse::<usize>()
+    {
+        // 尝试获取该行的内容
+        if let Some(line_content) = content.lines().nth(line_num.saturating_sub(1)) {
+            return format!("{} (line {}: {})", err_msg, line_num, line_content.trim());
         }
+        return format!("{} (line {})", err_msg, line_num);
+    }
     err_msg.to_string()
 }

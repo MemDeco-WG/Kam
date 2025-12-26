@@ -80,7 +80,39 @@ invalid_selection_out_of_range = "Invalid selection. Number out of range."
 invalid_input_number = "Invalid input. Please enter a number."
 
 [env]
-no_kam_vars = "No KAM_ environment variables found"
+no_kam_vars = "No KAM_ environment variables found."
+
+[env.docs]
+header = "Environment variables used by Kam"
+intro = "Kam reads and/or sets these environment variables. The current process value (if set) is shown alongside each entry."
+kam_home = "Kam home directory (overrides default: $HOME/.kam)."
+kam_cache_dir = "Directory used for caching and indexes."
+kam_ui_language = "UI language override (e.g., en, zh, zh-CN)."
+kam_lang = "Legacy UI language variable (fallback)."
+kam_author_email = "Override author email used in about output."
+kam_root_manager = "Preferred root manager for device installs (e.g., Magisk)."
+kam_repo_concurrency = "Concurrency for repository operations."
+kam_force_index_refresh = "If present, forces index cache refresh."
+kam_bump_enabled = "Set to 1 to mark bump-enabled state in hooks/builds."
+kam_release_enabled = "Set to 1 to mark release-enabled state in hooks/builds."
+kam_sign_enabled = "Set to 1 to enable signing."
+kam_pre_release = "Set to 1 to mark pre-release builds."
+kam_interactive = "Set to 1 to indicate interactive mode in scripts (where applicable)."
+kam_repo = "Repository override used in certain operations."
+kam_repo_ref = "Repository ref override for certain operations."
+kam_git_repo = "Git repository URL used for hooks/operations."
+kam_github_repo = "GitHub repository name from CI (GITHUB_REPOSITORY)."
+kam_release_tag = "Release tag used in release workflows."
+kam_prop_prefix = "KAM_PROP_* variables reflect module properties (prop.*) exported for hooks."
+kam_tmpl_note = "Template variables (KAM_TMPL_*) are available to hooks when templates define variables."
+kam_module_prefix = "KAM_MODULE_* variables provide module metadata to hooks (id, version, author, ...)."
+kam_stage = "Stage name for hook execution (e.g., pre-build, post-build)."
+home = "User HOME used when resolving user-level paths."
+path = "System PATH used to locate external tools."
+xdg_config_home = "XDG_CONFIG_HOME used for finding configs and completions."
+xdg_data_home = "XDG_DATA_HOME used for finding data directories."
+github_repository = "GITHUB_REPOSITORY in CI provides repository info."
+github_ref = "GITHUB_REF in CI provides branch/ref info."
 
 [check]
 no_issues_found = "No issues found."
@@ -96,6 +128,19 @@ header = "Warnings:"
 file_fixed = "{} (fixed)"
 
 [config]
+
+[config.interactive]
+intro = "Interactive configuration - guided setup for common preferences."
+view_builtins = "You can view available built-in config keys with: `kam config show`"
+select_target = "Select target config to edit"
+choose_action = "Choose an action"
+enter_ui_language = "Enter UI language (e.g., en, zh, zh-CN)"
+choose_root_manager = "Choose preferred root manager (Magisk|KernelSU|APatchSU)"
+set_custom_key = "Set other configuration key"
+enter_custom_key = "Enter configuration key (dot-separated path, e.g., ui.language)"
+enter_value_for_key = "Enter value for {}"
+make_more_changes = "Make more changes?"
+aborted = "Aborted."
 builtin_keys = "Built-in configuration keys:"
 example = "Example:"
 note_custom_keys = "Note: You can also set custom keys. Use 'kam config list' to see all configured values."
@@ -581,6 +626,9 @@ summary = "Display about information for Kam and credits"
 
 [cli.commands.config]
 summary = "Manage per-project or global kam configuration (similar to git config)"
+
+[cli.commands.config.flags]
+interactive = "Interactive mode: guide the user through common configuration (language, root manager, etc.)"
 
 [cli.commands.env]
 summary = "Print environment variables starting with KAM_"

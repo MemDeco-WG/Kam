@@ -12,13 +12,13 @@ pub enum ShellArg {
 }
 
 impl ShellArg {
-    pub fn to_shell(&self) -> shells::Shell {
+    pub const fn to_shell(&self) -> shells::Shell {
         match self {
-            ShellArg::Bash => shells::Shell::Bash,
-            ShellArg::Zsh => shells::Shell::Zsh,
-            ShellArg::Fish => shells::Shell::Fish,
-            ShellArg::PowerShell => shells::Shell::PowerShell,
-            ShellArg::Elvish => shells::Shell::Elvish,
+            Self::Bash => shells::Shell::Bash,
+            Self::Zsh => shells::Shell::Zsh,
+            Self::Fish => shells::Shell::Fish,
+            Self::PowerShell => shells::Shell::PowerShell,
+            Self::Elvish => shells::Shell::Elvish,
         }
     }
 }

@@ -107,9 +107,9 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
                             );
                             if level.eq_ignore_ascii_case("error") {
                                 fr.valid = false;
-                                fr.errors.push(msg.clone());
+                                fr.errors.push(msg);
                             } else {
-                                fr.warnings.push(msg.clone());
+                                fr.warnings.push(msg);
                             }
                         };
 
@@ -149,7 +149,7 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
     }
     // 如果要求修复且shfmt可用，就用shfmt格式化
     if do_fix && command_installed("shfmt") {
-        let before = s.clone();
+        let before = s;
         let status = Command::new("shfmt").arg("-w").arg(path).status();
         if status.is_ok() && status.unwrap().success() {
             // 重新读取文件，比较是否有变化

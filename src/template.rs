@@ -963,6 +963,28 @@ cache_dir = "~/my_config_cache_dir"
     }
 
     #[test]
+    fn test_flatten_kam_toml_build_source_dir_default() {
+        // Construct a basic KamToml using defaults and ensure the default build.source_dir
+        // is present in the flattened variables (so users can discover the field).
+        let kt = crate::types::kam_toml::KamToml::new_with_current_timestamp(
+            "com.example.test".to_string(),
+            "Example Test".to_string(),
+            "0.1.0".to_string(),
+            Some("Author".to_string()),
+            "Desc".to_string(),
+            None,
+            None,
+        );
+
+        // Flatten and assert the default source_dir is included (templated default)
+        let vars = TemplateVariableProcessor::flatten_kam_toml(&kt);
+        assert_eq!(
+            vars.get("kam.build.source_dir").map(|s| s.as_str()),
+            Some("src/{{id}}")
+        );
+    }
+
+    #[test]
     fn test_copy_and_replace_respects_exclude_include_rules() {
         use std::fs::File;
         use std::io::Write;

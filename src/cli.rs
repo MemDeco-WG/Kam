@@ -119,12 +119,12 @@ impl Cli {
 
         // If the user already supplied `--` we don't touch the args.
         if args_os.iter().any(|a| a == &OsString::from("--")) {
-            let matches = Cli::command().try_get_matches_from(args_os)?;
-            return Cli::from_arg_matches(&matches);
+            let matches = Self::command().try_get_matches_from(args_os)?;
+            return Self::from_arg_matches(&matches);
         }
 
         // Collect subcommand names so we don't mistakenly insert `--` before a real subcommand.
-        let sub_names: HashSet<String> = Cli::command()
+        let sub_names: HashSet<String> = Self::command()
             .get_subcommands()
             .map(|s| s.get_name().to_string())
             .collect();
@@ -144,8 +144,7 @@ impl Cli {
 
                 // Detect combined short flags like `-Syu` or `-yuS`. We only accept letters
                 // from the known set to avoid surprising behavior with unrelated flags.
-                let mut combined = false;
-                if tok.starts_with('-') && !tok.starts_with("--") {
+                let combined = if tok.starts_with('-') && !tok.starts_with("--") {
                     let rest = &tok[1..];
                     let mut all_known = true;
                     let mut contains_sync_or_search = false;
@@ -159,8 +158,10 @@ impl Cli {
                             }
                         }
                     }
-                    combined = all_known && contains_sync_or_search;
-                }
+                    all_known && contains_sync_or_search
+                } else {
+                    false
+                };
 
                 if (explicit || combined)
                     && i + 1 < args_os.len()
@@ -175,8 +176,8 @@ impl Cli {
         }
 
         // Parse using the derived Command (mirrors clap's default parsing path).
-        let matches = Cli::command().try_get_matches_from(args_os)?;
-        Cli::from_arg_matches(&matches)
+        let matches = Self::command().try_get_matches_from(args_os)?;
+        Self::from_arg_matches(&matches)
     }
 
     /// Convenience wrapper that panics on error (like clap's `parse_from`).

@@ -296,15 +296,15 @@ pub fn create_kam_module_zip(
 ) -> Result<PathBuf, KamError> {
     let module_output_file = output_dir.join(format!("{}.zip", basename));
 
-    let src_dir = if let Some(build) = &kam_toml.kam.build {
-        if let Some(custom_src) = &build.source_dir {
-            project_path.join(custom_src)
-        } else {
-            project_path.join("src").join(module_id)
-        }
-    } else {
-        project_path.join("src").join(module_id)
-    };
+    let src_dir = kam_toml.kam.build.as_ref().map_or_else(
+        || project_path.join("src").join(module_id),
+        |build| {
+            build.source_dir.as_ref().map_or_else(
+                || project_path.join("src").join(module_id),
+                |custom_src| project_path.join(custom_src),
+            )
+        },
+    );
 
     if !src_dir.exists() && !args.quiet {
         Utils::warn(&trf!(
@@ -366,25 +366,19 @@ pub fn create_kam_module_zip(
     // Add source files (module dir: src/<module_id>) flattened to root
     if src_dir.exists() {
         // Compile exclude and include patterns as raw strings and use central matcher at runtime
-        let exclude_patterns: Vec<String> = if let Some(build) = kam_toml.kam.build.as_ref() {
-            if let Some(excludes) = &build.exclude {
-                excludes.clone()
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        };
+        let exclude_patterns: Vec<String> = kam_toml
+            .kam
+            .build
+            .as_ref()
+            .and_then(|build| build.exclude.clone())
+            .unwrap_or_default();
 
-        let include_patterns: Vec<String> = if let Some(build) = kam_toml.kam.build.as_ref() {
-            if let Some(includes) = &build.include {
-                includes.clone()
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        };
+        let include_patterns: Vec<String> = kam_toml
+            .kam
+            .build
+            .as_ref()
+            .and_then(|build| build.include.clone())
+            .unwrap_or_default();
 
         // First, count files to create a proper progress bar
         let file_count = {
@@ -579,17 +573,19 @@ pub fn create_template_archive(
     let mut tar = TarBuilder::new(enc);
 
     // Compile exclude and include patterns as raw strings and use the central matcher at runtime
-    let exclude_patterns: Vec<String> = if let Some(build) = _kam_toml.kam.build.as_ref() {
-        build.exclude.clone().unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let exclude_patterns: Vec<String> = _kam_toml
+        .kam
+        .build
+        .as_ref()
+        .and_then(|build| build.exclude.clone())
+        .unwrap_or_default();
 
-    let include_patterns: Vec<String> = if let Some(build) = _kam_toml.kam.build.as_ref() {
-        build.include.clone().unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let include_patterns: Vec<String> = _kam_toml
+        .kam
+        .build
+        .as_ref()
+        .and_then(|build| build.include.clone())
+        .unwrap_or_default();
 
     // Use ignore::WalkBuilder to traverse all files, respecting .gitignore
     // For templates, we generally want to include hidden files (like .gitignore itself if needed, though ignore crate handles it)

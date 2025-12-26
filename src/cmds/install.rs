@@ -386,13 +386,7 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                     let interpreter = content
                         .lines()
                         .next()
-                        .and_then(|l| {
-                            if l.starts_with("#!") {
-                                Some(l[2..].to_string())
-                            } else {
-                                None
-                            }
-                        })
+                        .and_then(|l| l.strip_prefix("#!").map(|s| s.to_string()))
                         .unwrap_or_else(|| "sh".to_string());
                     // Use a simple heuristic: if shebang contains 'bash' prefer 'bash', otherwise fall back to 'sh'
                     let exec = if interpreter.contains("bash") {
@@ -459,15 +453,14 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
             let mut candidates: Vec<PathBuf> = Vec::new();
             for dir in &[workdir.join("."), workdir.join(target_dir)] {
                 if dir.exists() && dir.is_dir() {
-                    for entry in fs::read_dir(&dir).map_err(KamError::Io)? {
+                    for entry in fs::read_dir(dir).map_err(KamError::Io)? {
                         let e = entry.map_err(KamError::Io)?;
                         let p = e.path();
-                        if p.is_file() {
-                            if let Some(ext) = p.extension().and_then(|x| x.to_str()) {
-                                if ext.eq_ignore_ascii_case("zip") {
-                                    candidates.push(p);
-                                }
-                            }
+                        if p.is_file()
+                            && let Some(ext) = p.extension().and_then(|x| x.to_str())
+                            && ext.eq_ignore_ascii_case("zip")
+                        {
+                            candidates.push(p);
                         }
                     }
                 }
@@ -678,14 +671,13 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
 /// - Otherwise fallback to resolving the artifact locally (as before).
 pub fn run(args: InstallArgs) -> Result<(), KamError> {
     // If an explicit path was provided and it looks like a git spec, do git-based install
-    if let Some(p) = args.path.clone() {
-        if let Some(s) = p.to_str() {
-            if looks_like_git_spec(s) {
-                let (artifact, _tmpdir) = handle_git_install(s, &args)?;
-                // Keep tmpdir alive for the duration of installation by holding `_tmpdir`
-                return execute_install_from_artifact(&artifact, &args);
-            }
-        }
+    if let Some(p) = args.path.clone()
+        && let Some(s) = p.to_str()
+        && looks_like_git_spec(s)
+    {
+        let (artifact, _tmpdir) = handle_git_install(s, &args)?;
+        // Keep tmpdir alive for the duration of installation by holding `_tmpdir`
+        return execute_install_from_artifact(&artifact, &args);
     }
 
     // Default (local) behavior

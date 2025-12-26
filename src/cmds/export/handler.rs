@@ -51,23 +51,24 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
 
     // 确定输出路径
     // 如果输出是"-"就打印到stdout，否则写到文件
-    let output_path: Option<std::path::PathBuf> = if let Some(p) = &args.output {
-        match p.to_str() {
+    let output_path: Option<std::path::PathBuf> = args.output.as_ref().map_or_else(
+        || {
+            // 没指定输出，用默认文件名（根据格式）
+            let filename = match format {
+                ExportFormat::Prop => "module.prop",
+                ExportFormat::Json => "module.json",
+                ExportFormat::Repo => "repo.json",
+                ExportFormat::Track => "track.json",
+                ExportFormat::Config => "config.json",
+                ExportFormat::Update => "update.json",
+            };
+            Some(cwd.join(filename))
+        },
+        |p| match p.to_str() {
             Some("-") => None, // stdout
             _ => Some(p.clone()),
-        }
-    } else {
-        // 没指定输出，用默认文件名（根据格式）
-        let filename = match format {
-            ExportFormat::Prop => "module.prop",
-            ExportFormat::Json => "module.json",
-            ExportFormat::Repo => "repo.json",
-            ExportFormat::Track => "track.json",
-            ExportFormat::Config => "config.json",
-            ExportFormat::Update => "update.json",
-        };
-        Some(cwd.join(filename))
-    };
+        },
+    );
 
     // 根据格式导出
     match format {

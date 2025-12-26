@@ -249,6 +249,16 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
                             build.exclude = None;
                         }
 
+                        // Ensure build section/source_dir exists and set a sensible default if missing.
+                        // Use the actual module id here (rendered_kt.prop.id) so the final kam.toml contains a usable path
+                        // (this helps users discover the `kam.build.source_dir` field and ensures a valid default).
+                        let build = rendered_kt.kam.build.get_or_insert_with(|| {
+                            crate::types::kam_toml::sections::BuildSection::default()
+                        });
+                        if build.source_dir.is_none() {
+                            build.source_dir = Some(format!("src/{}", rendered_kt.prop.id));
+                        }
+
                         // Reset module_type to Kam (template's kam.toml has module_type = "template")
                         rendered_kt.kam.module_type = ModuleType::Kam;
 
@@ -258,8 +268,8 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
                         }
 
                         // Write the fixed kam.toml
-                        let fixed_content =
-                            toml::to_string_pretty(&rendered_kt).unwrap_or(rendered.clone());
+                        let fixed_content = toml::to_string_pretty(&rendered_kt)
+                            .unwrap_or_else(|_| rendered.clone());
                         fs::write(&kam_toml_path, fixed_content).map_err(KamError::Io)?;
 
                         // Replace current in-memory kt with the rendered/finalized kam.toml to ensure
