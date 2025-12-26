@@ -1,5 +1,15 @@
 ## Unreleased
 
+### Feat
+
+- **install**: add Git repo install support; update CHANGELOG
+
+### Fix
+
+- **install**: convert dialoguer::Error into std::io::Error via Into
+
+## v0.5.11 (2025-12-25)
+
 ## v0.5.10 (2025-12-24)
 
 ## v0.5.8 (2025-12-16)

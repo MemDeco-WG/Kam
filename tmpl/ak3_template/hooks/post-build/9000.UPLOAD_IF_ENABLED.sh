@@ -45,7 +45,7 @@ if [ -z "$CHANGELOG_SECTION" ]; then
 fi
 
 RELEASE_NOTES=$(cat <<EOF
-${KAM_MODULE_NAME:-$KAM_MODULE_ID} v${KAM_MODULE_VERSION:-unknown}
+${KAM_MODULE_NAME:-$KAM_MODULE_ID} ${KAM_MODULE_VERSION:-unknown}
 
 Module: ${KAM_MODULE_ID}
 Version: ${KAM_MODULE_VERSION}
@@ -78,4 +78,9 @@ else
 fi
 
 log_success "Upload step finished"
+
+git add .
+git commit -m "Update version to ${KAM_MODULE_VERSION}"
+git push
+
 exit 0
