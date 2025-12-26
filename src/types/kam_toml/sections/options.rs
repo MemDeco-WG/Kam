@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 归档选项（比如压缩算法名称或参数）
 pub struct ArchiveOptions {
@@ -10,13 +10,13 @@ pub struct ArchiveOptions {
 
 impl Default for ArchiveOptions {
     fn default() -> Self {
-        ArchiveOptions {
+        Self {
             compression: Some(String::new()),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 额外选项节（用于放置扩展配置，例如归档参数）
 pub struct OptionsSection {
@@ -26,7 +26,7 @@ pub struct OptionsSection {
 
 impl Default for OptionsSection {
     fn default() -> Self {
-        OptionsSection {
+        Self {
             archive: Some(ArchiveOptions::default()),
         }
     }

@@ -11,8 +11,8 @@ pub fn run(args: TmplArgs) -> Result<(), KamError> {
     match args.command {
         TmplCommands::List => list_templates(),
         TmplCommands::Import { path, name, force } => import::import_template(&path, name, force),
-        TmplCommands::Pull { url, global } => pull::run_pull(url, global),
-        TmplCommands::Update { global } => pull::run_update(global),
+        TmplCommands::Pull { url, global, quiet } => pull::run_pull(url, global, quiet),
+        TmplCommands::Update { global, quiet } => pull::run_update(global, quiet),
         TmplCommands::Export {
             templates,
             output,

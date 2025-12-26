@@ -25,7 +25,7 @@ pub struct KamToml {
 impl Default for KamToml {
     fn default() -> Self {
         // Use defaults from section Default impls where appropriate.
-        let mut default = KamToml::from_prop(PropSection::default());
+        let mut default = Self::from_prop(PropSection::default());
         default.mmrl = Some(MmrlSection::default());
         default.kam = KamSection::default();
         default.raw = "".to_string();
@@ -45,7 +45,7 @@ impl KamToml {
     // 从PropSection构造KamToml（用于默认值组合）
     // 这个辅助函数保持和其他构造函数相同的签名
     pub fn from_prop(prop: PropSection) -> Self {
-        KamToml {
+        Self {
             prop,
             mmrl: Some(MmrlSection::default()),
             kam: KamSection::default(),
@@ -65,7 +65,7 @@ impl KamToml {
         update_json: Option<String>,
         module_type: Option<enums::ModuleType>,
     ) -> Self {
-        let mut kt = KamToml::from_prop(PropSection {
+        let mut kt = Self::from_prop(PropSection {
             id,
             name,
             version,
@@ -97,7 +97,7 @@ impl KamToml {
                 crate::errors::KamError::Io(e)
             }
         })?;
-        let mut kt: KamToml = toml::from_str(&content)?;
+        let mut kt: Self = toml::from_str(&content)?;
         kt.raw = content;
         Ok(kt)
     }

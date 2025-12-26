@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 模板变量的定义
 // 用来描述模板中可被替换的变量的类型、是否必需、默认值等
@@ -26,7 +26,7 @@ pub struct VariableDefinition {
 
 impl Default for VariableDefinition {
     fn default() -> Self {
-        VariableDefinition {
+        Self {
             var_type: "string".to_string(),
             required: false,
             default: None,
@@ -38,7 +38,7 @@ impl Default for VariableDefinition {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 模板相关配置节，用于在模块中引用/配置子模板
 // - used_template：可选引用的内置或自定义模板id
@@ -50,7 +50,7 @@ pub struct TmplSection {
 
 impl Default for TmplSection {
     fn default() -> Self {
-        TmplSection {
+        Self {
             used_template: Some("kam_template".to_string()),
             variables: BTreeMap::new(),
         }

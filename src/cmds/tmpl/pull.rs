@@ -9,6 +9,7 @@ use reqwest::blocking::Client;
 use reqwest::header;
 use reqwest::redirect::Policy;
 use std::fs;
+use std::io::IsTerminal;
 use std::io::{Read, Write};
 use std::time::Duration;
 use tempfile::Builder as TempFileBuilder;
@@ -82,11 +83,13 @@ fn set_config_value(global: bool, key: &str, value: &str) -> Result<(), KamError
 
 // 从URL拉取模板
 // 下载ZIP文件然后导入
-pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
+pub fn run_pull(url: Option<String>, _global: bool, quiet: bool) -> Result<(), KamError> {
     // 如果没指定URL就用默认的GitHub releases地址
     let download_url = url.as_deref().unwrap_or(DEFAULT_TEMPLATES_URL);
     use crate::utils::Utils;
-    Utils::executing(&format!("Downloading templates from: {}", download_url));
+    if !quiet {
+        Utils::executing(&format!("Downloading templates from: {}", download_url));
+    }
 
     // 创建HTTP客户端，设置30秒超时
     let client = Client::builder()
@@ -115,15 +118,29 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
         .and_then(|h| h.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok());
 
-    // 如果有文件大小就显示进度条，没有就警告一下
-    let pb = if let Some(size) = file_size {
-        let pb = ProgressBar::new(size);
-        pb.set_style(ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, ETA: {eta})",
-        ).unwrap().progress_chars("#>-"));
-        Some(pb)
+    // 仅在非安静模式且 stdout 是 TTY 时显示进度条
+    let show_progress = !quiet && std::io::stdout().is_terminal();
+
+    // 如果有文件大小就显示进度条，没有就警告一下（仅在 show_progress 为 true 时显示警告）
+    let pb = if show_progress {
+        file_size.map_or_else(
+            || {
+                Utils::warn("Could not determine file size. Progress bar will be disabled.");
+                None
+            },
+            |size| {
+                let pb = ProgressBar::new(size);
+                pb.set_style(
+                    ProgressStyle::with_template(
+                        "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, ETA: {eta})",
+                    )
+                    .unwrap()
+                    .progress_chars("#>-"),
+                );
+                Some(pb)
+            },
+        )
     } else {
-        Utils::warn("Could not determine file size. Progress bar will be disabled.");
         None
     };
 
@@ -170,7 +187,9 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
 
     // 下载完成，导入模板
     let tmp_path = tmpf.path().to_path_buf();
-    Utils::executing("Importing downloaded templates...");
+    if !quiet {
+        Utils::executing("Importing downloaded templates...");
+    }
     import::import_template(&tmp_path, None, true)?;
 
     // 保存URL和下载时间到配置（方便下次update）
@@ -178,21 +197,22 @@ pub fn run_pull(url: Option<String>, _global: bool) -> Result<(), KamError> {
     let now = Utc::now().to_rfc3339();
     set_config_value(true, "tmpl.pull.last_download", &now)?;
 
-    Utils::success("Templates downloaded and imported successfully");
+    if !quiet {
+        Utils::success("Templates downloaded and imported successfully");
+    }
     Ok(())
 }
 
 // 更新模板（用上次记录的URL重新下载）
-pub fn run_update(_global: bool) -> Result<(), KamError> {
+pub fn run_update(_global: bool, quiet: bool) -> Result<(), KamError> {
     let url = read_config_value(true, "tmpl.pull.url")?;
-    if let Some(v) = url {
-        // 有记录的URL，就用它重新下载
-        run_pull(Some(v.clone()), true)
-    } else {
-        // 没有记录的URL，提示用户先pull一次
-        Err(KamError::CommandFailed(
-            "No recorded tmpl.pull.url found in global config. Run `kam tmpl pull <url>` first."
-                .to_string(),
-        ))
-    }
+    url.map_or_else(
+        || {
+            Err(KamError::CommandFailed(
+                "No recorded tmpl.pull.url found in global config. Run `kam tmpl pull <url>` first."
+                    .to_string(),
+            ))
+        },
+        |v| run_pull(Some(v), true, quiet),
+    )
 }

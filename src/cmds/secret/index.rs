@@ -26,7 +26,7 @@ pub struct SecretMeta {
 
 impl Default for SecretMeta {
     fn default() -> Self {
-        SecretMeta {
+        Self {
             encrypted: false,
             created_at: 0,
             storage: "file".to_string(),
@@ -117,7 +117,7 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
         struct Legacy {
             names: HashSet<String>,
         }
-        let legacy: Legacy = serde_json::from_value(v.clone())
+        let legacy: Legacy = serde_json::from_value(v)
             .map_err(|e| KamError::Json(format!("Failed to parse legacy secret index: {}", e)))?;
         let mut new = SecretIndex::default();
         // 把旧格式的names转成新格式的entries

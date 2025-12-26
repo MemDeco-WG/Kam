@@ -58,11 +58,7 @@ pub fn default_exclude_dir_names() -> Vec<String> {
 
 fn matches_directory_prefix(pattern: &str, path: &str) -> bool {
     let prefix = pattern.trim_end_matches('/');
-    let path_norm = if let Some(stripped) = path.strip_prefix("./") {
-        stripped
-    } else {
-        path
-    };
+    let path_norm = path.strip_prefix("./").map_or(path, |stripped| stripped);
     path_norm == prefix || path_norm.starts_with(&format!("{}/", prefix))
 }
 
@@ -364,9 +360,9 @@ impl Utils {
         // Print stdout lines (map common prefixes to structured outputs)
         for line in s_out.lines() {
             match Self::classify_log_line(line) {
-                LogLevel::Warn(msg) => Utils::warn(msg),
-                LogLevel::Error(msg) => Utils::error(msg),
-                LogLevel::Info(msg) => Utils::info(msg),
+                LogLevel::Warn(msg) => Self::warn(msg),
+                LogLevel::Error(msg) => Self::error(msg),
+                LogLevel::Info(msg) => Self::info(msg),
                 LogLevel::Empty => {}
             }
         }
@@ -387,9 +383,9 @@ impl Utils {
     /// log consumers that read output line-by-line.
     pub fn print_cmd_line(line: &str) {
         match Self::classify_log_line(line) {
-            LogLevel::Warn(msg) => Utils::warn(msg),
-            LogLevel::Error(msg) => Utils::error(msg),
-            LogLevel::Info(msg) => Utils::info(msg),
+            LogLevel::Warn(msg) => Self::warn(msg),
+            LogLevel::Error(msg) => Self::error(msg),
+            LogLevel::Info(msg) => Self::info(msg),
             LogLevel::Empty => {}
         }
     }
@@ -464,7 +460,7 @@ impl Utils {
                             // Trim trailing newline for consistent formatting
                             let s_trim = s.trim_end_matches('\n');
                             if !s_trim.is_empty() {
-                                Utils::print_cmd_line(s_trim);
+                                Self::print_cmd_line(s_trim);
                             }
                         }
                         Err(_) => break,

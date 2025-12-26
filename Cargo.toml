@@ -126,4 +126,4 @@ keywords = [
 license = "GPL-3.0"
 name = "kam"
 repository = "https://github.com/MemDeco-WG/Kam"
-version = "0.5.18"
+version = "0.5.19"

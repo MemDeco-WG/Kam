@@ -517,8 +517,8 @@ install = "Install completion script into system/user completion directories (ma
 # Command: install
 # -------------------------
 [cli.commands.install]
-summary = "Install a module package to a connected device using the configured root manager"
-description = "Install a built module (.zip) to a connected device using Magisk/KernelSU/APatchSU. Configure the preferred manager with `kam config set root.manager <Manager>`. Note: On Android this command may require root (su). Kam will attempt to use 'su' to escalate if needed."
+summary = "Act as a compatibility layer for Magisk, KernelSU, and APatchSU to install modules"
+description = "Act as a compatibility layer for Magisk/KernelSU/APatchSU to install modules (.zip), delegating to the configured root manager. Configure the preferred manager with `kam config set root.manager <Manager>`. Note: On Android this command may require root (su); Kam will attempt to use 'su' to escalate if needed."
 
 [install]
 section = "Install: {}"

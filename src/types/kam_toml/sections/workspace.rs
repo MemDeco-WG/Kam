@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 工作区配置节，用于Kam工作区管理，类似Cargo的workspaces
 pub struct WorkspaceSection {
@@ -12,7 +12,7 @@ pub struct WorkspaceSection {
 
 impl Default for WorkspaceSection {
     fn default() -> Self {
-        WorkspaceSection {
+        Self {
             members: Some(vec![".".to_string()]),
             exclude: None,
         }

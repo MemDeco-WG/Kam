@@ -132,47 +132,53 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     // 智能推断项目名称：优先使用 git 仓库名，其次目录名
     let project_name_str = args.project_name.as_ref().map_or_else(
         || {
-            if let Some(ref repo_name) = git_repo_name {
-                // 将仓库名转换为更友好的显示名称（去掉下划线/横线，首字母大写等）
-                let mut name = repo_name.clone();
-                // 简单的美化：将下划线和横线替换为空格，并首字母大写
-                name = name.replace(['_', '-'], " ");
-                // 简单的首字母大写（只处理第一个单词）
-                if let Some(first_char) = name.chars().next() {
-                    let mut chars: Vec<char> = name.chars().collect();
-                    chars[0] = first_char.to_uppercase().next().unwrap_or(first_char);
-                    name = chars.into_iter().collect();
-                }
-                name
-            } else if project_name_raw != "." {
-                // 从路径提取目录名并美化
-                let dir_name = std::path::Path::new(project_name_raw)
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(project_name_raw)
-                    .to_string();
-                let mut name = dir_name.replace(['_', '-'], " ");
-                if let Some(first_char) = name.chars().next() {
-                    let mut chars: Vec<char> = name.chars().collect();
-                    chars[0] = first_char.to_uppercase().next().unwrap_or(first_char);
-                    name = chars.into_iter().collect();
-                }
-                name
-            } else {
-                // 从当前目录名提取
-                let dir_name = current_dir
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("Example Module Name")
-                    .to_string();
-                let mut name = dir_name.replace(['_', '-'], " ");
-                if let Some(first_char) = name.chars().next() {
-                    let mut chars: Vec<char> = name.chars().collect();
-                    chars[0] = first_char.to_uppercase().next().unwrap_or(first_char);
-                    name = chars.into_iter().collect();
-                }
-                name
-            }
+            // 优先使用 detected git 仓库名（如果有），否则从路径或当前目录提取
+            git_repo_name.as_ref().map_or_else(
+                || {
+                    if project_name_raw != "." {
+                        // 从路径提取目录名并美化
+                        let dir_name = std::path::Path::new(project_name_raw)
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(project_name_raw)
+                            .to_string();
+                        let mut name = dir_name.replace(['_', '-'], " ");
+                        if let Some(first_char) = name.chars().next() {
+                            let mut chars: Vec<char> = name.chars().collect();
+                            chars[0] = first_char.to_uppercase().next().unwrap_or(first_char);
+                            name = chars.into_iter().collect();
+                        }
+                        name
+                    } else {
+                        // 从当前目录名提取
+                        let dir_name = current_dir
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("Example Module Name")
+                            .to_string();
+                        let mut name = dir_name.replace(['_', '-'], " ");
+                        if let Some(first_char) = name.chars().next() {
+                            let mut chars: Vec<char> = name.chars().collect();
+                            chars[0] = first_char.to_uppercase().next().unwrap_or(first_char);
+                            name = chars.into_iter().collect();
+                        }
+                        name
+                    }
+                },
+                |repo_name| {
+                    // 将仓库名转换为更友好的显示名称（去掉下划线/横线，首字母大写等）
+                    let mut name = repo_name.clone();
+                    // 简单的美化：将下划线和横线替换为空格，并首字母大写
+                    name = name.replace(['_', '-'], " ");
+                    // 简单的首字母大写（只处理第一个单词）
+                    if let Some(first_char) = name.chars().next() {
+                        let mut chars: Vec<char> = name.chars().collect();
+                        chars[0] = first_char.to_uppercase().next().unwrap_or(first_char);
+                        name = chars.into_iter().collect();
+                    }
+                    name
+                },
+            )
         },
         |name| name.clone(),
     );
@@ -231,10 +237,12 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
         || {
             if project_name_raw == "." {
                 // if git repo identified, prefer repo name
-                if let Some(repo_url) = git_repo_url.clone() {
-                    if let Some((_owner, repo_name)) = parse_git_remote_url(&repo_url) {
-                        repo_name
-                    } else {
+                git_repo_url
+                    .as_ref()
+                    .and_then(|repo_url| {
+                        parse_git_remote_url(repo_url.as_str()).map(|(_owner, repo_name)| repo_name)
+                    })
+                    .unwrap_or_else(|| {
                         std::env::current_dir()
                             .unwrap()
                             .file_name()
@@ -242,16 +250,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                             .to_str()
                             .unwrap()
                             .to_string()
-                    }
-                } else {
-                    std::env::current_dir()
-                        .unwrap()
-                        .file_name()
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_string()
-                }
+                    })
             } else {
                 // Extract basename from path (e.g., "/tmp/test_kam_init" -> "test_kam_init")
                 std::path::Path::new(project_name_raw)
@@ -299,13 +298,9 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
 
     let author = args.author.as_deref().map_or_else(
         || {
-            if let Some(a) = git_author {
-                a
-            } else if let Some(a) = global_author {
-                a
-            } else {
-                "Your Name".to_string()
-            }
+            git_author
+                .or(global_author)
+                .unwrap_or_else(|| "Your Name".to_string())
         },
         |a| a.to_string(),
     );

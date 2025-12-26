@@ -153,22 +153,24 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             });
 
             if let Ok(pkey) = pkey_res
-                && let Ok(pem) = pkey.public_key_to_pem() {
-                    let pem_s = String::from_utf8_lossy(&pem).to_string();
-                    pub_key_pem = Some(pem_s.clone());
+                && let Ok(pem) = pkey.public_key_to_pem()
+            {
+                let pem_s = String::from_utf8_lossy(&pem).to_string();
+                pub_key_pem = Some(pem_s.clone());
 
-                    // Sign the PEM string
-                    use base64::engine::Engine as _;
-                    use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
-                    use openssl::hash::MessageDigest;
-                    use openssl::sign::Signer;
+                // Sign the PEM string
+                use base64::engine::Engine as _;
+                use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
+                use openssl::hash::MessageDigest;
+                use openssl::sign::Signer;
 
-                    if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey)
-                        && signer.update(pem_s.as_bytes()).is_ok()
-                            && let Ok(sig) = signer.sign_to_vec() {
-                                pub_key_signature = Some(BASE64_ENGINE.encode(&sig));
-                            }
+                if let Ok(mut signer) = Signer::new(MessageDigest::sha256(), &pkey)
+                    && signer.update(pem_s.as_bytes()).is_ok()
+                    && let Ok(sig) = signer.sign_to_vec()
+                {
+                    pub_key_signature = Some(BASE64_ENGINE.encode(&sig));
                 }
+            }
 
             // Determine effective with_backup: CLI flag overrides global default
             let _default_with_backup = global_with_backup_default();
@@ -224,9 +226,10 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
         SecretCommands::Remove { name } => {
             // Remove fallback file if any
             if let Ok(p) = secret_file_path(&name)
-                && p.exists() {
-                    let _ = fs::remove_file(&p);
-                }
+                && p.exists()
+            {
+                let _ = fs::remove_file(&p);
+            }
             let mut idx = load_index()?;
             idx.entries.remove(&name);
             save_index(&idx)?;
@@ -259,14 +262,12 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
         }
         SecretCommands::Import { path, name } => {
             let data = fs::read(&path).map_err(KamError::Io)?;
-            let final_name = if let Some(n) = name {
-                n
-            } else {
+            let final_name = name.unwrap_or_else(|| {
                 path.file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("imported")
                     .to_string()
-            };
+            });
             // If the file looks like encrypted blob (has magic header), store as-is; else encrypt before storing
             if data.starts_with(b"KAMKEYv1") {
                 // If importing an already encrypted blob, we can't easily derive the public key without the password.

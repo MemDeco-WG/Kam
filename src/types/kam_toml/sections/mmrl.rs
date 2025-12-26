@@ -1,7 +1,7 @@
 use super::repo::RepoSection;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // MMRL顶层节：包含仓库/发布相关的子配置
 pub struct MmrlSection {
@@ -11,7 +11,7 @@ pub struct MmrlSection {
 
 impl Default for MmrlSection {
     fn default() -> Self {
-        MmrlSection {
+        Self {
             repo: Some(RepoSection::default()),
         }
     }

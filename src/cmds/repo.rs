@@ -20,6 +20,7 @@ use reqwest::blocking::Client;
 use reqwest::header::USER_AGENT;
 use serde::Deserialize;
 use std::fs::File;
+use std::io::IsTerminal;
 use std::io::{Read, Write, stdin, stdout};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -46,9 +47,10 @@ pub struct RepoArgs {
     #[arg(short = 's', long = "search")]
     pub search: bool,
 
-    /// URL for the modules registry API (default: https://modules.kernelsu.org). Overrides the built-in modules endpoint.
-    #[arg(long = "modules-url", value_name = "URL")]
-    pub modules_url: Option<String>,
+    // `--modules-url` flag is handled at top-level (global). Local override removed to avoid duplicate long option.
+    /// Suppress progress output (quiet mode)
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
 
     /// Positional targets: module IDs or search terms (used with -S / -s)
     #[arg(value_name = "TARGETS", num_args = 0..)]
@@ -72,23 +74,35 @@ pub struct SyncArgs {
     #[arg(short = 'j', long = "jobs", value_name = "N")]
     pub jobs: Option<usize>,
 
-    /// Optional modules registry base url (override)
-    #[arg(long = "modules-url", value_name = "URL")]
-    pub modules_url: Option<String>,
+    // Per-sync `--modules-url` override removed; use the global/top-level setting instead.
+    /// Suppress progress output (quiet mode)
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
 }
 
+/// Entrypoint for `kam repo` subcommand.
+///
+/// The original `run(args)` signature is preserved for backwards compatibility
+/// and forwards to `run_with_modules_url` which accepts an optional
+/// `modules_url` override (useful when callers want to forward the
+/// top-level `--modules-url` value into the repo command).
 pub fn run(args: RepoArgs) -> Result<(), KamError> {
+    run_with_modules_url(args, None)
+}
+
+/// Entrypoint variant that accepts a global/top-level `modules_url` override.
+///
+/// Callers that wish to forward the top-level `--modules-url` flag into the
+/// repo command should use this variant. The implementation respects the
+/// override for both `repo sync` and pacman-style `-S`/`-s` handling.
+pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<String>) -> Result<(), KamError> {
     // If a nested repo subcommand is provided, handle it first (e.g., `repo sync`)
     if let Some(RepoCommand::Sync(sync_args)) = args.command {
-        // Determine effective base URL: priority - sync command arg -> repo arg -> default
-        let base = effective_base_url(
-            sync_args
-                .modules_url
-                .as_deref()
-                .or(args.modules_url.as_deref()),
-        );
+        // Determine effective base URL (allow a forwarded override)
+        let base = effective_base_url(modules_url.as_deref());
         // Use the CLI-provided jobs value (if any) to control concurrency for this sync.
-        return repo_sync_with_jobs(&base, sync_args.force, sync_args.jobs);
+        // Pass through the quiet flag so the sync implementation can suppress progress output.
+        return repo_sync_with_jobs(&base, sync_args.force, sync_args.jobs, sync_args.quiet);
     }
 
     // fallback to existing pacman-style handling (-S / -s)
@@ -97,7 +111,8 @@ pub fn run(args: RepoArgs) -> Result<(), KamError> {
         args.search,
         args.targets,
         false,
-        args.modules_url,
+        modules_url,
+        args.quiet,
     )
 }
 
@@ -170,6 +185,7 @@ pub fn handle_pacman_style(
     targets: Vec<String>,
     yes: bool,
     modules_url: Option<String>,
+    quiet: bool,
 ) -> Result<(), KamError> {
     // Respect explicit --yes/-y flag passed from CLI (as param) or environment arg fallback
     let assume_yes = yes || std::env::args().any(|a| a == "-y" || a == "--yes");
@@ -208,7 +224,7 @@ pub fn handle_pacman_style(
             let _md = match fetch_module_detail(&client, module_id, &base) {
                 Ok(md) => {
                     // Process the module normally
-                    process_module_download(&md, module_id, &client, assume_yes)?;
+                    process_module_download(&md, module_id, &client, assume_yes, quiet)?;
                     continue;
                 }
                 Err(KamError::FetchFailed(ref e))
@@ -227,12 +243,11 @@ pub fn handle_pacman_style(
                         // Now fetch the details for the selected module
                         let md = fetch_module_detail(&client, &selected_module, &base)?;
                         // Continue with the download process using the selected module
-                        process_module_download(&md, &selected_module, &client, assume_yes)?;
-                        continue; // Skip to the next target
+                        process_module_download(&md, &selected_module, &client, assume_yes, quiet)?;
                     } else {
                         Utils::info(crate::i18n::tr_key("repo.skipped_selection"));
-                        continue;
                     }
+                    continue;
                 }
                 Err(e) => return Err(e),
             };
@@ -251,6 +266,7 @@ fn process_module_download(
     module_id: &str,
     client: &Client,
     assume_yes: bool,
+    quiet: bool,
 ) -> Result<(), KamError> {
     // Select an asset (first zip-like asset in releases)
     let mut chosen_asset: Option<(&Asset, &str)> = None; // (asset, release_name)
@@ -337,7 +353,7 @@ fn process_module_download(
     }
 
     // Proceed to download
-    match download_asset(client, asset, None) {
+    match download_asset(client, asset, None, quiet) {
         Ok(path) => {
             Utils::success(&crate::i18n::tr_fmt(
                 "repo.saved",
@@ -393,13 +409,13 @@ fn module_cache_path(module_id: &str) -> Result<PathBuf, KamError> {
 }
 
 fn is_fresh(path: &Path, ttl_secs: u64) -> bool {
-    match path.metadata().and_then(|m| m.modified()) {
-        Ok(modified) => match std::time::SystemTime::now().duration_since(modified) {
-            Ok(dur) => dur.as_secs() < ttl_secs,
-            Err(_) => false,
-        },
-        Err(_) => false,
-    }
+    path.metadata()
+        .and_then(|m| m.modified())
+        .is_ok_and(|modified| {
+            std::time::SystemTime::now()
+                .duration_since(modified)
+                .is_ok_and(|dur| dur.as_secs() < ttl_secs)
+        })
 }
 
 fn write_atomic(path: &Path, contents: &str) -> Result<(), KamError> {
@@ -518,10 +534,12 @@ fn resolve_entry_url(base_url: &str, url: &str) -> String {
     format!("{}/{}", base_url.trim_end_matches('/'), u)
 }
 
+#[allow(clippy::literal_string_with_formatting_args)]
 pub fn repo_sync_with_jobs(
     base_url: &str,
     force: bool,
     jobs: Option<usize>,
+    quiet: bool,
 ) -> Result<(), KamError> {
     // Always attempt to fetch the latest index from the remote and write it to cache.
     // `jobs` overrides env var and default parallelism to control number of worker threads.
@@ -546,19 +564,41 @@ pub fn repo_sync_with_jobs(
         )));
     }
 
-    // Show a progress indicator while fetching the master index
-    let index_len = resp.content_length();
-    let index_pb = match index_len {
-        Some(len) => ProgressBar::new(len),
-        None => ProgressBar::new_spinner(),
-    };
-    index_pb.set_style(
-        ProgressStyle::with_template("{spinner} Fetching index {bytes}/{total_bytes} ({eta})")
-            .unwrap_or_else(|_| ProgressStyle::default_bar()),
-    );
-    index_pb.enable_steady_tick(Duration::from_millis(100));
+    // Whether we should show progress bars at all (respect quiet and TTY)
+    let show_progress = !quiet && std::io::stdout().is_terminal();
 
-    // Read the response body in chunks so the progress bar moves
+    // Show a progress indicator while fetching the master index (hidden when quiet)
+    let index_len = resp.content_length();
+    let index_pb = if show_progress {
+        index_len.map_or_else(
+            || {
+                let pb = ProgressBar::new_spinner();
+                pb.set_style(
+                    ProgressStyle::with_template(
+                        "{spinner} Fetching index {bytes}/{total_bytes} ({eta})",
+                    )
+                    .unwrap_or_else(|_| ProgressStyle::default_bar()),
+                );
+                pb.enable_steady_tick(Duration::from_millis(100));
+                pb
+            },
+            |len| {
+                let pb = ProgressBar::new(len);
+                pb.set_style(
+                    ProgressStyle::with_template(
+                        "{spinner} Fetching index {bytes}/{total_bytes} ({eta})",
+                    )
+                    .unwrap_or_else(|_| ProgressStyle::default_bar()),
+                );
+                pb.enable_steady_tick(Duration::from_millis(100));
+                pb
+            },
+        )
+    } else {
+        ProgressBar::hidden()
+    };
+
+    // Read the response body in chunks so the progress bar moves (hidden if quiet)
     let mut buf: Vec<u8> = Vec::new();
     let mut tmp = [0u8; 8 * 1024];
     loop {
@@ -613,13 +653,20 @@ pub fn repo_sync_with_jobs(
 
     // MultiProgress will nicely render the master spinner above per-module bars.
     let mp = MultiProgress::new();
-    let top_pb = mp.add(ProgressBar::new_spinner());
-    top_pb.set_style(
-        ProgressStyle::with_template("{spinner} Preparing modules... ({pos}/{len})")
-            .unwrap_or_else(|_| ProgressStyle::default_bar()),
-    );
-    top_pb.set_length(entries.len() as u64);
-    top_pb.enable_steady_tick(Duration::from_millis(80));
+    // Use a visible spinner only when we actually want to show progress (not quiet and TTY).
+    let top_pb = if show_progress {
+        let pb = mp.add(ProgressBar::new_spinner());
+        pb.set_style(
+            ProgressStyle::with_template("{spinner} Preparing modules... ({pos}/{len})")
+                .unwrap_or_else(|_| ProgressStyle::default_bar()),
+        );
+        pb.set_length(entries.len() as u64);
+        pb.enable_steady_tick(Duration::from_millis(80));
+        pb
+    } else {
+        // Hidden spinner so later `.inc()` calls are safe but nothing is rendered.
+        ProgressBar::hidden()
+    };
 
     // Build per-module progress bars and a list of fetch tasks; cached modules are shown immediately,
     // but limit visible items to MAX_VISIBLE (20). If nothing needs fetching, show 'Everything up to date'.
@@ -675,13 +722,23 @@ pub fn repo_sync_with_jobs(
         let cached = matches!((&module_cache, force), (Ok(p), false) if p.exists());
 
         if visible_cnt < display_limit {
-            // visible progress bar
-            let pb = mp.add(ProgressBar::new_spinner());
-            pb.set_style(
-                ProgressStyle::with_template("{msg:20} {bar:40.cyan/blue} {bytes}/{total_bytes}")
+            // visible progress bar (or hidden placeholder when quiet)
+            let pb = if show_progress {
+                let p = mp.add(ProgressBar::new_spinner());
+                p.set_style(
+                    ProgressStyle::with_template(
+                        "{msg:20} {bar:40.cyan/blue} {bytes}/{total_bytes}",
+                    )
                     .unwrap_or_else(|_| ProgressStyle::default_bar()),
-            );
-            pb.set_message(format!("{:20}", module_id));
+                );
+                p.set_message(format!("{:20}", module_id));
+                p
+            } else {
+                // Hidden progress bar so later operations still work but nothing is shown.
+                let p = ProgressBar::hidden();
+                p.set_message(format!("{:20}", module_id));
+                p
+            };
 
             if cached {
                 // show cached as full bar immediately
@@ -693,7 +750,7 @@ pub fn repo_sync_with_jobs(
                 continue;
             }
 
-            // needs fetch - add as visible task
+            // needs fetch - add as visible task (or hidden placeholder when quiet)
             let murl = format!("{}{}{}.json", base_url, MODULE_JSON_PREFIX, module_id);
             if let Ok(p) = module_cache {
                 tasks.push((module_id, murl, p, pb));
@@ -1285,11 +1342,15 @@ fn fetch_module_detail(
     Ok(md)
 }
 
-/// Download the latest release ZIP for `module_id` and save to `dest_dir` if provided,
-/// otherwise to the current working directory. Returns the saved file path.
+/// Download the latest release ZIP for `module_id`.
+///
+/// If `dest_dir` is provided it will be saved there; otherwise it will be
+/// saved to the current working directory. Returns the saved file path. When
+/// `quiet` is true, progress output will be suppressed.
 pub fn download_module_latest(
     module_id: &str,
     dest_dir: Option<&Path>,
+    quiet: bool,
 ) -> Result<PathBuf, KamError> {
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
@@ -1327,7 +1388,7 @@ pub fn download_module_latest(
                         .unwrap_or(false)
                         || x.name.to_lowercase().ends_with(".zip")
                 }) {
-                    return download_asset(&client, a, dest_dir);
+                    return download_asset(&client, a, dest_dir, quiet);
                 }
             }
         }
@@ -1343,6 +1404,7 @@ fn download_asset(
     client: &Client,
     asset: &Asset,
     dest_dir: Option<&Path>,
+    quiet: bool,
 ) -> Result<PathBuf, KamError> {
     let url = &asset.download_url;
 
@@ -1367,10 +1429,12 @@ fn download_asset(
 
     // Try to determine size for progress
     let size = asset.size.or_else(|| resp.content_length());
+    let show_progress = !quiet && std::io::stdout().is_terminal();
 
-    let pb = match size {
-        Some(s) => ProgressBar::new(s),
-        None => ProgressBar::new_spinner(),
+    let pb = if show_progress {
+        size.map_or_else(ProgressBar::new_spinner, ProgressBar::new)
+    } else {
+        ProgressBar::hidden()
     };
 
     pb.set_style(
@@ -1609,15 +1673,8 @@ mod tests {
     fn test_parsing_repo_sync_modules_url() {
         let url = "https://example.test";
         let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync", "--modules-url", url]);
-        match cli.command {
-            Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
-                Some(RepoCommand::Sync(sync_args)) => {
-                    assert_eq!(sync_args.modules_url.as_deref(), Some(url));
-                }
-                _ => panic!("expected RepoCommand::Sync"),
-            },
-            _ => panic!("expected Commands::Repo"),
-        }
+        // `--modules-url` is a global/top-level option; ensure it's parsed into the top-level `Cli`.
+        assert_eq!(cli.modules_url.as_deref(), Some(url));
     }
 
     #[test]

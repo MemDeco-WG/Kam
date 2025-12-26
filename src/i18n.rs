@@ -195,29 +195,13 @@ pub fn tr_key(key: &str) -> &str {
     match current_language() {
         Language::En => {
             // Prefer keyed translations first (key-based system)
-            if let Some(kv) = keyed_en(key) {
-                kv
-            } else {
-                // Fallback: try literal mappings (legacy behavior with colon variants)
-                if let Some(en) = tr_try_with_colon_variants(key, zh_to_en) {
-                    en
-                } else {
-                    key
-                }
-            }
+            keyed_en(key)
+                .unwrap_or_else(|| tr_try_with_colon_variants(key, zh_to_en).map_or(key, |en| en))
         }
         Language::Zh => {
             // Prefer keyed translations first (key-based system)
-            if let Some(kv) = keyed_zh(key) {
-                kv
-            } else {
-                // Fallback: try literal mappings (legacy behavior with colon variants)
-                if let Some(zh) = tr_try_with_colon_variants(key, en_to_zh) {
-                    zh
-                } else {
-                    key
-                }
-            }
+            keyed_zh(key)
+                .unwrap_or_else(|| tr_try_with_colon_variants(key, en_to_zh).map_or(key, |zh| zh))
         }
     }
 }

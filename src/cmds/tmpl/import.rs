@@ -134,12 +134,10 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
             // Non .tar.gz entry - consider grouping by top-level directory name
             if let Some(component) = outpath.components().next()
                 && let std::path::Component::Normal(os_str) = component
-                    && let Some(top) = os_str.to_str() {
-                        dir_groups
-                            .entry(top.to_string())
-                            .or_default()
-                            .push(i);
-                    }
+                && let Some(top) = os_str.to_str()
+            {
+                dir_groups.entry(top.to_string()).or_default().push(i);
+            }
         }
     }
 
@@ -168,10 +166,9 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
             };
 
             // Compute relative subpath under the top directory
-            let subpath = match entry_path.strip_prefix(&top) {
-                Ok(p) => p.to_owned(),
-                Err(_) => entry_path.to_owned(),
-            };
+            let subpath = entry_path
+                .strip_prefix(&top)
+                .map_or_else(|_| entry_path.to_owned(), |p| p.to_owned());
 
             let out_target = temp_dir.path().join(&subpath);
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 管理器平台的配置（例如magisk、kernelsu、apatch）
 pub struct ManagerConfig {
@@ -16,7 +16,7 @@ pub struct ManagerConfig {
 
 impl Default for ManagerConfig {
     fn default() -> Self {
-        ManagerConfig {
+        Self {
             min: None,
             devices: Some(vec![]),
             arch: Some(vec![]),
@@ -25,7 +25,7 @@ impl Default for ManagerConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 不同包管理器或平台的配置组合
 pub struct ManagerSection {
@@ -39,7 +39,7 @@ pub struct ManagerSection {
 
 impl Default for ManagerSection {
     fn default() -> Self {
-        ManagerSection {
+        Self {
             magisk: Some(ManagerConfig::default()),
             kernelsu: Some(ManagerConfig::default()),
             apatch: Some(ManagerConfig::default()),

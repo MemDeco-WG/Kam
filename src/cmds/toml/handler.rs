@@ -142,16 +142,19 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
         crate::cmds::toml::args::TomlCommand::Get { key } => {
             // 获取值并打印
             let v = read_toml(&path)?;
-            if let Some(val) = get_value_by_path(&v, &key) {
-                println!("{}", val);
-                Ok(())
-            } else {
-                Err(KamError::CommandFailed(format!(
-                    "Key '{}' not found in {}",
-                    key,
-                    path.display()
-                )))
-            }
+            get_value_by_path(&v, &key).map_or_else(
+                || {
+                    Err(KamError::CommandFailed(format!(
+                        "Key '{}' not found in {}",
+                        key,
+                        path.display()
+                    )))
+                },
+                |val| {
+                    println!("{}", val);
+                    Ok(())
+                },
+            )
         }
         crate::cmds::toml::args::TomlCommand::Set { key, value } => {
             // 设置值，支持key=value格式（如果value是None）
@@ -164,7 +167,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             } else {
                 return Err(KamError::InvalidFilename("No value provided".to_string()));
             };
-            let mut v = read_toml(&path).unwrap_or(toml::Value::Table(Default::default()));
+            let mut v = read_toml(&path).unwrap_or_else(|_| toml::Value::Table(Default::default()));
             // 如果key已存在，确保新值的类型兼容
             // 这样不会把整数字段改成字符串（虽然可能有点严格）
             if let Some(existing) = get_value_by_path(&v, &key) {
@@ -192,12 +195,13 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                 let parts: Vec<&str> = key.split('.').collect();
                 if let Some(last) = parts.last()
                     && *last == "versionCode"
-                        && new_value.parse::<i64>().is_err() {
-                            return Err(KamError::CommandFailed(format!(
-                                "Invalid value: '{}' is not an integer; {} must be an integer",
-                                new_value, key
-                            )));
-                        }
+                    && new_value.parse::<i64>().is_err()
+                {
+                    return Err(KamError::CommandFailed(format!(
+                        "Invalid value: '{}' is not an integer; {} must be an integer",
+                        new_value, key
+                    )));
+                }
             }
             set_value_by_path(&mut v, &key, &new_value);
             write_toml(&path, &v)?;

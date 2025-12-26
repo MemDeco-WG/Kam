@@ -46,7 +46,7 @@ pub fn run(args: EnvArgs) -> Result<(), KamError> {
     // Describe known env vars with i18n-backed descriptions
     if args.describe {
         // Header / intro (i18n)
-        Utils::section(&crate::i18n::tr_key("env.docs.header"));
+        Utils::section(crate::i18n::tr_key("env.docs.header"));
         let intro = crate::i18n::tr_key("env.docs.intro");
         if !intro.is_empty() {
             println!("{}", intro);

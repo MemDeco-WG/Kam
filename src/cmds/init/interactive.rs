@@ -108,7 +108,7 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                 let sel = &choices[idx];
                 if sel == &trf!("init.interactive.choice_pull_default_templates") {
                     // 从配置的URL拉取默认模板
-                    pull::run_pull(None, true)?;
+                    pull::run_pull(None, true, false)?;
                     // 刷新列表再显示一次
                     continue;
                 }
@@ -122,7 +122,7 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                     let input_trim = input.trim();
                     if input_trim.is_empty() {
                         // 如果留空，就下载默认模板然后重新显示菜单
-                        pull::run_pull(None, true)?;
+                        pull::run_pull(None, true, false)?;
                         continue;
                     }
 
@@ -166,7 +166,7 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                     )?;
                     if pick.trim().is_empty() {
                         // Empty text input: download the default templates and refresh choices
-                        crate::cmds::tmpl::pull::run_pull(None, true)?;
+                        crate::cmds::tmpl::pull::run_pull(None, true, false)?;
                         break; // Exit the fallback prompt and let the outer loop refresh the choices
                     }
                     if let Ok(num) = pick.parse::<usize>() {
@@ -585,17 +585,22 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
         }
         // 显示名称（只用最后一部分，让树更紧凑）
         let is_file = metadata.is_file();
-        let display_name = if let Some(name) = rel.file_name().and_then(|s| s.to_str()) {
-            if is_file {
-                format!("{}{}", prefix, name)
-            } else {
-                format!("{}{}/", prefix, name)
-            }
-        } else if is_file {
-            format!("{}{}", prefix, rel.display())
-        } else {
-            format!("{}{}/", prefix, rel.display())
-        };
+        let display_name = rel.file_name().and_then(|s| s.to_str()).map_or_else(
+            || {
+                if is_file {
+                    format!("{}{}", prefix, rel.display())
+                } else {
+                    format!("{}{}/", prefix, rel.display())
+                }
+            },
+            |name| {
+                if is_file {
+                    format!("{}{}", prefix, name)
+                } else {
+                    format!("{}{}/", prefix, name)
+                }
+            },
+        );
         entries.push((display_name, rel, is_file));
     }
 

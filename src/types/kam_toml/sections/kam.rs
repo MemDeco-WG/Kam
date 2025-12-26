@@ -1,7 +1,7 @@
 use super::{BuildSection, ModuleType, SupportedArch, TmplSection, WorkspaceSection};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // [kam]部分的高层结构，包含与Kam平台相关的配置
 // 这个结构反映kam.toml中的字段，很多字段是可选的
@@ -29,7 +29,7 @@ pub struct KamSection {
 
 impl Default for KamSection {
     fn default() -> Self {
-        KamSection {
+        Self {
             min_api: Some(0),
             max_api: Some(0),
             supported_arch: Some(Vec::new()),

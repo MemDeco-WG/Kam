@@ -19,11 +19,11 @@ impl Serialize for SupportedArch {
         S: Serializer,
     {
         match self {
-            SupportedArch::Arm => serializer.serialize_str("arm"),
-            SupportedArch::Arm64 => serializer.serialize_str("arm64"),
-            SupportedArch::X86 => serializer.serialize_str("x86"),
-            SupportedArch::X86_64 => serializer.serialize_str("x86_64"),
-            SupportedArch::Other(s) => serializer.serialize_str(s),
+            Self::Arm => serializer.serialize_str("arm"),
+            Self::Arm64 => serializer.serialize_str("arm64"),
+            Self::X86 => serializer.serialize_str("x86"),
+            Self::X86_64 => serializer.serialize_str("x86_64"),
+            Self::Other(s) => serializer.serialize_str(s),
         }
     }
 }
@@ -69,11 +69,11 @@ impl<'de> Deserialize<'de> for SupportedArch {
 impl fmt::Display for SupportedArch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            SupportedArch::Arm => "arm",
-            SupportedArch::Arm64 => "arm64",
-            SupportedArch::X86 => "x86",
-            SupportedArch::X86_64 => "x86_64",
-            SupportedArch::Other(s) => return write!(f, "{}", s),
+            Self::Arm => "arm",
+            Self::Arm64 => "arm64",
+            Self::X86 => "x86",
+            Self::X86_64 => "x86_64",
+            Self::Other(s) => return write!(f, "{}", s),
         };
         write!(f, "{}", s)
     }
@@ -83,11 +83,11 @@ impl fmt::Display for SupportedArch {
 impl PartialEq<String> for SupportedArch {
     fn eq(&self, other: &String) -> bool {
         match self {
-            SupportedArch::Arm => other == "arm",
-            SupportedArch::Arm64 => other == "arm64",
-            SupportedArch::X86 => other == "x86",
-            SupportedArch::X86_64 => other == "x86_64",
-            SupportedArch::Other(s) => s == other,
+            Self::Arm => other == "arm",
+            Self::Arm64 => other == "arm64",
+            Self::X86 => other == "x86",
+            Self::X86_64 => other == "x86_64",
+            Self::Other(s) => s == other,
         }
     }
 }
@@ -104,7 +104,7 @@ impl PartialEq<SupportedArch> for String {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 #[serde(rename_all = "lowercase")]
 // 模块类型（序列化为字符串，用于kam.toml中的module_type字段）

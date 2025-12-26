@@ -26,11 +26,10 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
     }
 
     // 如果没有指定签名文件，就用源文件名+.sig
-    let sig_path = if let Some(s) = &args.sig {
-        Path::new(s).to_path_buf()
-    } else {
-        Path::new(&format!("{}.sig", src_str)).to_path_buf()
-    };
+    let sig_path = args.sig.as_ref().map_or_else(
+        || Path::new(&format!("{}.sig", src_str)).to_path_buf(),
+        |s| Path::new(s).to_path_buf(),
+    );
 
     if !sig_path.exists() {
         return Err(KamError::CommandFailed(trf!(

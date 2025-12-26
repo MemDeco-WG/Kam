@@ -46,7 +46,7 @@ impl crate::rules::Rule for Chmod777Rule {
     fn run(&self, _path: &Path, content: &str, fr: &mut FileResult) {
         // Scan line by line and report each match once (with the line snippet).
         for (i, line) in content.lines().enumerate() {
-            if Chmod777Rule::pattern().is_match(line) {
+            if Self::pattern().is_match(line) {
                 let msg = format!("chmod 777 detected (line {}): {}", i + 1, line.trim());
                 fr.warnings.push(msg);
             }

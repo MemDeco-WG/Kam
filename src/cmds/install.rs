@@ -43,9 +43,17 @@ pub struct InstallArgs {
     #[arg(short = 'v', long, conflicts_with = "quiet")]
     pub verbose: bool,
 
+    /// Stream the install command's stdout/stderr live (useful for capturing interactive output)
+    #[arg(long)]
+    pub stream: bool,
+
     /// Suppress non-essential output
     #[arg(short, long)]
     pub quiet: bool,
+
+    /// Assume "yes" to all confirmation prompts (equivalent to -y). Use `-y` or `--yes` to skip confirmation.
+    #[arg(short = 'y', long = "yes", action = clap::ArgAction::SetTrue, global = true)]
+    pub assume_yes: bool,
 }
 
 /// Public helper: read preferred root manager from environment or global config.
@@ -265,21 +273,22 @@ fn expand_git_shorthand(s: &str) -> String {
     //   - +git:owner/repo
     let mut s_trim = s.trim().to_string();
     let lower = s_trim.to_ascii_lowercase();
-    for prefix in &["git+", "gh+", "+git", "+gh", "+git:", "+gh:"] {
+    // Prefer longer/colon-terminated prefixes first to avoid matching the shorter
+    // '+git' before '+git:' which would leave a leading ':' in the remainder.
+    for prefix in &["+git:", "+gh:", "git+", "gh+", "+git", "+gh"] {
         if lower.starts_with(prefix) {
             s_trim = s_trim[prefix.len()..].to_string();
             break;
         }
     }
 
-    let result = if s_trim.contains("://") || s_trim.contains('@') || s_trim.ends_with(".git") {
+    if s_trim.contains("://") || s_trim.contains('@') || s_trim.ends_with(".git") {
         s_trim
     } else if s_trim.contains('/') {
         format!("https://github.com/{}.git", s_trim)
     } else {
         s_trim
-    };
-    result
+    }
 }
 
 /// Clone a repository into a temporary directory preferring `gh` then `git`.
@@ -541,6 +550,77 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
         Utils::info(&trf!("install.executing", cli_bin, cli_args.join(" ")));
     }
 
+    // If the user requested streaming (or verbose was requested), stream the child process
+    // output live instead of capturing it and printing at the end.
+    if args.stream || args.verbose {
+        let mut cmd = Command::new(&cli_bin);
+        cmd.args(&cli_args);
+        // Keep stdin inherited so interactive commands still work
+        cmd.stdin(Stdio::inherit());
+        match Utils::run_and_stream(cmd) {
+            Ok(status) => {
+                if status.success() {
+                    if !args.quiet {
+                        Utils::success(&trf!("install.installed", artifact.display(), cli_bin));
+                    }
+                    return Ok(());
+                } else {
+                    // If the child failed with common exit codes for missing/permission issues,
+                    // attempt privilege escalation fallback using `su` if available (similar to non-stream path).
+                    let code = status.code();
+                    // 126 = cannot execute, 127 = not found (common shell conventions)
+                    if crate::utils::command_exists("su")
+                        && (code == Some(126)
+                            || code == Some(127)
+                            || !crate::utils::command_exists(&cli_bin))
+                    {
+                        let cmd_str = std::iter::once(cli_bin.clone())
+                            .chain(cli_args.iter().cloned())
+                            .map(|s| {
+                                if s.contains('\'') {
+                                    format!("'{}'", s.replace("'", "'\"'\"'"))
+                                } else {
+                                    format!("'{}'", s)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        if !args.quiet {
+                            Utils::info(&trf!("Attempting to execute via 'su -c': {}", cmd_str));
+                        }
+                        let mut su_cmd = Command::new("su");
+                        su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
+                        match Utils::run_and_stream(su_cmd) {
+                            Ok(su_status) => {
+                                if su_status.success() {
+                                    if !args.quiet {
+                                        Utils::success(&trf!(
+                                            "Installed {} via {}",
+                                            artifact.display(),
+                                            cli_bin
+                                        ));
+                                    }
+                                    return Ok(());
+                                } else {
+                                    return Err(KamError::CommandFailed(format!(
+                                        "Privilege escalation via 'su' failed with status: {:?}",
+                                        su_status
+                                    )));
+                                }
+                            }
+                            Err(e) => return Err(KamError::Io(e)),
+                        }
+                    }
+                    return Err(KamError::CommandFailed(format!(
+                        "Install command '{}' exited with status: {}. Re-run with -v/--verbose to see the command output.",
+                        cli_bin, status
+                    )));
+                }
+            }
+            Err(e) => return Err(KamError::Io(e)),
+        }
+    }
+
     match Command::new(&cli_bin).args(&cli_args).output() {
         Ok(out) => {
             if args.verbose {
@@ -588,7 +668,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                                 }
                                 Ok(())
                             } else {
-                                Err(KamError::CommandFailed(trf!(
+                                Err(KamError::CommandFailed(format!(
                                     "Privilege escalation via 'su' failed with status: {:?}",
                                     status
                                 )))

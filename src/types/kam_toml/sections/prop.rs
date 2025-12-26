@@ -35,7 +35,7 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 pub struct PropSection {
     pub id: String,
@@ -61,7 +61,7 @@ impl PropSection {
 
 impl Default for PropSection {
     fn default() -> Self {
-        PropSection {
+        Self {
             id: "example_module_id".to_string(),
             name: "Example Module Name".to_string(),
             version: "1.0.0".to_string(),

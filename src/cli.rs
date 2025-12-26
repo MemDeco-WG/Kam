@@ -13,12 +13,12 @@ use std::ffi::OsString;
 )]
 pub struct Cli {
     /// Pacman-style sync (download) flag (equivalent to pacman -S)
-    #[arg(short = 'S', long = "sync", action = clap::ArgAction::SetTrue, overrides_with = "sync")]
-    pub sync: bool,
+    #[arg(short = 'S', action = clap::ArgAction::SetTrue)]
+    pub sync_flag: bool,
 
     /// Pacman-style search modifier (use with -S as '-Ss' to search or '-s' alone to search)
-    #[arg(short = 's', long = "search", action = clap::ArgAction::SetTrue, overrides_with = "search")]
-    pub search: bool,
+    #[arg(short = 's', long = "search", action = clap::ArgAction::SetTrue)]
+    pub search_flag: bool,
 
     /// Positional targets: module IDs or search terms (used with -S / -s)
     #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
@@ -31,6 +31,10 @@ pub struct Cli {
     /// Assume "yes" to all confirmation prompts (equivalent to -y). Use `-y` or `--yes` to skip confirmation.
     #[arg(short = 'y', long = "yes", action = clap::ArgAction::SetTrue, global = true)]
     pub assume_yes: bool,
+
+    /// Suppress progress/output (quiet mode). Useful with pacman-style syncs (-S) to avoid progress bars in CI.
+    #[arg(short = 'q', long = "quiet", action = clap::ArgAction::SetTrue, global = true)]
+    pub quiet: bool,
 
     /// Update (refresh) the modules registry index before sync/download (equivalent to `kam repo sync --force`). Use `-u` or `--update` to enable.
     #[arg(short = 'u', long = "update", action = clap::ArgAction::SetTrue, global = true)]
@@ -83,7 +87,7 @@ pub enum Commands {
     /// Manage per-project or global kam configuration (similar to git config)
     Config(crate::cmds::config::ConfigArgs),
 
-    /// Install a module package to a connected device (using configured root manager)
+    /// Act as a compatibility layer for Magisk, KernelSU, and APatchSU to install modules (delegates to configured root manager)
     Install(crate::cmds::install::InstallArgs),
 
     /// Interact with module repository (search/download)
@@ -135,12 +139,8 @@ impl Cli {
         for i in 1..args_os.len() {
             if let Some(tok) = args_os[i].to_str() {
                 // Exact matches we historically supported.
-                let explicit = tok == "-S"
-                    || tok == "-s"
-                    || tok == "-Ss"
-                    || tok == "-sS"
-                    || tok == "--sync"
-                    || tok == "--search";
+                let explicit =
+                    tok == "-S" || tok == "-s" || tok == "-Ss" || tok == "-sS" || tok == "--search";
 
                 // Detect combined short flags like `-Syu` or `-yuS`. We only accept letters
                 // from the known set to avoid surprising behavior with unrelated flags.
@@ -151,7 +151,7 @@ impl Cli {
                     for ch in rest.chars() {
                         match ch {
                             'S' | 's' => contains_sync_or_search = true,
-                            'y' | 'u' => {}
+                            'y' | 'u' | 'q' => {}
                             _ => {
                                 all_known = false;
                                 break;
@@ -218,24 +218,18 @@ pub fn inject_double_dash_for_targets(
             let mut should_inject = false;
 
             // Exact matches (long or simple short forms)
-            if tok == "-S"
-                || tok == "-s"
-                || tok == "-Ss"
-                || tok == "-sS"
-                || tok == "--sync"
-                || tok == "--search"
-            {
+            if tok == "-S" || tok == "-s" || tok == "-Ss" || tok == "-sS" || tok == "--search" {
                 should_inject = true;
             } else if tok.starts_with('-') && !tok.starts_with("--") {
                 // Potential combined short flags like `-Syu`, `-yuS`, `-Ss`.
                 // Only treat as combined short flags if every character after '-'
-                // is one of the known short options we support here (S, s, y, u).
+                // is one of the known short options we support here (S, s, y, u, q).
                 let mut all_known = true;
                 let mut contains_sync_or_search = false;
                 for ch in tok.chars().skip(1) {
                     match ch {
                         'S' | 's' => contains_sync_or_search = true,
-                        'y' | 'u' => {}
+                        'y' | 'u' | 'q' => {}
                         _ => {
                             all_known = false;
                             break;

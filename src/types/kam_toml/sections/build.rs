@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 额外包含的文件配置
 pub struct ExtraInclude {
@@ -10,7 +10,7 @@ pub struct ExtraInclude {
     pub dest: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 打包/构建配置节
 // - source_dir：自定义源代码目录（默认为 "src/{{id}}"，初始化时会展开为实际模块 ID）
@@ -32,7 +32,7 @@ pub struct BuildSection {
 
 impl Default for BuildSection {
     fn default() -> Self {
-        BuildSection {
+        Self {
             source_dir: Some("src/{{id}}".to_string()),
             target_dir: Some("dist".to_string()),
             output_file: Some("{{id}}-{{versionCode}}-{{version}}".to_string()),

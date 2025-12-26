@@ -271,8 +271,8 @@ install = "将补全脚本安装到标准 shell 补全目录（可能需要 root
 # install
 # -------------------------
 [cli.commands.install]
-summary = "将模块包安装到连接的设备（使用配置的 root 管理器）"
-description = "将已构建的模块（.zip）安装到连接的设备，支持 Magisk/KernelSU/APatchSU。可通过 `kam config set root.manager <Manager>` 设置默认管理器。注意：在 Android 上此命令可能需要 root（su）。Kam 会在需要时尝试使用 'su' 执行提权。"
+summary = "充当 Magisk/KernelSU/APatchSU 的兼容层以安装模块"
+description = "作为兼容层，调用配置的 root 管理器（Magisk/KernelSU/APatchSU）来安装模块（.zip）。可通过 `kam config set root.manager <Manager>` 设置默认管理器。注意：在 Android 上此命令可能需要 root（su）。Kam 会在需要时尝试使用 'su' 执行提权。"
 
 [install]
 section = "安装：{}"

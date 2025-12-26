@@ -824,6 +824,27 @@ eval set -- "$opt"
             "install.sh should not trigger piped-download warning"
         );
     }
+
+    #[test]
+    fn case_pattern_does_not_trigger_paren_error() {
+        let content = r#"
+case "$_k_lang" in
+    zh*|cn*|CN*)
+        kam config --global set ui.language zh
+        ;;
+    *)
+        kam config --global set ui.language en
+        ;;
+esac
+"#;
+        let fr = run_check_on_content(content);
+        assert!(
+            !fr.errors
+                .iter()
+                .any(|e| e.contains("Unbalanced parentheses")),
+            "Case pattern containing ')' should not trigger parentheses error"
+        );
+    }
 }
 
 // 自定义的shell脚本检查（没有shellcheck时用）
@@ -839,13 +860,13 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
         warnings: Vec::new(),
         fixed: false,
     };
-    // 基本检查：不匹配的引号、不匹配的括号（排除引号内的）、尾随空格、CRLF
+    // 基本检查：不匹配的引号、尾随空格、CRLF
     // 这个检查比较简单，但能发现一些明显的问题
+    // 注：不再将不匹配的括号作为错误；某些 Shell 结构（如 case 模式中的 `pattern)`）会包含单独的右括号，原先的简单计数会导致误报。
     let mut single_open = false;
     let mut double_open = false;
     let mut escaped = false;
-    let mut paren_depth: i64 = 0;
-    // 逐字符扫描，跟踪引号和括号的状态
+    // 逐字符扫描，仅跟踪引号的状态（括号匹配检测已移除以避免误报）
     for ch in s.chars() {
         if escaped {
             // 转义字符，跳过下一个字符的特殊处理
@@ -866,25 +887,11 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
             double_open = !double_open;
             continue;
         }
-        // 括号匹配（只在不在引号内时处理）
-        if !single_open && !double_open {
-            if ch == '(' {
-                paren_depth += 1;
-            } else if ch == ')' {
-                paren_depth -= 1;
-            }
-        }
     }
     // 检查引号是否匹配
     if single_open || double_open {
         fr.valid = false;
         fr.errors.push("Unbalanced quotes detected".to_string());
-    }
-    // 检查括号是否匹配
-    if paren_depth != 0 {
-        fr.valid = false;
-        fr.errors
-            .push("Unbalanced parentheses in script".to_string());
     }
     // 用tree-sitter解析：如果解析器可用，检测语法错误
     // 虽然可能有点慢，但能发现更多问题

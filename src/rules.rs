@@ -1,7 +1,7 @@
 //! Rules system for `kam check`.
 //!
-//! This module defines the `Rule` trait and provides a small built-in rule
-//! loader which includes rule implementations placed under `rules.d/`.
+//! This module provides the `Rule` trait and a small built-in rule loader.
+//! Built-in rule implementations are placed under `rules.d/`.
 //!
 //! Conventions:
 //! - A rule is an implementor of `crate::rules::Rule`.
@@ -31,10 +31,11 @@ pub trait Rule: Send + Sync {
     fn run(&self, path: &Path, content: &str, fr: &mut crate::cmds::check::file::FileResult);
 }
 
-/// Builtin rule implementations are located in the source tree as `crate::rules::<name>`
-/// modules (for example: `src/rules/chmod_777.rs`).
-/// Add new built-in rules under `src/rules/` as modules and expose them with a
-/// `pub fn create() -> Box<dyn crate::rules::Rule>` factory function.
+/// Builtin rule implementations are located in `crate::rules::<name>`.
+///
+/// For example `src/rules/chmod_777.rs`. Add new built-in rules under `src/rules/`
+/// and expose them with a `pub fn create() -> Box<dyn crate::rules::Rule>` factory
+/// function.
 pub mod chmod_777;
 
 /// Load the set of built-in rules.

@@ -24,12 +24,8 @@ impl TemplateCacheManager {
             && !dir_str.trim().is_empty()
         {
             let cache_dir = if dir_str.starts_with("~/") {
-                if let Some(home) = dirs::home_dir() {
-                    let rel = dir_str.trim_start_matches("~/");
-                    home.join(rel)
-                } else {
-                    PathBuf::from(dir_str)
-                }
+                let rel = dir_str.trim_start_matches("~/").to_string();
+                dirs::home_dir().map_or_else(|| PathBuf::from(&dir_str), |home| home.join(&rel))
             } else {
                 PathBuf::from(dir_str)
             };
@@ -55,11 +51,10 @@ impl TemplateCacheManager {
             {
                 let cache_dir = if cache_val.starts_with("~/") {
                     // Keep tilde-expansion semantics relative to the user's HOME
-                    if let Some(home) = dirs::home_dir() {
-                        home.join(cache_val.trim_start_matches("~/"))
-                    } else {
-                        PathBuf::from(cache_val)
-                    }
+                    dirs::home_dir().map_or_else(
+                        || PathBuf::from(cache_val),
+                        |home| home.join(cache_val.trim_start_matches("~/")),
+                    )
                 } else {
                     PathBuf::from(cache_val)
                 };
@@ -434,7 +429,7 @@ impl TemplateCopier {
         force: bool,
         template_id: &str,
     ) -> Result<(), KamError> {
-        TemplateCopier::copy_and_replace_with_rules(src, dst, vars, force, template_id, None, None)
+        Self::copy_and_replace_with_rules(src, dst, vars, force, template_id, None, None)
     }
 
     // 核心复制函数，支持include和exclude规则

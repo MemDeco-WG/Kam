@@ -156,7 +156,7 @@ fn main() {
     // Handle pacman-style top-level flags (-S / -s) before dispatching to subcommands.
     // - `-Ss <query>` performs a remote search
     // - `-S <moduleId>` downloads the latest release ZIP for the given module(s)
-    if cli.sync || cli.search {
+    if cli.sync_flag || cli.search_flag {
         // SPECIAL CASE: When sync/search flags are present but no targets were parsed,
         // it might be because clap interpreted a search term as a subcommand.
         // In this case, we check if the command is one that might be used as a search term.
@@ -177,11 +177,12 @@ fn main() {
         };
 
         match kam::cmds::repo::handle_pacman_style(
-            cli.sync,
-            cli.search,
+            cli.sync_flag,
+            cli.search_flag,
             effective_targets,
             cli.assume_yes,
             cli.modules_url.clone(),
+            cli.quiet,
         ) {
             Ok(()) => return,
             Err(e) => {
@@ -209,7 +210,9 @@ fn main() {
         Some(Commands::Config(args)) => kam::cmds::config::run(args),
         Some(Commands::Toml(args)) => kam::cmds::toml::run(args),
         Some(Commands::Install(args)) => kam::cmds::install::run(args),
-        Some(Commands::Repo(args)) => kam::cmds::repo::run(args),
+        Some(Commands::Repo(args)) => {
+            kam::cmds::repo::run_with_modules_url(args, cli.modules_url.clone())
+        }
         Some(Commands::Help(args)) => {
             // Print top-level or subcommand help using a cloned, mutable Command so
             // we can traverse nested subcommand definitions and call `print_long_help()`.
@@ -251,7 +254,7 @@ fn main() {
         None => {
             // Default behavior: fetch the modules index when no subcommand is provided.
             let base = kam::cmds::repo::effective_base_url(None);
-            match kam::cmds::repo::repo_sync_with_jobs(&base, false, None) {
+            match kam::cmds::repo::repo_sync_with_jobs(&base, false, None, cli.quiet) {
                 Ok(()) => Ok(()),
                 Err(e) => {
                     print_error_chain(&e);

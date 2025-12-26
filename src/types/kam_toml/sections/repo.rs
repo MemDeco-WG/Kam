@@ -2,14 +2,14 @@ use super::{ManagerSection, NoteSection, OptionsSection};
 use serde::{Deserialize, Serialize};
 
 // 维护者条目可以是简单字符串（名字）或对象（包含name、link、type）
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum MaintainerEntry {
     Name(String),
     Object(Maintainer),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 pub struct Maintainer {
     #[serde(rename = "type")]
@@ -18,7 +18,7 @@ pub struct Maintainer {
     pub link: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 // 仓库/发布信息节，包含展示与分发相关的元数据（匹配repo.json规范）
 pub struct RepoSection {
@@ -88,7 +88,7 @@ pub struct RepoSection {
 
 impl Default for RepoSection {
     fn default() -> Self {
-        RepoSection {
+        Self {
             license: Some("MIT".to_string()),
             license_file: Some("LICENSE".to_string()),
             homepage: Some(String::new()),

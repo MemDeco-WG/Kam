@@ -56,6 +56,9 @@ pub enum TmplCommands {
         /// The `--global` flag is accepted for CLI consistency but has no effect.
         #[arg(long)]
         global: bool,
+        /// Suppress progress output (quiet mode). Useful in CI / non-TTY environments.
+        #[arg(short = 'q', long)]
+        quiet: bool,
     },
 
     /// Re-download based on recorded URL in config and import
@@ -64,5 +67,8 @@ pub enum TmplCommands {
         /// The `--global` flag is accepted for CLI consistency but has no effect.
         #[arg(long)]
         global: bool,
+        /// Suppress progress output (quiet mode). Useful in CI / non-TTY environments.
+        #[arg(short = 'q', long)]
+        quiet: bool,
     },
 }
