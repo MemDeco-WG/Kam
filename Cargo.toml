@@ -24,6 +24,7 @@ semver = "1.0"
 serde_json = "1.0.145"
 serde_yaml = "0.9.33"
 sha2 = "0.10"
+
 sigstore-sign = "0.6.0"
 sigstore-tsa = "0.6.0"
 sigstore-types = "0.6.0"
@@ -39,6 +40,7 @@ walkdir = "2.3.3"
 x509-parser = "0.18.0"
 zip = "6.0.0"
 crossbeam-channel = "0.5"
+zeroize = "1.8.2"
 
 [dependencies.chrono]
 features = ["serde"]

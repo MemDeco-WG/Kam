@@ -14,6 +14,26 @@ use openssl::hash::MessageDigest;
 use openssl::sign::Signer;
 use rpassword::prompt_password;
 
+/// Redact secret names for logging to avoid leaking sensitive metadata.
+/// Shows first 2 and last 2 characters where available, otherwise a fixed placeholder.
+fn redact_name(name: &str) -> String {
+    let len = name.chars().count();
+    if len <= 4 {
+        "<redacted>".to_string()
+    } else {
+        let first: String = name.chars().take(2).collect();
+        let last: String = name
+            .chars()
+            .rev()
+            .take(2)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
+        format!("{}...{}", first, last)
+    }
+}
+
 /// Extract public key and signature from private key data.
 /// Returns (pub_key_pem, pub_key_signature) if successful.
 fn extract_public_key_and_signature(
@@ -184,7 +204,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 pub_key_signature,
             )?;
             use crate::utils::Utils;
-            Utils::success(&trf!("secret.saved", name));
+            Utils::success(&trf!("secret.saved", redact_name(&name)));
         }
         SecretCommands::Get {
             name,
@@ -216,7 +236,11 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                     .map_err(KamError::Io)?;
                 f.write_all(&plaintext).map_err(KamError::Io)?;
                 use crate::utils::Utils;
-                Utils::success(&trf!("secret.written_to", name, path.display()));
+                Utils::success(&trf!(
+                    "secret.written_to",
+                    redact_name(&name),
+                    path.display()
+                ));
             } else {
                 // Write to stdout
                 let s = String::from_utf8_lossy(&plaintext);
@@ -234,7 +258,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             idx.entries.remove(&name);
             save_index(&idx)?;
             use crate::utils::Utils;
-            Utils::success(&trf!("secret.removed", name));
+            Utils::success(&trf!("secret.removed", redact_name(&name)));
         }
         SecretCommands::Export {
             name,
@@ -258,7 +282,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 }
             }
             use crate::utils::Utils;
-            Utils::success(&trf!("secret.exported", name, path.display()));
+            Utils::success(&trf!("secret.exported", redact_name(&name), path.display()));
         }
         SecretCommands::Import { path, name } => {
             let data = fs::read(&path).map_err(KamError::Io)?;
@@ -303,7 +327,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 )?;
             }
             use crate::utils::Utils;
-            Utils::success(&trf!("secret.imported", final_name));
+            Utils::success(&trf!("secret.imported", redact_name(&final_name)));
         }
         SecretCommands::ExportPub { name, out } => {
             // Use helper to get/refresh public key (handles caching and fallback)
@@ -327,7 +351,11 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             if let Some(path) = out {
                 fs::write(&path, &pub_pem).map_err(KamError::Io)?;
                 use crate::utils::Utils;
-                Utils::success(&trf!("secret.public_key_exported", name, path.display()));
+                Utils::success(&trf!(
+                    "secret.public_key_exported",
+                    redact_name(&name),
+                    path.display()
+                ));
             } else {
                 let s = String::from_utf8_lossy(&pub_pem);
                 print!("{}", s);
@@ -365,7 +393,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             // Store the certificate chain
             super::cert::store_cert_chain(&name, &chain_pem)?;
             use crate::utils::Utils;
-            Utils::success(&trf!("secret.cert_chain_imported", name));
+            Utils::success(&trf!("secret.cert_chain_imported", redact_name(&name)));
         }
         SecretCommands::Trust {
             add_root,

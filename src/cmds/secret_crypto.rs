@@ -7,6 +7,9 @@ use openssl::{
     symm::{Cipher, Crypter, Mode},
 };
 use sha2::Sha256;
+// Use Zeroizing to ensure derived key material is cleared from memory.
+// Make sure `zeroize` is present in Cargo.toml (`zeroize = "1"`).
+
 // use rand::RngCore; // not used
 
 // 加密格式的魔数（用于识别加密数据）
@@ -23,13 +26,14 @@ pub fn encrypt_with_password(plaintext: &[u8], password: &str) -> Result<Vec<u8>
     let mut salt = [0u8; SALT_LEN];
     rand_bytes(&mut salt).map_err(|e| KamError::CommandFailed(format!("Random failed: {}", e)))?;
     // 用PBKDF2派生64字节密钥材料（32字节加密密钥 + 32字节HMAC密钥）
-    let mut key_material = vec![0u8; 64];
+    // Use `Zeroizing` so derived key material is zeroed on drop.
+    let mut key_material = zeroize::Zeroizing::new([0u8; 64]);
     pbkdf2_hmac(
         password.as_bytes(),
         &salt,
         PBKDF2_ITERS.try_into().unwrap(),
         MessageDigest::sha256(),
-        &mut key_material,
+        &mut *key_material,
     )
     .map_err(|e| KamError::CommandFailed(format!("KDF failed: {}", e)))?;
     let key_enc = &key_material[0..32]; // 前32字节用于加密
@@ -60,6 +64,8 @@ pub fn encrypt_with_password(plaintext: &[u8], password: &str) -> Result<Vec<u8>
     mac.update(&iv);
     mac.update(&out);
     let tag = mac.finalize().into_bytes();
+    // Zero sensitive key material as soon as we've computed the tag and no longer need it.
+    drop(key_material);
 
     // 构建最终的blob：MAGIC + salt + iv + ciphertext + tag
     // 这样解密时能知道格式和验证完整性
@@ -92,13 +98,14 @@ pub fn decrypt_with_password(blob: &[u8], password: &str) -> Result<Vec<u8>, Kam
     let ciphertext = &blob[offset..(blob.len() - HMAC_LEN)];
 
     // 派生密钥（和加密时一样）
-    let mut key_material = vec![0u8; 64];
+    // Use `Zeroizing` so derived key material is zeroed on drop.
+    let mut key_material = zeroize::Zeroizing::new([0u8; 64]);
     pbkdf2_hmac(
         password.as_bytes(),
         salt,
         PBKDF2_ITERS.try_into().unwrap(),
         MessageDigest::sha256(),
-        &mut key_material,
+        &mut *key_material,
     )
     .map_err(|e| KamError::CommandFailed(format!("KDF failed: {}", e)))?;
     let key_enc = &key_material[0..32];
@@ -118,6 +125,8 @@ pub fn decrypt_with_password(blob: &[u8], password: &str) -> Result<Vec<u8>, Kam
     let cipher = Cipher::aes_256_cbc();
     let mut crypter = Crypter::new(cipher, Mode::Decrypt, key_enc, Some(iv))
         .map_err(|e| KamError::CommandFailed(format!("Crypter new: {}", e)))?;
+    // We no longer need the derived key material after constructing the crypter; zero it now.
+    drop(key_material);
     let mut out = vec![0u8; ciphertext.len() + cipher.block_size()];
     let mut count = crypter
         .update(ciphertext, &mut out)

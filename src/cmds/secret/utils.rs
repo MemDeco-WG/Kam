@@ -106,10 +106,9 @@ pub fn get_or_refresh_public_key(
     let has_cache = if let Some(meta) = idx.entries.get(name) {
         meta.pub_key_pem.is_some() && meta.pub_key_signature.is_some()
     } else {
-        return Err(KamError::CommandFailed(format!(
-            "Secret '{}' not found in index",
-            name
-        )));
+        return Err(KamError::CommandFailed(
+            "Secret not found in index".to_string(),
+        ));
     };
 
     if has_cache {
@@ -136,7 +135,7 @@ pub fn get_or_refresh_public_key(
 
         if let Ok(pkey) = parse_attempt {
             if verbose {
-                println!("Using verified cached public key for '{}'", name);
+                println!("Using verified cached public key");
             }
             return Ok(pkey);
         } else if verbose {
@@ -199,7 +198,7 @@ pub fn get_or_refresh_public_key(
         save_index(&idx)
             .map_err(|e| KamError::CommandFailed(format!("Failed to save index: {}", e)))?;
         if verbose {
-            println!("Cache repaired/updated for '{}'", name);
+            println!("Cache repaired/updated");
         }
     }
 
