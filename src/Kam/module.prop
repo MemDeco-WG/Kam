@@ -1,7 +1,7 @@
 id=Kam
 name=Kam
-version=v0.5.19
-versionCode=1766767298621
+version=v0.5.20
+versionCode=1766818065659
 author=LightJunction
 description=This is a Example Module！ Do not install it!
 updateJson=https://raw.githubusercontent.com/MemDeco-WG/Kam/main/update.json
