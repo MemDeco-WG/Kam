@@ -6,6 +6,7 @@
 # Do NOT hard-code paths like 'src/<id>'; reference the module source via $KAM_MODULE_ROOT
 # and artifacts via $KAM_DIST_DIR to avoid confusion across different module configurations.
 
+# shellcheck source=../lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 log_info "Running tmpl pre-build hook..."
@@ -15,18 +16,19 @@ log_info "Building module: $KAM_MODULE_ID v$KAM_MODULE_VERSION"
 if [ "${KAM_DEBUG:-}" = "1" ]; then
     log_warn "KAM_DEBUG=1: dumping KAM* environment variables (sorted)"
     # Ensure color variables exist to avoid raw escape sequences if utils.sh is missing
+    # shellcheck disable=2034
     if [ -z "${BLUE:-}" ]; then
         BLUE=""
         GREEN=""
         YELLOW=""
         NC=""
     fi
-    printf "${BLUE}KAM variables:${NC}\n"
+    printf "%s\n" "${BLUE}KAM variables:${NC}"
     if env | grep '^KAM' >/dev/null 2>&1; then
         env | sort | grep '^KAM' | while IFS= read -r line; do
             name="${line%%=*}"
             val="${line#*=}"
-            printf "  ${BLUE}%s${NC} = ${GREEN}%s${NC}\n" "$name" "$val"
+            printf "  %s%s%s = %s%s%s\n" "$BLUE" "$name" "$NC" "$GREEN" "$val" "$NC"
         done
     else
         log_info "No KAM-prefixed environment variables found."

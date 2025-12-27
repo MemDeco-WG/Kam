@@ -43,10 +43,6 @@ pub struct InstallArgs {
     #[arg(short = 'v', long, conflicts_with = "quiet")]
     pub verbose: bool,
 
-    /// Stream the install command's stdout/stderr live (useful for capturing interactive output)
-    #[arg(long)]
-    pub stream: bool,
-
     /// Suppress non-essential output
     #[arg(short, long)]
     pub quiet: bool,
@@ -317,7 +313,7 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
             .arg(gh_spec)
             .arg(dest.to_str().unwrap());
         cmd.stdin(Stdio::inherit());
-        match Utils::run_and_stream(cmd) {
+        match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
             Ok(status) => {
                 Utils::warn(&format!("'gh' clone failed with status: {:?}", status));
@@ -341,7 +337,7 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
         let mut cmd = Command::new("git");
         cmd.arg("clone").arg(&url).arg(dest.to_str().unwrap());
         cmd.stdin(Stdio::inherit());
-        match Utils::run_and_stream(cmd) {
+        match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
             Ok(status) => {
                 return Err(KamError::CommandFailed(format!(
@@ -405,7 +401,8 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                     Utils::info(&format!("Executing '{}' {}", exec, kam_sh.display()));
                     let mut cmd = Command::new(exec);
                     cmd.arg(kam_sh.to_str().unwrap()).stdin(Stdio::inherit());
-                    let status = Utils::run_and_stream(cmd).map_err(KamError::Io)?;
+                    let status =
+                        Utils::run_and_stream_no_stderr_header(cmd).map_err(KamError::Io)?;
                     if !status.success() {
                         return Err(KamError::CommandFailed(format!(
                             "'kam.sh' execution failed with status: {:?}",
@@ -550,14 +547,13 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
         Utils::info(&trf!("install.executing", cli_bin, cli_args.join(" ")));
     }
 
-    // If the user requested streaming (or verbose was requested), stream the child process
-    // output live instead of capturing it and printing at the end.
-    if args.stream || args.verbose {
+    // Stream the child process output live when verbose was requested.
+    if args.verbose {
         let mut cmd = Command::new(&cli_bin);
         cmd.args(&cli_args);
         // Keep stdin inherited so interactive commands still work
         cmd.stdin(Stdio::inherit());
-        match Utils::run_and_stream(cmd) {
+        match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) => {
                 if status.success() {
                     if !args.quiet {
@@ -590,7 +586,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         }
                         let mut su_cmd = Command::new("su");
                         su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
-                        match Utils::run_and_stream(su_cmd) {
+                        match Utils::run_and_stream_no_stderr_header(su_cmd) {
                             Ok(su_status) => {
                                 if su_status.success() {
                                     if !args.quiet {
@@ -656,7 +652,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                     }
                     let mut su_cmd = Command::new("su");
                     su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
-                    match Utils::run_and_stream(su_cmd) {
+                    match Utils::run_and_stream_no_stderr_header(su_cmd) {
                         Ok(status) => {
                             if status.success() {
                                 if !args.quiet {
@@ -708,7 +704,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                     }
                     let mut su_cmd = Command::new("su");
                     su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
-                    match Utils::run_and_stream(su_cmd) {
+                    match Utils::run_and_stream_no_stderr_header(su_cmd) {
                         Ok(status) => {
                             if status.success() {
                                 if !args.quiet {
@@ -837,6 +833,16 @@ mod tests {
         assert_eq!(
             expand_git_shorthand("git+owner/repo"),
             "https://github.com/owner/repo.git"
+        );
+    }
+
+    #[test]
+    fn install_no_longer_accepts_stream_flag() {
+        // `try_parse_from` returns an Err for unknown/invalid arguments
+        let res = crate::cli::Cli::try_parse_from(["kam", "install", "--stream", "pkg.zip"]);
+        assert!(
+            res.is_err(),
+            "Expected unknown flag '--stream' to cause parse error"
         );
     }
 }

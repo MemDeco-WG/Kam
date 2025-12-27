@@ -20,6 +20,7 @@ DIST="${KAM_DIST_DIR:-${KAM_PROJECT_ROOT:-$PWD}/dist}"
 
 # Build a simple release notes file (temporary)
 TMP_CHANGELOG=$(mktemp)
+# shellcheck disable=2329
 cleanup_tmp() {
     if [ -n "$TMP_CHANGELOG" ] && [ -f "$TMP_CHANGELOG" ]; then
         rm -f "$TMP_CHANGELOG"
@@ -59,7 +60,7 @@ Built with [Kam](https://github.com/MemDeco-WG/Kam)
 EOF
 )
 printf "%s\n" "$RELEASE_NOTES" > "$TMP_CHANGELOG"
-log_info "打包以下文件：$(ls $DIST)"
+log_info "打包以下文件：$(ls -1 "$DIST")"
 # Decide which repository to use for the release.
 # Priority:
 # 1. GITHUB_REPOSITORY (set in GitHub Actions) - preferred when present
@@ -118,7 +119,16 @@ fi
 if [ -d "$DIST" ] && [ "$(ls -A "$DIST")" ]; then
     log_info "Creating GitHub release $TAG and uploading assets from $DIST to $REPO"
     assets=("$DIST"/*)
-    gh release create "$TAG" --repo "$REPO" --title "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" --notes-file "$TMP_CHANGELOG" $PRE_FLAG "${assets[@]}" || { log_error "Failed to create release $TAG and upload assets to $REPO"; exit 1; }
+    # Build arguments in an array so $PRE_FLAG (when empty) doesn't expand into an extra empty param
+    gh_args=("$TAG" "--repo" "$REPO" "--title" "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" "--notes-file" "$TMP_CHANGELOG")
+    if [ -n "$PRE_FLAG" ]; then
+        gh_args+=("$PRE_FLAG")
+    fi
+    gh_args+=("${assets[@]}")
+    if ! gh release create "${gh_args[@]}"; then
+        log_error "Failed to create release $TAG and upload assets to $REPO"
+        exit 1
+    fi
 else
     log_warn "Dist directory not found or empty: $DIST"
 fi

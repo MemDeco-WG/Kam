@@ -16,13 +16,13 @@ use_other_commands = "请使用其他命令（例如 `kam init`, `kam build`）�
 building_module_version = "构建模块：{} v{}"
 building_workspace_member = "构建工作区成员：{}"
 complete = "构建完成"
-no_kam_toml = "未找到 kam.toml"
-no_workspace_section = "未找到 workspace 段"
-no_workspace_members = "展开模式后未找到任何工作区成员"
 concurrent_building_members = "正在并行构建 {} 个成员（使用 {} 个作业）"
 failed_to_build = "构建 {} 失败: {}"
 failed_workspace_members = "{} 个工作区成员构建失败"
 invalid_glob_pattern = "无效的 glob 模式 '{}': {}"
+no_kam_toml = "未找到 kam.toml"
+no_workspace_members = "展开模式后未找到任何工作区成员"
+no_workspace_section = "未找到 workspace 段"
 packaging_artifacts = "正在打包制品..."
 skipping_failed_load_kam_toml = "跳过 {}：无法加载 kam.toml: {}"
 skipping_no_kam_toml = "跳过 {}：未找到 kam.toml"
@@ -37,403 +37,19 @@ template_added = "模板 '{}' 已从 {} 添加到缓存"
 template_removed = "模板 '{}' 已从缓存中删除"
 
 [cache.modules]
-index_files = "模块索引缓存文件："
-index_entry = "{}（{} 字节）"
-no_index_files = "未找到索引缓存文件"
-detail_cache = "模块详情缓存："
 cleaned_successfully = "模块缓存已成功清理"
+detail_cache = "模块详情缓存："
 directory_empty_or_not_exists = "模块缓存目录为空或不存在"
+index_entry = "{}（{} 字节）"
+index_files = "模块索引缓存文件："
+no_index_files = "未找到索引缓存文件"
+no_matching_cache_file = "未找到匹配的缓存文件：'{}'"
 removed = "已删除 {}"
 removed_module_cache = "已删除模块缓存：{}"
-no_matching_cache_file = "未找到匹配的缓存文件：'{}'"
-
-# 模块搜索 / 下载相关的本地化消息 (用于 `kam -S / -s` 的交互)
-[repo]
-download = "下载：{}"
-module_not_found_showing_similar = "模块 '{}' 未找到。显示类似的模块："
-selected_module = "已选择模块：{}"
-skipped_selection = "已跳过选择。"
-no_results_for = "未找到与 '{}' 相关的结果。"
-similar_packages_header = "共有 {} 个与 '{}' 类似的软件包："
-authors = "作者"
-url = "网址"
-version = "版本"
-updated = "更新时间"
-no_downloadable_zip_asset = "未找到模块 {} 的可下载 zip 资源"
-everything_up_to_date = "已是最新"
-confirm_download = "确认下载 '{}' [{}] ? [Y/n] "
-skipped_download = "已跳过下载：{}"
-saved = "已保存：{}"
-failed_to_download = "下载失败 {}: {}"
-score_format = "  (得分：{:.2})"
-result_line_simple = "{} - {}{}"
-result_line = "{} - {} - {}{}"
-
-[repo.search]
-empty_query = "查询为空"
-
-[repo.module_detail]
-title = "模块：{} - {}"
-release = "发行：{}"
-asset = "资源：{}{}"
-download_url = "下载 URL：{}"
-
-[repo.prompt]
-enter_number = "输入要安装的包的编号（或按回车跳过）："
-invalid_selection_out_of_range = "选择无效。编号超出范围。"
-invalid_input_number = "输入无效。请输入一个数字。"
-
-[env]
-no_kam_vars = "未发现以 KAM_ 开头的环境变量"
 
 [check]
 no_issues_found = "未发现问题。"
 some_issues_found = "发现问题。"
-
-# CLI 本地化（用于 `kam --help` 以及子命令帮助文本）
-[cli]
-about = "一个用于脚手架、构建、打包与分发 Android 模块与模板（ksu/APU/Magisk/AnyTemplate）的命令行工具。支持项目初始化、打包、模板管理与仓库元数据导出。"
-long_about = "提供从模板初始化项目、构建与打包模块、管理模板与缓存、导出项目元数据等功能。使用 `kam help <COMMAND>` 查看子命令的详细帮助信息。"
-
-# 全局选项（顶层）
-[cli.flags]
-help = "打印帮助（参考 '-h'）"
-version = "打印版本"
-sync = "Pacman 风格同步（下载）标志（等同于 pacman -S）"
-search = "Pacman 风格搜索修饰符（与 -S 一起使用为 '-Ss' 进行搜索或单独使用 '-s' 搜索）"
-modules_url = "模块注册表 API 的 URL（默认：https://modules.kernelsu.org）。覆盖内置的模块端点"
-yes = "对所有确认提示假设为 \"yes\"（等同于 -y）。使用 `-y` 或 `--yes` 跳过确认"
-
-# -------------------------
-# init
-# -------------------------
-[cli.commands.init]
-summary = "从模板初始化一个新的 Kam 项目（支持 meta 与 kernel 模板）"
-description = "以交互或非交互方式从本地或内置模板创建新项目，并可预填常见元数据。"
-
-[cli.commands.init.flags]
-name = "项目路径（在交互模式下可留空以交互填写）"
-id = "模块 ID（默认为目录名）"
-project_name = "项目名称（默认示例：Example Module Name）"
-version = "项目版本（默认：1.0.0）"
-author = "作者姓名"
-update_json = "Update JSON 的 URL（默认：从 git 自动生成）"
-description = "项目描述"
-force = "强制覆盖已存在的文件"
-interactive = "以交互模式运行并提示必填项"
-var = "模板变量，key=value 格式（可重复）"
-template = "要使用的模板（内置 ID 或本地路径）"
-tmpl = "创建模板项目"
-
-# -------------------------
-# build
-# -------------------------
-[cli.commands.build]
-summary = "构建并打包模块为可分发的 ZIP 工件"
-description = "构建项目并在输出目录生成工件，支持工作区并行构建与签名等选项。"
-
-[cli.commands.build.flags]
-path = "项目路径（默认：当前目录）"
-all = "构建所有工作区成员"
-output = "输出目录（默认：dist）"
-bump = "启用版本自动 bump（KAM_BUMP_ENABLED）"
-release = "启用发布构建（KAM_RELEASE_ENABLED）"
-sign = "构建后进行签名（KAM_SIGN_ENABLE）"
-interactive = "以交互模式运行构建；对破坏性操作进行确认"
-pre_release = "启用预发布模式"
-quiet = "减少输出，仅显示警告与错误"
-jobs = "并行作业数（默认：CPU 核心数）"
-
-# -------------------------
-# version
-# -------------------------
-[cli.commands.version]
-summary = "管理模块版本与 bump 策略"
-
-# -------------------------
-# cache
-# -------------------------
-[cli.commands.cache]
-summary = "管理本地模板与工件缓存"
-description = "列出、添加、删除或清理缓存的模板，并可显示缓存路径。"
-
-[cli.commands.cache.list]
-summary = "列出已缓存的模板"
-
-[cli.commands.cache.clean]
-summary = "清理所有缓存的模板"
-
-[cli.commands.cache.add]
-summary = "从本地目录或归档添加模板到缓存"
-[cli.commands.cache.add.flags]
-name = "要注册的模板名称"
-path = "模板源路径（目录或归档）"
-
-[cli.commands.cache.remove]
-summary = "从缓存中移除模板"
-[cli.commands.cache.remove.flags]
-name = "要移除的模板名称"
-
-[cli.commands.cache.path]
-summary = "显示缓存目录路径"
-
-# Module cache subcommands
-[cli.commands.cache.modules]
-summary = "管理模块索引缓存（index_*.json 和 modules/<id>.json）"
-description = "列出、清理、显示路径或移除特定模块缓存文件。"
-
-[cli.commands.cache.modules.list]
-summary = "列出模块索引和模块详情缓存文件"
-
-[cli.commands.cache.modules.clean]
-summary = "清理模块缓存（删除 index_*.json 和 modules/ 目录）"
-
-[cli.commands.cache.modules.path]
-summary = "显示模块缓存目录路径"
-
-[cli.commands.cache.modules.remove]
-summary = "移除特定缓存文件（精确文件名或模块 id 对应的 modules/<id>.json）"
-[cli.commands.cache.modules.remove.flags]
-name = "要移除的文件名或模块 id"
-
-# -------------------------
-# tmpl
-# -------------------------
-[cli.commands.tmpl]
-summary = "管理模板：导入、导出、打包与列出"
-description = "管理模板资源，包括导入/导出、列出与路径查询等操作。"
-
-[tmpl]
-no_templates_in_cache = "缓存中未找到模板"
-use_import_command = "使用 {} 导入模板"
-no_tar_gz_in_zip = "在 ZIP 文件中未找到 .tar.gz 模板"
-
-[tmpl.pull]
-could_not_determine_file_size = "无法确定文件大小，进度条将被禁用。"
-no_recorded_url = "未找到记录的 tmpl.pull.url。在全局配置中记录 URL 后再运行 'kam tmpl pull <url>'。"
-
-[cli.commands.tmpl.list]
-summary = "列出所有可用模板"
-
-[cli.commands.tmpl.import]
-summary = "从文件导入模板"
-[cli.commands.tmpl.import.flags]
-path = "模板归档路径（单个模板：.tar.gz；多个模板：.zip）"
-name = "模板名称（可选；默认使用文件名）"
-force = "若模板已存在则强制覆盖"
-
-[cli.commands.tmpl.export]
-summary = "导出模板到文件"
-[cli.commands.tmpl.export.flags]
-templates = "要导出的模板名称（可多次指定）"
-output = "输出文件路径（.tar.gz / .zip）"
-force = "若输出已存在则强制覆盖"
-
-[cli.commands.tmpl.remove]
-summary = "从缓存中移除模板"
-
-[cli.commands.tmpl.path]
-summary = "显示模板缓存目录路径"
-
-[cli.commands.tmpl.pull]
-summary = "从 URL 下载模板并导入"
-[cli.commands.tmpl.pull.flags]
-url = "下载 URL（默认：GitHub release 的 templates ZIP）"
-global = "此标志为一致性保留（无实际影响）"
-
-[cli.commands.tmpl.update]
-summary = "从配置中记录的 URL 重新下载并导入"
-[cli.commands.tmpl.update.flags]
-global = "此标志为一致性保留（无实际影响）"
-
-# -------------------------
-# validate
-# -------------------------
-[cli.commands.validate]
-summary = "验证 `kam.toml` 配置与模板"
-description = "对 kam.toml、模板与项目结构进行验证，报告错误和警告。"
-[cli.commands.validate.flags]
-path = "项目路径（默认：当前目录）"
-
-# -------------------------
-# completions
-# -------------------------
-[cli.commands.completions]
-summary = "生成常见 shell 的补全脚本"
-description = "为支持的 shell (bash, zsh, fish, powershell, elvish) 生成补全脚本。"
-no_install_candidates = "未找到可安装的补全项"
-[cli.commands.completions.flags]
-shell = "补全脚本类型（bash,zsh,fish,powershell,elvish）"
-out = "输出文件；若省略则打印到标准输出"
-install = "将补全脚本安装到标准 shell 补全目录（可能需要 root 权限）"
-
-# -------------------------
-# install
-# -------------------------
-[cli.commands.install]
-summary = "充当 Magisk/KernelSU/APatchSU 的兼容层以安装模块"
-description = "作为兼容层，调用配置的 root 管理器（Magisk/KernelSU/APatchSU）来安装模块（.zip）。可通过 `kam config set root.manager <Manager>` 设置默认管理器。注意：在 Android 上此命令可能需要 root（su）。Kam 会在需要时尝试使用 'su' 执行提权。"
-
-[install]
-section = "安装：{}"
-dry_run = "演示运行：将执行 '{} {}'"
-executing = "执行：{} {}"
-package_not_found = "在项目或 dist 目录中未找到 zip 包"
-installed = "已安装 {}（通过 {}）"
-cli_not_found = "安装命令 '{}' 未在 PATH 中找到。请安装该命令或在 ~/.kam/config.toml 中设置 'root.manager'"
-trying_su = "尝试使用 'su -c' 执行：{}"
-su_not_found = "未找到 'su' 命令。无法进行提权（可能 root 管理器未授权）。"
-su_failed = "通过 'su' 提权失败：{}"
-unable_determine_cli = "无法确定安装 CLI。请在 ~/.kam/config.toml 中设置 'root.manager'，或使用 --manager 指定。"
-
-[cli.commands.install.flags]
-path = "模块包路径（.zip）。若省略，Kam 会在项目的 dist/ 输出目录尝试查找产物"
-manager = "首选 root 管理器（Magisk、KernelSU、APatchSU）"
-dry_run = "打印将要执行的命令但不实际执行"
-quiet = "抑制非必要输出"
-
-# -------------------------
-# secret
-# -------------------------
-[cli.commands.secret]
-summary = "秘密（密钥）管理（用于签名/验证任务）"
-description = "管理存储的 secrets：添加、获取、列出、移除、导入/导出，以及受信任的根 CA 管理。"
-
-[cli.commands.secret.list]
-summary = "列出已保存的秘密"
-
-[cli.commands.secret.add]
-summary = "添加秘密（来自值或文件）"
-[cli.commands.secret.add.flags]
-name = "秘密的名称"
-file = "从文件读取秘密的路径"
-file_path = "可作为位置参数的文件路径（可替代 --file）"
-value = "直接提供秘密值"
-force_file = "强制以本地文件方式存储而非系统密钥环"
-password = "在命令行传递密码（不推荐）"
-with_backup = "同时在 ~/.kam/secrets 下创建本地备份"
-
-[cli.commands.secret.get]
-summary = "获取秘密并打印到标准输出（或写入文件）"
-[cli.commands.secret.get.flags]
-out = "写入文件而非打印到标准输出"
-password = "在命令行传递密码（不推荐）"
-
-[cli.commands.secret.remove]
-summary = "移除一个秘密"
-
-[cli.commands.secret.export]
-summary = "导出秘密到文件（默认导出明文；使用 --encrypted 导出加密 blob）"
-[cli.commands.secret.export.flags]
-encrypted = "若设置则以加密 blob 导出"
-
-[cli.commands.secret.import]
-summary = "从文件导入秘密"
-
-[cli.commands.secret.exportpub]
-summary = "从存储的私钥秘密导出公钥"
-[cli.commands.secret.exportpub.flags]
-name = "秘密名称（默认：main）"
-out = "输出文件路径（若省略则打印到标准输出）"
-
-[cli.commands.secret.importcert]
-summary = "从 GitHub issue 或文件导入开发者证书链"
-[cli.commands.secret.importcert.flags]
-repo = "GitHub 仓库（格式：owner/repo）"
-issue = "包含证书的 GitHub issue 编号"
-cert_chain = "证书链 PEM 文件路径"
-name = "存储时使用的名称"
-
-[cli.commands.secret.trust]
-summary = "管理受信任的根 CA"
-[cli.commands.secret.trust.flags]
-add_root = "从文件或 URL 添加根 CA"
-ca_name = "根 CA 的名称"
-list = "列出受信任的根 CA"
-remove = "按名称移除根 CA"
-
-# -------------------------
-# sign
-# -------------------------
-[cli.commands.sign]
-summary = "使用密钥环或 PEM 文件对工件进行签名"
-
-[cli.commands.sign.flags]
-src = "要签名的工件（zip）。若省略，请使用 --dist 或 --all 签名多个文件"
-secret = "密钥环中私钥的名称（默认：main）"
-out = "输出目录（默认：dist）"
-dist = "签名指定目录中的所有工件"
-all = "签名 dist 中的所有工件（等同于 --dist）"
-cert = "包含在签名元数据中的证书链 PEM 路径"
-key_path = "可选的私钥 PEM 路径（代替密钥环）"
-
-# -------------------------
-# verify
-# -------------------------
-[cli.commands.verify]
-summary = "验证工件签名（.sig）或 sigstore bundle（DSSE）"
-description = "验证数字签名或 sigstore bundle，支持多种验证选项。"
-
-# -------------------------
-# check
-# -------------------------
-[cli.commands.check]
-summary = "检查项目的 JSON/YAML/Markdown 文件（lint/格式/解析）"
-description = "静态检查项目中的文件，适用于 CI 或本地开发以尽早发现问题。"
-[cli.commands.check.flags]
-path = "项目路径（默认：当前目录）"
-json = "以 JSON 格式输出结果"
-fix = "尝试自动修复/格式化文件（如果可能）"
-
-# -------------------------
-# export
-# -------------------------
-[cli.commands.export]
-summary = "将 `kam.toml` 导出为常用格式 (module.prop, module.json, repo.json, track.json, config.json, update.json)"
-[cli.commands.export.flags]
-format = "导出格式：prop、json、update、repo、track、config"
-output = "输出文件路径（默认：在当前目录写入格式特定文件名）"
-
-# -------------------------
-# toml
-# -------------------------
-[cli.commands.toml]
-summary = "使用点路径键（get/set/unset/list）查看并编辑 `kam.toml`"
-[cli.commands.toml.flags]
-file = "指定文件而非项目中的 kam.toml"
-
-# -------------------------
-# about / help
-# -------------------------
-[cli.commands.about]
-summary = "显示 Kam 的关于信息与致谢"
-
-[cli.commands.config]
-[cli.commands.config.flags]
-interactive = "交互式配置向导：引导设置常用偏好（语言、root 管理器等）"
-summary = "管理项目级或全局 kam 配置（类似 git config）"
-
-[cli.commands.env]
-summary = "打印以 KAM_ 前缀开头的环境变量"
-description = "打印所有以 KAM_ 开头的环境变量，便于调试。"
-
-[cli.commands.help]
-summary = "打印帮助信息或指定子命令的帮助"
-
-[tmpl.export]
-no_templates_exported = "未导出任何模板"
-no_templates_specified = "未指定要导出的模板"
-
-[cli.commands.repo]
-summary = "与模块注册表交互（搜索/下载）"
-description = "从注册表搜索并下载模块。使用 `kam -Ss <term>` 搜索或 `kam -S <moduleId>` 下载模块。"
-
-[cli.commands.repo.sync]
-summary = "下载并缓存模块索引（类似 `pacman -Sy`）"
-description = "刷新注册表索引并保存到本地缓存，以便后续搜索无需重新下载索引。使用 `--force` 强制刷新。"
-
-[cli.commands.repo.sync.flags]
-force = "即使缓存仍然有效也强制刷新"
 
 [check.errors]
 header = "错误："
@@ -441,89 +57,372 @@ header = "错误："
 [check.warnings]
 header = "警告："
 
-[common]
-file_fixed = "{}（已修复）"
+[cli]
+about = "一个用于脚手架、构建、打包与分发 Android 模块与模板（ksu/APU/Magisk/AnyTemplate）的命令行工具。支持项目初始化、打包、模板管理与仓库元数据导出。"
+long_about = "提供从模板初始化项目、构建与打包模块、管理模板与缓存、导出项目元数据等功能。使用 `kam help <COMMAND>` 查看子命令的详细帮助信息。"
 
-[config]
+[cli.commands.about]
+summary = "显示 Kam 的关于信息与致谢"
 
-[config.interactive]
-intro = "交互式配置 - 引导设置常用偏好。"
-view_builtins = "可用的内置配置可以通过：`kam config show` 查看"
-select_target = "选择要编辑的配置目标"
-choose_action = "选择操作"
-enter_ui_language = "输入 UI 语言 (例如：en, zh, zh-CN)"
-choose_root_manager = "选择首选 root 管理器 (Magisk|KernelSU|APatchSU)"
-set_custom_key = "设置其他配置项"
-enter_custom_key = "输入配置键（点分路径，例如 ui.language）"
-enter_value_for_key = "为 {} 输入值"
-make_more_changes = "继续修改其他设置？"
-aborted = "已取消。"
-builtin_keys = "内置配置键："
-example = "示例："
+[cli.commands.build]
+description = "构建项目并在输出目录生成工件，支持工作区并行构建与签名等选项。"
+summary = "构建并打包模块为可分发的 ZIP 工件"
 
-[env.docs]
-header = "Kam 使用的环境变量"
-intro = "Kam 读取或设置若干环境变量以影响其行为。下面列出常见的变量（括号中显示当前进程中的值，如果已设置）："
-kam_home = "Kam 的家目录（默认：$HOME/.kam）"
-kam_cache_dir = "用于缓存（索引、模板等）的目录"
-kam_ui_language = "UI 语言覆盖（例如：en、zh、zh-CN）"
-kam_lang = "旧版兼容的 UI 语言环境变量"
-kam_author_email = "覆盖 `kam about` 中显示的作者邮箱"
-kam_root_manager = "安装时首选的 root 管理器（例如：Magisk|KernelSU|APatchSU）"
-kam_repo_concurrency = "仓库操作的并发数"
-kam_force_index_refresh = "设置后强制刷新索引缓存"
-kam_bump_enabled = "设置为 1 时启用 bump 行为"
-kam_release_enabled = "设置为 1 时启用 release 行为"
-kam_sign_enabled = "设置为 1 时启用签名"
-kam_pre_release = "设置为 1 时标记为 pre-release 构建"
-kam_interactive = "设置为 1 时在脚本中表示交互式（视情况而定）"
-kam_repo = "某些命令或钩子使用的仓库覆盖值"
-kam_repo_ref = "仓库分支/引用的覆盖值（例如分支或 tag）"
-kam_git_repo = "用于 hooks 的 git 仓库信息"
-kam_github_repo = "CI 中的 GitHub 仓库信息（GITHUB_REPOSITORY）"
-kam_release_tag = "发布流程使用的 tag 值"
+[cli.commands.build.flags]
+all = "构建所有工作区成员"
+bump = "启用版本自动 bump（KAM_BUMP_ENABLED）"
+interactive = "以交互模式运行构建；对破坏性操作进行确认"
+jobs = "并行作业数（默认：CPU 核心数）"
+output = "输出目录（默认：dist）"
+path = "项目路径（默认：当前目录）"
+pre_release = "启用预发布模式"
+quiet = "减少输出，仅显示警告与错误"
+release = "启用发布构建（KAM_RELEASE_ENABLED）"
+sign = "构建后进行签名（KAM_SIGN_ENABLE）"
 
-# 项目 / 钩子 / 模块相关变量
-kam_project_root = "项目根目录（KAM_PROJECT_ROOT）"
-kam_hooks_root = "hooks 根目录（KAM_HOOKS_ROOT）"
-kam_module_root = "模块根目录（KAM_MODULE_ROOT）"
-kam_web_root = "模块的 webroot 路径（KAM_WEB_ROOT）"
-kam_dist_dir = "分发 / 构建输出目录（KAM_DIST_DIR）"
+[cli.commands.cache]
+description = "列出、添加、删除或清理缓存的模板，并可显示缓存路径。"
+summary = "管理本地模板与工件缓存"
 
-# 模块元信息
-kam_module_id = "模块 ID（KAM_MODULE_ID）"
-kam_module_version = "模块版本（KAM_MODULE_VERSION）"
-kam_module_version_code = "模块版本号（KAM_MODULE_VERSION_CODE）"
-kam_module_name = "模块名称（KAM_MODULE_NAME）"
-kam_module_author = "模块作者（KAM_MODULE_AUTHOR）"
-kam_module_description = "模块描述（KAM_MODULE_DESCRIPTION）"
-kam_module_update_json = "模块更新 JSON（KAM_MODULE_UPDATE_JSON）"
+[cli.commands.cache.add]
+summary = "从本地目录或归档添加模板到缓存"
 
-# prop 导出
-kam_prop_prefix = "KAM_PROP_* 环境变量由 prop.* 导出以供 hooks 使用"
-kam_prop_id = "prop.id（导出为 KAM_PROP_ID）"
-kam_prop_name = "prop.name（导出为 KAM_PROP_NAME）"
-kam_prop_version = "prop.version（导出为 KAM_PROP_VERSION）"
-kam_prop_version_code = "prop.versionCode（导出为 KAM_PROP_VERSION_CODE）"
-kam_prop_author = "prop.author（导出为 KAM_PROP_AUTHOR）"
-kam_prop_description = "prop.description（导出为 KAM_PROP_DESCRIPTION）"
+[cli.commands.cache.add.flags]
+name = "要注册的模板名称"
+path = "模板源路径（目录或归档）"
 
-kam_tmpl_prefix = "模板变量以 KAM_TMPL_* 的形式导出给 hooks"
-kam_module_prefix = "KAM_MODULE_* 提供模块元信息给 hooks（id、version、author 等）"
-kam_stage = "hook 执行阶段名称（例如：pre-build、post-build）"
-kam_tmpl_note = "当模板定义变量时，相关的 KAM_TMPL_* 变量会被生成并可被 hooks 使用"
-home = "$HOME（用于解析用户级路径）"
-path = "系统 PATH（用于查找外部工具）"
-xdg_config_home = "XDG_CONFIG_HOME（用于查找配置和补全）"
-xdg_data_home = "XDG_DATA_HOME（用于查找数据目录）"
-github_repository = "CI 中的 GITHUB_REPOSITORY，提供仓库信息"
-github_ref = "CI 中的 GITHUB_REF，提供分支/引用信息"
+[cli.commands.cache.clean]
+summary = "清理所有缓存的模板"
+
+[cli.commands.cache.list]
+summary = "列出已缓存的模板"
+
+[cli.commands.cache.modules]
+description = "列出、清理、显示路径或移除特定模块缓存文件。"
+summary = "管理模块索引缓存（index_*.json 和 modules/<id>.json）"
+
+[cli.commands.cache.modules.clean]
+summary = "清理模块缓存（删除 index_*.json 和 modules/ 目录）"
+
+[cli.commands.cache.modules.list]
+summary = "列出模块索引和模块详情缓存文件"
+
+[cli.commands.cache.modules.path]
+summary = "显示模块缓存目录路径"
+
+[cli.commands.cache.modules.remove]
+summary = "移除特定缓存文件（精确文件名或模块 id 对应的 modules/<id>.json）"
+
+[cli.commands.cache.modules.remove.flags]
+name = "要移除的文件名或模块 id"
+
+[cli.commands.cache.path]
+summary = "显示缓存目录路径"
+
+[cli.commands.cache.remove]
+summary = "从缓存中移除模板"
+
+[cli.commands.cache.remove.flags]
+name = "要移除的模板名称"
+
+[cli.commands.check]
+description = "静态检查项目中的文件，适用于 CI 或本地开发以尽早发现问题。"
+summary = "检查项目的 JSON/YAML/Markdown 文件（lint/格式/解析）"
+
+[cli.commands.check.flags]
+fix = "尝试自动修复/格式化文件（如果可能）"
+json = "以 JSON 格式输出结果"
+path = "项目路径（默认：当前目录）"
+
+[cli.commands.completions]
+description = "为支持的 shell (bash, zsh, fish, powershell, elvish) 生成补全脚本。"
+no_install_candidates = "未找到可安装的补全项"
+summary = "生成常见 shell 的补全脚本"
+
+[cli.commands.completions.flags]
+install = "将补全脚本安装到标准 shell 补全目录（可能需要 root 权限）"
+out = "输出文件；若省略则打印到标准输出"
+shell = "补全脚本类型（bash,zsh,fish,powershell,elvish）"
+
+[cli.commands.config.flags]
+interactive = "交互式配置向导：引导设置常用偏好（语言、root 管理器等）"
+summary = "管理项目级或全局 kam 配置（类似 git config）"
+
+[cli.commands.env]
+description = "打印所有以 KAM_ 开头的环境变量，便于调试。"
+summary = "打印以 KAM_ 前缀开头的环境变量"
 
 [cli.commands.env.flags]
 describe = "展示 Kam 使用的环境变量说明（i18n）"
 note_custom_keys = "注意：您也可以设置自定义键。使用 'kam config list' 查看所有配置项。"
 set_success = "设置 {} = {} 到 {}"
 unset_success = "'{}' 已在 {} 中取消设置"
+
+[cli.commands.export]
+summary = "将 `kam.toml` 导出为常用格式 (module.prop, module.json, repo.json, track.json, config.json, update.json)"
+
+[cli.commands.export.flags]
+format = "导出格式：prop、json、update、repo、track、config"
+output = "输出文件路径（默认：在当前目录写入格式特定文件名）"
+
+[cli.commands.help]
+summary = "打印帮助信息或指定子命令的帮助"
+
+[cli.commands.init]
+description = "以交互或非交互方式从本地或内置模板创建新项目，并可预填常见元数据。"
+summary = "从模板初始化一个新的 Kam 项目（支持 meta 与 kernel 模板）"
+
+[cli.commands.init.flags]
+author = "作者姓名"
+description = "项目描述"
+force = "强制覆盖已存在的文件"
+id = "模块 ID（默认为目录名）"
+interactive = "以交互模式运行并提示必填项"
+name = "项目路径（在交互模式下可留空以交互填写）"
+project_name = "项目名称（默认示例：Example Module Name）"
+template = "要使用的模板（内置 ID 或本地路径）"
+tmpl = "创建模板项目"
+update_json = "Update JSON 的 URL（默认：从 git 自动生成）"
+var = "模板变量，key=value 格式（可重复）"
+version = "项目版本（默认：1.0.0）"
+
+[cli.commands.install]
+description = "作为兼容层，调用配置的 root 管理器（Magisk/KernelSU/APatchSU）来安装模块（.zip）。可通过 `kam config set root.manager <Manager>` 设置默认管理器。注意：在 Android 上此命令可能需要 root（su）。Kam 会在需要时尝试使用 'su' 执行提权。"
+summary = "充当 Magisk/KernelSU/APatchSU 的兼容层以安装模块"
+
+[cli.commands.install.flags]
+dry_run = "打印将要执行的命令但不实际执行"
+manager = "首选 root 管理器（Magisk、KernelSU、APatchSU）"
+path = "模块包路径（.zip）。若省略，Kam 会在项目的 dist/ 输出目录尝试查找产物"
+quiet = "抑制非必要输出"
+
+[cli.commands.repo]
+description = "从注册表搜索并下载模块。使用 `kam -Ss <term>` 搜索或 `kam -S <moduleId>` 下载模块。"
+summary = "与模块注册表交互（搜索/下载）"
+
+[cli.commands.repo.sync]
+description = "刷新注册表索引并保存到本地缓存，以便后续搜索无需重新下载索引。使用 `--force` 强制刷新。"
+summary = "下载并缓存模块索引（类似 `pacman -Sy`）"
+
+[cli.commands.repo.sync.flags]
+force = "即使缓存仍然有效也强制刷新"
+
+[cli.commands.secret]
+description = "管理存储的 secrets：添加、获取、列出、移除、导入/导出，以及受信任的根 CA 管理。"
+summary = "秘密（密钥）管理（用于签名/验证任务）"
+
+[cli.commands.secret.add]
+summary = "添加秘密（来自值或文件）"
+
+[cli.commands.secret.add.flags]
+file = "从文件读取秘密的路径"
+file_path = "可作为位置参数的文件路径（可替代 --file）"
+force_file = "强制以本地文件方式存储而非系统密钥环"
+name = "秘密的名称"
+password = "在命令行传递密码（不推荐）"
+value = "直接提供秘密值"
+with_backup = "同时在 ~/.kam/secrets 下创建本地备份"
+
+[cli.commands.secret.export]
+summary = "导出秘密到文件（默认导出明文；使用 --encrypted 导出加密 blob）"
+
+[cli.commands.secret.export.flags]
+encrypted = "若设置则以加密 blob 导出"
+
+[cli.commands.secret.exportpub]
+summary = "从存储的私钥秘密导出公钥"
+
+[cli.commands.secret.exportpub.flags]
+name = "秘密名称（默认：main）"
+out = "输出文件路径（若省略则打印到标准输出）"
+
+[cli.commands.secret.get]
+summary = "获取秘密并打印到标准输出（或写入文件）"
+
+[cli.commands.secret.get.flags]
+out = "写入文件而非打印到标准输出"
+password = "在命令行传递密码（不推荐）"
+
+[cli.commands.secret.import]
+summary = "从文件导入秘密"
+
+[cli.commands.secret.importcert]
+summary = "从 GitHub issue 或文件导入开发者证书链"
+
+[cli.commands.secret.importcert.flags]
+cert_chain = "证书链 PEM 文件路径"
+issue = "包含证书的 GitHub issue 编号"
+name = "存储时使用的名称"
+repo = "GitHub 仓库（格式：owner/repo）"
+
+[cli.commands.secret.list]
+summary = "列出已保存的秘密"
+
+[cli.commands.secret.remove]
+summary = "移除一个秘密"
+
+[cli.commands.secret.trust]
+summary = "管理受信任的根 CA"
+
+[cli.commands.secret.trust.flags]
+add_root = "从文件或 URL 添加根 CA"
+ca_name = "根 CA 的名称"
+list = "列出受信任的根 CA"
+remove = "按名称移除根 CA"
+
+[cli.commands.sign]
+summary = "使用密钥环或 PEM 文件对工件进行签名"
+
+[cli.commands.sign.flags]
+all = "签名 dist 中的所有工件（等同于 --dist）"
+cert = "包含在签名元数据中的证书链 PEM 路径"
+dist = "签名指定目录中的所有工件"
+key_path = "可选的私钥 PEM 路径（代替密钥环）"
+out = "输出目录（默认：dist）"
+secret = "密钥环中私钥的名称（默认：main）"
+src = "要签名的工件（zip）。若省略，请使用 --dist 或 --all 签名多个文件"
+
+[cli.commands.tmpl]
+description = "管理模板资源，包括导入/导出、列出与路径查询等操作。"
+summary = "管理模板：导入、导出、打包与列出"
+
+[cli.commands.tmpl.export]
+summary = "导出模板到文件"
+
+[cli.commands.tmpl.export.flags]
+force = "若输出已存在则强制覆盖"
+output = "输出文件路径（.tar.gz / .zip）"
+templates = "要导出的模板名称（可多次指定）"
+
+[cli.commands.tmpl.import]
+summary = "从文件导入模板"
+
+[cli.commands.tmpl.import.flags]
+force = "若模板已存在则强制覆盖"
+name = "模板名称（可选；默认使用文件名）"
+path = "模板归档路径（单个模板：.tar.gz；多个模板：.zip）"
+
+[cli.commands.tmpl.list]
+summary = "列出所有可用模板"
+
+[cli.commands.tmpl.path]
+summary = "显示模板缓存目录路径"
+
+[cli.commands.tmpl.pull]
+summary = "从 URL 下载模板并导入"
+
+[cli.commands.tmpl.pull.flags]
+global = "此标志为一致性保留（无实际影响）"
+url = "下载 URL（默认：GitHub release 的 templates ZIP）"
+
+[cli.commands.tmpl.remove]
+summary = "从缓存中移除模板"
+
+[cli.commands.tmpl.update]
+summary = "从配置中记录的 URL 重新下载并导入"
+
+[cli.commands.tmpl.update.flags]
+global = "此标志为一致性保留（无实际影响）"
+
+[cli.commands.toml]
+summary = "使用点路径键（get/set/unset/list）查看并编辑 `kam.toml`"
+
+[cli.commands.toml.flags]
+file = "指定文件而非项目中的 kam.toml"
+
+[cli.commands.validate]
+description = "对 kam.toml、模板与项目结构进行验证，报告错误和警告。"
+summary = "验证 `kam.toml` 配置与模板"
+
+[cli.commands.validate.flags]
+path = "项目路径（默认：当前目录）"
+
+[cli.commands.verify]
+description = "验证数字签名或 sigstore bundle，支持多种验证选项。"
+summary = "验证工件签名（.sig）或 sigstore bundle（DSSE）"
+
+[cli.commands.version]
+summary = "管理模块版本与 bump 策略"
+
+[cli.flags]
+help = "打印帮助（参考 '-h'）"
+modules_url = "模块注册表 API 的 URL（默认：https://modules.kernelsu.org）。覆盖内置的模块端点"
+search = "Pacman 风格搜索修饰符（与 -S 一起使用为 '-Ss' 进行搜索或单独使用 '-s' 搜索）"
+sync = "Pacman 风格同步（下载）标志（等同于 pacman -S）"
+version = "打印版本"
+yes = '对所有确认提示假设为 "yes"（等同于 -y）。使用 `-y` 或 `--yes` 跳过确认'
+
+[common]
+file_fixed = "{}（已修复）"
+
+[config.interactive]
+aborted = "已取消。"
+builtin_keys = "内置配置键："
+choose_action = "选择操作"
+choose_root_manager = "选择首选 root 管理器 (Magisk|KernelSU|APatchSU)"
+enter_custom_key = "输入配置键（点分路径，例如 ui.language）"
+enter_ui_language = "输入 UI 语言 (例如：en, zh, zh-CN)"
+enter_value_for_key = "为 {} 输入值"
+example = "示例："
+intro = "交互式配置 - 引导设置常用偏好。"
+make_more_changes = "继续修改其他设置？"
+select_target = "选择要编辑的配置目标"
+set_custom_key = "设置其他配置项"
+view_builtins = "可用的内置配置可以通过：`kam config show` 查看"
+
+[env]
+no_kam_vars = "未发现以 KAM_ 开头的环境变量"
+
+[env.docs]
+github_ref = "CI 中的 GITHUB_REF，提供分支/引用信息"
+github_repository = "CI 中的 GITHUB_REPOSITORY，提供仓库信息"
+header = "Kam 使用的环境变量"
+home = "$HOME（用于解析用户级路径）"
+intro = "Kam 读取或设置若干环境变量以影响其行为。下面列出常见的变量（括号中显示当前进程中的值，如果已设置）："
+kam_author_email = "覆盖 `kam about` 中显示的作者邮箱"
+kam_bump_enabled = "设置为 1 时启用 bump 行为"
+kam_cache_dir = "用于缓存（索引、模板等）的目录"
+kam_dist_dir = "分发 / 构建输出目录（KAM_DIST_DIR）"
+kam_force_index_refresh = "设置后强制刷新索引缓存"
+kam_git_repo = "用于 hooks 的 git 仓库信息"
+kam_github_repo = "CI 中的 GitHub 仓库信息（GITHUB_REPOSITORY）"
+kam_home = "Kam 的家目录（默认：$HOME/.kam）"
+kam_hooks_root = "hooks 根目录（KAM_HOOKS_ROOT）"
+kam_interactive = "设置为 1 时在脚本中表示交互式（视情况而定）"
+kam_lang = "旧版兼容的 UI 语言环境变量"
+kam_module_author = "模块作者（KAM_MODULE_AUTHOR）"
+kam_module_description = "模块描述（KAM_MODULE_DESCRIPTION）"
+kam_module_id = "模块 ID（KAM_MODULE_ID）"
+kam_module_name = "模块名称（KAM_MODULE_NAME）"
+kam_module_prefix = "KAM_MODULE_* 提供模块元信息给 hooks（id、version、author 等）"
+kam_module_root = "模块根目录（KAM_MODULE_ROOT）"
+kam_module_update_json = "模块更新 JSON（KAM_MODULE_UPDATE_JSON）"
+kam_module_version = "模块版本（KAM_MODULE_VERSION）"
+kam_module_version_code = "模块版本号（KAM_MODULE_VERSION_CODE）"
+kam_pre_release = "设置为 1 时标记为 pre-release 构建"
+kam_project_root = "项目根目录（KAM_PROJECT_ROOT）"
+kam_prop_author = "prop.author（导出为 KAM_PROP_AUTHOR）"
+kam_prop_description = "prop.description（导出为 KAM_PROP_DESCRIPTION）"
+kam_prop_id = "prop.id（导出为 KAM_PROP_ID）"
+kam_prop_name = "prop.name（导出为 KAM_PROP_NAME）"
+kam_prop_prefix = "KAM_PROP_* 环境变量由 prop.* 导出以供 hooks 使用"
+kam_prop_version = "prop.version（导出为 KAM_PROP_VERSION）"
+kam_prop_version_code = "prop.versionCode（导出为 KAM_PROP_VERSION_CODE）"
+kam_release_enabled = "设置为 1 时启用 release 行为"
+kam_release_tag = "发布流程使用的 tag 值"
+kam_repo = "某些命令或钩子使用的仓库覆盖值"
+kam_repo_concurrency = "仓库操作的并发数"
+kam_repo_ref = "仓库分支/引用的覆盖值（例如分支或 tag）"
+kam_root_manager = "安装时首选的 root 管理器（例如：Magisk|KernelSU|APatchSU）"
+kam_sign_enabled = "设置为 1 时启用签名"
+kam_stage = "hook 执行阶段名称（例如：pre-build、post-build）"
+kam_tmpl_note = "当模板定义变量时，相关的 KAM_TMPL_* 变量会被生成并可被 hooks 使用"
+kam_tmpl_prefix = "模板变量以 KAM_TMPL_* 的形式导出给 hooks"
+kam_ui_language = "UI 语言覆盖（例如：en、zh、zh-CN）"
+kam_web_root = "模块的 webroot 路径（KAM_WEB_ROOT）"
+path = "系统 PATH（用于查找外部工具）"
+xdg_config_home = "XDG_CONFIG_HOME（用于查找配置和补全）"
+xdg_data_home = "XDG_DATA_HOME（用于查找数据目录）"
 
 [export]
 config_json = "已导出 config.json 到 {}"
@@ -611,6 +510,18 @@ project_name = "项目名称"
 template = "模板"
 version = "版本"
 
+[install]
+cli_not_found = "安装命令 '{}' 未在 PATH 中找到。请安装该命令或在 ~/.kam/config.toml 中设置 'root.manager'"
+dry_run = "演示运行：将执行 '{} {}'"
+executing = "执行：{} {}"
+installed = "已安装 {}（通过 {}）"
+package_not_found = "在项目或 dist 目录中未找到 zip 包"
+section = "安装：{}"
+su_failed = "通过 'su' 提权失败：{}"
+su_not_found = "未找到 'su' 命令。无法进行提权（可能 root 管理器未授权）。"
+trying_su = "尝试使用 'su -c' 执行：{}"
+unable_determine_cli = "无法确定安装 CLI。请在 ~/.kam/config.toml 中设置 'root.manager'，或使用 --manager 指定。"
+
 [packaging]
 files = "正在打包文件..."
 generating_module_prop = "正在生成 module.prop"
@@ -628,6 +539,41 @@ output_directory = "输出目录"
 output_file = "输出文件"
 package_size = "包大小"
 
+[repo]
+authors = "作者"
+confirm_download = "确认下载 '{}' [{}] ? [Y/n] "
+download = "下载：{}"
+everything_up_to_date = "已是最新"
+failed_to_download = "下载失败 {}: {}"
+module_not_found_showing_similar = "模块 '{}' 未找到。显示类似的模块："
+no_downloadable_zip_asset = "未找到模块 {} 的可下载 zip 资源"
+no_results_for = "未找到与 '{}' 相关的结果。"
+result_line = "{} - {} - {}{}"
+result_line_simple = "{} - {}{}"
+saved = "已保存：{}"
+score_format = "  (得分：{:.2})"
+selected_module = "已选择模块：{}"
+similar_packages_header = "共有 {} 个与 '{}' 类似的软件包："
+skipped_download = "已跳过下载：{}"
+skipped_selection = "已跳过选择。"
+updated = "更新时间"
+url = "网址"
+version = "版本"
+
+[repo.module_detail]
+asset = "资源：{}{}"
+download_url = "下载 URL：{}"
+release = "发行：{}"
+title = "模块：{} - {}"
+
+[repo.prompt]
+enter_number = "输入要安装的包的编号（或按回车跳过）："
+invalid_input_number = "输入无效。请输入一个数字。"
+invalid_selection_out_of_range = "选择无效。编号超出范围。"
+
+[repo.search]
+empty_query = "查询为空"
+
 [secret]
 cert_chain_imported = "证书链 '{}' 导入成功"
 encrypted = "(加密)"
@@ -637,10 +583,10 @@ failed_read_ca = "读取 CA 失败: {}"
 failed_retrieve_public_key = "检索密钥的公钥失败 '{}': {}"
 fetching_cert_from_github = "从 GitHub issue {} 获取证书..."
 imported = "秘密 '{}' 已导入"
+no_cert_chain_in_issue = "在 issue 或评论中未找到证书链"
 no_secrets_stored = "未存储任何秘密。"
 no_trusted_root_cas = "未发现受信任的根 CA。"
 no_valid_cert_in_chain = "在证书链中未找到有效证书"
-no_cert_chain_in_issue = "在 issue 或评论中未找到证书链"
 plain = "(明文)"
 public_key_exported = "秘密 '{}' 的公钥已导出到 {}"
 removed = "秘密 '{}' 已移除"
@@ -671,6 +617,19 @@ failed = "失败"
 succeeded = "成功"
 total = "总计"
 total_duration = "总耗时"
+
+[tmpl]
+no_tar_gz_in_zip = "在 ZIP 文件中未找到 .tar.gz 模板"
+no_templates_in_cache = "缓存中未找到模板"
+use_import_command = "使用 {} 导入模板"
+
+[tmpl.export]
+no_templates_exported = "未导出任何模板"
+no_templates_specified = "未指定要导出的模板"
+
+[tmpl.pull]
+could_not_determine_file_size = "无法确定文件大小，进度条将被禁用。"
+no_recorded_url = "未找到记录的 tmpl.pull.url。在全局配置中记录 URL 后再运行 'kam tmpl pull <url>'。"
 
 [validate]
 failed = "验证失败。请修复上面的错误。"

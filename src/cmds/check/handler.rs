@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use super::args::CheckArgs;
 use super::file::{FileResult, check_file};
 use crate::errors::KamError;
+use crate::types::kam_toml::RuleConfig;
 
 fn collect_project_files(
     project_path: &Path,
@@ -159,13 +160,13 @@ fn render_json_results(results: &Vec<FileResult>, verbose: bool) -> serde_json::
 }
 
 pub fn run(args: CheckArgs) -> Result<(), KamError> {
-    let project_path = Path::new(&args.path);
-    if !project_path.exists() {
-        return Err(KamError::InvalidDirectory(trf!(
-            "Path does not exist: {}",
-            args.path
-        )));
-    }
+    // Determine input paths: use positional `PATHS` (files/dirs/globs) when provided,
+    // otherwise fall back to the configured `--project-path` (`args.path`, default ".").
+    let input_paths: Vec<String> = if args.paths.is_empty() {
+        vec![args.path.clone()]
+    } else {
+        args.paths.clone()
+    };
 
     // Report shellcheck availability early so users can tell whether .sh files will
     // be checked by shellcheck (preferred) or by the built-in Rust check fallback.
@@ -198,17 +199,6 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
 
     let mut results: Vec<FileResult> = Vec::new();
 
-    // 检测项目类型：是否是 Kam 项目
-    let is_kam_project = project_path.join("kam.toml").exists();
-
-    // 如果是 Kam 项目，优先检查 kam.toml
-    if is_kam_project {
-        let kam_toml_path = project_path.join("kam.toml");
-        if let Ok(res) = super::file::check_file(&kam_toml_path, "toml", args.fix) {
-            results.push(res);
-        }
-    }
-
     // 获取默认排除目录，再加几个常见的
     // 这些目录通常不需要检查（比如构建产物、模板等）
     let mut skip_dirs = crate::utils::default_exclude_dir_names();
@@ -218,18 +208,110 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         }
     }
 
-    // 如果是 Kam 项目，根据配置调整检查范围
-    if is_kam_project
-        && let Ok(_kam_toml) = crate::types::kam_toml::KamToml::load_from_dir(project_path)
-    {
-        // 如果配置了 source_dir，可以优先检查该目录
-        // 但这里我们仍然检查整个项目，只是跳过一些不必要的目录
-        // 可以添加基于 build 配置的智能过滤逻辑
-        // 例如：如果配置了 exclude，可以跳过这些文件
+    // Expand input paths (support files, directories, and glob patterns).
+    // For any directory that looks like a Kam project (has kam.toml) we
+    // perform a pre-check of its kam.toml and then collect files under it.
+    let mut collected_files: Vec<PathBuf> = Vec::new();
+    let mut prechecked_kam_count: usize = 0;
+    // Cache of per-project rule configurations (keyed by project directory).
+    // Each entry maps to an optional rules map parsed from that project's kam.toml.
+    let mut project_rules_cache: std::collections::HashMap<
+        std::path::PathBuf,
+        Option<std::collections::HashMap<String, RuleConfig>>,
+    > = std::collections::HashMap::new();
+
+    for p in input_paths {
+        // Treat common glob characters as a hint to expand via glob crate.
+        let looks_like_glob = p.contains('*') || p.contains('?') || p.contains('[');
+        if looks_like_glob {
+            match glob::glob(&p) {
+                Ok(entries) => {
+                    for entry in entries.filter_map(Result::ok) {
+                        if entry.is_dir() {
+                            if entry.join("kam.toml").exists() {
+                                if let Ok(res) = super::file::check_file(
+                                    &entry.join("kam.toml"),
+                                    "toml",
+                                    args.fix,
+                                    None,
+                                ) {
+                                    results.push(res);
+                                    prechecked_kam_count += 1;
+                                }
+                                // Try to parse and cache the project's rules config for later files.
+                                if let Ok(kt) = crate::types::kam_toml::KamToml::load_from_file(
+                                    entry.join("kam.toml"),
+                                ) {
+                                    let key =
+                                        entry.canonicalize().unwrap_or_else(|_| entry.clone());
+                                    project_rules_cache.insert(key, kt.rules);
+                                }
+                            }
+                            let dir_files = collect_project_files(
+                                &entry,
+                                &skip_dirs,
+                                entry.join("kam.toml").exists(),
+                            );
+                            collected_files.extend(dir_files);
+                        } else if entry.is_file() {
+                            collected_files.push(entry);
+                        }
+                    }
+                }
+                Err(e) => {
+                    crate::utils::Utils::warn(&format!("Invalid glob pattern '{}': {}", p, e));
+                }
+            }
+        } else {
+            let pathp = Path::new(&p);
+            if pathp.exists() {
+                if pathp.is_dir() {
+                    if pathp.join("kam.toml").exists() {
+                        if let Ok(res) =
+                            super::file::check_file(&pathp.join("kam.toml"), "toml", args.fix, None)
+                        {
+                            results.push(res);
+                            prechecked_kam_count += 1;
+                        }
+                        if let Ok(kt) =
+                            crate::types::kam_toml::KamToml::load_from_file(pathp.join("kam.toml"))
+                        {
+                            let key = pathp.canonicalize().unwrap_or_else(|_| pathp.to_path_buf());
+                            project_rules_cache.insert(key, kt.rules);
+                        }
+                    }
+                    let dir_files =
+                        collect_project_files(pathp, &skip_dirs, pathp.join("kam.toml").exists());
+                    collected_files.extend(dir_files);
+                } else if pathp.is_file() {
+                    collected_files.push(pathp.to_path_buf());
+                }
+            } else {
+                return Err(KamError::InvalidDirectory(trf!(
+                    "Path does not exist: {}",
+                    p
+                )));
+            }
+        }
     }
-    // 虽然可能漏掉一些，但至少能跳过大部分不需要检查的目录
-    // Collect files while respecting .gitignore and our skip list
-    let files = collect_project_files(project_path, &skip_dirs, is_kam_project);
+
+    // Deduplicate files (canonicalized where possible).
+    use std::collections::HashSet;
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+    let mut files: Vec<PathBuf> = Vec::new();
+    for f in collected_files {
+        let canon = f.canonicalize().unwrap_or_else(|_| f.clone());
+        if seen.insert(canon.clone()) {
+            files.push(canon);
+        }
+    }
+
+    // NOTE:
+    // Project-level kam.toml checks and single-project collection were handled
+    // earlier while expanding the provided PATH/GLOB targets. We no longer need
+    // the leftover per-project collection here, and references to
+    // `project_path`/`is_kam_project` would be invalid in multi-target mode.
+    // (This block intentionally left out.)
 
     // 如果检测到 shell 脚本文件，确保 shellcheck 已安装并可执行；否则直接报错
     let mut has_sh = false;
@@ -269,11 +351,8 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         return Err(KamError::ShellcheckMissing);
     }
 
-    // 文件总数（包含已单独检查的 kam.toml）
-    let mut total_files: usize = files.len();
-    if is_kam_project {
-        total_files += 1;
-    }
+    // 文件总数（包含已预检的 kam.toml）
+    let total_files: usize = files.len() + prechecked_kam_count;
 
     // 只在非JSON输出且是终端时显示进度条
     let show_progress = !args.json && std::io::stdout().is_terminal();
@@ -285,9 +364,9 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         .unwrap()
         .progress_chars("#>-"); // 进度条字符，看起来比较好看
         pb.set_style(style);
-        // 如果已经检查过 kam.toml，进度条从 1 开始
-        if is_kam_project {
-            pb.inc(1);
+        // 如果已经预检过一些 kam.toml，则把进度条先推进相应的数量
+        if prechecked_kam_count > 0 {
+            pb.inc(prechecked_kam_count as u64);
         }
         Some(pb)
     } else {
@@ -335,7 +414,30 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             }
         };
 
-        let res = check_file(path, kind, args.fix)?;
+        // Determine per-project rule configuration (if any) by walking up to the nearest
+        // ancestor directory that had a cached kam.toml.
+        fn find_project_rules<'a>(
+            p: &std::path::Path,
+            cache: &'a std::collections::HashMap<
+                std::path::PathBuf,
+                Option<std::collections::HashMap<String, RuleConfig>>,
+            >,
+        ) -> Option<&'a std::collections::HashMap<String, RuleConfig>> {
+            let mut cur = p;
+            while let Some(parent) = cur.parent() {
+                if let Ok(canon) = parent.canonicalize() {
+                    if let Some(opt) = cache.get(&canon) {
+                        return opt.as_ref();
+                    }
+                } else if let Some(opt) = cache.get(parent) {
+                    return opt.as_ref();
+                }
+                cur = parent;
+            }
+            None
+        }
+        let project_rules = find_project_rules(path, &project_rules_cache);
+        let res = check_file(path, kind, args.fix, project_rules)?;
         results.push(res);
         if let Some(ref p) = pb {
             p.set_message(format!("{}", path.display()));
@@ -358,6 +460,28 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             serde_json::to_string(&jv).unwrap_or_else(|_| "{}".into())
         };
         println!("{}", out);
+
+        // Compute totals so JSON mode honors fail-on-error / fail-on-warning flags.
+        let mut total_errors: usize = 0;
+        let mut total_warnings: usize = 0;
+        for r in &results {
+            total_errors += r.errors.len();
+            total_warnings += r.warnings.len();
+        }
+
+        if args.fail_on_error && total_errors > 0 {
+            return Err(KamError::CommandFailed(format!(
+                "check failed: {} error(s) found",
+                total_errors
+            )));
+        }
+        if args.fail_on_warning && total_warnings > 0 {
+            return Err(KamError::CommandFailed(format!(
+                "check failed: {} warning(s) found",
+                total_warnings
+            )));
+        }
+
         return Ok(());
     }
 
@@ -416,6 +540,27 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         );
     }
 
+    // Compute totals and respect fail-on-* flags so callers (CI) can opt-in to non-zero exit codes.
+    let mut total_errors: usize = 0;
+    let mut total_warnings: usize = 0;
+    for r in &results {
+        total_errors += r.errors.len();
+        total_warnings += r.warnings.len();
+    }
+
+    if args.fail_on_error && total_errors > 0 {
+        return Err(KamError::CommandFailed(format!(
+            "check failed: {} error(s) found",
+            total_errors
+        )));
+    }
+    if args.fail_on_warning && total_warnings > 0 {
+        return Err(KamError::CommandFailed(format!(
+            "check failed: {} warning(s) found",
+            total_warnings
+        )));
+    }
+
     Ok(())
 }
 
@@ -433,10 +578,13 @@ mod tests {
         let mut f = File::create(&path).unwrap();
         writeln!(f, "{{ \"a\":1,\"b\":2,}}").unwrap();
         let args = CheckArgs {
-            path: dir.path().to_string_lossy().to_string(),
+            path: ".".to_string(),
+            paths: vec![dir.path().to_string_lossy().to_string()],
             json: true,
             verbose: false,
             fix: false,
+            fail_on_error: false,
+            fail_on_warning: false,
         };
         // Run
         let result = run(args);
@@ -459,10 +607,13 @@ mod tests {
         }
 
         let args = CheckArgs {
-            path: dir.path().to_string_lossy().to_string(),
+            path: ".".to_string(),
+            paths: vec![dir.path().to_string_lossy().to_string()],
             json: true,
             verbose: false,
             fix: false,
+            fail_on_error: false,
+            fail_on_warning: false,
         };
 
         let res = run(args);
@@ -518,10 +669,13 @@ mod tests {
         // intentionally compact/unformatted JSON
         writeln!(f, "{{\"a\":1,\"b\":2}} ").unwrap();
         let args = CheckArgs {
-            path: dir.path().to_string_lossy().to_string(),
+            path: ".".to_string(),
+            paths: vec![dir.path().to_string_lossy().to_string()],
             json: false,
             verbose: false,
             fix: true,
+            fail_on_error: false,
+            fail_on_warning: false,
         };
         // Run
         let result = run(args);
@@ -538,10 +692,13 @@ mod tests {
         let mut f = File::create(&path).unwrap();
         writeln!(f, "a = 1 b = 2").unwrap();
         let args = CheckArgs {
-            path: dir.path().to_string_lossy().to_string(),
+            path: ".".to_string(),
+            paths: vec![dir.path().to_string_lossy().to_string()],
             json: true,
             verbose: false,
             fix: false,
+            fail_on_error: false,
+            fail_on_warning: false,
         };
         // Run
         let result = run(args);
@@ -556,10 +713,13 @@ mod tests {
         // intentionally compact/unformatted TOML
         writeln!(f, "a=1\nb=2").unwrap();
         let args = CheckArgs {
-            path: dir.path().to_string_lossy().to_string(),
+            path: ".".to_string(),
+            paths: vec![dir.path().to_string_lossy().to_string()],
             json: false,
             verbose: false,
             fix: true,
+            fail_on_error: false,
+            fail_on_warning: false,
         };
         // Run
         let result = run(args);
@@ -578,10 +738,13 @@ mod tests {
         // CRLF line endings + trailing spaces + missing EOF newline + YAML frontmatter
         write!(f, "---\r\ntitle:foo\r\n---\r\nLine with space \r\n").unwrap();
         let args = CheckArgs {
-            path: dir.path().to_string_lossy().to_string(),
+            path: ".".to_string(),
+            paths: vec![dir.path().to_string_lossy().to_string()],
             json: false,
             verbose: false,
             fix: true,
+            fail_on_error: false,
+            fail_on_warning: false,
         };
         let result = run(args);
         assert!(result.is_ok());
@@ -690,5 +853,112 @@ mod tests {
         let v_verbose = render_json_results(&arr, true);
         let v_full = serde_json::to_value(&arr).unwrap();
         assert_eq!(v_verbose, v_full);
+    }
+
+    #[test]
+    fn fail_on_error_causes_nonzero_exit() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("bad.json");
+        let mut f = File::create(&path).unwrap();
+        writeln!(f, "{{ \"a\":1,\"b\":2,}}").unwrap();
+
+        let args = CheckArgs {
+            path: ".".to_string(),
+            paths: vec![dir.path().to_string_lossy().to_string()],
+            json: true,
+            verbose: false,
+            fix: false,
+            fail_on_error: true,
+            fail_on_warning: false,
+        };
+
+        let res = run(args);
+        assert!(
+            res.is_err(),
+            "Expected run to return Err when errors found and --fail-on-error is set"
+        );
+    }
+
+    #[test]
+    fn fail_on_warning_causes_nonzero_exit() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("kam.toml");
+        let content = r#"[prop]
+id = "com.example.test"
+name = "Example"
+version = "v1.2.3"
+versionCode = 1
+description = "Example module"
+"#;
+        fs::write(&path, content).unwrap();
+
+        let args = CheckArgs {
+            path: ".".to_string(),
+            paths: vec![dir.path().to_string_lossy().to_string()],
+            json: true,
+            verbose: false,
+            fix: false,
+            fail_on_error: false,
+            fail_on_warning: true,
+        };
+        let res = run(args);
+        assert!(
+            res.is_err(),
+            "Expected run to return Err when warnings found and fail_on_warning=true"
+        );
+    }
+
+    #[test]
+    fn check_single_file_positional() {
+        // Ensure passing a single file via positional PATH works.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("single_bad.json");
+        let mut f = File::create(&path).unwrap();
+        // invalid JSON
+        writeln!(f, "{{ \"a\":1, }}").unwrap();
+
+        let args = CheckArgs {
+            path: ".".to_string(),
+            paths: vec![path.to_string_lossy().to_string()],
+            json: true,
+            verbose: false,
+            fix: false,
+            fail_on_error: true,
+            fail_on_warning: false,
+        };
+        let res = run(args);
+        assert!(
+            res.is_err(),
+            "Expected run to return Err when errors found and --fail-on-error is set"
+        );
+    }
+
+    #[test]
+    fn check_glob_pattern_matches_files() {
+        // Ensure glob patterns match files and they get checked.
+        let dir = tempdir().unwrap();
+        let a = dir.path().join("a.json");
+        let mut fa = File::create(&a).unwrap();
+        writeln!(fa, "{{ \"a\":1, }}").unwrap(); // invalid
+
+        let b = dir.path().join("b.json");
+        let mut fb = File::create(&b).unwrap();
+        writeln!(fb, "{{ \"a\": 1 }}").unwrap(); // valid
+
+        let pattern = format!("{}/{}", dir.path().to_string_lossy(), "*.json");
+        let args = CheckArgs {
+            path: ".".to_string(),
+            paths: vec![pattern],
+            json: true,
+            verbose: false,
+            fix: false,
+            fail_on_error: true,
+            fail_on_warning: false,
+        };
+        let res = run(args);
+        assert!(
+            res.is_err(),
+            "Expected run to return Err when glob matches files with errors and --fail-on-error is set"
+        );
     }
 }

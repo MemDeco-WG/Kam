@@ -2,10 +2,12 @@
 
 # $CI
 if [ -n "$CI" ]; then
-	exit 0
+    exit 0
 fi
 
 # Load helpers
+# shellcheck source=../lib/utils.sh
+# shellcheck source=hooks/lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 
@@ -15,8 +17,8 @@ log_info "Synchronized GitHub workflows from KamModuleX to main project."
 
 # cp to tmpl/*/.github/workflows
 for tmpl_dir in "$KAM_PROJECT_ROOT/tmpl"/*/; do
-	cp -rf "$KAM_PROJECT_ROOT/.github/workflows" "$tmpl_dir/.github/"
-	log_info "Synchronized GitHub workflows to template: $tmpl_dir"
+    cp -rf "$KAM_PROJECT_ROOT/.github/workflows" "$tmpl_dir/.github/"
+    log_info "Synchronized GitHub workflows to template: $tmpl_dir"
 done
 
 exit 0

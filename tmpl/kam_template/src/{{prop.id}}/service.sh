@@ -1,6 +1,7 @@
 # shellcheck shell=ash
 # service.sh
-#
+MODDIR=${0%/*}
+[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
 # This script runs in the "late_start service" stage of the boot process.
 #
 # ---------------------------------------------------------------------------------------
@@ -21,5 +22,4 @@
 # - Waiting for specific system properties (like sys.boot_completed).
 #
 # ---------------------------------------------------------------------------------------
-MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
+import __runtime__

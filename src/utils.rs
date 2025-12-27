@@ -475,8 +475,6 @@ impl Utils {
             if let Some(err) = stderr {
                 let mut reader = BufReader::new(err);
                 let mut buf: Vec<u8> = Vec::new();
-                // Only print header once before the first stderr line
-                let mut printed_header = false;
                 loop {
                     buf.clear();
                     match reader.read_until(b'\n', &mut buf) {
@@ -485,10 +483,6 @@ impl Utils {
                             let s = String::from_utf8_lossy(&buf);
                             let s_trim = s.trim_end_matches('\n');
                             if !s_trim.is_empty() {
-                                if !printed_header {
-                                    eprintln!("{}", "\n--- stderr ---".color(err_color).bold());
-                                    printed_header = true;
-                                }
                                 eprintln!("{}", s_trim.color(err_color));
                             }
                         }
@@ -503,6 +497,20 @@ impl Utils {
         let _ = out_handle.join();
         let _ = err_handle.join();
         Ok(status)
+    }
+
+    /// Convenience wrapper to preserve compatibility with callers that explicitly
+    /// request no stderr header when streaming child processes. Historically some
+    /// callers referenced a `run_and_stream_no_stderr_header` helper; add a thin
+    /// delegating wrapper so those call sites compile and keep behavior stable.
+    ///
+    /// Note: the current `run_and_stream` implementation already streams stderr
+    /// lines without printing a `--- stderr ---` separator, so this wrapper simply
+    /// delegates to it.
+    pub fn run_and_stream_no_stderr_header(
+        cmd: std::process::Command,
+    ) -> io::Result<std::process::ExitStatus> {
+        Self::run_and_stream(cmd)
     }
 }
 

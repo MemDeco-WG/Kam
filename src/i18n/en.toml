@@ -34,115 +34,15 @@ template_added = "Template '{}' added to cache from {}"
 template_removed = "Template '{}' removed from cache"
 
 [cache.modules]
-index_files = "Module index cache files:"
-index_entry = "{} ({} bytes)"
-no_index_files = "No index cache files found"
-detail_cache = "Module detail cache:"
 cleaned_successfully = "Module cache cleaned successfully"
+detail_cache = "Module detail cache:"
 directory_empty_or_not_exists = "Module cache directory empty or not exists"
+index_entry = "{} ({} bytes)"
+index_files = "Module index cache files:"
+no_index_files = "No index cache files found"
+no_matching_cache_file = "No matching cache file found for '{}'"
 removed = "Removed {}"
 removed_module_cache = "Removed module cache: {}"
-no_matching_cache_file = "No matching cache file found for '{}'"
-
-[repo]
-download = "Download: {}"
-module_not_found_showing_similar = "Module '{}' not found. Showing similar modules:"
-selected_module = "Selected module: {}"
-skipped_selection = "Skipped selection."
-no_results_for = "No results found for '{}'."
-similar_packages_header = "There are {} similar packages to '{}':"
-authors = "authors"
-url = "url"
-version = "version"
-updated = "updated"
-no_downloadable_zip_asset = "No downloadable zip asset found for module {}"
-confirm_download = "Confirm download '{}' [{}] ? [Y/n] "
-skipped_download = "Skipped download: {}"
-everything_up_to_date = "Everything up to date"
-saved = "Saved: {}"
-failed_to_download = "Failed to download {}: {}"
-score_format = "  (score: {:.2})"
-result_line_simple = "{} - {}{}"
-result_line = "{} - {} - {}{}"
-
-[repo.module_detail]
-title = "Module: {} - {}"
-release = "Release: {}"
-asset = "Asset: {}{}"
-download_url = "Download URL: {}"
-
-[repo.search]
-empty_query = "Empty query"
-
-[repo.prompt]
-enter_number = "Enter the number of the package to install (or press Enter to skip): "
-invalid_selection_out_of_range = "Invalid selection. Number out of range."
-invalid_input_number = "Invalid input. Please enter a number."
-
-[env]
-no_kam_vars = "No KAM_ environment variables found."
-
-[env.docs]
-header = "Environment variables used by Kam"
-intro = "Kam reads and/or sets these environment variables. The current process value (if set) is shown alongside each entry."
-kam_home = "Kam home directory (overrides default: $HOME/.kam)."
-kam_cache_dir = "Directory used for caching and indexes."
-kam_ui_language = "UI language override (e.g., en, zh, zh-CN)."
-kam_lang = "Legacy UI language variable (fallback)."
-kam_author_email = "Override author email used in about output."
-kam_root_manager = "Preferred root manager for device installs (e.g., Magisk)."
-kam_repo_concurrency = "Concurrency for repository operations."
-kam_force_index_refresh = "If present, forces index cache refresh."
-kam_bump_enabled = "Set to 1 to mark bump-enabled state in hooks/builds."
-kam_release_enabled = "Set to 1 to mark release-enabled state in hooks/builds."
-kam_sign_enabled = "Set to 1 to enable signing."
-kam_pre_release = "Set to 1 to mark pre-release builds."
-kam_interactive = "Set to 1 to indicate interactive mode in scripts (where applicable)."
-kam_repo = "Repository override used in certain operations."
-kam_repo_ref = "Repository ref override for certain operations."
-kam_git_repo = "Git repository URL used for hooks/operations."
-kam_github_repo = "GitHub repository name from CI (GITHUB_REPOSITORY)."
-kam_release_tag = "Release tag used in release workflows."
-
-# Project / hook related vars
-kam_project_root = "Project root path (KAM_PROJECT_ROOT) used by hooks and scripts."
-kam_hooks_root = "Root directory for hooks (KAM_HOOKS_ROOT)."
-kam_module_root = "Module root directory (KAM_MODULE_ROOT) for module operations."
-kam_web_root = "Web root path within module (KAM_WEB_ROOT)."
-kam_dist_dir = "Distribution/output directory used during build (KAM_DIST_DIR)."
-
-# Per-module variables exported for hooks
-kam_module_id = "Module ID (KAM_MODULE_ID)."
-kam_module_version = "Module version (KAM_MODULE_VERSION)."
-kam_module_version_code = "Module version code (KAM_MODULE_VERSION_CODE)."
-kam_module_name = "Module name (KAM_MODULE_NAME)."
-kam_module_author = "Module author (KAM_MODULE_AUTHOR)."
-kam_module_description = "Module description (KAM_MODULE_DESCRIPTION)."
-kam_module_update_json = "Update JSON field for the module (KAM_MODULE_UPDATE_JSON)."
-
-# Per-prop exports
-kam_prop_id = "prop.id exported as KAM_PROP_ID for hooks."
-kam_prop_name = "prop.name exported as KAM_PROP_NAME for hooks."
-kam_prop_version = "prop.version exported as KAM_PROP_VERSION for hooks."
-kam_prop_version_code = "prop.versionCode exported as KAM_PROP_VERSION_CODE for hooks."
-kam_prop_author = "prop.author exported as KAM_PROP_AUTHOR for hooks."
-kam_prop_description = "prop.description exported as KAM_PROP_DESCRIPTION for hooks."
-
-kam_prop_prefix = "KAM_PROP_* variables reflect module properties (prop.*) exported for hooks."
-kam_tmpl_note = "Template variables (KAM_TMPL_*) are available to hooks when templates define variables."
-kam_tmpl_prefix = "Template variables are exported as KAM_TMPL_* for hooks."
-kam_module_prefix = "KAM_MODULE_* variables provide module metadata to hooks (id, version, author, ...)."
-kam_stage = "Stage name for hook execution (e.g., pre-build, post-build)."
-
-# Common system envs referenced
-home = "User HOME used when resolving user-level paths."
-path = "System PATH used to locate external tools."
-xdg_config_home = "XDG_CONFIG_HOME used for finding configs and completions."
-xdg_data_home = "XDG_DATA_HOME used for finding data directories."
-github_repository = "GITHUB_REPOSITORY in CI provides repository info."
-github_ref = "GITHUB_REF in CI provides branch/ref info."
-
-docs_example = "Example"
 
 [check]
 no_issues_found = "No issues found."
@@ -154,28 +54,372 @@ header = "Errors:"
 [check.warnings]
 header = "Warnings:"
 
+[cli]
+about = "A CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repo metadata exports."
+long_about = "A CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repository metadata exports. Use `kam help <COMMAND>` for more details about a specific command."
+
+[cli.commands.about]
+summary = "Display about information for Kam and credits"
+
+[cli.commands.build]
+description = "Builds a module or workspace member and creates artifacts in the output directory."
+summary = "Build and package a module into a deployable ZIP artifact"
+
+[cli.commands.build.flags]
+all = "Build all workspace members"
+bump = "Enable version bump process (KAM_BUMP_ENABLED)"
+interactive = "Run build interactively; confirm potentially destructive actions"
+jobs = "Number of parallel jobs (default: number of CPU cores)"
+output = "Output directory (default: dist)"
+path = "Path to the project (default: current directory)"
+pre_release = "Enable pre-release mode (KAM_PRE_RELEASE)"
+quiet = "Suppress non-essential output; show warnings and errors only"
+release = "Enable release build mode (KAM_RELEASE_ENABLED)"
+sign = "Enable signing after build (KAM_SIGN_ENABLE)"
+
+[cli.commands.cache]
+description = "List, add, remove, or clean cached templates and show cache directory."
+summary = "Manage local template and artifact cache"
+
+[cli.commands.cache.add]
+summary = "Add a template to cache from a local directory or archive"
+
+[cli.commands.cache.add.flags]
+name = "Name of the template to register"
+path = "Path to the template source (directory or archive)"
+
+[cli.commands.cache.clean]
+summary = "Clean all cached templates"
+
+[cli.commands.cache.list]
+summary = "List cached templates"
+
+[cli.commands.cache.modules]
+description = "List, clean, show path, or remove specific module cache files."
+summary = "Manage module index cache (index_*.json and modules/<id>.json)"
+
+[cli.commands.cache.modules.clean]
+summary = "Clean module cache (remove index_*.json and modules/ directory)"
+
+[cli.commands.cache.modules.list]
+summary = "List module index and module detail cache files"
+
+[cli.commands.cache.modules.path]
+summary = "Show module cache directory path"
+
+[cli.commands.cache.modules.remove]
+summary = "Remove a specific cache file (exact filename or module id for modules/<id>.json)"
+
+[cli.commands.cache.modules.remove.flags]
+name = "Filename or module id to remove"
+
+[cli.commands.cache.path]
+summary = "Show cache directory path"
+
+[cli.commands.cache.remove]
+summary = "Remove a template from cache"
+
+[cli.commands.cache.remove.flags]
+name = "Name of the template to remove"
+
+[cli.commands.check]
+description = "Static checking utilities for files in the project, useful for CI and local development."
+summary = "Check project JSON/YAML/Markdown files (lint/format/parse)"
+
+[cli.commands.check.flags]
+fix = "Try to automatically fix/format files when possible"
+json = "Output results as JSON"
+path = "Path to the project directory (default: current directory)"
+
+[cli.commands.completions]
+description = "Generate completion scripts for supported shells (bash, zsh, fish, powershell, elvish)."
+summary = "Generate shell completion scripts for common shells"
+
+[cli.commands.completions.flags]
+install = "Install completion script into system/user completion directories (may require root)."
+out = "Output file. If omitted, prints to STDOUT."
+shell = "Shell type for completion (bash,zsh,fish,powershell,elvish)"
+
+[cli.commands.config]
+summary = "Manage per-project or global kam configuration (similar to git config)"
+
+[cli.commands.config.flags]
+interactive = "Interactive mode: guide the user through common configuration (language, root manager, etc.)"
+
+[cli.commands.env]
+summary = "Print environment variables starting with KAM_"
+
+[cli.commands.env.flags]
+describe = "Show descriptions of environment variables used by Kam"
+description = "Print all environment variables whose names start with KAM_, useful for debugging."
+
+[cli.commands.export]
+summary = "Export `kam.toml` to common formats (module.prop, module.json, repo.json, track.json, config.json, update.json)"
+
+[cli.commands.export.flags]
+format = "Export format: prop, json, update, repo, track, config"
+output = "Output file path (default: a format-specific filename in the current directory)"
+
+[cli.commands.help]
+summary = "Print this message or the help of the given subcommand(s)"
+
+[cli.commands.init]
+description = "Interactive and non-interactive initialization from templates; supports local archives or built-in templates, with options to prefill common metadata."
+summary = "Initialize a new Kam project from templates (supports meta and kernel templates)"
+
+[cli.commands.init.flags]
+author = "Author name"
+description = "Project description"
+force = "Force overwrite existing files"
+id = "Project ID (default: folder basename)"
+interactive = "Run in interactive mode and prompt for required values"
+name = "Project path (optional in interactive mode)"
+project_name = "Project name (default: Example Module Name)"
+template = "Template to use (builtin ID or local path)"
+tmpl = "Create a template project"
+update_json = "Update JSON URL (default: generated from git)"
+var = "Template variable in key=value format (can be repeated)"
+version = "Project version (default: 1.0.0)"
+
+[cli.commands.install]
+description = "Act as a compatibility layer for Magisk/KernelSU/APatchSU to install modules (.zip), delegating to the configured root manager. Configure the preferred manager with `kam config set root.manager <Manager>`. Note: On Android this command may require root (su); Kam will attempt to use 'su' to escalate if needed."
+summary = "Act as a compatibility layer for Magisk, KernelSU, and APatchSU to install modules"
+
+[cli.commands.install.flags]
+
+[cli.commands.repo]
+description = "Search and download modules from the registry. Use `kam -Ss <term>` to search or `kam -S <moduleId>` to download a module."
+summary = "Interact with module repository (search/download)"
+
+[cli.commands.repo.sync]
+description = "Refresh the registry index and save it to the local cache so subsequent searches won't need to re-download the index. Use `--force` to force a refresh."
+dry_run = "Print the derived install command instead of executing it"
+manager = "Preferred root manager (Magisk, KernelSU, APatchSU)"
+path = "Path to module package (.zip). If omitted, Kam will try to find an artifact in the project's dist/ output dir"
+quiet = "Suppress non-essential output"
+summary = "Download and cache the modules index (like `pacman -Sy`)"
+
+[cli.commands.secret]
+description = "Manage stored secrets: add, get, list, remove, export, import and trust CA management."
+summary = "Secret keyring management (used by sign/verify tasks)"
+
+[cli.commands.secret.add]
+summary = "Add a secret from a value or file"
+
+[cli.commands.secret.add.flags]
+file = "Path to file to read the secret from"
+file_path = "Positional path to read secret from (alternative to --file)"
+force_file = "Store as a local file instead of using the system keyring"
+name = "Name for the secret"
+password = "Pass the password on the CLI (not recommended)"
+value = "Provide secret value directly"
+with_backup = "Also create a local fallback file under ~/.kam/secrets"
+
+[cli.commands.secret.export]
+summary = "Export secret to a file (default: decrypted; use --encrypted to export encrypted blob)"
+
+[cli.commands.secret.export.flags]
+encrypted = "Export encrypted blob if set"
+
+[cli.commands.secret.exportpub]
+summary = "Export public key from a stored private key secret"
+
+[cli.commands.secret.exportpub.flags]
+name = "Name of the secret (default: main)"
+out = "Output file path (if omitted, prints to stdout)"
+
+[cli.commands.secret.get]
+summary = "Get a secret and print it to stdout (or write to file)"
+
+[cli.commands.secret.get.flags]
+out = "Write to file instead of stdout"
+password = "Pass password on the CLI (not recommended)"
+
+[cli.commands.secret.import]
+summary = "Import secret from a file"
+
+[cli.commands.secret.importcert]
+summary = "Import developer certificate chain from GitHub issue or file"
+
+[cli.commands.secret.importcert.flags]
+cert_chain = "Path to certificate chain PEM file"
+issue = "GitHub issue number containing the certificate (optional)"
+name = "Name to store certificate under"
+repo = "GitHub repo (owner/repo) containing the certificate (optional)"
+
+[cli.commands.secret.list]
+summary = "List saved secrets"
+
+[cli.commands.secret.remove]
+summary = "Remove a secret"
+
+[cli.commands.secret.trust]
+summary = "Manage trusted Root CAs"
+
+[cli.commands.secret.trust.flags]
+add_root = "Add a Root CA from file or URL"
+ca_name = "Name for the Root CA"
+list = "List trusted Root CAs"
+remove = "Remove Root CA by name"
+
+[cli.commands.sign]
+summary = "Sign an artifact using a key from the keyring or a PEM file"
+
+[cli.commands.sign.flags]
+all = "Sign all artifacts inside dist (alias of --dist with default dist)"
+cert = "Certificate PEM chain path to include in signature metadata"
+dist = "Sign all artifacts in given directory (alternative to src)"
+key_path = "Optional path to private key PEM file to use instead of keyring secret"
+out = "Output directory (default: dist)"
+secret = "Name of the keyring secret holding the private key (default: main)"
+src = "Artifact to sign (zip). If omitted, use --dist or --all to sign multiple files"
+
+[cli.commands.tmpl]
+description = "Manage templates including import/export, listing and path queries."
+summary = "Manage templates: import, export, package, and list"
+
+[cli.commands.tmpl.export]
+summary = "Export template(s) to file"
+
+[cli.commands.tmpl.export.flags]
+force = "Force overwrite if output exists"
+output = "Output file path (.tar.gz for single, .zip for multiple)"
+templates = "Template name(s) to export (can specify multiple)"
+
+[cli.commands.tmpl.import]
+summary = "Import template(s) from file"
+
+[cli.commands.tmpl.import.flags]
+force = "Force overwrite if template already exists"
+name = "Template name (optional; defaults to filename)"
+path = "Path to template archive (.tar.gz for single, .zip for multiple)"
+
+[cli.commands.tmpl.list]
+summary = "List all available templates"
+
+[cli.commands.tmpl.path]
+summary = "Show template cache directory path"
+
+[cli.commands.tmpl.pull]
+summary = "Download templates from a URL and import them"
+
+[cli.commands.tmpl.pull.flags]
+global = "Flag accepted for consistency but has no effect (uses config)"
+url = "Download URL (defaults to GitHub latest release templates ZIP)"
+
+[cli.commands.tmpl.remove]
+summary = "Remove a template from cache"
+
+[cli.commands.tmpl.update]
+summary = "Re-download based on recorded URL in config and import"
+
+[cli.commands.tmpl.update.flags]
+global = "Flag accepted for consistency but has no effect (uses config)"
+
+[cli.commands.toml]
+summary = "Inspect and edit `kam.toml` using dot-path keys (get/set/unset/list)"
+
+[cli.commands.toml.flags]
+file = "Operate on this file instead of project's kam.toml"
+
+[cli.commands.validate]
+description = "Validate kam.toml, templates, and project structure for errors and warnings."
+summary = "Validate `kam.toml` configuration and templates"
+
+[cli.commands.validate.flags]
+path = "Path to the project directory (default: current directory)"
+
+[cli.commands.verify]
+description = "Verify digital signatures or sigstore bundles; supports a variety of verification options."
+summary = "Verify an artifact signature (.sig) or a sigstore bundle (DSSE)"
+
+[cli.commands.version]
+description = "Manage and query module versions, bump policies, and automated versioning helpers."
+summary = "Manage module versions and bump policies"
+
+[cli.flags]
+help = "Print help (see a summary with '-h')"
+modules_url = "URL for the modules registry API (default: https://modules.kernelsu.org). Overrides the built-in modules endpoint"
+search = "Pacman-style search modifier (use with -S as '-Ss' to search or '-s' alone to search)"
+sync = "Pacman-style sync (download) flag (equivalent to pacman -S)"
+version = "Print version"
+yes = 'Assume "yes" to all confirmation prompts (equivalent to -y). Use `-y` or `--yes` to skip confirmation'
+
 [common]
 file_fixed = "{} (fixed)"
 
-[config]
-
 [config.interactive]
-intro = "Interactive configuration - guided setup for common preferences."
-view_builtins = "You can view available built-in config keys with: `kam config show`"
-select_target = "Select target config to edit"
-choose_action = "Choose an action"
-enter_ui_language = "Enter UI language (e.g., en, zh, zh-CN)"
-choose_root_manager = "Choose preferred root manager (Magisk|KernelSU|APatchSU)"
-set_custom_key = "Set other configuration key"
-enter_custom_key = "Enter configuration key (dot-separated path, e.g., ui.language)"
-enter_value_for_key = "Enter value for {}"
-make_more_changes = "Make more changes?"
 aborted = "Aborted."
 builtin_keys = "Built-in configuration keys:"
+choose_action = "Choose an action"
+choose_root_manager = "Choose preferred root manager (Magisk|KernelSU|APatchSU)"
+enter_custom_key = "Enter configuration key (dot-separated path, e.g., ui.language)"
+enter_ui_language = "Enter UI language (e.g., en, zh, zh-CN)"
+enter_value_for_key = "Enter value for {}"
 example = "Example:"
+intro = "Interactive configuration - guided setup for common preferences."
+make_more_changes = "Make more changes?"
 note_custom_keys = "Note: You can also set custom keys. Use 'kam config list' to see all configured values."
+select_target = "Select target config to edit"
+set_custom_key = "Set other configuration key"
 set_success = "Set {} = {} in {}"
 unset_success = "Unset {} in {}"
+view_builtins = "You can view available built-in config keys with: `kam config show`"
+
+[env]
+no_kam_vars = "No KAM_ environment variables found."
+
+[env.docs]
+docs_example = "Example"
+github_ref = "GITHUB_REF in CI provides branch/ref info."
+github_repository = "GITHUB_REPOSITORY in CI provides repository info."
+header = "Environment variables used by Kam"
+home = "User HOME used when resolving user-level paths."
+intro = "Kam reads and/or sets these environment variables. The current process value (if set) is shown alongside each entry."
+kam_author_email = "Override author email used in about output."
+kam_bump_enabled = "Set to 1 to mark bump-enabled state in hooks/builds."
+kam_cache_dir = "Directory used for caching and indexes."
+kam_dist_dir = "Distribution/output directory used during build (KAM_DIST_DIR)."
+kam_force_index_refresh = "If present, forces index cache refresh."
+kam_git_repo = "Git repository URL used for hooks/operations."
+kam_github_repo = "GitHub repository name from CI (GITHUB_REPOSITORY)."
+kam_home = "Kam home directory (overrides default: $HOME/.kam)."
+kam_hooks_root = "Root directory for hooks (KAM_HOOKS_ROOT)."
+kam_interactive = "Set to 1 to indicate interactive mode in scripts (where applicable)."
+kam_lang = "Legacy UI language variable (fallback)."
+kam_module_author = "Module author (KAM_MODULE_AUTHOR)."
+kam_module_description = "Module description (KAM_MODULE_DESCRIPTION)."
+kam_module_id = "Module ID (KAM_MODULE_ID)."
+kam_module_name = "Module name (KAM_MODULE_NAME)."
+kam_module_prefix = "KAM_MODULE_* variables provide module metadata to hooks (id, version, author, ...)."
+kam_module_root = "Module root directory (KAM_MODULE_ROOT) for module operations."
+kam_module_update_json = "Update JSON field for the module (KAM_MODULE_UPDATE_JSON)."
+kam_module_version = "Module version (KAM_MODULE_VERSION)."
+kam_module_version_code = "Module version code (KAM_MODULE_VERSION_CODE)."
+kam_pre_release = "Set to 1 to mark pre-release builds."
+kam_project_root = "Project root path (KAM_PROJECT_ROOT) used by hooks and scripts."
+kam_prop_author = "prop.author exported as KAM_PROP_AUTHOR for hooks."
+kam_prop_description = "prop.description exported as KAM_PROP_DESCRIPTION for hooks."
+kam_prop_id = "prop.id exported as KAM_PROP_ID for hooks."
+kam_prop_name = "prop.name exported as KAM_PROP_NAME for hooks."
+kam_prop_prefix = "KAM_PROP_* variables reflect module properties (prop.*) exported for hooks."
+kam_prop_version = "prop.version exported as KAM_PROP_VERSION for hooks."
+kam_prop_version_code = "prop.versionCode exported as KAM_PROP_VERSION_CODE for hooks."
+kam_release_enabled = "Set to 1 to mark release-enabled state in hooks/builds."
+kam_release_tag = "Release tag used in release workflows."
+kam_repo = "Repository override used in certain operations."
+kam_repo_concurrency = "Concurrency for repository operations."
+kam_repo_ref = "Repository ref override for certain operations."
+kam_root_manager = "Preferred root manager for device installs (e.g., Magisk)."
+kam_sign_enabled = "Set to 1 to enable signing."
+kam_stage = "Stage name for hook execution (e.g., pre-build, post-build)."
+kam_tmpl_note = "Template variables (KAM_TMPL_*) are available to hooks when templates define variables."
+kam_tmpl_prefix = "Template variables are exported as KAM_TMPL_* for hooks."
+kam_ui_language = "UI language override (e.g., en, zh, zh-CN)."
+kam_web_root = "Web root path within module (KAM_WEB_ROOT)."
+path = "System PATH used to locate external tools."
+xdg_config_home = "XDG_CONFIG_HOME used for finding configs and completions."
+xdg_data_home = "XDG_DATA_HOME used for finding data directories."
 
 [export]
 config_json = "Exported config.json to {}"
@@ -192,14 +436,6 @@ running_post = "Running post-build hooks"
 running_pre = "Running pre-build hooks"
 skipping_hooks_for_template_packaging = "Skipping {} hooks for template packaging"
 skipping_template_packaging = "Skipping build hooks for template packaging"
-
-[tmpl]
-no_templates_in_cache = "No templates found in cache"
-use_import_command = "Use {} to import templates"
-no_tar_gz_in_zip = "No .tar.gz templates found in ZIP file"
-
-[tmpl.pull]
-could_not_determine_file_size = "Could not determine file size. Progress bar will be disabled."
 
 [init.interactive]
 aborted = "Aborted."
@@ -264,6 +500,17 @@ project_name = "Project name"
 template = "Template"
 version = "Version"
 
+[install]
+cli_not_found = "Install CLI '{}' not found on PATH. Please install it or set 'root.manager' in ~/.kam/config.toml"
+dry_run = "Dry run: will execute '{} {}'"
+executing = "Executing: {} {}"
+installed = "Installed {} via {}"
+section = "Install: {}"
+su_failed = "Privilege escalation via 'su' failed: {}"
+su_not_found = "'su' command not found. Root privilege escalation is unavailable (root manager may not be authorized)."
+trying_su = "Attempting to execute via 'su -c': {}"
+unable_determine_cli = "Unable to determine install CLI. Please set 'root.manager' in ~/.kam/config.toml or pass --manager"
+
 [packaging]
 files = "Packaging files..."
 generating_module_prop = "Generating module.prop"
@@ -279,6 +526,41 @@ header = "Project"
 output_directory = "Output Directory"
 output_file = "Output File"
 package_size = "Package Size"
+
+[repo]
+authors = "authors"
+confirm_download = "Confirm download '{}' [{}] ? [Y/n] "
+download = "Download: {}"
+everything_up_to_date = "Everything up to date"
+failed_to_download = "Failed to download {}: {}"
+module_not_found_showing_similar = "Module '{}' not found. Showing similar modules:"
+no_downloadable_zip_asset = "No downloadable zip asset found for module {}"
+no_results_for = "No results found for '{}'."
+result_line = "{} - {} - {}{}"
+result_line_simple = "{} - {}{}"
+saved = "Saved: {}"
+score_format = "  (score: {:.2})"
+selected_module = "Selected module: {}"
+similar_packages_header = "There are {} similar packages to '{}':"
+skipped_download = "Skipped download: {}"
+skipped_selection = "Skipped selection."
+updated = "updated"
+url = "url"
+version = "version"
+
+[repo.module_detail]
+asset = "Asset: {}{}"
+download_url = "Download URL: {}"
+release = "Release: {}"
+title = "Module: {} - {}"
+
+[repo.prompt]
+enter_number = "Enter the number of the package to install (or press Enter to skip): "
+invalid_input_number = "Invalid input. Please enter a number."
+invalid_selection_out_of_range = "Invalid selection. Number out of range."
+
+[repo.search]
+empty_query = "Empty query"
 
 [secret]
 cert_chain_imported = "Certificate chain '{}' imported successfully"
@@ -322,6 +604,18 @@ succeeded = "Succeeded"
 total = "Total"
 total_duration = "Total Duration"
 
+[tmpl]
+no_tar_gz_in_zip = "No .tar.gz templates found in ZIP file"
+no_templates_in_cache = "No templates found in cache"
+use_import_command = "Use {} to import templates"
+
+[tmpl.export]
+no_templates_exported = "No templates were exported"
+no_templates_specified = "No templates specified for export"
+
+[tmpl.pull]
+could_not_determine_file_size = "Could not determine file size. Progress bar will be disabled."
+
 [validate]
 failed = "Validation failed. Please fix the errors above."
 no_issues_kam_toml_valid = "No issues found. kam.toml is valid."
@@ -350,330 +644,3 @@ header = "Warnings:"
 
 [workspace.summary]
 title = "✿ Workspace Build Summary ✿"
-
-# --------------------------------------------------------------------------
-# CLI help / commands (used to localize `kam --help` and subcommand help)
-# --------------------------------------------------------------------------
-[cli]
-about = "A CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repo metadata exports."
-long_about = "A CLI toolkit for scaffolding, building, packaging, and distributing Android modules and templates (ksu/APU/Magisk/AnyTemplate). It supports module initialization, packaging, template management, and repository metadata exports. Use `kam help <COMMAND>` for more details about a specific command."
-
-# Global flags (top-level)
-[cli.flags]
-help = "Print help (see a summary with '-h')"
-version = "Print version"
-sync = "Pacman-style sync (download) flag (equivalent to pacman -S)"
-search = "Pacman-style search modifier (use with -S as '-Ss' to search or '-s' alone to search)"
-modules_url = "URL for the modules registry API (default: https://modules.kernelsu.org). Overrides the built-in modules endpoint"
-yes = "Assume \"yes\" to all confirmation prompts (equivalent to -y). Use `-y` or `--yes` to skip confirmation"
-
-# -------------------------
-# Command: init
-# -------------------------
-[cli.commands.init]
-summary = "Initialize a new Kam project from templates (supports meta and kernel templates)"
-description = "Interactive and non-interactive initialization from templates; supports local archives or built-in templates, with options to prefill common metadata."
-
-[cli.commands.init.flags]
-name = "Project path (optional in interactive mode)"
-id = "Project ID (default: folder basename)"
-project_name = "Project name (default: Example Module Name)"
-version = "Project version (default: 1.0.0)"
-author = "Author name"
-update_json = "Update JSON URL (default: generated from git)"
-description = "Project description"
-force = "Force overwrite existing files"
-interactive = "Run in interactive mode and prompt for required values"
-var = "Template variable in key=value format (can be repeated)"
-template = "Template to use (builtin ID or local path)"
-tmpl = "Create a template project"
-
-# -------------------------
-# Command: build
-# -------------------------
-[cli.commands.build]
-summary = "Build and package a module into a deployable ZIP artifact"
-description = "Builds a module or workspace member and creates artifacts in the output directory."
-
-[cli.commands.build.flags]
-path = "Path to the project (default: current directory)"
-all = "Build all workspace members"
-output = "Output directory (default: dist)"
-bump = "Enable version bump process (KAM_BUMP_ENABLED)"
-release = "Enable release build mode (KAM_RELEASE_ENABLED)"
-sign = "Enable signing after build (KAM_SIGN_ENABLE)"
-interactive = "Run build interactively; confirm potentially destructive actions"
-pre_release = "Enable pre-release mode (KAM_PRE_RELEASE)"
-quiet = "Suppress non-essential output; show warnings and errors only"
-jobs = "Number of parallel jobs (default: number of CPU cores)"
-
-# -------------------------
-# Command: version
-# -------------------------
-[cli.commands.version]
-summary = "Manage module versions and bump policies"
-description = "Manage and query module versions, bump policies, and automated versioning helpers."
-
-# -------------------------
-# Command: cache
-# -------------------------
-[cli.commands.cache]
-summary = "Manage local template and artifact cache"
-description = "List, add, remove, or clean cached templates and show cache directory."
-
-[cli.commands.cache.list]
-summary = "List cached templates"
-[cli.commands.cache.clean]
-summary = "Clean all cached templates"
-[cli.commands.cache.add]
-summary = "Add a template to cache from a local directory or archive"
-[cli.commands.cache.add.flags]
-name = "Name of the template to register"
-path = "Path to the template source (directory or archive)"
-[cli.commands.cache.remove]
-summary = "Remove a template from cache"
-[cli.commands.cache.remove.flags]
-name = "Name of the template to remove"
-[cli.commands.cache.path]
-summary = "Show cache directory path"
-
-# Module cache subcommands
-[cli.commands.cache.modules]
-summary = "Manage module index cache (index_*.json and modules/<id>.json)"
-description = "List, clean, show path, or remove specific module cache files."
-
-[cli.commands.cache.modules.list]
-summary = "List module index and module detail cache files"
-
-[cli.commands.cache.modules.clean]
-summary = "Clean module cache (remove index_*.json and modules/ directory)"
-
-[cli.commands.cache.modules.path]
-summary = "Show module cache directory path"
-
-[cli.commands.cache.modules.remove]
-summary = "Remove a specific cache file (exact filename or module id for modules/<id>.json)"
-[cli.commands.cache.modules.remove.flags]
-name = "Filename or module id to remove"
-
-# -------------------------
-# Command: tmpl
-# -------------------------
-[cli.commands.tmpl]
-summary = "Manage templates: import, export, package, and list"
-description = "Manage templates including import/export, listing and path queries."
-
-[cli.commands.tmpl.list]
-summary = "List all available templates"
-[cli.commands.tmpl.import]
-summary = "Import template(s) from file"
-[cli.commands.tmpl.import.flags]
-path = "Path to template archive (.tar.gz for single, .zip for multiple)"
-name = "Template name (optional; defaults to filename)"
-force = "Force overwrite if template already exists"
-[cli.commands.tmpl.export]
-summary = "Export template(s) to file"
-[cli.commands.tmpl.export.flags]
-templates = "Template name(s) to export (can specify multiple)"
-output = "Output file path (.tar.gz for single, .zip for multiple)"
-force = "Force overwrite if output exists"
-[cli.commands.tmpl.remove]
-summary = "Remove a template from cache"
-[cli.commands.tmpl.path]
-summary = "Show template cache directory path"
-[cli.commands.tmpl.pull]
-summary = "Download templates from a URL and import them"
-[cli.commands.tmpl.pull.flags]
-url = "Download URL (defaults to GitHub latest release templates ZIP)"
-global = "Flag accepted for consistency but has no effect (uses config)"
-[cli.commands.tmpl.update]
-summary = "Re-download based on recorded URL in config and import"
-[cli.commands.tmpl.update.flags]
-global = "Flag accepted for consistency but has no effect (uses config)"
-
-# -------------------------
-# Command: validate
-# -------------------------
-[cli.commands.validate]
-summary = "Validate `kam.toml` configuration and templates"
-description = "Validate kam.toml, templates, and project structure for errors and warnings."
-
-[cli.commands.validate.flags]
-path = "Path to the project directory (default: current directory)"
-
-# -------------------------
-# Command: completions
-# -------------------------
-[cli.commands.completions]
-summary = "Generate shell completion scripts for common shells"
-description = "Generate completion scripts for supported shells (bash, zsh, fish, powershell, elvish)."
-
-[cli.commands.completions.flags]
-shell = "Shell type for completion (bash,zsh,fish,powershell,elvish)"
-out = "Output file. If omitted, prints to STDOUT."
-install = "Install completion script into system/user completion directories (may require root)."
-
-# -------------------------
-# Command: install
-# -------------------------
-[cli.commands.install]
-summary = "Act as a compatibility layer for Magisk, KernelSU, and APatchSU to install modules"
-description = "Act as a compatibility layer for Magisk/KernelSU/APatchSU to install modules (.zip), delegating to the configured root manager. Configure the preferred manager with `kam config set root.manager <Manager>`. Note: On Android this command may require root (su); Kam will attempt to use 'su' to escalate if needed."
-
-[install]
-section = "Install: {}"
-dry_run = "Dry run: will execute '{} {}'"
-executing = "Executing: {} {}"
-installed = "Installed {} via {}"
-cli_not_found = "Install CLI '{}' not found on PATH. Please install it or set 'root.manager' in ~/.kam/config.toml"
-trying_su = "Attempting to execute via 'su -c': {}"
-su_not_found = "'su' command not found. Root privilege escalation is unavailable (root manager may not be authorized)."
-su_failed = "Privilege escalation via 'su' failed: {}"
-unable_determine_cli = "Unable to determine install CLI. Please set 'root.manager' in ~/.kam/config.toml or pass --manager"
-
-[cli.commands.install.flags]
-
-[cli.commands.repo]
-summary = "Interact with module repository (search/download)"
-description = "Search and download modules from the registry. Use `kam -Ss <term>` to search or `kam -S <moduleId>` to download a module."
-
-[cli.commands.repo.sync]
-summary = "Download and cache the modules index (like `pacman -Sy`)"
-description = "Refresh the registry index and save it to the local cache so subsequent searches won't need to re-download the index. Use `--force` to force a refresh."
-path = "Path to module package (.zip). If omitted, Kam will try to find an artifact in the project's dist/ output dir"
-manager = "Preferred root manager (Magisk, KernelSU, APatchSU)"
-dry_run = "Print the derived install command instead of executing it"
-quiet = "Suppress non-essential output"
-
-# -------------------------
-# Command: secret
-# -------------------------
-[cli.commands.secret]
-summary = "Secret keyring management (used by sign/verify tasks)"
-description = "Manage stored secrets: add, get, list, remove, export, import and trust CA management."
-
-[cli.commands.secret.list]
-summary = "List saved secrets"
-[cli.commands.secret.add]
-summary = "Add a secret from a value or file"
-[cli.commands.secret.add.flags]
-name = "Name for the secret"
-file = "Path to file to read the secret from"
-file_path = "Positional path to read secret from (alternative to --file)"
-value = "Provide secret value directly"
-force_file = "Store as a local file instead of using the system keyring"
-password = "Pass the password on the CLI (not recommended)"
-with_backup = "Also create a local fallback file under ~/.kam/secrets"
-[cli.commands.secret.get]
-summary = "Get a secret and print it to stdout (or write to file)"
-[cli.commands.secret.get.flags]
-out = "Write to file instead of stdout"
-password = "Pass password on the CLI (not recommended)"
-[cli.commands.secret.remove]
-summary = "Remove a secret"
-[cli.commands.secret.export]
-summary = "Export secret to a file (default: decrypted; use --encrypted to export encrypted blob)"
-[cli.commands.secret.export.flags]
-encrypted = "Export encrypted blob if set"
-[cli.commands.secret.import]
-summary = "Import secret from a file"
-[cli.commands.secret.exportpub]
-summary = "Export public key from a stored private key secret"
-[cli.commands.secret.exportpub.flags]
-name = "Name of the secret (default: main)"
-out = "Output file path (if omitted, prints to stdout)"
-[cli.commands.secret.importcert]
-summary = "Import developer certificate chain from GitHub issue or file"
-[cli.commands.secret.importcert.flags]
-repo = "GitHub repo (owner/repo) containing the certificate (optional)"
-issue = "GitHub issue number containing the certificate (optional)"
-cert_chain = "Path to certificate chain PEM file"
-name = "Name to store certificate under"
-[cli.commands.secret.trust]
-summary = "Manage trusted Root CAs"
-[cli.commands.secret.trust.flags]
-add_root = "Add a Root CA from file or URL"
-ca_name = "Name for the Root CA"
-list = "List trusted Root CAs"
-remove = "Remove Root CA by name"
-
-# -------------------------
-# Command: sign
-# -------------------------
-[cli.commands.sign]
-summary = "Sign an artifact using a key from the keyring or a PEM file"
-
-[cli.commands.sign.flags]
-src = "Artifact to sign (zip). If omitted, use --dist or --all to sign multiple files"
-secret = "Name of the keyring secret holding the private key (default: main)"
-out = "Output directory (default: dist)"
-dist = "Sign all artifacts in given directory (alternative to src)"
-all = "Sign all artifacts inside dist (alias of --dist with default dist)"
-cert = "Certificate PEM chain path to include in signature metadata"
-key_path = "Optional path to private key PEM file to use instead of keyring secret"
-
-# -------------------------
-# Command: verify
-# -------------------------
-[cli.commands.verify]
-summary = "Verify an artifact signature (.sig) or a sigstore bundle (DSSE)"
-description = "Verify digital signatures or sigstore bundles; supports a variety of verification options."
-
-# -------------------------
-# Command: check
-# -------------------------
-[cli.commands.check]
-summary = "Check project JSON/YAML/Markdown files (lint/format/parse)"
-description = "Static checking utilities for files in the project, useful for CI and local development."
-
-[cli.commands.check.flags]
-path = "Path to the project directory (default: current directory)"
-json = "Output results as JSON"
-fix = "Try to automatically fix/format files when possible"
-
-# -------------------------
-# Command: export
-# -------------------------
-[cli.commands.export]
-summary = "Export `kam.toml` to common formats (module.prop, module.json, repo.json, track.json, config.json, update.json)"
-
-[cli.commands.export.flags]
-format = "Export format: prop, json, update, repo, track, config"
-output = "Output file path (default: a format-specific filename in the current directory)"
-
-# -------------------------
-# Command: toml
-# -------------------------
-[cli.commands.toml]
-summary = "Inspect and edit `kam.toml` using dot-path keys (get/set/unset/list)"
-[cli.commands.toml.flags]
-file = "Operate on this file instead of project's kam.toml"
-
-# -------------------------
-# Misc / about / help
-[cli.commands.about]
-summary = "Display about information for Kam and credits"
-
-[cli.commands.config]
-summary = "Manage per-project or global kam configuration (similar to git config)"
-
-[cli.commands.config.flags]
-interactive = "Interactive mode: guide the user through common configuration (language, root manager, etc.)"
-
-[cli.commands.env]
-summary = "Print environment variables starting with KAM_"
-
-[cli.commands.env.flags]
-describe = "Show descriptions of environment variables used by Kam"
-description = "Print all environment variables whose names start with KAM_, useful for debugging."
-
-[cli.commands.help]
-summary = "Print this message or the help of the given subcommand(s)"
-
-[tmpl.export]
-no_templates_exported = "No templates were exported"
-no_templates_specified = "No templates specified for export"
-
-# --------------------------------------------------------------------------
-# End CLI localization entries
-# --------------------------------------------------------------------------
