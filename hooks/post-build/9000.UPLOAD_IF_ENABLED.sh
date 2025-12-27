@@ -20,6 +20,7 @@ DIST="${KAM_DIST_DIR:-${KAM_PROJECT_ROOT:-$PWD}/dist}"
 
 # Build a simple release notes file (temporary)
 TMP_CHANGELOG=$(mktemp)
+# shellcheck disable=2329
 cleanup_tmp() {
     if [ -n "$TMP_CHANGELOG" ] && [ -f "$TMP_CHANGELOG" ]; then
         rm -f "$TMP_CHANGELOG"
@@ -59,7 +60,7 @@ Built with [Kam](https://github.com/MemDeco-WG/Kam)
 EOF
 )
 printf "%s\n" "$RELEASE_NOTES" > "$TMP_CHANGELOG"
-log_info "打包以下文件：$(ls \"$DIST\")"
+log_info "打包以下文件：$(ls -1 \"$DIST\")"
 # Check if release already exists
 if gh release view "$TAG" >/dev/null 2>&1; then
     log_error "Release $TAG already exists and is immutable, cannot proceed"
@@ -67,14 +68,21 @@ if gh release view "$TAG" >/dev/null 2>&1; then
 fi
 
 # Create release and upload all assets in one step
-PRE_FLAG=""
-if [ "${KAM_PRE_RELEASE:-0}" = "1" ]; then
-    PRE_FLAG="--prerelease"
-fi
 if [ -d "$DIST" ] && [ "$(ls -A "$DIST")" ]; then
     log_info "Creating GitHub release $TAG and uploading assets from $DIST"
     assets=("$DIST"/*)
-    gh release create "$TAG" --title "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" --notes-file "$TMP_CHANGELOG" $PRE_FLAG "${assets[@]}" || { log_error "Failed to create release $TAG and upload assets"; exit 1; }
+
+    # Build arguments in an array so an empty prerelease flag doesn't expand into an extra empty param
+    gh_args=("$TAG" "--title" "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" "--notes-file" "$TMP_CHANGELOG")
+    if [ "${KAM_PRE_RELEASE:-0}" = "1" ]; then
+        gh_args+=("--prerelease")
+    fi
+    gh_args+=("${assets[@]}")
+
+    if ! gh release create "${gh_args[@]}"; then
+        log_error "Failed to create release $TAG and upload assets"
+        exit 1
+    fi
 else
     log_warn "Dist directory not found or empty: $DIST"
 fi

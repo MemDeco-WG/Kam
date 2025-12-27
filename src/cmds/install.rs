@@ -313,7 +313,7 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
             .arg(gh_spec)
             .arg(dest.to_str().unwrap());
         cmd.stdin(Stdio::inherit());
-        match Utils::run_and_stream(cmd) {
+        match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
             Ok(status) => {
                 Utils::warn(&format!("'gh' clone failed with status: {:?}", status));
@@ -337,7 +337,7 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
         let mut cmd = Command::new("git");
         cmd.arg("clone").arg(&url).arg(dest.to_str().unwrap());
         cmd.stdin(Stdio::inherit());
-        match Utils::run_and_stream(cmd) {
+        match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
             Ok(status) => {
                 return Err(KamError::CommandFailed(format!(
@@ -401,7 +401,8 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                     Utils::info(&format!("Executing '{}' {}", exec, kam_sh.display()));
                     let mut cmd = Command::new(exec);
                     cmd.arg(kam_sh.to_str().unwrap()).stdin(Stdio::inherit());
-                    let status = Utils::run_and_stream(cmd).map_err(KamError::Io)?;
+                    let status =
+                        Utils::run_and_stream_no_stderr_header(cmd).map_err(KamError::Io)?;
                     if !status.success() {
                         return Err(KamError::CommandFailed(format!(
                             "'kam.sh' execution failed with status: {:?}",
@@ -552,7 +553,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
         cmd.args(&cli_args);
         // Keep stdin inherited so interactive commands still work
         cmd.stdin(Stdio::inherit());
-        match Utils::run_and_stream(cmd) {
+        match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) => {
                 if status.success() {
                     if !args.quiet {
@@ -585,7 +586,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         }
                         let mut su_cmd = Command::new("su");
                         su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
-                        match Utils::run_and_stream(su_cmd) {
+                        match Utils::run_and_stream_no_stderr_header(su_cmd) {
                             Ok(su_status) => {
                                 if su_status.success() {
                                     if !args.quiet {
@@ -651,7 +652,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                     }
                     let mut su_cmd = Command::new("su");
                     su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
-                    match Utils::run_and_stream(su_cmd) {
+                    match Utils::run_and_stream_no_stderr_header(su_cmd) {
                         Ok(status) => {
                             if status.success() {
                                 if !args.quiet {
@@ -703,7 +704,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                     }
                     let mut su_cmd = Command::new("su");
                     su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
-                    match Utils::run_and_stream(su_cmd) {
+                    match Utils::run_and_stream_no_stderr_header(su_cmd) {
                         Ok(status) => {
                             if status.success() {
                                 if !args.quiet {

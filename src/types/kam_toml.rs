@@ -5,6 +5,17 @@ use toml;
 pub mod sections;
 use sections::*;
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct RuleConfig {
+    /// Whether this rule is enabled for the current project.
+    /// When omitted the default is to enable the rule.
+    pub enabled: Option<bool>,
+
+    /// Whether this rule is allowed to perform auto-fixes when `--fix` is used.
+    /// When omitted the default is to allow fixes.
+    pub fix: Option<bool>,
+}
+
 pub mod enums;
 
 // KamToml：module.prop、update.json和其他元数据的超集
@@ -18,6 +29,12 @@ pub struct KamToml {
 
     pub tmpl: Option<TmplSection>,
     pub tool: Option<ToolSection>,
+
+    /// Per-project rule configuration. Keys are rule IDs (e.g. "trailing_whitespace"),
+    /// values are per-rule options (enabled/fix). If omitted, all builtin rules use
+    /// their default behavior.
+    pub rules: Option<std::collections::HashMap<String, RuleConfig>>,
+
     // lib字段在kam.lib!
     #[serde(skip)]
     pub raw: String,
@@ -51,6 +68,8 @@ impl KamToml {
             kam: KamSection::default(),
             tmpl: Some(TmplSection::default()),
             tool: Some(ToolSection::default()),
+            // Initialize rules to None by default (per-project override can populate this)
+            rules: None,
             raw: String::new(),
         }
     }

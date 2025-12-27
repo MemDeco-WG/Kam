@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 use super::args::CheckArgs;
 use super::file::{FileResult, check_file};
 use crate::errors::KamError;
+use crate::types::kam_toml::RuleConfig;
+use std::collections::HashMap;
 
 fn collect_project_files(
     project_path: &Path,
@@ -212,6 +214,12 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     // perform a pre-check of its kam.toml and then collect files under it.
     let mut collected_files: Vec<PathBuf> = Vec::new();
     let mut prechecked_kam_count: usize = 0;
+    // Cache of per-project rule configurations (keyed by project directory).
+    // Each entry maps to an optional rules map parsed from that project's kam.toml.
+    let mut project_rules_cache: std::collections::HashMap<
+        std::path::PathBuf,
+        Option<std::collections::HashMap<String, RuleConfig>>,
+    > = std::collections::HashMap::new();
 
     for p in input_paths {
         // Treat common glob characters as a hint to expand via glob crate.
@@ -226,9 +234,17 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                                     &entry.join("kam.toml"),
                                     "toml",
                                     args.fix,
+                                    None,
                                 ) {
                                     results.push(res);
                                     prechecked_kam_count += 1;
+                                }
+                                // Try to parse and cache the project's rules config for later files.
+                                if let Ok(kt) = crate::types::kam_toml::KamToml::load_from_file(
+                                    entry.join("kam.toml"),
+                                ) {
+                                    let key = entry.canonicalize().unwrap_or(entry.clone());
+                                    project_rules_cache.insert(key, kt.rules);
                                 }
                             }
                             let dir_files = collect_project_files(
@@ -252,10 +268,16 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                 if pathp.is_dir() {
                     if pathp.join("kam.toml").exists() {
                         if let Ok(res) =
-                            super::file::check_file(&pathp.join("kam.toml"), "toml", args.fix)
+                            super::file::check_file(&pathp.join("kam.toml"), "toml", args.fix, None)
                         {
                             results.push(res);
                             prechecked_kam_count += 1;
+                        }
+                        if let Ok(kt) =
+                            crate::types::kam_toml::KamToml::load_from_file(pathp.join("kam.toml"))
+                        {
+                            let key = pathp.canonicalize().unwrap_or(pathp.to_path_buf());
+                            project_rules_cache.insert(key, kt.rules);
                         }
                     }
                     let dir_files =
@@ -395,7 +417,30 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             }
         };
 
-        let res = check_file(path, kind, args.fix)?;
+        // Determine per-project rule configuration (if any) by walking up to the nearest
+        // ancestor directory that had a cached kam.toml.
+        fn find_project_rules<'a>(
+            p: &std::path::Path,
+            cache: &'a std::collections::HashMap<
+                std::path::PathBuf,
+                Option<std::collections::HashMap<String, RuleConfig>>,
+            >,
+        ) -> Option<&'a std::collections::HashMap<String, RuleConfig>> {
+            let mut cur = p;
+            while let Some(parent) = cur.parent() {
+                if let Ok(canon) = parent.canonicalize() {
+                    if let Some(opt) = cache.get(&canon) {
+                        return opt.as_ref();
+                    }
+                } else if let Some(opt) = cache.get(parent) {
+                    return opt.as_ref();
+                }
+                cur = parent;
+            }
+            None
+        }
+        let project_rules = find_project_rules(path, &project_rules_cache);
+        let res = check_file(path, kind, args.fix, project_rules)?;
         results.push(res);
         if let Some(ref p) = pb {
             p.set_message(format!("{}", path.display()));

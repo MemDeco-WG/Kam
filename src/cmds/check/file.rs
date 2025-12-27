@@ -59,7 +59,12 @@ where
     }
 }
 
-pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, KamError> {
+pub fn check_file(
+    path: &Path,
+    kind: &str,
+    do_fix: bool,
+    rules_cfg: Option<&std::collections::HashMap<String, crate::types::kam_toml::RuleConfig>>,
+) -> Result<FileResult, KamError> {
     let mut s = fs::read_to_string(path)?;
     let mut fr = FileResult {
         path: path.to_string_lossy().to_string(),
@@ -84,7 +89,12 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
             match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "JSON") {
                 Ok((valid, fixed)) => {
                     fr.valid = valid;
-                    fr.fixed = fixed;
+                    if fixed {
+                        // Reload the newly formatted content so subsequent checks operate
+                        // on the canonicalized content.
+                        s = fs::read_to_string(path)?;
+                        fr.fixed = true;
+                    }
                 }
                 Err(e) => {
                     fr.valid = false;
@@ -105,7 +115,12 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
             match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "YAML") {
                 Ok((valid, fixed)) => {
                     fr.valid = valid;
-                    fr.fixed = fixed;
+                    if fixed {
+                        // Reload the newly formatted content so subsequent checks operate
+                        // on the canonicalized content.
+                        s = fs::read_to_string(path)?;
+                        fr.fixed = true;
+                    }
                 }
                 Err(e) => {
                     fr.valid = false;
@@ -151,7 +166,12 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
             match check_structured_format(&s, path, do_fix, parse_fn, format_fn, "TOML") {
                 Ok((valid, fixed)) => {
                     fr.valid = valid;
-                    fr.fixed = fixed;
+                    if fixed {
+                        // Reload the newly formatted content so subsequent checks operate
+                        // on the canonicalized content (important for subsequent deep checks).
+                        s = fs::read_to_string(path)?;
+                        fr.fixed = true;
+                    }
                 }
                 Err(e) => {
                     fr.valid = false;
@@ -203,6 +223,8 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
                         .truncate(true)
                         .open(path)?
                         .write_all(normalized.as_bytes())?;
+                    // Update in-memory content so subsequent rules operate on the fixed content
+                    s = normalized;
                     fr.fixed = true;
                 }
             }
@@ -212,8 +234,78 @@ pub fn check_file(path: &Path, kind: &str, do_fix: bool) -> Result<FileResult, K
 
     // Apply rules as a final pass so that file-level rules (rules.d/*) can
     // append warnings/errors irrespective of the structured checks above.
-    crate::rules::apply_all_rules(path, &s, &mut fr);
+    //
+    // Run rules and allow optional in-memory fixes. When `do_fix` is true
+    // these will be written back to the file and `fr.fixed` will be set.
+    let new_s = crate::rules::apply_all_rules_with_fix(path, &s, &mut fr, do_fix, rules_cfg);
+    if do_fix && new_s != s {
+        fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(path)?
+            .write_all(new_s.as_bytes())?;
+        fr.fixed = true;
+    }
     Ok(fr)
+}
+
+#[cfg(test)]
+mod format_fix_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn json_fix_formats_file() {
+        let tmp = TempDir::new().unwrap();
+        let p = tmp.path().join("t.json");
+        fs::write(&p, r#"{"b":2,"a":1}"#).unwrap();
+
+        let res = check_file(&p, "json", true, None).unwrap();
+        assert!(res.fixed);
+        let content = fs::read_to_string(&p).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let pretty = serde_json::to_string_pretty(&v).unwrap();
+        assert_eq!(content, pretty);
+    }
+
+    #[test]
+    fn yaml_fix_formats_file() {
+        let tmp = TempDir::new().unwrap();
+        let p = tmp.path().join("y.yaml");
+        let original = "a: 1\nb:\n  - x\n";
+        fs::write(&p, original).unwrap();
+
+        let res = check_file(&p, "yaml", true, None).unwrap();
+        let after = fs::read_to_string(&p).unwrap();
+        let v: serde_yaml::Value = serde_yaml::from_str(original).unwrap();
+        let formatted = serde_yaml::to_string(&v).unwrap();
+        assert_eq!(after, formatted);
+        let expected_fixed = original != formatted;
+        assert_eq!(
+            res.fixed, expected_fixed,
+            "fixed flag should match whether content changed"
+        );
+    }
+
+    #[test]
+    fn toml_fix_formats_file() {
+        let tmp = TempDir::new().unwrap();
+        let p = tmp.path().join("t.toml");
+        let original = "title = \"A\"\n[package]\nname = \"t\"\n";
+        fs::write(&p, original).unwrap();
+
+        let res = check_file(&p, "toml", true, None).unwrap();
+        let after = fs::read_to_string(&p).unwrap();
+        let v: toml::Value = toml::from_str(original).unwrap();
+        let formatted = toml::to_string_pretty(&v).unwrap();
+        assert_eq!(after, formatted);
+        let expected_fixed = original != formatted;
+        assert_eq!(
+            res.fixed, expected_fixed,
+            "fixed flag should match whether content changed"
+        );
+    }
 }
 
 /// 对 kam.toml 文件进行深度检查
