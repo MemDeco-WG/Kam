@@ -1,6 +1,7 @@
 use clap::Args;
 
 #[derive(Args, Debug)]
+#[command(trailing_var_arg = true)]
 pub struct CheckArgs {
     /// Path to use as project directory fallback when no PATHS are supplied
     /// (default: current directory). Use positional PATHS for files/globs.
@@ -9,7 +10,7 @@ pub struct CheckArgs {
 
     /// Paths or globs to check (file(s), directories, or glob patterns).
     /// If omitted, `path` (project directory) will be checked.
-    #[arg(value_name = "PATHS", num_args = 0.., last = true)]
+    #[arg(value_name = "PATHS", num_args = 0..)]
     pub paths: Vec<String>,
 
     /// Output results as JSON (compact by default; use -v/--verbose for detailed JSON)
@@ -122,27 +123,29 @@ mod tests {
 
     #[test]
     fn parse_single_path() {
-        let res = crate::cli::Cli::try_parse_from(["kam", "check", "file.json"]);
-        assert!(res.is_ok(), "parse failed: {}", res.unwrap_err());
-        let cli = res.unwrap();
-        match cli.command {
-            Some(Commands::Check(args)) => {
-                assert_eq!(args.paths, vec!["file.json".to_string()]);
-            }
-            _ => panic!("expected check subcommand"),
+        let res = crate::cli::Cli::try_parse_from_with_pacman(["kam", "check", "file.json"]);
+        match res {
+            Ok(cli) => match cli.command {
+                Some(Commands::Check(args)) => {
+                    assert_eq!(args.paths, vec!["file.json".to_string()]);
+                }
+                _ => panic!("expected check subcommand"),
+            },
+            Err(e) => panic!("parse failed: {}", e),
         }
     }
 
     #[test]
     fn parse_multiple_paths_and_glob() {
-        let res = crate::cli::Cli::try_parse_from(["kam", "check", "a.json", "*.md"]);
-        assert!(res.is_ok(), "parse failed: {}", res.unwrap_err());
-        let cli = res.unwrap();
-        match cli.command {
-            Some(Commands::Check(args)) => {
-                assert_eq!(args.paths, vec!["a.json".to_string(), "*.md".to_string()]);
-            }
-            _ => panic!("expected check subcommand"),
+        let res = crate::cli::Cli::try_parse_from_with_pacman(["kam", "check", "a.json", "*.md"]);
+        match res {
+            Ok(cli) => match cli.command {
+                Some(Commands::Check(args)) => {
+                    assert_eq!(args.paths, vec!["a.json".to_string(), "*.md".to_string()]);
+                }
+                _ => panic!("expected check subcommand"),
+            },
+            Err(e) => panic!("parse failed: {}", e),
         }
     }
 }

@@ -1,6 +1,55 @@
 # shellcheck shell=ash
 # {{prop.name}} customize.sh
 #
+# ---------------------------------------------------------------------------------------
+# CUSTOM INSTALLATION LOGIC
+# ---------------------------------------------------------------------------------------
+[ -f "$MODPATH/lib/kamfw/.kamfwrc" ] && . "$MODPATH/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
+# 作者注：导入以上工具库，会自动依据ROOT管理器
+# 进行一些特殊处理
+# 比如，如果是magisk.补全META-INF
+# boot-completed --> service
+# 记得在boot-completed调用：
+# wait_boot_if_magisk
+# 详见 lib/kamfw/magisk.sh
+# lib/kamfw/ksu.sh
+# lib/kamfw/ap.sh
+# 依赖控制,文件共享
+# 自动提取模块.local到kam共享目录，采用硬链接方式
+# 为保证模块卸载时候不会有残留文件，uninstall.sh文件不要删
+import __customize__
+# --> .local/bin ~~> /data/adb/kam/bin
+# --> .local/lib ~~> /data/adb/kam/lib
+
+# i18n
+import i18n
+import lang
+
+# 任务一：模块使用指南
+set_i18n "USAGE_GUIDE" \
+    "zh" "使用教程：
+    ..." \
+    "en" "Usage guide:
+    ..." \
+    "ja" "使用方法：
+    ..." \
+    "ko" "사용 안내:
+    ... "
+
+# print： ui_print plus
+print "$(i18n "USAGE_GUIDE")"
+
+# import launcher
+
+# launch url "https://github.com/UserName/repo"
+# launch ...
+
+# import rich --> 这里有更多，比如 ask函数 confirm函数
+
+##################################
+# 备忘文档 -- 可删除               #
+# You can delete this section    #
+##################################
 # This script is sourced by the module installer script after all files are extracted
 # and default permissions/secontext are applied.
 #
@@ -102,7 +151,3 @@
 # /system/app/YouTube
 # "
 #
-# ---------------------------------------------------------------------------------------
-# CUSTOM INSTALLATION LOGIC
-# ---------------------------------------------------------------------------------------
-[ -f "$MODPATH/lib/kamfw/.kamfwrc" ] && . "$MODPATH/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
