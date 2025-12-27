@@ -1,5 +1,3 @@
-use clap::{Arg, Command};
-
 /// Simple helper that deduplicates repeated `[PATH]` entries inside the
 /// `Arguments:` section of a clap help string by keeping only the last
 /// occurrence. This mirrors the behavior used when printing localized help
@@ -11,7 +9,7 @@ use clap::{Arg, Command};
 /// single usage placeholder where appropriate.
 fn dedupe_path_entries(help: &str) -> String {
     // Split into lines for simple scanning.
-    let mut lines: Vec<&str> = help.split('\n').collect();
+    let lines: Vec<&str> = help.split('\n').collect();
 
     // Find the start of the Arguments: section.
     let start_opt = lines
