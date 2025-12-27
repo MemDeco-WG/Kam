@@ -59,7 +59,7 @@ Built with [Kam](https://github.com/MemDeco-WG/Kam)
 EOF
 )
 printf "%s\n" "$RELEASE_NOTES" > "$TMP_CHANGELOG"
-log_info "打包以下文件：$(ls $DIST)"
+log_info "打包以下文件：$(ls \"$DIST\")"
 # Check if release already exists
 if gh release view "$TAG" >/dev/null 2>&1; then
     log_error "Release $TAG already exists and is immutable, cannot proceed"

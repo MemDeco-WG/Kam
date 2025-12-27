@@ -84,6 +84,7 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
     };
     // 运行shellcheck，输出JSON格式（方便解析）
     match Command::new("shellcheck")
+        .arg("-x")
         .arg("--format=json")
         .arg(path)
         .output()
@@ -185,6 +186,9 @@ mod shell_tests {
             writeln!(f, "if [ \"$1\" = \"--version\" ]; then").unwrap();
             writeln!(f, "  echo \"shellcheck mock\"").unwrap();
             writeln!(f, "  exit 0").unwrap();
+            writeln!(f, "fi").unwrap();
+            writeln!(f, "if [ \"$1\" = \"-x\" ]; then").unwrap();
+            writeln!(f, "  shift").unwrap();
             writeln!(f, "fi").unwrap();
             writeln!(f, "if [ \"$1\" = \"--format=json\" ]; then").unwrap();
             writeln!(f, "  shift").unwrap();
@@ -290,13 +294,13 @@ mod shell_tests {
         {
             let mut f = File::create(&sc_path).unwrap();
             writeln!(f, "#!/bin/sh").unwrap();
-            writeln!(f, "if [ \"$1\" = \"--version\" ]; then").unwrap();
+            writeln!(f, "if echo \"$@\" | grep -q -- --version; then").unwrap();
             writeln!(f, "  echo \"shellcheck mock\"").unwrap();
             writeln!(f, "  exit 0").unwrap();
             writeln!(f, "fi").unwrap();
-            writeln!(f, "if [ \"$1\" = \"--format=json\" ]; then").unwrap();
-            writeln!(f, "  shift").unwrap();
-            writeln!(f, "  p=\"$1\"").unwrap();
+            // Accept optional -x before --format=json (shellcheck -x --format=json path)
+            writeln!(f, "if echo \"$@\" | grep -q -- --format=json; then").unwrap();
+            writeln!(f, "  p=\"${{!#}}\"").unwrap();
             // Emit an array-form JSON (modern shellcheck format) with a fake warning.
             f.write_all(b"  printf '[{\"file\":\"%s\",\"line\":1,\"column\":1,\"level\":\"warning\",\"code\":9999,\"message\":\"fake-warning\"}]' \"$p\"\n").unwrap();
             writeln!(f, "  exit 0").unwrap();

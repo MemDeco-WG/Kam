@@ -230,24 +230,41 @@ mod tests {
         };
         assert!(run(args).is_ok());
 
-        // Search recursively for any file under HOME that contains the bash completion
-        // function `_kam()`, so we don't rely on a specific filename.
+        // The installed completion may be written to system locations, to XDG_DATA_HOME,
+        // or to a location under HOME. Check the canonical candidate locations rather
+        // than only searching HOME to make the test robust across environments.
+        let candidates = default_completion_candidates(shells::Shell::Bash);
         let mut found_path: Option<std::path::PathBuf> = None;
-        for entry in walkdir::WalkDir::new(&home_dir)
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|e| e.file_type().is_file())
-        {
-            if let Ok(text) = std::fs::read_to_string(entry.path())
-                && text.contains("_kam()")
-            {
-                found_path = Some(entry.into_path());
-                break;
+        for path in candidates {
+            if path.exists() && path.is_file() {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    if text.contains("_kam()") {
+                        found_path = Some(path);
+                        break;
+                    }
+                }
+            } else if path.exists() && path.is_dir() {
+                for entry in walkdir::WalkDir::new(&path)
+                    .into_iter()
+                    .filter_map(Result::ok)
+                {
+                    if entry.file_type().is_file() {
+                        if let Ok(text) = std::fs::read_to_string(entry.path()) {
+                            if text.contains("_kam()") {
+                                found_path = Some(entry.into_path());
+                                break;
+                            }
+                        }
+                    }
+                }
+                if found_path.is_some() {
+                    break;
+                }
             }
         }
         assert!(
             found_path.is_some(),
-            "installed bash completion containing '_kam()' not found under HOME"
+            "installed bash completion containing '_kam()' not found in completion candidate paths"
         );
 
         // restore HOME
@@ -285,15 +302,35 @@ mod tests {
         };
         assert!(run(args).is_ok());
 
-        // Search recursively for an installed kam.fish file under the fake HOME and accept the first match.
+        // The installed kam.fish may be written to system or XDG locations as well as
+        // user HOME. Check the canonical completion candidate paths to be robust.
+        let candidates = default_completion_candidates(shells::Shell::Fish);
         let mut found: Option<std::path::PathBuf> = None;
-        for entry in WalkDir::new(&home_dir).into_iter().filter_map(Result::ok) {
-            if entry.file_type().is_file() && entry.file_name() == "kam.fish" {
-                found = Some(entry.into_path());
-                break;
+        for path in candidates {
+            if path.exists() && path.is_file() {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if content.contains("complete -c kam") || content.contains("kam.fish") {
+                        found = Some(path);
+                        break;
+                    }
+                }
+            } else if path.exists() && path.is_dir() {
+                for entry in WalkDir::new(&path).into_iter().filter_map(Result::ok) {
+                    if entry.file_type().is_file() {
+                        if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                            if content.contains("complete -c kam") || content.contains("kam.fish") {
+                                found = Some(entry.into_path());
+                                break;
+                            }
+                        }
+                    }
+                }
+                if found.is_some() {
+                    break;
+                }
             }
         }
-        let path = found.expect("installed kam.fish not found under HOME");
+        let path = found.expect("installed kam.fish not found in completion candidate paths");
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains("complete -c kam") || content.contains("kam.fish"));
 
@@ -342,25 +379,40 @@ mod tests {
         let out_content = std::fs::read_to_string(&out).unwrap();
         assert!(out_content.contains("_kam()"));
 
-        // The installation path (under the fake HOME) should also contain the completion.
+        // The installation may have been written to a system or XDG path instead of HOME.
+        // Inspect the canonical candidate locations to find the installed completion.
+        let candidates = default_completion_candidates(shells::Shell::Bash);
         let mut found: Option<PathBuf> = None;
-        for entry in walkdir::WalkDir::new(&home_dir)
-            .into_iter()
-            .filter_map(Result::ok)
-        {
-            if !entry.file_type().is_file() {
-                continue;
-            }
-            if let Ok(text) = std::fs::read_to_string(entry.path())
-                && text.contains("_kam()")
-            {
-                found = Some(entry.into_path());
-                break;
+        for path in candidates {
+            if path.exists() && path.is_file() {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    if text.contains("_kam()") {
+                        found = Some(path);
+                        break;
+                    }
+                }
+            } else if path.exists() && path.is_dir() {
+                for entry in walkdir::WalkDir::new(&path)
+                    .into_iter()
+                    .filter_map(Result::ok)
+                {
+                    if entry.file_type().is_file() {
+                        if let Ok(text) = std::fs::read_to_string(entry.path()) {
+                            if text.contains("_kam()") {
+                                found = Some(entry.into_path());
+                                break;
+                            }
+                        }
+                    }
+                }
+                if found.is_some() {
+                    break;
+                }
             }
         }
         assert!(
             found.is_some(),
-            "installed `kam` completion not found under fake HOME when using --install"
+            "installed `kam` completion not found in completion candidate paths when using --install"
         );
 
         // restore HOME

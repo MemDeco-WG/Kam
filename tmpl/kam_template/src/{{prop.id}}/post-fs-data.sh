@@ -1,6 +1,8 @@
 # shellcheck shell=ash
 # post-fs-data.sh
-#
+MODDIR=${0%/*}
+[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
+
 # 🚨中文提示：一般情况不需要这个脚本
 # 如果你不了解，你只需要记得这个脚本执行时机很早就行了
 # This script runs in the "post-fs-data" stage of the boot process.
@@ -38,6 +40,4 @@
 # ksud module config set --temp runtime_state "active"
 #
 # ---------------------------------------------------------------------------------------
-
-MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
+import __runtime__
