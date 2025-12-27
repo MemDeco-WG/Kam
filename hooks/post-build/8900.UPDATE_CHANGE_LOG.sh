@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # shellcheck source=../lib/utils.sh
+# shellcheck source=hooks/lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 # optionally update changelog using commitizen.
