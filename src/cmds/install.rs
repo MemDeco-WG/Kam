@@ -538,17 +538,7 @@ fn is_command_not_found_error(output: &str) -> bool {
         || output_lower.contains("no such file or directory")
 }
 
-/// 判断是否为模块脚本自身的错误（非权限问题）
-fn is_module_script_error(output: &str) -> bool {
-    // 检查常见的模块脚本错误模式
-    output.contains("does not exist")
-        || output.contains("File not found")
-        || output.contains("No such file")
-        || output.contains("Error:")
-        || output.contains("Failed to")
-        || output.contains("abort")
-        || output.contains("ERROR")
-}
+
 
 /// Perform the actual install once we have an artifact path. Extracted from the
 /// original `run` implementation so both local and git-based flows can share it.
