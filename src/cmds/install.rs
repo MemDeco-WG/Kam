@@ -521,6 +521,35 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
     }
 }
 
+/// 判断是否为权限相关错误
+fn is_permission_error(output: &str) -> bool {
+    let output_lower = output.to_lowercase();
+    output_lower.contains("permission denied") 
+        || output_lower.contains("access denied")
+        || output_lower.contains("operation not permitted")
+        || output_lower.contains("sudo") && output_lower.contains("required")
+}
+
+/// 判断是否为命令未找到错误
+fn is_command_not_found_error(output: &str) -> bool {
+    let output_lower = output.to_lowercase();
+    output_lower.contains("not found") 
+        || output_lower.contains("command not found")
+        || output_lower.contains("no such file or directory")
+}
+
+/// 判断是否为模块脚本自身的错误（非权限问题）
+fn is_module_script_error(output: &str) -> bool {
+    // 检查常见的模块脚本错误模式
+    output.contains("does not exist")
+        || output.contains("File not found")
+        || output.contains("No such file")
+        || output.contains("Error:")
+        || output.contains("Failed to")
+        || output.contains("abort")
+        || output.contains("ERROR")
+}
+
 /// Perform the actual install once we have an artifact path. Extracted from the
 /// original `run` implementation so both local and git-based flows can share it.
 fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<(), KamError> {
@@ -561,15 +590,14 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                     }
                     return Ok(());
                 } else {
-                    // If the child failed with common exit codes for missing/permission issues,
-                    // attempt privilege escalation fallback using `su` if available (similar to non-stream path).
+                    // 对于 verbose 模式，我们需要更智能地判断错误类型
+                    // 由于 streaming 模式下我们无法捕获完整的输出，我们基于退出码和命令可用性来判断
                     let code = status.code();
-                    // 126 = cannot execute, 127 = not found (common shell conventions)
-                    if crate::utils::command_exists("su")
-                        && (code == Some(126)
-                            || code == Some(127)
-                            || !crate::utils::command_exists(&cli_bin))
-                    {
+                    let should_try_su = crate::utils::command_exists("su")
+                        && ((code == Some(126) || code == Some(127)) // cannot execute or not found
+                            || !crate::utils::command_exists(&cli_bin)); // CLI binary doesn't exist
+                    
+                    if should_try_su {
                         let cmd_str = std::iter::once(cli_bin.clone())
                             .chain(cli_args.iter().cloned())
                             .map(|s| {
@@ -607,10 +635,17 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                             Err(e) => return Err(KamError::Io(e)),
                         }
                     }
-                    return Err(KamError::CommandFailed(format!(
-                        "Install command '{}' exited with status: {}. Re-run with -v/--verbose to see the command output.",
-                        cli_bin, status
-                    )));
+                    // 退出代码为1直接报错
+                    if code == Some(1) {
+                        return Err(KamError::CommandFailed("安装失败，检查安装脚本或者检查root授权".to_string()));
+                    } else {
+                        // 其他退出代码提供详细信息
+                        let error_msg = format!(
+                            "Install command '{}' exited with status: {}. Check the output above for details.",
+                            cli_bin, status
+                        );
+                        return Err(KamError::CommandFailed(error_msg));
+                    }
                 }
             }
             Err(e) => return Err(KamError::Io(e)),
@@ -628,13 +663,12 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                 }
                 Ok(())
             } else {
-                let s_out = String::from_utf8_lossy(&out.stdout).to_lowercase();
-                let s_err = String::from_utf8_lossy(&out.stderr).to_lowercase();
+                let s_out = String::from_utf8_lossy(&out.stdout);
+                let s_err = String::from_utf8_lossy(&out.stderr);
                 let combined = format!("{}{}", s_out, s_err);
-                if (combined.contains("not found")
-                    || combined.contains("command not found")
-                    || combined.contains("permission denied"))
-                    && crate::utils::command_exists("su")
+                
+                // 只有在真正的权限错误时才尝试使用 su
+                if is_permission_error(&combined) && crate::utils::command_exists("su")
                 {
                     let cmd_str = std::iter::once(cli_bin.clone())
                         .chain(cli_args.iter().cloned())
@@ -672,16 +706,30 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         }
                         Err(e) => Err(KamError::Io(e)),
                     }
-                } else if combined.contains("not found") || combined.contains("command not found") {
+                } else if is_command_not_found_error(&combined) {
                     Err(KamError::CommandFailed(trf!(
                         "Install CLI '{}' not found on PATH. Please install it or set 'root.manager' in ~/.kam/config.toml",
                         cli_bin
                     )))
                 } else {
-                    Err(KamError::CommandFailed(format!(
-                        "Install command '{}' exited with status: {}. Re-run with -v/--verbose to see the command output.",
-                        cli_bin, out.status
-                    )))
+                    // 退出代码为1直接报错
+                    if out.status.code() == Some(1) {
+                        Err(KamError::CommandFailed("安装失败，检查安装脚本或者检查root授权".to_string()))
+                    } else {
+                        // 其他退出代码显示详细信息
+                        let error_msg = if args.verbose {
+                            format!(
+                                "Module installation failed. Exit status: {}. Output:\n{}\nError:\n{}",
+                                out.status, s_out, s_err
+                            )
+                        } else {
+                            format!(
+                                "Install command '{}' exited with status: {}. Re-run with -v/--verbose to see the command output.",
+                                cli_bin, out.status
+                            )
+                        };
+                        Err(KamError::CommandFailed(error_msg))
+                    }
                 }
             }
         }
