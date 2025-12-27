@@ -43,10 +43,6 @@ pub struct InstallArgs {
     #[arg(short = 'v', long, conflicts_with = "quiet")]
     pub verbose: bool,
 
-    /// Stream the install command's stdout/stderr live (useful for capturing interactive output)
-    #[arg(long)]
-    pub stream: bool,
-
     /// Suppress non-essential output
     #[arg(short, long)]
     pub quiet: bool,
@@ -550,9 +546,8 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
         Utils::info(&trf!("install.executing", cli_bin, cli_args.join(" ")));
     }
 
-    // If the user requested streaming (or verbose was requested), stream the child process
-    // output live instead of capturing it and printing at the end.
-    if args.stream || args.verbose {
+    // Stream the child process output live when verbose was requested.
+    if args.verbose {
         let mut cmd = Command::new(&cli_bin);
         cmd.args(&cli_args);
         // Keep stdin inherited so interactive commands still work
@@ -837,6 +832,16 @@ mod tests {
         assert_eq!(
             expand_git_shorthand("git+owner/repo"),
             "https://github.com/owner/repo.git"
+        );
+    }
+
+    #[test]
+    fn install_no_longer_accepts_stream_flag() {
+        // `try_parse_from` returns an Err for unknown/invalid arguments
+        let res = crate::cli::Cli::try_parse_from(["kam", "install", "--stream", "pkg.zip"]);
+        assert!(
+            res.is_err(),
+            "Expected unknown flag '--stream' to cause parse error"
         );
     }
 }
