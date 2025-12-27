@@ -133,11 +133,210 @@ fn main() {
     // Heuristic: when `-S`/`-s` is used and the next token looks like a target
     // (not an option and not a real subcommand) automatically insert `--` so
     // `kam -S <target>` works without the user having to type `--`.
+    // Intercept help tokens early so we can post-process help output (dedupe
+    // duplicate argument/option blocks introduced by adding translations).
+    //
+    // We do this before handing args off to clap so that `kam <cmd> --help`
+    // produces deduplicated, nicer help output.
+    fn dedupe_help(raw: &str) -> String {
+        // Split into lines for simple, robust processing.
+        let lines: Vec<&str> = raw.lines().collect();
+
+        // Helper: for a contiguous section (lines slice) split into blocks
+        // separated by blank lines, then keep the last occurrence of each
+        // block keyed by its first (header) line.
+        fn dedupe_section(section_lines: &[&str]) -> Vec<String> {
+            use std::collections::HashMap;
+            let mut blocks: Vec<Vec<String>> = Vec::new();
+            let mut i = 0;
+            while i < section_lines.len() {
+                // skip leading blank lines
+                while i < section_lines.len() && section_lines[i].trim().is_empty() {
+                    i += 1;
+                }
+                if i >= section_lines.len() {
+                    break;
+                }
+                // collect block until next blank line
+                let mut block: Vec<String> = Vec::new();
+                while i < section_lines.len() && !section_lines[i].trim().is_empty() {
+                    block.push(section_lines[i].to_string());
+                    i += 1;
+                }
+                blocks.push(block);
+            }
+
+            // Keep the last occurrence of each block header (header = first line).
+            let mut map: HashMap<String, Vec<String>> = HashMap::new();
+            let mut order: Vec<String> = Vec::new();
+            for block in blocks.into_iter().rev() {
+                if block.is_empty() {
+                    continue;
+                }
+                let header = block[0].trim_start().to_string();
+                if !map.contains_key(&header) {
+                    order.push(header.clone());
+                    map.insert(header, block);
+                }
+            }
+            order.reverse();
+
+            // Reconstruct lines for this section.
+            let mut out: Vec<String> = Vec::new();
+            for key in order {
+                if let Some(block) = map.get(&key) {
+                    out.extend(block.clone());
+                    out.push(String::new()); // blank line between blocks
+                }
+            }
+            if out.last().map(|s| s.is_empty()) == Some(true) {
+                out.pop();
+            }
+            out
+        }
+
+        // Walk lines and process `Arguments:` and `Options:` sections.
+        let mut out_lines: Vec<String> = Vec::new();
+        let mut i = 0;
+        while i < lines.len() {
+            let line = lines[i];
+            let trimmed = line.trim_end();
+            if trimmed == "Arguments:" || trimmed == "Options:" {
+                // emit section header
+                out_lines.push(line.to_string());
+                i += 1;
+
+                // collect section lines until next top-level header (line ending with ':')
+                // or EOF.
+                let mut sec_lines: Vec<&str> = Vec::new();
+                while i < lines.len() {
+                    let nxt = lines[i];
+                    // stop if next is a new top-level header like 'Commands:' or 'Options:'
+                    if nxt.trim_end().ends_with(':') {
+                        break;
+                    }
+                    sec_lines.push(nxt);
+                    i += 1;
+                }
+
+                // Dedupe this section and append the cleaned lines.
+                let cleaned_block = dedupe_section(&sec_lines);
+                for l in cleaned_block {
+                    out_lines.push(l);
+                }
+
+                // preserve a single blank line boundary if present in original
+                if i < lines.len() && lines[i].trim().is_empty() {
+                    out_lines.push(String::new());
+                    // consume the original blank line
+                    i += 1;
+                }
+            } else {
+                out_lines.push(line.to_string());
+                i += 1;
+            }
+        }
+
+        // Normalize the Usage line: collapse consecutive duplicated tokens while preserving order.
+        // Example: `Usage: kam install [OPTIONS] [PATH] [PATH]` -> `Usage: kam install [OPTIONS] [PATH]`
+        for ln in out_lines.iter_mut() {
+            if ln.trim_start().starts_with("Usage:") {
+                let tokens: Vec<&str> = ln.split_whitespace().collect();
+                if tokens.len() > 1 {
+                    let mut new_tokens: Vec<&str> = Vec::new();
+                    // Keep the 'Usage:' prefix and collapse ONLY consecutive duplicates.
+                    new_tokens.push(tokens[0]);
+                    for tok in tokens.into_iter().skip(1) {
+                        if new_tokens.last().map(|s| *s) != Some(tok) {
+                            new_tokens.push(tok);
+                        }
+                    }
+                    *ln = new_tokens.join(" ");
+                }
+            }
+        }
+
+        // Make sure final string ends with a newline (like clap's help does).
+        let mut res = out_lines.join("\n");
+        if !res.ends_with('\n') {
+            res.push('\n');
+        }
+        res
+    }
+
     let matches = {
         // Collect argv and allow the CLI helper to insert `--` when appropriate so
         // combined short flags like `-Syu` are handled consistently with runtime.
         let args_os: Vec<std::ffi::OsString> = std::env::args_os().collect();
         let args = kam::cli::inject_double_dash_for_targets(args_os, &mut cmd);
+
+        // Intercept explicit help tokens (-h / --help) so we can post-process them.
+        let toks: Vec<String> = args
+            .iter()
+            .map(|s| s.to_string_lossy().into_owned())
+            .collect();
+        if let Some(help_pos) = toks.iter().position(|t| t == "--help" || t == "-h") {
+            // Build list of non-option tokens (subcommand path) up to the help token.
+            let sub_names: Vec<String> = toks[1..help_pos]
+                .iter()
+                .filter_map(|s| {
+                    if !s.starts_with('-') && s != "--" {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Traverse the command tree using cloned Command values (avoid mutable borrows).
+            let mut cur = cmd.clone();
+            let mut found = true;
+            for name in sub_names {
+                // Collect owned clones so we don't hold borrows into `cur` while assigning to it.
+                let sub_clones: Vec<clap::Command> =
+                    cur.get_subcommands().map(|s| s.clone()).collect();
+                match sub_clones
+                    .into_iter()
+                    .find(|s| s.get_name() == name.as_str())
+                {
+                    Some(s) => cur = s,
+                    None => {
+                        // token wasn't a subcommand, stop descent
+                        found = false;
+                        break;
+                    }
+                }
+            }
+
+            if !found {
+                // Could not locate a nested subcommand; fall back to top-level help.
+                let mut tmp = cmd.clone();
+                if let Err(e) = tmp.print_long_help() {
+                    kam::utils::Utils::error(&format!("Failed to write help: {}", e));
+                    std::process::exit(1);
+                }
+                println!();
+                std::process::exit(0);
+            }
+
+            // Capture long help into a buffer so we can dedupe sections.
+            let mut buf: Vec<u8> = Vec::new();
+            if cur.write_long_help(&mut buf).is_ok() {
+                let raw = String::from_utf8_lossy(&buf);
+                let cleaned = dedupe_help(&raw);
+                // print deduped help and exit
+                print!("{}", cleaned);
+                if !cleaned.ends_with('\n') {
+                    println!();
+                }
+            } else {
+                // Fallback: print directly
+                let _ = cur.print_long_help();
+                println!();
+            }
+
+            std::process::exit(0);
+        }
 
         // Parse from the (possibly modified) argv list so clap receives the `--`
         // we've injected when appropriate.
@@ -225,13 +424,16 @@ fn main() {
                 println!();
                 Ok(())
             } else {
-                // Clone the command and traverse mutable references to subcommands so
-                // we can call the mutable `print_long_help()` API on the target.
-                let mut cur_owned = cmd.clone();
-                let mut cur = &mut cur_owned;
+                // Traverse subcommands using owned clones (avoids mutable borrow conflicts).
+                // Traverse subcommands using owned clones (avoids mutable borrow conflicts).
+                let mut cur = cmd.clone();
                 for name in &args.subcommand {
-                    match cur
-                        .get_subcommands_mut()
+                    // Collect owned clones before searching so we don't hold borrows
+                    // into `cur` while assigning to it.
+                    let sub_clones: Vec<clap::Command> =
+                        cur.get_subcommands().map(|s| s.clone()).collect();
+                    match sub_clones
+                        .into_iter()
                         .find(|s| s.get_name() == name.as_str())
                     {
                         Some(s) => cur = s,
