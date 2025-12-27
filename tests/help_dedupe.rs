@@ -30,7 +30,7 @@ fn dedupe_path_entries(help: &str) -> String {
                         // Keep the 'Usage:' prefix and collapse consecutive duplicates.
                         new_tokens.push(tokens[0]);
                         for tok in tokens.into_iter().skip(1) {
-                            if new_tokens.last().map(|s| *s) != Some(tok) {
+                            if new_tokens.last().copied() != Some(tok) {
                                 new_tokens.push(tok);
                             }
                         }
@@ -76,7 +76,7 @@ fn dedupe_path_entries(help: &str) -> String {
                     let mut new_tokens: Vec<&str> = Vec::new();
                     new_tokens.push(tokens[0]);
                     for tok in tokens.into_iter().skip(1) {
-                        if new_tokens.last().map(|s| *s) != Some(tok) {
+                        if new_tokens.last().copied() != Some(tok) {
                             new_tokens.push(tok);
                         }
                     }
@@ -131,7 +131,7 @@ fn dedupe_path_entries(help: &str) -> String {
                 // Keep the 'Usage:' prefix and collapse ONLY consecutive duplicates.
                 new_tokens.push(tokens[0]);
                 for tok in tokens.into_iter().skip(1) {
-                    if new_tokens.last().map(|s| *s) != Some(tok) {
+                    if new_tokens.last().copied() != Some(tok) {
                         new_tokens.push(tok);
                     }
                 }
@@ -173,7 +173,7 @@ fn dedupe_path_entries(help: &str) -> String {
                             // skip tokens that are represented in the Arguments section
                             continue;
                         }
-                        if new_tokens.last().map(|s| *s) != Some(tok) {
+                        if new_tokens.last().copied() != Some(tok) {
                             new_tokens.push(tok);
                         }
                     }

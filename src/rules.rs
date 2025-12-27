@@ -41,7 +41,7 @@ pub trait Rule: Send + Sync {
         path: &Path,
         content: &str,
         fr: &mut crate::cmds::check::file::FileResult,
-        do_fix: bool,
+        _do_fix: bool,
     ) -> Option<String> {
         // Default behaviour: run normal analysis and don't change content.
         self.run(path, content, fr);
@@ -113,8 +113,8 @@ pub fn apply_all_rules_with_fix(
         // Determine per-rule configuration (enabled / allow fix) if provided by project config.
         let mut enabled: bool = true;
         let mut allow_fix: bool = true;
-        if let Some(cfg_map) = rules_cfg {
-            if let Some(cfg) = cfg_map.get(id) {
+        if let Some(cfg_map) = rules_cfg
+            && let Some(cfg) = cfg_map.get(id) {
                 if let Some(e) = cfg.enabled {
                     enabled = e;
                 }
@@ -122,7 +122,6 @@ pub fn apply_all_rules_with_fix(
                     allow_fix = f;
                 }
             }
-        }
 
         if !enabled {
             // Rule explicitly disabled in project config, skip it entirely.
@@ -134,12 +133,11 @@ pub fn apply_all_rules_with_fix(
 
         if should_apply_fix {
             // Let the rule perform its analysis + optional fix and return modified content.
-            if let Some(new_content) = rule.run_with_fix(path, &cur, fr, true) {
-                if new_content != cur {
+            if let Some(new_content) = rule.run_with_fix(path, &cur, fr, true)
+                && new_content != cur {
                     cur = new_content;
                     fr.fixed = true;
                 }
-            }
         } else {
             // Analysis-only run (no fixes allowed for this rule). Default run_with_fix
             // delegates to run() when do_fix is false, so this also covers rules that

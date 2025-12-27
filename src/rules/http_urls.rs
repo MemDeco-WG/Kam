@@ -1,5 +1,7 @@
 //! Detect insecure (HTTP) URLs and recommend using HTTPS instead.
 //
+//!
+//
 //! Small builtin rule for `kam check` that scans file content for `http://`
 //! URLs and emits a warning for each occurrence. This helps catch insecure
 //! references that should generally use `https://`.

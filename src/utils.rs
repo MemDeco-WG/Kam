@@ -508,7 +508,7 @@ impl Utils {
     /// lines without printing a `--- stderr ---` separator, so this wrapper simply
     /// delegates to it.
     pub fn run_and_stream_no_stderr_header(
-        mut cmd: std::process::Command,
+        cmd: std::process::Command,
     ) -> io::Result<std::process::ExitStatus> {
         Self::run_and_stream(cmd)
     }

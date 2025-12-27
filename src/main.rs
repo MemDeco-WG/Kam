@@ -74,10 +74,10 @@ fn dedupe_help(raw: &str) -> String {
                 continue;
             }
             let header = block[0].trim_start().to_string();
-            if !map.contains_key(&header) {
+            map.entry(header.clone()).or_insert_with(|| {
                 order.push(header.clone());
-                map.insert(header, block);
-            }
+                block
+            });
         }
         order.reverse();
 
@@ -147,7 +147,7 @@ fn dedupe_help(raw: &str) -> String {
                 // Keep the 'Usage:' prefix and collapse ONLY consecutive duplicates.
                 new_tokens.push(tokens[0]);
                 for tok in tokens.into_iter().skip(1) {
-                    if new_tokens.last().map(|s| *s) != Some(tok) {
+                    if new_tokens.last().copied() != Some(tok) {
                         new_tokens.push(tok);
                     }
                 }
@@ -315,8 +315,7 @@ fn main() {
             let mut found = true;
             for name in sub_names {
                 // Collect owned clones so we don't hold borrows into `cur` while assigning to it.
-                let sub_clones: Vec<clap::Command> =
-                    cur.get_subcommands().map(|s| s.clone()).collect();
+                let sub_clones: Vec<clap::Command> = cur.get_subcommands().cloned().collect();
                 match sub_clones
                     .into_iter()
                     .find(|s| s.get_name() == name.as_str())
@@ -498,8 +497,7 @@ fn main() {
                 for name in &args.subcommand {
                     // Collect owned clones before searching so we don't hold borrows
                     // into `cur` while assigning to it.
-                    let sub_clones: Vec<clap::Command> =
-                        cur.get_subcommands().map(|s| s.clone()).collect();
+                    let sub_clones: Vec<clap::Command> = cur.get_subcommands().cloned().collect();
                     match sub_clones
                         .into_iter()
                         .find(|s| s.get_name() == name.as_str())

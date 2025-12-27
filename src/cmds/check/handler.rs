@@ -12,7 +12,6 @@ use super::args::CheckArgs;
 use super::file::{FileResult, check_file};
 use crate::errors::KamError;
 use crate::types::kam_toml::RuleConfig;
-use std::collections::HashMap;
 
 fn collect_project_files(
     project_path: &Path,
@@ -243,7 +242,8 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                                 if let Ok(kt) = crate::types::kam_toml::KamToml::load_from_file(
                                     entry.join("kam.toml"),
                                 ) {
-                                    let key = entry.canonicalize().unwrap_or(entry.clone());
+                                    let key =
+                                        entry.canonicalize().unwrap_or_else(|_| entry.clone());
                                     project_rules_cache.insert(key, kt.rules);
                                 }
                             }
@@ -276,7 +276,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                         if let Ok(kt) =
                             crate::types::kam_toml::KamToml::load_from_file(pathp.join("kam.toml"))
                         {
-                            let key = pathp.canonicalize().unwrap_or(pathp.to_path_buf());
+                            let key = pathp.canonicalize().unwrap_or_else(|_| pathp.to_path_buf());
                             project_rules_cache.insert(key, kt.rules);
                         }
                     }
@@ -300,10 +300,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut files: Vec<PathBuf> = Vec::new();
     for f in collected_files {
-        let canon = match f.canonicalize() {
-            Ok(c) => c,
-            Err(_) => f.clone(),
-        };
+        let canon = f.canonicalize().unwrap_or_else(|_| f.clone());
         if seen.insert(canon.clone()) {
             files.push(canon);
         }
@@ -355,7 +352,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     }
 
     // 文件总数（包含已预检的 kam.toml）
-    let mut total_files: usize = files.len() + prechecked_kam_count;
+    let total_files: usize = files.len() + prechecked_kam_count;
 
     // 只在非JSON输出且是终端时显示进度条
     let show_progress = !args.json && std::io::stdout().is_terminal();

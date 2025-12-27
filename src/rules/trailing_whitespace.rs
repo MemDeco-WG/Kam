@@ -44,7 +44,7 @@ impl crate::rules::Rule for TrailingWhitespaceRule {
             if Self::pattern().is_match(line) {
                 // Show the line content trimmed of trailing whitespace so the
                 // snippet is readable in diagnostics.
-                let snippet = line.trim_end_matches(|c| c == ' ' || c == '\t').to_string();
+                let snippet = line.trim_end_matches([' ', '\t']).to_string();
                 let msg = format!("trailing whitespace detected (line {}): {}", i + 1, snippet);
                 fr.warnings.push(msg);
             }
@@ -70,7 +70,7 @@ impl crate::rules::Rule for TrailingWhitespaceRule {
         let ends_with_newline = content.ends_with('\n');
         let fixed_lines: Vec<String> = content
             .split('\n')
-            .map(|line| line.trim_end_matches(|c| c == ' ' || c == '\t').to_string())
+            .map(|line| line.trim_end_matches([' ', '\t']).to_string())
             .collect();
         let mut fixed = fixed_lines.join("\n");
         if ends_with_newline && !fixed.ends_with('\n') {
