@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# shellcheck source=../lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 log_warn " comment out to enable !" && exit 0
@@ -25,7 +26,7 @@ rm -f "$DIST/templates.zip"
 
 # Create a minimal archive of the contents of templates/
 
-zip -rj "$DIST/templates.zip" $TEMPLATES_DIR || exit 1
+zip -rj "$DIST/templates.zip" "$TEMPLATES_DIR" || exit 1
 
 log_success "Templates packaged at $DIST/templates.zip "
 exit 0

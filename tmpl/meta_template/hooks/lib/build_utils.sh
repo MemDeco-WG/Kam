@@ -24,38 +24,37 @@ detect_build_tool() {
             return 1
         fi
     fi
- 
+
     echo "$BUILD_TOOL"
     return 0
 }
 
 build_multi_arch() {
-     local BUILD_TOOL=$1
-     # 检查传入的工具是否有效
-     if [ -z "$BUILD_TOOL" ]; then
-         echo "Error: Build tool not specified!" >&2
-         return 1
-     fi
-     # 编译aarch64架构
-     echo ""
-     echo "Building for aarch64-linux-android..."
-     if [ "$BUILD_TOOL" = "cross" ]; then
-         cross build --release --target aarch64-linux-android
-     else
-         cargo ndk build -t arm64-v8a --release
-     fi
-     # 编译x86_64架构
-     echo ""
-     echo "Building for x86_64-linux-android..."
-     if [ "$BUILD_TOOL" = "cross" ]; then
-         cross build --release --target x86_64-linux-android
-     else
-         cargo ndk build -t x86_64 --release
-     fi
-     return $?
- }
+    local BUILD_TOOL="$1"
 
+    # 检查传入的工具是否有效
+    if [ -z "$BUILD_TOOL" ]; then
+        echo "Error: Build tool not specified!" >&2
+        return 1
+    fi
 
+    # 编译aarch64架构
+    echo ""
+    echo "Building for aarch64-linux-android..."
+    if [ "$BUILD_TOOL" = "cross" ]; then
+        cross build --release --target aarch64-linux-android
+    else
+        cargo ndk build -t arm64-v8a --release
+    fi
 
+    # 编译x86_64架构
+    echo ""
+    echo "Building for x86_64-linux-android..."
+    if [ "$BUILD_TOOL" = "cross" ]; then
+        cross build --release --target x86_64-linux-android
+    else
+        cargo ndk build -t x86_64 --release
+    fi
 
-
+    return $?
+}

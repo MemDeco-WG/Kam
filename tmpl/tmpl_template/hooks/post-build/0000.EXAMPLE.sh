@@ -6,6 +6,7 @@
 # Do NOT hard-code paths like 'src/<id>'; reference the module source via $KAM_MODULE_ROOT
 # and artifacts via $KAM_DIST_DIR to avoid confusion across different module configurations.
 
+# shellcheck source=../lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 # Add your post-build logic here (e.g., signing the zip, uploading artifacts)

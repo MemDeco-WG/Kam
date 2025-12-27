@@ -16,6 +16,8 @@
 #
 
 # Load helpers
+# shellcheck source=../lib/utils.sh
+# shellcheck source=hooks/lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 log_info "Syncing hooks..."
