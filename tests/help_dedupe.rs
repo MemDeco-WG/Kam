@@ -4,6 +4,11 @@ use clap::{Arg, Command};
 /// `Arguments:` section of a clap help string by keeping only the last
 /// occurrence. This mirrors the behavior used when printing localized help
 /// (we prefer the translated entry, which is typically appended last).
+///
+/// In addition to collapsing duplicate argument blocks, this helper also
+/// normalizes the `Usage:` line by collapsing consecutive duplicate tokens
+/// (e.g. `[PATH] [PATH]` -> `[PATH]`) so the final help text contains a
+/// single usage placeholder where appropriate.
 fn dedupe_path_entries(help: &str) -> String {
     // Split into lines for simple scanning.
     let mut lines: Vec<&str> = help.split('\n').collect();
@@ -14,7 +19,31 @@ fn dedupe_path_entries(help: &str) -> String {
         .position(|l| l.trim_start().starts_with("Arguments:"));
     let start = match start_opt {
         Some(idx) => idx,
-        None => return help.to_string(),
+        None => {
+            // No Arguments: section; still normalize the Usage line and return.
+            let mut out_lines: Vec<String> = lines.into_iter().map(|s| s.to_string()).collect();
+            for ln in out_lines.iter_mut() {
+                if ln.trim_start().starts_with("Usage:") {
+                    let tokens: Vec<&str> = ln.split_whitespace().collect();
+                    if tokens.len() > 1 {
+                        let mut new_tokens: Vec<&str> = Vec::new();
+                        // Keep the 'Usage:' prefix and collapse consecutive duplicates.
+                        new_tokens.push(tokens[0]);
+                        for tok in tokens.into_iter().skip(1) {
+                            if new_tokens.last().map(|s| *s) != Some(tok) {
+                                new_tokens.push(tok);
+                            }
+                        }
+                        *ln = new_tokens.join(" ");
+                    }
+                }
+            }
+            let mut out = out_lines.join("\n");
+            if !out.ends_with('\n') {
+                out.push('\n');
+            }
+            return out;
+        }
     };
 
     // Find the end of the section: the next top-level header (line that ends with ':')
@@ -38,7 +67,28 @@ fn dedupe_path_entries(help: &str) -> String {
 
     // Nothing to dedupe if zero or one occurrence.
     if header_indices.len() <= 1 {
-        return help.to_string();
+        // Still normalize the Usage line even if there was nothing to remove.
+        let mut out_lines: Vec<String> = lines.into_iter().map(|s| s.to_string()).collect();
+        for ln in out_lines.iter_mut() {
+            if ln.trim_start().starts_with("Usage:") {
+                let tokens: Vec<&str> = ln.split_whitespace().collect();
+                if tokens.len() > 1 {
+                    let mut new_tokens: Vec<&str> = Vec::new();
+                    new_tokens.push(tokens[0]);
+                    for tok in tokens.into_iter().skip(1) {
+                        if new_tokens.last().map(|s| *s) != Some(tok) {
+                            new_tokens.push(tok);
+                        }
+                    }
+                    *ln = new_tokens.join(" ");
+                }
+            }
+        }
+        let mut out = out_lines.join("\n");
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        return out;
     }
 
     // For all occurrences except the last, compute the group range (header .. group_end).
@@ -68,6 +118,68 @@ fn dedupe_path_entries(help: &str) -> String {
         if !skipped {
             out_lines.push(lines[i].to_string());
             i += 1;
+        }
+    }
+
+    // Normalize the Usage line: collapse consecutive duplicated tokens while preserving order.
+    // Example: `Usage: kam install [OPTIONS] [PATH] [PATH]` -> `Usage: kam install [OPTIONS] [PATH]`
+    for ln in out_lines.iter_mut() {
+        if ln.trim_start().starts_with("Usage:") {
+            let tokens: Vec<&str> = ln.split_whitespace().collect();
+            if tokens.len() > 1 {
+                let mut new_tokens: Vec<&str> = Vec::new();
+                // Keep the 'Usage:' prefix and collapse ONLY consecutive duplicates.
+                new_tokens.push(tokens[0]);
+                for tok in tokens.into_iter().skip(1) {
+                    if new_tokens.last().map(|s| *s) != Some(tok) {
+                        new_tokens.push(tok);
+                    }
+                }
+                *ln = new_tokens.join(" ");
+            }
+        }
+    }
+
+    // If the Arguments: section contains headers (e.g. [PATH]), avoid duplicating
+    // those tokens in the Usage line by removing them there and keeping the
+    // authoritative single header in the Arguments section.
+    let mut arg_headers: Vec<String> = Vec::new();
+    if let Some(arg_start) = out_lines
+        .iter()
+        .position(|l| l.trim_start().starts_with("Arguments:"))
+    {
+        let mut j = arg_start + 1;
+        while j < out_lines.len() {
+            let t = out_lines[j].trim();
+            if !t.is_empty() && t.ends_with(':') {
+                break;
+            }
+            if t.starts_with('[') && t.ends_with(']') {
+                arg_headers.push(t.to_string());
+            }
+            j += 1;
+        }
+    }
+
+    if !arg_headers.is_empty() {
+        for ln in out_lines.iter_mut() {
+            if ln.trim_start().starts_with("Usage:") {
+                let tokens: Vec<&str> = ln.split_whitespace().collect();
+                if tokens.len() > 1 {
+                    let mut new_tokens: Vec<&str> = Vec::new();
+                    new_tokens.push(tokens[0]);
+                    for tok in tokens.into_iter().skip(1) {
+                        if arg_headers.iter().any(|h| h == tok) {
+                            // skip tokens that are represented in the Arguments section
+                            continue;
+                        }
+                        if new_tokens.last().map(|s| *s) != Some(tok) {
+                            new_tokens.push(tok);
+                        }
+                    }
+                    *ln = new_tokens.join(" ");
+                }
+            }
         }
     }
 
