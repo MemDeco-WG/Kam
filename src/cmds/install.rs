@@ -328,7 +328,7 @@ fn create_tempdir_with_fallback_override(
 
     // 2) Try the system default temp dir
     match tempfile::tempdir() {
-        Ok(td) => return Ok(td),
+        Ok(td) => Ok(td),
         Err(e) => {
             Utils::warn(&format!("Default tempdir() failed: {}", e));
             // 3) Try $HOME/.cache/kam/tmp
@@ -380,7 +380,7 @@ fn create_tempdir_with_fallback_override(
             }
 
             // If all attempts failed, return the original error
-            return Err(e);
+            Err(e)
         }
     }
 }
