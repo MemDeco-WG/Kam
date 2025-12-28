@@ -120,7 +120,7 @@ keywords = [
 license = "GPL-3.0"
 name = "kam"
 repository = "https://github.com/MemDeco-WG/Kam"
-version = "0.5.25"
+version = "0.5.26"
 
 [profile.release]
 codegen-units = 1
