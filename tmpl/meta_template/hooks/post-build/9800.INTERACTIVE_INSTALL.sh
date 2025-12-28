@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # shellcheck source=../lib/utils.sh
+# shellcheck source=Kam/KamHooks/lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 if [ "$KAM_INTERACTIVE" = "1" ]; then

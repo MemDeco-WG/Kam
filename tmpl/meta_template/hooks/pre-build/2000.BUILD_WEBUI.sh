@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # shellcheck source=../lib/utils.sh
+# shellcheck source=Kam/KamHooks/lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 log_warn " comment out to enable build webui !" && exit 0

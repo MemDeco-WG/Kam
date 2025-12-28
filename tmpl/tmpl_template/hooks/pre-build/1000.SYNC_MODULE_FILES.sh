@@ -5,6 +5,7 @@
 # - update.json in project root ($KAM_PROJECT_ROOT/update.json)
 
 # shellcheck source=../lib/utils.sh
+# shellcheck source=Kam/KamHooks/lib/utils.sh
 . "$KAM_HOOKS_ROOT/lib/utils.sh"
 
 require_command kam "kam CLI not found; cannot export files"
