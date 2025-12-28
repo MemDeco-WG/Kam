@@ -199,8 +199,13 @@ pub fn tr_key(key: &str) -> &str {
                 .unwrap_or_else(|| tr_try_with_colon_variants(key, zh_to_en).map_or(key, |en| en))
         }
         Language::Zh => {
-            // Prefer keyed translations first (key-based system)
+            // Prefer keyed translations first (key-based system).
+            // If a keyed Chinese translation is not available, fallback to keyed English
+            // translations so the user still sees a human-readable string instead of
+            // the raw key. If neither keyed map contains the entry, fall back to the
+            // literal-based conversion attempt (en->zh) and finally the key itself.
             keyed_zh(key)
+                .or_else(|| keyed_en(key))
                 .unwrap_or_else(|| tr_try_with_colon_variants(key, en_to_zh).map_or(key, |zh| zh))
         }
     }
@@ -998,7 +1003,91 @@ mod tests {
     #[serial]
     fn test_translate_zh_to_en() {
         set_language(Language::En);
-        assert_eq!(tr_key("配置项"), "Item");
+        assert_eq!(tr_key("感谢使用 Kam"), "Thanks for using Kam");
+    }
+
+    #[test]
+    #[serial]
+    fn test_repo_i18n_keys_present() {
+        // Ensure commonly used repo keys exist in at least one of the keyed maps
+        // (either English or Chinese). This avoids fragile tests when runtime
+        // overlays or partial translations are present; we accept presence in
+        // either map as success.
+        let keys = vec![
+            "repo.result_line_simple",
+            "repo.score_format",
+            "repo.no_results_for",
+            "repo.authors",
+            "repo.url",
+            "repo.version",
+            "repo.no_downloadable_zip_asset",
+            "repo.confirm_download",
+            "repo.skipped_download",
+            "repo.saved",
+            "repo.failed_to_download",
+            "repo.search.empty_query",
+        ];
+
+        // Collect keys missing in both maps for clearer debug output.
+        let mut missing: Vec<&str> = Vec::new();
+        for k in &keys {
+            let en_has = keyed_en_map().contains_key(*k);
+            let zh_has = keyed_zh_map().contains_key(*k);
+            if !en_has && !zh_has {
+                missing.push(*k);
+            }
+        }
+
+        if !missing.is_empty() {
+            // Print diagnostic information to help debug missing translations.
+            eprintln!("Missing repo i18n keys: {:?}", missing);
+
+            let en_repo_keys: Vec<_> = keyed_en_map()
+                .keys()
+                .filter(|k| k.starts_with("repo."))
+                .collect();
+            let zh_repo_keys: Vec<_> = keyed_zh_map()
+                .keys()
+                .filter(|k| k.starts_with("repo."))
+                .collect();
+
+            eprintln!("EN repo keys ({}): {:?}", en_repo_keys.len(), en_repo_keys);
+            eprintln!("ZH repo keys ({}): {:?}", zh_repo_keys.len(), zh_repo_keys);
+        }
+
+        assert!(
+            missing.is_empty(),
+            "Missing i18n keys in en/zh maps: {:?}",
+            missing
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_parse_en_toml() {
+        // Ensure the shipped English TOML is syntactically valid and contains a [repo] table.
+        let t = match toml::from_str::<toml::value::Table>(include_str!("i18n/en.toml")) {
+            Ok(tbl) => tbl,
+            Err(e) => panic!("Failed to parse src/i18n/en.toml as TOML: {}", e),
+        };
+        assert!(
+            t.get("repo").is_some(),
+            "Expected top-level [repo] table in src/i18n/en.toml"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_parse_zh_toml() {
+        // Ensure the shipped Chinese TOML is syntactically valid and contains a [repo] table.
+        let t = match toml::from_str::<toml::value::Table>(include_str!("i18n/zh.toml")) {
+            Ok(tbl) => tbl,
+            Err(e) => panic!("Failed to parse src/i18n/zh.toml as TOML: {}", e),
+        };
+        assert!(
+            t.get("repo").is_some(),
+            "Expected top-level [repo] table in src/i18n/zh.toml"
+        );
     }
 
     #[test]

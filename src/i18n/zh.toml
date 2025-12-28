@@ -198,7 +198,34 @@ quiet = "抑制非必要输出"
 
 [cli.commands.repo]
 description = "从注册表搜索并下载模块。使用 `kam -Ss <term>` 搜索或 `kam -S <moduleId>` 下载模块。"
+
+[repo]
+download = "正在下载 {}"
+module_not_found_showing_similar = "未找到模块 '{}'；显示相似结果..."
+selected_module = "选择的模块：{}"
+skipped_selection = "已跳过选择"
+everything_up_to_date = "已是最新状态"
+updated_modules = "已更新 {} 个模块"
+index_synced = "索引已同步到 {}"
+index_force_synced = "索引已强制从 {} 同步到 {}"
+result_line = "{} - {} - {}{}"
+result_line_simple = "{} — {}{}"
+score_format = "  (得分：{:.2})"
+no_results_for = "未找到与 '{}' 匹配的结果"
+similar_packages_header = "共有 {} 个与 '{}' 类似的软件包："
+authors = "作者"
+url = "URL"
+version = "版本"
+no_downloadable_zip_asset = "未找到可下载的 ZIP 资源：'{}'"
+confirm_download = "确认是否下载模块 {} 的资源 {}？(y/N)"
+skipped_download = "跳过下载：{}"
+saved = "已保存到 {}"
+failed_to_download = "下载 {} 失败：{}"
+updated = "更新于"
 summary = "与模块注册表交互（搜索/下载）"
+
+[repo.search]
+empty_query = "搜索需要一个查询，例如：`-Ss <term>`"
 
 [cli.commands.repo.sync]
 description = "刷新注册表索引并保存到本地缓存，以便后续搜索无需重新下载索引。使用 `--force` 强制刷新。"
@@ -539,26 +566,7 @@ output_directory = "输出目录"
 output_file = "输出文件"
 package_size = "包大小"
 
-[repo]
-authors = "作者"
-confirm_download = "确认下载 '{}' [{}] ? [Y/n] "
-download = "下载：{}"
-everything_up_to_date = "已是最新"
-failed_to_download = "下载失败 {}: {}"
-module_not_found_showing_similar = "模块 '{}' 未找到。显示类似的模块："
-no_downloadable_zip_asset = "未找到模块 {} 的可下载 zip 资源"
-no_results_for = "未找到与 '{}' 相关的结果。"
-result_line = "{} - {} - {}{}"
-result_line_simple = "{} - {}{}"
-saved = "已保存：{}"
-score_format = "  (得分：{:.2})"
-selected_module = "已选择模块：{}"
-similar_packages_header = "共有 {} 个与 '{}' 类似的软件包："
-skipped_download = "已跳过下载：{}"
-skipped_selection = "已跳过选择。"
-updated = "更新时间"
-url = "网址"
-version = "版本"
+
 
 [repo.module_detail]
 asset = "资源：{}{}"
@@ -571,8 +579,7 @@ enter_number = "输入要安装的包的编号（或按回车跳过）："
 invalid_input_number = "输入无效。请输入一个数字。"
 invalid_selection_out_of_range = "选择无效。编号超出范围。"
 
-[repo.search]
-empty_query = "查询为空"
+
 
 [secret]
 cert_chain_imported = "证书链 '{}' 导入成功"

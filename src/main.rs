@@ -207,6 +207,10 @@ fn main() {
 
     // Localize top-level/global arguments (if translations exist).
     // Collect replacements first, then apply, to avoid borrowing issues.
+    //
+    // Avoid adding duplicate args: if an argument with the same id already exists
+    // on the command we skip re-adding it to prevent clap from panicking about
+    // duplicate long/short option names.
     {
         let mut replacements = Vec::new();
         for arg in cmd.get_arguments() {
@@ -217,8 +221,24 @@ fn main() {
                 replacements.push(arg.clone().help(tr.to_string()));
             }
         }
+
         if !replacements.is_empty() {
             for repl in replacements {
+                let repl_id = repl.get_id().as_str();
+                // If an arg with the same id already exists on this command, skip adding
+                // to avoid duplicate argument names (which causes a clap panic).
+                if cmd.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
+                    if std::env::var("KAM_DEBUG_I18N")
+                        .map(|v| v == "1")
+                        .unwrap_or(false)
+                    {
+                        eprintln!(
+                            "Skipping localization for arg '{}' (already present)",
+                            repl_id
+                        );
+                    }
+                    continue;
+                }
                 cmd = cmd.clone().arg(repl);
             }
         }
@@ -285,6 +305,40 @@ fn main() {
     //
     // `dedupe_help` was moved to module scope so it can be used for both explicit
     // help printing and parse-time error formatting.
+    //
+    // Debugging aid: when KAM_DEBUG_I18N=1, dump argument metadata to stderr
+    // so we can detect conflicting or duplicate long/short option names.
+    if std::env::var("KAM_DEBUG_I18N")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
+        eprintln!("KAM_DEBUG_I18N=1: dumping top-level arguments and subcommands...");
+
+        // Top-level arguments
+        for arg in cmd.get_arguments() {
+            let id = arg.get_id().as_str();
+            let long = arg.get_long().unwrap_or("");
+            let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
+            eprintln!("TOP ARG: id='{}' long='{}' short='{}'", id, long, short);
+        }
+
+        // Recursively dump subcommands and their arguments
+        fn dump_subs(c: &clap::Command, prefix: &str) {
+            for sub in c.get_subcommands() {
+                let name = sub.get_name();
+                eprintln!("SUBCMD: {}{}", prefix, name);
+                for a in sub.get_arguments() {
+                    let id = a.get_id().as_str();
+                    let long = a.get_long().unwrap_or("");
+                    let short = a.get_short().map(|c| c.to_string()).unwrap_or_default();
+                    eprintln!("  ARG: id='{}' long='{}' short='{}'", id, long, short);
+                }
+                dump_subs(sub, &format!("{}{} ", prefix, name));
+            }
+        }
+
+        dump_subs(&cmd, "");
+    }
 
     let matches = {
         // Collect argv and allow the CLI helper to insert `--` when appropriate so
@@ -409,6 +463,19 @@ fn main() {
         }
     };
 
+    // If the caller requested an explicit index update and they did not also provide
+    // pacman-style flags, perform the equivalent of `kam repo sync --force` and exit.
+    if cli.update_index && !cli.sync_flag && !cli.search_flag {
+        let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
+        match kam::cmds::repo::repo_sync_with_jobs(&base, true, None, cli.quiet) {
+            Ok(()) => return,
+            Err(e) => {
+                print_error_chain(&e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // Handle pacman-style top-level flags (-S / -s) before dispatching to subcommands.
     // - `-Ss <query>` performs a remote search
     // - `-S <moduleId>` downloads the latest release ZIP for the given module(s)
@@ -431,6 +498,18 @@ fn main() {
         } else {
             cli.targets.clone()
         };
+
+        // If `--update`/`-u` is present, perform a forced index sync before continuing.
+        if cli.update_index {
+            let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
+            match kam::cmds::repo::repo_sync_with_jobs(&base, true, None, cli.quiet) {
+                Ok(()) => {}
+                Err(e) => {
+                    print_error_chain(&e);
+                    std::process::exit(1);
+                }
+            }
+        }
 
         match kam::cmds::repo::handle_pacman_style(
             cli.sync_flag,
@@ -530,15 +609,24 @@ fn main() {
         Some(Commands::Env(args)) => kam::cmds::env::run(args),
         Some(Commands::About(args)) => kam::cmds::about::run(args),
         None => {
-            // Default behavior: fetch the modules index when no subcommand is provided.
-            let base = kam::cmds::repo::effective_base_url(None);
-            match kam::cmds::repo::repo_sync_with_jobs(&base, false, None, cli.quiet) {
-                Ok(()) => Ok(()),
-                Err(e) => {
-                    print_error_chain(&e);
+            // No subcommand provided: show top-level help (deduped) instead of performing background operations.
+            let mut tmp = cmd.clone();
+            let mut buf: Vec<u8> = Vec::new();
+            if tmp.write_long_help(&mut buf).is_ok() {
+                let raw = String::from_utf8_lossy(&buf);
+                let cleaned = dedupe_help(&raw);
+                print!("{}", cleaned);
+                if !cleaned.ends_with('\n') {
+                    println!();
+                }
+            } else {
+                if let Err(e) = tmp.print_long_help() {
+                    kam::utils::Utils::error(&format!("Failed to write help: {}", e));
                     std::process::exit(1);
                 }
+                println!();
             }
+            Ok(())
         }
     };
 

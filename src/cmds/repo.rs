@@ -292,15 +292,14 @@ fn process_module_download(
         }
     }
 
-    let (asset, release_label) = match chosen_asset {
-        Some((a, rname)) => (a, rname),
-        None => {
-            Utils::warn(&crate::i18n::tr_fmt(
-                "repo.no_downloadable_zip_asset",
-                &[&module_id],
-            ));
-            return Ok(());
-        }
+    let (asset, release_label) = if let Some((a, rname)) = chosen_asset {
+        (a, rname)
+    } else {
+        Utils::warn(&crate::i18n::tr_fmt(
+            "repo.no_downloadable_zip_asset",
+            &[&module_id],
+        ));
+        return Ok(());
     };
 
     // Print detailed info and ask for confirmation unless assume_yes
@@ -620,13 +619,16 @@ pub fn repo_sync_with_jobs(
     write_atomic(&path, &body)?;
 
     if force {
-        Utils::section(&format!(
-            "Index force-synced from {} -> {}",
-            url,
-            path.display()
-        ));
+        let msg = crate::i18n::tr_fmt(
+            "repo.index_force_synced",
+            &[&url, &path.display().to_string()],
+        );
+        Utils::section(&msg);
     } else {
-        Utils::success(&format!("Index synced to {}", path.display()));
+        Utils::success(&crate::i18n::tr_fmt(
+            "repo.index_synced",
+            &[&path.display().to_string()],
+        ));
     }
 
     // Parse the index and, if present, attempt to fetch each module's individual index with per-module progress
@@ -687,8 +689,9 @@ pub fn repo_sync_with_jobs(
 
     // If nothing requires network fetch, show a concise 'Everything up to date' and return.
     if need_fetch_count == 0 {
-        Utils::success("everything up to date");
-        top_pb.finish_with_message("everything up to date");
+        let msg = crate::i18n::tr_key("repo.everything_up_to_date");
+        Utils::success(msg);
+        top_pb.finish_with_message(msg);
         return Ok(());
     }
 
@@ -889,7 +892,15 @@ pub fn repo_sync_with_jobs(
     // If the workers did not actually update anything, tell the user that everything is up to date.
     let updated_total = updated_count.load(Ordering::SeqCst);
     if updated_total == 0 {
-        Utils::info(crate::i18n::tr_key("repo.everything_up_to_date"));
+        let msg = crate::i18n::tr_key("repo.everything_up_to_date");
+        Utils::success(msg);
+    } else {
+        // Always show a concise summary so users see an effect even when progress bars
+        // are suppressed (quiet/non-tty).
+        Utils::success(&crate::i18n::tr_fmt(
+            "repo.updated_modules",
+            &[&updated_total.to_string()],
+        ));
     }
 
     top_pb.finish();

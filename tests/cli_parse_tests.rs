@@ -90,3 +90,15 @@ fn parsing_combined_short_flags_with_quiet_and_target() {
     assert_eq!(cli.targets, vec!["MagicNet".to_string()]);
     assert!(cli.command.is_none());
 }
+
+#[test]
+fn parsing_update_flag_alone() {
+    // `kam -u` should set the update_index flag without other side effects.
+    let cli = Cli::try_parse_from_with_pacman(["kam", "-u"]).unwrap();
+
+    assert!(cli.update_index, "expected -u (update index) to be true");
+    assert!(!cli.sync_flag, "did not expect -S (sync) to be true");
+    assert!(!cli.search_flag, "did not expect -s (search) to be true");
+    assert!(cli.targets.is_empty(), "expected no targets");
+    assert!(cli.command.is_none(), "expected no subcommand");
+}
