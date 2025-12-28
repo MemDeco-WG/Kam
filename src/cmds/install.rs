@@ -289,8 +289,108 @@ fn expand_git_shorthand(s: &str) -> String {
 
 /// Clone a repository into a temporary directory preferring `gh` then `git`.
 /// Returns the TempDir (kept alive by caller) and the checkout path inside it.
+fn create_tempdir_with_fallback_override(
+    override_tmpdir: Option<&Path>,
+) -> Result<TempDir, io::Error> {
+    // If caller provided an override directory, try that first (useful for tests).
+    if let Some(ov) = override_tmpdir {
+        if fs::create_dir_all(ov).is_ok() {
+            if let Ok(td) = tempfile::tempdir_in(ov) {
+                return Ok(td);
+            } else {
+                Utils::warn(&format!(
+                    "Failed to create tempdir inside override: {}",
+                    ov.display()
+                ));
+            }
+        } else {
+            Utils::warn(&format!(
+                "Failed to create override tmp dir '{}'",
+                ov.display()
+            ));
+        }
+    }
+
+    // 1) If the user has explicitly set TMPDIR, try to use/create it first.
+    if let Ok(tmp_env) = std::env::var("TMPDIR") {
+        let p = PathBuf::from(tmp_env);
+        if let Err(e) = fs::create_dir_all(&p) {
+            Utils::warn(&format!("Failed to create TMPDIR '{}': {}", p.display(), e));
+        } else if let Ok(td) = tempfile::tempdir_in(&p) {
+            return Ok(td);
+        } else {
+            Utils::warn(&format!(
+                "Failed to create tempdir inside TMPDIR '{}'",
+                p.display()
+            ));
+        }
+    }
+
+    // 2) Try the system default temp dir
+    match tempfile::tempdir() {
+        Ok(td) => return Ok(td),
+        Err(e) => {
+            Utils::warn(&format!("Default tempdir() failed: {}", e));
+            // 3) Try $HOME/.cache/kam/tmp
+            if let Ok(home) = std::env::var("HOME") {
+                let p = PathBuf::from(home).join(".cache").join("kam").join("tmp");
+                if fs::create_dir_all(&p).is_ok() {
+                    if let Ok(td2) = tempfile::tempdir_in(&p) {
+                        Utils::warn(&format!("Using fallback tempdir: {}", p.display()));
+                        return Ok(td2);
+                    } else {
+                        Utils::warn(&format!(
+                            "Failed to create tempdir inside fallback: {}",
+                            p.display()
+                        ));
+                    }
+                }
+            }
+
+            // 4) Ensure std::env::temp_dir exists and try it
+            {
+                let p = std::env::temp_dir();
+                if fs::create_dir_all(&p).is_ok() {
+                    if let Ok(td2) = tempfile::tempdir_in(&p) {
+                        Utils::warn(&format!("Using fallback tempdir: {}", p.display()));
+                        return Ok(td2);
+                    } else {
+                        Utils::warn(&format!(
+                            "Failed to create tempdir inside fallback: {}",
+                            p.display()
+                        ));
+                    }
+                }
+            }
+
+            // 5) Try a per-project fallback (./.kam_tmp)
+            if let Ok(cwd) = std::env::current_dir() {
+                let p = cwd.join(".kam_tmp");
+                if fs::create_dir_all(&p).is_ok() {
+                    if let Ok(td2) = tempfile::tempdir_in(&p) {
+                        Utils::warn(&format!("Using fallback tempdir: {}", p.display()));
+                        return Ok(td2);
+                    } else {
+                        Utils::warn(&format!(
+                            "Failed to create tempdir inside fallback: {}",
+                            p.display()
+                        ));
+                    }
+                }
+            }
+
+            // If all attempts failed, return the original error
+            return Err(e);
+        }
+    }
+}
+
+fn create_tempdir_with_fallback() -> Result<TempDir, io::Error> {
+    create_tempdir_with_fallback_override(None)
+}
+
 fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
-    let tmp = tempfile::tempdir().map_err(KamError::Io)?;
+    let tmp = create_tempdir_with_fallback().map_err(KamError::Io)?;
     // We explicitly create a subdirectory to avoid ambiguity with how some CLIs behave.
     let dest = tmp.path().join("repo");
     // Try gh first
@@ -524,7 +624,7 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
 /// 判断是否为权限相关错误
 fn is_permission_error(output: &str) -> bool {
     let output_lower = output.to_lowercase();
-    output_lower.contains("permission denied") 
+    output_lower.contains("permission denied")
         || output_lower.contains("access denied")
         || output_lower.contains("operation not permitted")
         || output_lower.contains("sudo") && output_lower.contains("required")
@@ -533,12 +633,10 @@ fn is_permission_error(output: &str) -> bool {
 /// 判断是否为命令未找到错误
 fn is_command_not_found_error(output: &str) -> bool {
     let output_lower = output.to_lowercase();
-    output_lower.contains("not found") 
+    output_lower.contains("not found")
         || output_lower.contains("command not found")
         || output_lower.contains("no such file or directory")
 }
-
-
 
 /// Perform the actual install once we have an artifact path. Extracted from the
 /// original `run` implementation so both local and git-based flows can share it.
@@ -586,7 +684,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                     let should_try_su = crate::utils::command_exists("su")
                         && ((code == Some(126) || code == Some(127)) // cannot execute or not found
                             || !crate::utils::command_exists(&cli_bin)); // CLI binary doesn't exist
-                    
+
                     if should_try_su {
                         let cmd_str = std::iter::once(cli_bin.clone())
                             .chain(cli_args.iter().cloned())
@@ -627,7 +725,9 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                     }
                     // 退出代码为1直接报错
                     if code == Some(1) {
-                        return Err(KamError::CommandFailed("安装失败，检查安装脚本或者检查root授权".to_string()));
+                        return Err(KamError::CommandFailed(
+                            "安装失败，检查安装脚本或者检查root授权".to_string(),
+                        ));
                     } else {
                         // 其他退出代码提供详细信息
                         let error_msg = format!(
@@ -656,10 +756,9 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                 let s_out = String::from_utf8_lossy(&out.stdout);
                 let s_err = String::from_utf8_lossy(&out.stderr);
                 let combined = format!("{}{}", s_out, s_err);
-                
+
                 // 只有在真正的权限错误时才尝试使用 su
-                if is_permission_error(&combined) && crate::utils::command_exists("su")
-                {
+                if is_permission_error(&combined) && crate::utils::command_exists("su") {
                     let cmd_str = std::iter::once(cli_bin.clone())
                         .chain(cli_args.iter().cloned())
                         .map(|s| {
@@ -704,7 +803,9 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                 } else {
                     // 退出代码为1直接报错
                     if out.status.code() == Some(1) {
-                        Err(KamError::CommandFailed("安装失败，检查安装脚本或者检查root授权".to_string()))
+                        Err(KamError::CommandFailed(
+                            "安装失败，检查安装脚本或者检查root授权".to_string(),
+                        ))
                     } else {
                         // 其他退出代码显示详细信息
                         let error_msg = if args.verbose {
@@ -881,6 +982,28 @@ mod tests {
         assert!(
             res.is_err(),
             "Expected unknown flag '--stream' to cause parse error"
+        );
+    }
+
+    #[test]
+    fn tmpdir_override_is_created_and_used() {
+        use tempfile::tempdir;
+
+        // Create a base temporary directory we control
+        let base = tempdir().unwrap();
+        let fake = base.path().join("missing_tmpdir");
+
+        // Ensure the path doesn't already exist
+        assert!(!fake.exists());
+
+        // Use the override API instead of mutating process env
+        let td = super::create_tempdir_with_fallback_override(Some(&fake))
+            .expect("create_tempdir_with_fallback_override should succeed");
+        assert!(
+            td.path().starts_with(&fake),
+            "expected tempdir to be created under override TMPDIR ({}), got {}",
+            fake.display(),
+            td.path().display()
         );
     }
 }
