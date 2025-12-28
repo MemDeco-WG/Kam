@@ -1,12 +1,24 @@
 [package]
-authors = ["LightJunction"]
+name = "kam"
+version = "0.5.26"
+edition = "2024"
+description = "A lightweight, networkless CLI for scaffolding and packaging Magisk/Kernelsu/APU/Anykernel3/Astrbot/... modules."
+documentation = "https://github.com/MemDeco-WG/Kam/blob/main/README.md"
+homepage = "https://github.com/MemDeco-WG/Kam"
+repository = "https://github.com/MemDeco-WG/Kam"
+license = "GPL-3.0"
+keywords = [
+  "ap",
+  "cli",
+  "kernelsu",
+  "magisk",
+]
+# `package.authors` is deprecated; moved to `package.metadata.authors`
+# authors = ["LightJunction"]
 categories = [
   "command-line-utilities",
   "development-tools",
 ]
-description = "A lightweight, networkless CLI for scaffolding and packaging Magisk/Kernelsu/APU/Anykernel3/Astrbot/... modules."
-documentation = "https://github.com/MemDeco-WG/Kam/blob/main/README.md"
-edition = "2024"
 exclude = [
   "/tmpl",
   "ModuleWebUI",
@@ -16,17 +28,9 @@ exclude = [
   "target",
   "templates",
 ]
-homepage = "https://github.com/MemDeco-WG/Kam"
-keywords = [
-  "ap",
-  "cli",
-  "kernelsu",
-  "magisk",
-]
-license = "GPL-3.0"
-name = "kam"
-repository = "https://github.com/MemDeco-WG/Kam"
-version = "0.5.26"
+
+[package.metadata]
+authors = ["LightJunction"]
 
 [dependencies]
 base64 = "0.22.1"
