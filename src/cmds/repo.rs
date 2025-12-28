@@ -263,6 +263,16 @@ pub fn handle_pacman_style(
 }
 
 /// Helper function to process module download with asset selection and confirmation
+fn parse_confirm_input(input: &str, default_yes: bool) -> bool {
+    let s = input.trim();
+    if s.is_empty() {
+        default_yes
+    } else {
+        let s = s.to_ascii_lowercase();
+        s == "y" || s == "yes"
+    }
+}
+
 fn process_module_download(
     md: &ModuleDetail,
     module_id: &str,
@@ -340,9 +350,8 @@ fn process_module_download(
         let mut input = String::new();
         stdin().read_line(&mut input).map_err(KamError::Io)?;
         let input_trimmed = input.trim();
-        let ok = input_trimmed.is_empty()
-            || input_trimmed.to_lowercase() == "y"
-            || input_trimmed.to_lowercase() == "yes";
+        // Interpret empty input according to the prompt's default (here: (y/N) -> default is false)
+        let ok = parse_confirm_input(input_trimmed, false);
         if !ok {
             Utils::warn(&crate::i18n::tr_fmt("repo.skipped_download", &[&module_id]));
         }
@@ -1528,6 +1537,20 @@ mod tests {
                 .map(|a| !a.is_empty())
                 .unwrap_or(false)
         }));
+    }
+
+    #[test]
+    fn test_parse_confirm_input() {
+        // empty -> default false (prompt shows (y/N))
+        assert_eq!(parse_confirm_input("", false), false);
+        // empty -> default true when default_yes is true
+        assert_eq!(parse_confirm_input("", true), true);
+        assert_eq!(parse_confirm_input("y", false), true);
+        assert_eq!(parse_confirm_input("Y", false), true);
+        assert_eq!(parse_confirm_input("yes", false), true);
+        assert_eq!(parse_confirm_input("n", true), false);
+        // whitespace counts as empty
+        assert_eq!(parse_confirm_input("   ", false), false);
     }
 
     #[test]
