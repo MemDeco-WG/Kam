@@ -278,6 +278,21 @@ fn main() {
             // Apply argument replacements (adding an Arg with the same id will
             // overwrite the previous definition in clap's builder).
             for repl in arg_repls {
+                let repl_id = repl.get_id().as_str();
+                // If an arg with the same id already exists on this subcommand, skip adding
+                // to avoid duplicate argument names (which can cause a clap panic).
+                if sub.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
+                    if std::env::var("KAM_DEBUG_I18N")
+                        .map(|v| v == "1")
+                        .unwrap_or(false)
+                    {
+                        eprintln!(
+                            "Skipping localization for arg '{}' (already present)",
+                            repl_id
+                        );
+                    }
+                    continue;
+                }
                 *sub = sub.clone().arg(repl);
             }
 

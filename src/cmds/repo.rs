@@ -218,7 +218,9 @@ pub fn handle_pacman_style(
 
         for module_id in targets.iter() {
             let section_title = crate::i18n::tr_fmt("repo.download", &[&module_id]);
-            Utils::section(&section_title);
+            if !quiet {
+                Utils::section(&section_title);
+            }
 
             // Fetch module details
             let _md = match fetch_module_detail(&client, module_id, &base) {
@@ -354,10 +356,12 @@ fn process_module_download(
     // Proceed to download
     match download_asset(client, asset, None, quiet) {
         Ok(path) => {
-            Utils::success(&crate::i18n::tr_fmt(
-                "repo.saved",
-                &[&path.display().to_string()],
-            ));
+            if !quiet {
+                Utils::success(&crate::i18n::tr_fmt(
+                    "repo.saved",
+                    &[&path.display().to_string()],
+                ));
+            }
         }
         Err(e) => {
             Utils::error(&crate::i18n::tr_fmt(
@@ -618,17 +622,19 @@ pub fn repo_sync_with_jobs(
     let path = index_cache_path(base_url)?;
     write_atomic(&path, &body)?;
 
-    if force {
-        let msg = crate::i18n::tr_fmt(
-            "repo.index_force_synced",
-            &[&url, &path.display().to_string()],
-        );
-        Utils::section(&msg);
-    } else {
-        Utils::success(&crate::i18n::tr_fmt(
-            "repo.index_synced",
-            &[&path.display().to_string()],
-        ));
+    if !quiet {
+        if force {
+            let msg = crate::i18n::tr_fmt(
+                "repo.index_force_synced",
+                &[&url, &path.display().to_string()],
+            );
+            Utils::section(&msg);
+        } else {
+            Utils::success(&crate::i18n::tr_fmt(
+                "repo.index_synced",
+                &[&path.display().to_string()],
+            ));
+        }
     }
 
     // Parse the index and, if present, attempt to fetch each module's individual index with per-module progress
@@ -647,11 +653,13 @@ pub fn repo_sync_with_jobs(
     }
     // Report how long it took to resolve the index into module entries
     let duration_ms = op_start.elapsed().as_millis();
-    Utils::info(&format!(
-        "Resolved {} modules in {}ms",
-        entries.len(),
-        duration_ms
-    ));
+    if !quiet {
+        Utils::info(&format!(
+            "Resolved {} modules in {}ms",
+            entries.len(),
+            duration_ms
+        ));
+    }
 
     // MultiProgress will nicely render the master spinner above per-module bars.
     let mp = MultiProgress::new();
@@ -689,6 +697,11 @@ pub fn repo_sync_with_jobs(
 
     // If nothing requires network fetch, show a concise 'Everything up to date' and return.
     if need_fetch_count == 0 {
+        // If quiet mode, just finish the progress spinner and return silently.
+        if quiet {
+            top_pb.finish();
+            return Ok(());
+        }
         let msg = crate::i18n::tr_key("repo.everything_up_to_date");
         Utils::success(msg);
         top_pb.finish_with_message(msg);
@@ -891,16 +904,18 @@ pub fn repo_sync_with_jobs(
 
     // If the workers did not actually update anything, tell the user that everything is up to date.
     let updated_total = updated_count.load(Ordering::SeqCst);
-    if updated_total == 0 {
-        let msg = crate::i18n::tr_key("repo.everything_up_to_date");
-        Utils::success(msg);
-    } else {
-        // Always show a concise summary so users see an effect even when progress bars
-        // are suppressed (quiet/non-tty).
-        Utils::success(&crate::i18n::tr_fmt(
-            "repo.updated_modules",
-            &[&updated_total.to_string()],
-        ));
+    if !quiet {
+        if updated_total == 0 {
+            let msg = crate::i18n::tr_key("repo.everything_up_to_date");
+            Utils::success(msg);
+        } else {
+            // Always show a concise summary so users see an effect even when progress bars
+            // are suppressed (quiet/non-tty).
+            Utils::success(&crate::i18n::tr_fmt(
+                "repo.updated_modules",
+                &[&updated_total.to_string()],
+            ));
+        }
     }
 
     top_pb.finish();
