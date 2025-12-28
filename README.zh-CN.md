@@ -2,8 +2,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[![Version](https://img.shields.io/badge/version-0.5.17-blue.svg)](https://github.com/MemDeco-WG/Kam)
-
 [English](README.md) | 简体中文
 
 ## 📖 简介
