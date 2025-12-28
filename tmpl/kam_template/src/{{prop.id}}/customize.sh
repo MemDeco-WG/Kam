@@ -42,6 +42,9 @@ print "$(i18n "USAGE_GUIDE")"
 
 # import rich --> 这里有更多，比如 ask函数 confirm函数
 
+import arch
+support_arch arm64 # arm x86 x64
+
 ##################################
 # 备忘文档 -- 可删除               #
 # You can delete this section    #
