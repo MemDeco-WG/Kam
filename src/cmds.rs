@@ -13,6 +13,7 @@ pub mod repo;
 pub mod secret;
 pub mod secret_crypto;
 pub mod sign;
+pub mod termux;
 pub mod tmpl;
 pub mod toml;
 pub mod validate;
