@@ -84,7 +84,28 @@ pub struct TermuxArgs {
     #[arg(short = 'k', long = "kill", action = clap::ArgAction::SetTrue)]
     pub kill: bool,
 
-    /// Timeout in seconds for one-shot command execution (default: 60)
+    /// Helper: print Termux SSH preparation instructions (do not modify device automatically).
+    #[arg(long = "ssh-setup", action = clap::ArgAction::SetTrue)]
+    pub ssh_setup: bool,
+
+    /// Forward local tcp:8022 to device tcp:8022 for SSH (adb forward tcp:8022 tcp:8022).
+    #[arg(long = "ssh-forward", action = clap::ArgAction::SetTrue)]
+    pub ssh_forward: bool,
+
+    /// Push a local public key to Termux `~/.ssh/authorized_keys` using `adb push`.
+    /// Example: `--ssh-push-key ~/.ssh/id_rsa.pub`
+    #[arg(long = "ssh-push-key", value_name = "PATH")]
+    pub ssh_push_key: Option<String>,
+
+    /// Connect via SSH (will ensure a forward is set and spawn `ssh -p 8022 localhost`).
+    #[arg(long = "ssh-connect", action = clap::ArgAction::SetTrue)]
+    pub ssh_connect: bool,
+
+    /// SSH port to use for Termux SSH (default: 8022).
+    #[arg(long = "ssh-port", default_value_t = 8022)]
+    pub ssh_port: u16,
+
+    /// Timeout in seconds for adb operations (used by daemon/one-shot).
     #[arg(short = 't', long = "timeout", default_value_t = 60)]
     pub timeout: u64,
 }
@@ -96,6 +117,11 @@ pub struct TermuxArgs {
 /// - If `--kill` (`-k`) => kill the current daemon (if any) and return.
 /// - If `--daemon` (`-d`) => start a background (persistent) Termux session and return.
 /// - If `--command` (`-c`) is supplied => run one-shot, print stdout/stderr and return.
+/// - SSH helpers (non-destructive helpers to prepare/connect to Termux via SSH):
+///     * `--ssh-forward`             => run `adb forward tcp:8022 tcp:8022` and print status.
+///     * `--ssh-push-key <path>`     => push local public key to Termux `~/.ssh/authorized_keys` via `adb push`.
+///     * `--ssh-connect`             => set up forwarding then spawn `ssh -p 8022 localhost` (interactive).
+///     * `--ssh-setup`               => print concise Termux-side setup instructions (install openssh / start `sshd`).
 /// - Otherwise => start an interactive session (`adb shell -t "<login>"`) inheriting tty.
 ///
 /// Note: the daemon uses a pid file under $KAM_HOME/termux/daemon.pid and writes logs
@@ -300,105 +326,146 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
     }
 
     if args.daemon {
-        // Start background daemon session.
-        if !crate::utils::command_exists("nohup") {
-            Utils::error(&trf!("cli.commands.termux.daemon.no_nohup"));
-            return Ok(());
-        }
+        // Deprecated: previous background adb-based daemon mode used adb + root to start
+        // a remote Termux session. That approach is no longer supported.
+        // Prefer running Termux's `sshd` on the phone and using `--ssh-forward` / `--ssh-connect`.
+        Utils::warn(&trf!("cli.commands.termux.deprecated_daemon"));
+        return Ok(());
+    }
 
-        // Check existing pidfile
-        match read_pidfile() {
-            Ok(Some(pid)) if is_pid_running(pid) => {
-                Utils::error(&trf!("cli.commands.termux.daemon.already_running", pid));
-                return Ok(());
+    // SSH helper operations (forwarding / push key / connect / setup).
+    if args.ssh_forward {
+        // Run: adb [<device>] forward tcp:<port> tcp:<port>
+        let mut fwd_cmd = Command::new("adb");
+        fwd_cmd.args(&adb_base);
+        let port_spec = format!("tcp:{}", args.ssh_port);
+        fwd_cmd.arg("forward").arg(&port_spec).arg(&port_spec);
+        match fwd_cmd.status() {
+            Ok(s) if s.success() => {
+                Utils::success(&trf!("termux.ssh.forwarded", args.ssh_port));
             }
-            _ => {}
-        }
-
-        // Build the same login inner command as interactive mode
-        let login_inner = format!(
-            "D={}; U=$(stat -c %u $D/home); exec su $U -c \"cd $D/home && . $D/{}; exec $D/{}\"",
-            TERMUX_DATA_DIR, TERMUX_ENV_REL, TERMUX_LOGIN_REL
-        );
-        let remote_login = format!("su -c '{}'", login_inner);
-
-        // Prepare log file and spawn background process (nohup adb ... shell -t -t ...)
-        let log_path = match termux_log_path() {
-            Ok(p) => p,
-            Err(e) => {
-                Utils::error(&format!("Failed to create daemon log dir: {}", e));
-                return Ok(());
-            }
-        };
-
-        let log_file = match OpenOptions::new().create(true).append(true).open(&log_path) {
-            Ok(f) => f,
-            Err(e) => {
-                Utils::error(&format!("Failed to open daemon log file: {}", e));
-                return Ok(());
-            }
-        };
-        // Build nohup command
-        let mut cmd = Command::new("nohup");
-        cmd.arg("adb");
-        cmd.args(&adb_base);
-        cmd.arg("shell");
-        // Force remote PTY allocation for detached session by using `-t -t`
-        cmd.arg("-t");
-        cmd.arg("-t");
-        cmd.arg(remote_login);
-        cmd.stdin(Stdio::null());
-        // stdout/stderr -> log file
-        let log_clone = match log_file.try_clone() {
-            Ok(f) => f,
-            Err(e) => {
-                Utils::error(&format!("Failed to clone log file handle: {}", e));
-                return Ok(());
-            }
-        };
-        cmd.stdout(Stdio::from(log_file));
-        cmd.stderr(Stdio::from(log_clone));
-
-        match cmd.spawn() {
-            Ok(child) => {
-                let pid = child.id();
-                if let Err(e) = write_pidfile(pid) {
-                    Utils::error(&trf!(
-                        "cli.commands.termux.daemon.failed_to_write_pidfile",
-                        e
-                    ));
-                    // best-effort: still leave the child running
-                    return Ok(());
-                }
-                Utils::success(&trf!("cli.commands.termux.daemon.started", pid));
-                Utils::info(&trf!("cli.commands.termux.daemon.logs", log_path.display()));
+            Ok(s) => {
+                Utils::error(&trf!("termux.ssh.forward_failed", s.code().unwrap_or(-1)));
             }
             Err(e) => {
-                Utils::error(&trf!("cli.commands.termux.daemon.failed_to_start", e));
+                Utils::error(&trf!("termux.ssh.forward_failed_err", e));
             }
         }
         return Ok(());
     }
 
+    if let Some(pubkey_path) = args.ssh_push_key.as_ref() {
+        // Verify local key exists
+        if !std::path::Path::new(pubkey_path).exists() {
+            Utils::error(&trf!("termux.ssh.pubkey_missing", pubkey_path));
+            return Ok(());
+        }
+
+        // Ensure remote .ssh directory exists (best-effort)
+        let remote_ssh_dir = "/data/data/com.termux/files/home/.ssh";
+        let mkdir_status = Command::new("adb")
+            .args(&adb_base)
+            .arg("shell")
+            .arg(format!("mkdir -p {}", remote_ssh_dir))
+            .status();
+
+        if mkdir_status.is_err() || mkdir_status.unwrap().code().unwrap_or(1) != 0 {
+            Utils::error(&trf!("termux.ssh.remote_mkdir_failed"));
+            return Ok(());
+        }
+
+        // Push key
+        let dest = format!("{}/authorized_keys", remote_ssh_dir);
+        match Command::new("adb")
+            .args(&adb_base)
+            .arg("push")
+            .arg(pubkey_path)
+            .arg(&dest)
+            .status()
+        {
+            Ok(s) if s.success() => {
+                Utils::success(&trf!("termux.ssh.pushed_key", dest));
+            }
+            _ => {
+                Utils::error(&trf!("termux.ssh.push_failed"));
+            }
+        }
+        return Ok(());
+    }
+
+    if args.ssh_connect {
+        // Try to ensure forwarding is set up (best-effort)
+        let port_spec = format!("tcp:{}", args.ssh_port);
+        let _ = Command::new("adb")
+            .args(&adb_base)
+            .arg("forward")
+            .arg(&port_spec)
+            .arg(&port_spec)
+            .status();
+
+        Utils::info(&trf!("termux.ssh.connecting", args.ssh_port));
+        // Spawn ssh to localhost:<port>, attach to current tty
+        let ssh_status = Command::new("ssh")
+            .arg("localhost")
+            .arg("-p")
+            .arg(args.ssh_port.to_string())
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status();
+
+        match ssh_status {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                Utils::error(&trf!("termux.ssh.ssh_exited", s.code().unwrap_or(-1)));
+            }
+            Err(e) => {
+                Utils::error(&trf!("termux.ssh.ssh_failed", e));
+            }
+        }
+        return Ok(());
+    }
+
+    if args.ssh_setup {
+        // Print brief, safe instructions for preparing Termux (avoid automatic installation)
+        Utils::info(&trf!("termux.ssh.setup_instructions"));
+        Utils::info(&trf!("termux.ssh.setup_step1", "pkg update && pkg upgrade"));
+        Utils::info(&trf!("termux.ssh.setup_step2", "pkg install openssh"));
+        Utils::info(&trf!(
+            "termux.ssh.setup_step3",
+            "passwd  (set a password, e.g., 123456)"
+        ));
+        Utils::info(&trf!(
+            "termux.ssh.setup_step4",
+            "sshd    (start the SSH server; default port 8022)"
+        ));
+        Utils::info(&trf!(
+            "termux.ssh.setup_note",
+            args.ssh_port,
+            args.ssh_port,
+            args.ssh_port
+        ));
+        return Ok(());
+    }
+
     if let Some(cmd) = args.command {
-        // One-shot mode: base64 encode command to avoid shell escaping
-        let encoded = BASE64_ENGINE.encode(cmd.as_bytes());
+        // One-shot mode: execute command via SSH (requires Termux `sshd` + adb port forwarding).
+        let port_spec = format!("tcp:{}", args.ssh_port);
+        let _ = Command::new("adb")
+            .args(&adb_base)
+            .arg("forward")
+            .arg(&port_spec)
+            .arg(&port_spec)
+            .status();
 
-        // Construct remote pipeline: decode and run under Termux user's shell using a reusable template
-        let remote = TERMUX_ONESHOT_FMT
-            .replace("{DATA_DIR}", TERMUX_DATA_DIR)
-            .replace("{PAYLOAD}", &encoded)
-            .replace("{ENV}", TERMUX_ENV_REL)
-            .replace("{SH}", TERMUX_SH_REL);
-
-        let mut adb_cmd = vec!["adb".to_string()];
-        adb_cmd.extend(adb_base);
-        adb_cmd.push("shell".to_string());
-        adb_cmd.push(remote);
-
-        // Execute and capture output
-        match Command::new(&adb_cmd[0])
-            .args(&adb_cmd[1..])
+        // Use a shell on the remote side so complex commands are interpreted correctly.
+        match Command::new("ssh")
+            .arg("localhost")
+            .arg("-p")
+            .arg(args.ssh_port.to_string())
+            .arg("sh")
+            .arg("-lc")
+            .arg(cmd)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -411,78 +478,43 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
                 Ok(())
             }
             Err(e) => {
-                Utils::error(&format!("Failed to run adb/termux command: {}", e));
+                Utils::error(&trf!("termux.ssh.ssh_failed", e));
                 Ok(())
             }
         }
     } else {
-        // Interactive mode: build the login inner command
-        let login_inner = format!(
-            "D={}; U=$(stat -c %u $D/home); exec su $U -c \"cd $D/home && . $D/{}; exec $D/{}\"",
-            TERMUX_DATA_DIR, TERMUX_ENV_REL, TERMUX_LOGIN_REL
-        );
+        // Interactive mode: prefer SSH-based connection (requires Termux `sshd` on the device).
+        // Ensure adb port forwarding is set (best-effort), then spawn an interactive SSH session.
+        let port_spec = format!("tcp:{}", args.ssh_port);
+        let _ = Command::new("adb")
+            .args(&adb_base)
+            .arg("forward")
+            .arg(&port_spec)
+            .arg(&port_spec)
+            .status();
 
-        if is_android_host() {
-            // run locally with su
-            let status = Command::new("su")
-                .arg("-c")
-                .arg(&login_inner)
-                .stdin(Stdio::inherit())
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .status();
+        Utils::info(&trf!("termux.ssh.connecting", args.ssh_port));
+        let status = Command::new("ssh")
+            .arg("localhost")
+            .arg("-p")
+            .arg(args.ssh_port.to_string())
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status();
 
-            match status {
-                Ok(s) => {
-                    if s.success() {
-                        Ok(())
-                    } else {
-                        Utils::error(&format!("local su/termux exited with status: {}", s));
-                        Ok(())
-                    }
-                }
-                Err(e) => {
-                    Utils::error(&format!(
-                        "Failed to spawn local termux interactive session: {}",
-                        e
-                    ));
+        match status {
+            Ok(s) => {
+                if s.success() {
+                    Ok(())
+                } else {
+                    Utils::error(&trf!("termux.ssh.ssh_exited", s.code().unwrap_or(-1)));
                     Ok(())
                 }
             }
-        } else {
-            // fallback to adb path
-            let remote_login = format!("su -c '{}'", login_inner);
-
-            let mut adb_cmd = vec!["adb".to_string()];
-            adb_cmd.extend(adb_base);
-            adb_cmd.push("shell".to_string());
-            adb_cmd.push("-t".to_string());
-            adb_cmd.push(remote_login.to_string());
-
-            // Spawn and attach to terminal
-            let status = Command::new(&adb_cmd[0])
-                .args(&adb_cmd[1..])
-                .stdin(Stdio::inherit())
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .status();
-
-            match status {
-                Ok(s) => {
-                    if s.success() {
-                        Ok(())
-                    } else {
-                        Utils::error(&format!("adb/termux exited with status: {}", s));
-                        Ok(())
-                    }
-                }
-                Err(e) => {
-                    Utils::error(&format!(
-                        "Failed to spawn adb termux interactive session: {}",
-                        e
-                    ));
-                    Ok(())
-                }
+            Err(e) => {
+                Utils::error(&trf!("termux.ssh.ssh_failed", e));
+                Ok(())
             }
         }
     }
@@ -501,6 +533,11 @@ mod tests {
             daemon: false,
             list: false,
             kill: false,
+            ssh_setup: false,
+            ssh_forward: false,
+            ssh_push_key: None,
+            ssh_connect: false,
+            ssh_port: 8022,
             timeout: 60,
         };
         // In environments without adb available the command will return Ok(()) after printing an error.
@@ -544,6 +581,11 @@ mod tests {
             daemon: false,
             list: true,
             kill: false,
+            ssh_setup: false,
+            ssh_forward: false,
+            ssh_push_key: None,
+            ssh_connect: false,
+            ssh_port: 8022,
             timeout: 60,
         };
         // Should return Ok even when no adb is present; the command prints a friendly message.
@@ -587,6 +629,11 @@ mod tests {
             daemon: false,
             list: false,
             kill: true,
+            ssh_setup: false,
+            ssh_forward: false,
+            ssh_push_key: None,
+            ssh_connect: false,
+            ssh_port: 8022,
             timeout: 60,
         };
         // Should return Ok even when no adb is present; the command prints a friendly message.

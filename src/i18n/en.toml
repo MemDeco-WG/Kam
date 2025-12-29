@@ -1,0 +1,397 @@
+# Auto-generated i18n skeleton (EN)
+# Run scripts/generate_i18n_skeleton.py to refresh
+
+[cli]
+about = "About"
+long_about = "Long about"
+
+[cli.commands]
+[cli.commands.termux]
+conflicting_options = "Commands termux conflicting options"
+deprecated_daemon = "Daemon mode using adb is deprecated; use SSH-based workflow instead"
+
+[cli.commands.termux.daemon]
+listing = "Commands termux daemon listing {}"
+logs = "Commands termux daemon logs {}"
+failed_to_query_process = "Commands termux daemon failed to query process {}"
+not_running = "Commands termux daemon not running"
+killed = "Commands termux daemon killed {}"
+failed_to_kill = "Commands termux daemon failed to kill {} {}"
+failed_to_read_pidfile = "Commands termux daemon failed to read pidfile {}"
+no_nohup = "Commands termux daemon no nohup"
+already_running = "Commands termux daemon already running {}"
+failed_to_write_pidfile = "Commands termux daemon failed to write pidfile {}"
+started = "Commands termux daemon started {}"
+failed_to_start = "Commands termux daemon failed to start {}"
+
+[termux.ssh]
+forwarded = "Port forwarding established on localhost:{}"
+forward_failed = "Failed to set up port forwarding: {}"
+forward_failed_err = "Failed to run adb forward: {}"
+pubkey_missing = "Local public key not found: {}"
+remote_mkdir_failed = "Failed to create remote .ssh directory"
+pushed_key = "Pushed public key to {}"
+push_failed = "Failed to push public key via adb"
+connecting = "Connecting via SSH (ssh -p {} localhost)..."
+ssh_exited = "SSH exited with code {}"
+ssh_failed = "Failed to start ssh client: {}"
+ssh_missing = "SSH client not found on this machine; please install an SSH client (ssh) to connect to Termux"
+setup_instructions = "Termux SSH setup instructions:"
+setup_step1 = "Update packages: {}"
+setup_step2 = "Install openssh: {}"
+setup_step3 = "Set password: {}"
+setup_step4 = "Start sshd: {}"
+setup_note = "Then, on your PC: adb forward tcp:{} tcp:{} && ssh localhost -p {}"
+
+[config]
+set_success = "Set success {} {} {}"
+unset_success = "Unset success {} {}"
+builtin_keys = "Builtin keys"
+example = "Example"
+note_custom_keys = "Note custom keys"
+
+[config.interactive]
+enter_value_for_key = "Interactive enter value for key {}"
+title = "Interactive title"
+view_builtins = "Interactive view builtins"
+press_enter = "Interactive press enter"
+local_project_detected = "Interactive local project detected"
+local_project_not_detected = "Interactive local project not detected"
+global = "Interactive global"
+cancel = "Interactive cancel"
+select_target = "Interactive select target"
+aborted = "Interactive aborted"
+set_custom_key = "Interactive set custom key"
+show_current_config = "Interactive show current config"
+exit = "Interactive exit"
+choose_action = "Interactive choose action"
+select_option = "Interactive select option"
+invalid_selection = "Interactive invalid selection"
+enter_ui_language = "Interactive enter ui language"
+no_change = "Interactive no change"
+choose_root_manager = "Interactive choose root manager"
+enter_custom_key = "Interactive enter custom key"
+no_key_entered = "Interactive no key entered"
+make_more_changes = "Interactive make more changes"
+
+[config.interactive.menu]
+set_ui_language = "Interactive menu set ui language {}"
+set_root_manager = "Interactive menu set root manager {}"
+
+[config.interactive.error]
+conflict_with_subcommand = "cannot be used with subcommands"
+no_subcommand = "Interactive error no subcommand"
+
+[init]
+[init.interactive]
+enter_yes_no = "Interactive enter yes no"
+choice_local_path = "Interactive choice local path"
+choice_pull_default_templates = "Interactive choice pull default templates"
+choose_template = "Interactive choose template"
+enter_local_template_path = "Interactive enter local template path"
+non_interactive_fallback = "Interactive non interactive fallback"
+select_by_name_or_number = "Interactive select by name or number"
+enter_path_to_local_template = "Interactive enter path to local template"
+invalid_selection = "Interactive invalid selection {}"
+variable_note = "Interactive variable note {} {}"
+variable = "Interactive variable {}"
+help = "Interactive help {}"
+example = "Interactive example {}"
+default = "Interactive default {}"
+custom_value_choice = "Interactive custom value choice"
+select_value_for = "Interactive select value for {}"
+enter_custom_value_for = "Interactive enter custom value for {}"
+value_required = "Interactive value required {}"
+enter_value_for_index_or_value = "Interactive enter value for index or value {}"
+invalid_selection_index = "Interactive invalid selection index"
+value_is_not_choice_prompt = "Interactive value is not choice prompt"
+enter_true_false_for = "Interactive enter true false for {} {}"
+enter_true_or_false = "Interactive enter true or false"
+enter_value_for = "Interactive enter value for {}"
+template_directory_empty = "Interactive template directory empty"
+preview_continue = "Interactive preview continue"
+preview_exit = "Interactive preview exit"
+template_preview = "Interactive template preview {}"
+preview_cancelled = "Interactive preview cancelled"
+directory_preview_header = "Interactive directory preview header {}"
+end_of_directory_preview = "Interactive end of directory preview"
+preview_failed_read_dir = "Interactive preview failed read dir"
+preview_header = "Interactive preview header {}"
+preview_file_truncated = "Interactive preview file truncated"
+preview_file_empty = "Interactive preview file empty"
+preview_failed_read_file = "Interactive preview failed read file"
+preview_end = "Interactive preview end {}"
+preview_another_file = "Interactive preview another file"
+template_contents_showing_up_to_files = "Interactive template contents showing up to files {}"
+and_more_files = "Interactive and more files {}"
+path_to_create_project = "Interactive path to create project"
+inferred_id_invalid = "Interactive inferred id invalid {}"
+use_sanitized_module_id = "Interactive use sanitized module id {}"
+module_id_prompt = "Interactive module id prompt"
+invalid_module_id = "Interactive invalid module id {}"
+module_id_mismatch = "Interactive module id mismatch {} {}"
+set_module_id_to_basename = "Interactive set module id to basename"
+project_name = "Interactive project name"
+version = "Interactive version"
+author = "Interactive author"
+description = "Interactive description"
+save_base_values = "Interactive save base values"
+saved_base_values = "Interactive saved base values"
+loaded_template_from_temp = "Interactive loaded template from temp {}"
+gh_not_found = "Interactive gh not found"
+recommend_github_cli = "Interactive recommend github cli"
+helper_script = "Interactive helper script"
+cz_not_found = "Interactive cz not found"
+recommend_cz_install = "Interactive recommend cz install"
+confirm_proceed_create = "Interactive confirm proceed create"
+aborted = "Interactive aborted"
+title = "Interactive title"
+press_enter = "Interactive press enter"
+template_variables = "Interactive template variables"
+completed_successfully = "Interactive completed successfully"
+next_steps = "Interactive next steps"
+
+[repo]
+download = "Download {}"
+module_not_found_showing_similar = "Module not found showing similar {}"
+selected_module = "Selected module {}"
+no_downloadable_zip_asset = "No downloadable zip asset {}"
+confirm_download = "Confirm download {} {}"
+skipped_download = "Skipped download {}"
+saved = "Saved {}"
+failed_to_download = "Failed to download {} {}"
+index_force_synced = "Index force synced {} {}"
+index_synced = "Index synced {}"
+updated_modules = "Updated modules {}"
+no_results_for = "No results for {}"
+score_format = "Score format {} {}"
+result_line_simple = "Result line simple {} {} {}"
+similar_packages_header = "Similar packages header {} {}"
+result_line = "Result line {} {} {} {}"
+skipped_selection = "Skipped selection"
+everything_up_to_date = "Everything up to date"
+authors = "Authors"
+url = "Url"
+version = "Version"
+updated = "Updated"
+invalid_selection_out_of_range = "Invalid selection out of range"
+invalid_input_number = "Invalid input number"
+
+[repo.module_detail]
+title = "Module detail title {} {}"
+release = "Module detail release {}"
+asset = "Module detail asset {} {}"
+download_url = "Module detail download url {}"
+
+[repo.search]
+empty_query = "Search empty query"
+
+[repo.prompt]
+enter_number = "Prompt enter number"
+
+[env]
+no_kam_vars = "No kam vars"
+
+[env.docs]
+header = "Docs header"
+intro = "Docs intro"
+kam_tmpl_note = "Docs kam tmpl note"
+
+[install]
+section = "Section {}"
+executing = "Executing {} {}"
+installed = "Installed {} {}"
+trying_su = "Trying su {}"
+su_failed = "Su failed {}"
+cli_not_found = "Cli not found {}"
+package_not_found = "Package not found"
+
+[build]
+invalid_glob_pattern = "Invalid glob pattern {} {}"
+workspace_member_not_found = "Workspace member not found {}"
+skipping_no_kam_toml = "Skipping no kam toml {}"
+building_workspace_member = "Building workspace member {}"
+failed_to_build = "Failed to build {} {}"
+skipping_failed_load_kam_toml = "Skipping failed load kam toml {} {}"
+concurrent_building_members = "Concurrent building members {} {}"
+failed_workspace_members = "Failed workspace members {}"
+no_workspace_section = "No workspace section"
+no_workspace_members = "No workspace members"
+building_module_version = "Building module version {} {}"
+complete = "Complete"
+
+[hooks]
+skipping_hooks_for_template_packaging = "Skipping hooks for template packaging {}"
+invalid_env_variable_name = "Invalid env variable name {} {} {}"
+malformed_env_line = "Malformed env line {} {} {}"
+running_pre = "Running pre"
+skipping_template_packaging = "Skipping template packaging"
+running_post = "Running post"
+
+[packaging]
+source_directory_not_found = "Source directory not found {}"
+success_module_built = "Success module built {}"
+success_template_built = "Success template built {}"
+generating_module_prop = "Generating module prop"
+using_existing_module_prop_from_hook = "Using existing module prop from hook"
+files = "Files"
+packaging = "Packaging"
+
+[project]
+output_directory = "Output directory"
+header = "Header"
+build_time = "Build time"
+package_size = "Package size"
+output_file = "Output file"
+
+[validate]
+no_issues_kam_toml_valid = "No issues kam toml valid"
+failed = "Failed"
+passed_with_warnings = "Passed with warnings"
+
+[validate.prop]
+id_required = "Prop id required"
+id_invalid_characters = "Prop id invalid characters"
+name_required = "Prop name required"
+version_required = "Prop version required"
+version_code_should_be_positive = "Prop version code should be positive"
+description_required = "Prop description required"
+author_empty_recommended = "Prop author empty recommended"
+
+[validate.mmrl]
+[validate.mmrl.repo]
+license_recommended = "Mmrl repo license recommended"
+license_file = "Mmrl repo license file"
+readme_file = "Mmrl repo readme file"
+changelog_file = "Mmrl repo changelog file"
+
+[validate.errors]
+header = "Errors header"
+
+[validate.warnings]
+header = "Warnings header"
+
+[tmpl]
+use_import_command = "Use import command {}"
+no_templates_in_cache = "No templates in cache"
+
+[tmpl.export]
+no_templates_exported = "Export no templates exported"
+no_templates_specified = "Export no templates specified"
+
+[export]
+module_prop = "Module prop {}"
+module_json = "Module json {}"
+repo_json = "Repo json {}"
+track_json = "Track json {}"
+config_json = "Config json {}"
+update_json = "Update json {}"
+
+[secret]
+confirm_remove = "Confirm remove {}"
+no_secrets_stored = "No secrets stored"
+saved = "Saved {}"
+written_to = "Written to {} {}"
+removed = "Removed {}"
+exported = "Exported {} {}"
+imported = "Imported {}"
+failed_retrieve_public_key = "Failed retrieve public key {} {}"
+public_key_exported = "Public key exported {} {}"
+fetching_cert_from_github = "Fetching cert from github {}"
+cert_chain_imported = "Cert chain imported {}"
+fetching_root_ca = "Fetching root ca {}"
+failed_fetch_ca = "Failed fetch ca {}"
+failed_read_ca = "Failed read ca {}"
+root_ca_added = "Root ca added {}"
+root_ca_removed = "Root ca removed {}"
+stored_secrets = "Stored secrets"
+no_valid_cert_in_chain = "No valid cert in chain"
+no_cert_chain_in_issue = "No cert chain in issue"
+
+[secret.interactive]
+confirm_overwrite = "Interactive confirm overwrite {}"
+confirm_before_add = "Interactive confirm before add {} {} {}"
+summary_added = "Interactive summary added {} {} {}"
+title = "Interactive title"
+intro = "Interactive intro"
+choose_action = "Interactive choose action"
+select_option = "Interactive select option"
+invalid_selection = "Interactive invalid selection"
+enter_name = "Interactive enter name"
+no_name_entered = "Interactive no name entered"
+cancel = "Interactive cancel"
+choose_input_method = "Interactive choose input method"
+select_input_method = "Interactive select input method"
+enter_value = "Interactive enter value"
+no_value_entered = "Interactive no value entered"
+encryption_password = "Interactive encryption password"
+confirm_encryption_password = "Interactive confirm encryption password"
+summary = "Interactive summary"
+yes = "Interactive yes"
+aborted = "Interactive aborted"
+enter_file_path = "Interactive enter file path"
+no_file_entered = "Interactive no file entered"
+file_not_found = "Interactive file not found"
+
+[secret.interactive.storage]
+file = "Interactive storage file {}"
+keyring = "Interactive storage keyring"
+
+[secret.interactive.menu]
+add = "Interactive menu add"
+list = "Interactive menu list"
+get = "Interactive menu get"
+remove = "Interactive menu remove"
+exit = "Interactive menu exit"
+
+[secret.interactive.input_method]
+direct = "Interactive input method direct"
+file = "Interactive input method file"
+
+[secret.interactive.error]
+password_mismatch = "Interactive error password mismatch"
+conflict_with_subcommand = "cannot be used with subcommands"
+
+[secret.error]
+no_subcommand = "Error no subcommand"
+
+[common]
+file_fixed = "File fixed {}"
+
+[check]
+some_issues_found = "Some issues found"
+no_issues_found = "No issues found"
+
+[check.errors]
+header = "Errors header"
+
+[check.warnings]
+header = "Warnings header"
+
+[sign]
+signed = "Signed {} {}"
+no_src_or_dist = "No src or dist"
+failed_to_sign = "Failed to sign {} {}"
+
+[cache]
+template_added = "Template added {} {}"
+template_removed = "Template removed {}"
+no_templates = "No templates"
+local_cached_templates = "Local cached templates"
+cleaned_successfully = "Cleaned successfully"
+directory_empty_or_not_exists = "Directory empty or not exists"
+
+[cache.modules]
+index_entry = "Modules index entry {} {}"
+removed = "Modules removed {}"
+removed_module_cache = "Modules removed module cache {}"
+no_matching_cache_file = "Modules no matching cache file {}"
+index_files = "Modules index files"
+no_index_files = "Modules no index files"
+detail_cache = "Modules detail cache"
+cleaned_successfully = "Modules cleaned successfully"
+directory_empty_or_not_exists = "Modules directory empty or not exists"
+
+[about]
+[about.info]
+use_other_commands = "Info use other commands"

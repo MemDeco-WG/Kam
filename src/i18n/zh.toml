@@ -1,0 +1,397 @@
+# Auto-generated i18n skeleton (ZH)
+# Fill in translations before committing
+
+[termux.ssh]
+forwarded = "本地端口已转发到 localhost:{}"
+forward_failed = "端口转发失败：{}"
+forward_failed_err = "运行 adb forward 失败：{}"
+pubkey_missing = "本地公钥文件未找到：{}"
+remote_mkdir_failed = "无法创建远端 .ssh 目录（权限问题？）"
+pushed_key = "已将公钥推送到 {}"
+push_failed = "通过 adb 推送公钥失败"
+connecting = "正在通过 SSH 连接（ssh -p {} localhost）..."
+ssh_exited = "SSH 客户端退出，返回码 {}"
+ssh_failed = "启动 ssh 客户端失败：{}"
+ssh_missing = "未在本机找到 ssh 客户端；请安装 ssh（例如 OpenSSH）以连接 Termux"
+setup_instructions = "Termux SSH 准备步骤："
+setup_step1 = "1) 在 Termux 中运行：pkg update && pkg upgrade"
+setup_step2 = "2) 在 Termux 中运行：pkg install openssh"
+setup_step3 = "3) 在 Termux 中运行：passwd（建议设置如 123456 的简短密码）"
+setup_step4 = "4) 在 Termux 中运行：sshd（默认端口 {}）"
+setup_note = "随后在电脑端运行：adb forward tcp:{} tcp:{} && ssh localhost -p {}"
+
+
+[cli]
+about = ""
+long_about = ""
+
+[cli.commands]
+[cli.commands.termux]
+conflicting_options = ""
+
+[cli.commands.termux.daemon]
+listing = ""
+logs = ""
+failed_to_query_process = ""
+not_running = ""
+killed = ""
+failed_to_kill = ""
+failed_to_read_pidfile = ""
+no_nohup = ""
+already_running = ""
+failed_to_write_pidfile = ""
+started = ""
+failed_to_start = ""
+
+[config]
+set_success = ""
+unset_success = ""
+builtin_keys = ""
+example = ""
+note_custom_keys = ""
+
+[config.interactive]
+enter_value_for_key = ""
+title = ""
+view_builtins = ""
+press_enter = ""
+local_project_detected = ""
+local_project_not_detected = ""
+global = ""
+cancel = ""
+select_target = ""
+aborted = ""
+set_custom_key = ""
+show_current_config = ""
+exit = ""
+choose_action = ""
+select_option = ""
+invalid_selection = ""
+enter_ui_language = ""
+no_change = ""
+choose_root_manager = ""
+enter_custom_key = ""
+no_key_entered = ""
+make_more_changes = ""
+
+[config.interactive.menu]
+set_ui_language = ""
+set_root_manager = ""
+
+[config.interactive.error]
+conflict_with_subcommand = "不能与子命令一起使用"
+no_subcommand = ""
+
+[init]
+[init.interactive]
+enter_yes_no = ""
+choice_local_path = ""
+choice_pull_default_templates = ""
+choose_template = ""
+enter_local_template_path = ""
+non_interactive_fallback = ""
+select_by_name_or_number = ""
+enter_path_to_local_template = ""
+invalid_selection = ""
+variable_note = ""
+variable = ""
+help = ""
+example = ""
+default = ""
+custom_value_choice = ""
+select_value_for = ""
+enter_custom_value_for = ""
+value_required = ""
+enter_value_for_index_or_value = ""
+invalid_selection_index = ""
+value_is_not_choice_prompt = ""
+enter_true_false_for = ""
+enter_true_or_false = ""
+enter_value_for = ""
+template_directory_empty = ""
+preview_continue = ""
+preview_exit = ""
+template_preview = ""
+preview_cancelled = ""
+directory_preview_header = ""
+end_of_directory_preview = ""
+preview_failed_read_dir = ""
+preview_header = ""
+preview_file_truncated = ""
+preview_file_empty = ""
+preview_failed_read_file = ""
+preview_end = ""
+preview_another_file = ""
+template_contents_showing_up_to_files = ""
+and_more_files = ""
+path_to_create_project = ""
+inferred_id_invalid = ""
+use_sanitized_module_id = ""
+module_id_prompt = ""
+invalid_module_id = ""
+module_id_mismatch = ""
+set_module_id_to_basename = ""
+project_name = ""
+version = ""
+author = ""
+description = ""
+save_base_values = ""
+saved_base_values = ""
+loaded_template_from_temp = ""
+gh_not_found = ""
+recommend_github_cli = ""
+helper_script = ""
+cz_not_found = ""
+recommend_cz_install = ""
+confirm_proceed_create = ""
+aborted = ""
+title = ""
+press_enter = ""
+template_variables = ""
+completed_successfully = ""
+next_steps = ""
+
+[repo]
+download = ""
+module_not_found_showing_similar = ""
+selected_module = ""
+no_downloadable_zip_asset = ""
+confirm_download = ""
+skipped_download = ""
+saved = ""
+failed_to_download = ""
+index_force_synced = ""
+index_synced = ""
+updated_modules = ""
+no_results_for = ""
+score_format = ""
+result_line_simple = ""
+similar_packages_header = ""
+result_line = ""
+skipped_selection = ""
+everything_up_to_date = ""
+authors = ""
+url = ""
+version = ""
+updated = ""
+invalid_selection_out_of_range = ""
+invalid_input_number = ""
+
+[repo.module_detail]
+title = ""
+release = ""
+asset = ""
+download_url = ""
+
+[repo.search]
+empty_query = ""
+
+[repo.prompt]
+enter_number = ""
+
+[env]
+no_kam_vars = ""
+
+[env.docs]
+header = ""
+intro = ""
+kam_tmpl_note = ""
+
+[install]
+section = ""
+executing = ""
+installed = ""
+trying_su = ""
+su_failed = ""
+cli_not_found = ""
+package_not_found = ""
+
+[build]
+invalid_glob_pattern = ""
+workspace_member_not_found = ""
+skipping_no_kam_toml = ""
+building_workspace_member = ""
+failed_to_build = ""
+skipping_failed_load_kam_toml = ""
+concurrent_building_members = ""
+failed_workspace_members = ""
+no_workspace_section = ""
+no_workspace_members = ""
+building_module_version = ""
+complete = ""
+
+[hooks]
+skipping_hooks_for_template_packaging = ""
+invalid_env_variable_name = ""
+malformed_env_line = ""
+running_pre = ""
+skipping_template_packaging = ""
+running_post = ""
+
+[packaging]
+source_directory_not_found = ""
+success_module_built = ""
+success_template_built = ""
+generating_module_prop = ""
+using_existing_module_prop_from_hook = ""
+files = ""
+packaging = ""
+
+[project]
+output_directory = ""
+header = ""
+build_time = ""
+package_size = ""
+output_file = ""
+
+[validate]
+no_issues_kam_toml_valid = ""
+failed = ""
+passed_with_warnings = ""
+
+[validate.prop]
+id_required = ""
+id_invalid_characters = ""
+name_required = ""
+version_required = ""
+version_code_should_be_positive = ""
+description_required = ""
+author_empty_recommended = ""
+
+[validate.mmrl]
+[validate.mmrl.repo]
+license_recommended = ""
+license_file = ""
+readme_file = ""
+changelog_file = ""
+
+[validate.errors]
+header = ""
+
+[validate.warnings]
+header = ""
+
+[tmpl]
+use_import_command = ""
+no_templates_in_cache = ""
+
+[tmpl.export]
+no_templates_exported = ""
+no_templates_specified = ""
+
+[export]
+module_prop = ""
+module_json = ""
+repo_json = ""
+track_json = ""
+config_json = ""
+update_json = ""
+
+[secret]
+confirm_remove = ""
+no_secrets_stored = ""
+saved = ""
+written_to = ""
+removed = ""
+exported = ""
+imported = ""
+failed_retrieve_public_key = ""
+public_key_exported = ""
+fetching_cert_from_github = ""
+cert_chain_imported = ""
+fetching_root_ca = ""
+failed_fetch_ca = ""
+failed_read_ca = ""
+root_ca_added = ""
+root_ca_removed = ""
+stored_secrets = ""
+no_valid_cert_in_chain = ""
+no_cert_chain_in_issue = ""
+
+[secret.interactive]
+confirm_overwrite = ""
+confirm_before_add = ""
+summary_added = ""
+title = ""
+intro = ""
+choose_action = ""
+select_option = ""
+invalid_selection = ""
+enter_name = ""
+no_name_entered = ""
+cancel = ""
+choose_input_method = ""
+select_input_method = ""
+enter_value = ""
+no_value_entered = ""
+encryption_password = ""
+confirm_encryption_password = ""
+summary = ""
+yes = ""
+aborted = ""
+enter_file_path = ""
+no_file_entered = ""
+file_not_found = ""
+
+[secret.interactive.storage]
+file = ""
+keyring = ""
+
+[secret.interactive.menu]
+add = ""
+list = ""
+get = ""
+remove = ""
+exit = ""
+
+[secret.interactive.input_method]
+direct = ""
+file = ""
+
+[secret.interactive.error]
+password_mismatch = ""
+conflict_with_subcommand = "不能与子命令一起使用"
+
+[secret.error]
+no_subcommand = ""
+
+[common]
+file_fixed = ""
+
+[check]
+some_issues_found = ""
+no_issues_found = ""
+
+[check.errors]
+header = ""
+
+[check.warnings]
+header = ""
+
+[sign]
+signed = ""
+no_src_or_dist = ""
+failed_to_sign = ""
+
+[cache]
+template_added = ""
+template_removed = ""
+no_templates = ""
+local_cached_templates = ""
+cleaned_successfully = ""
+directory_empty_or_not_exists = ""
+
+[cache.modules]
+index_entry = ""
+removed = ""
+removed_module_cache = ""
+no_matching_cache_file = ""
+index_files = ""
+no_index_files = ""
+detail_cache = ""
+cleaned_successfully = ""
+directory_empty_or_not_exists = ""
+
+[about]
+[about.info]
+use_other_commands = ""
