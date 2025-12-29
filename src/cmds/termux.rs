@@ -331,7 +331,7 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
             }
         };
 
-        let mut log_file = match OpenOptions::new().create(true).append(true).open(&log_path) {
+        let log_file = match OpenOptions::new().create(true).append(true).open(&log_path) {
             Ok(f) => f,
             Err(e) => {
                 Utils::error(&format!("Failed to open daemon log file: {}", e));
