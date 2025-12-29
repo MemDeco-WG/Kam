@@ -17,7 +17,9 @@
 use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
 use clap::Args;
-use std::path::Path;
+use std::fs;
+use std::fs::OpenOptions;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::errors::KamError;
@@ -60,13 +62,27 @@ fn is_android_host() -> bool {
 #[derive(Args, Debug)]
 pub struct TermuxArgs {
     /// Optional adb device id (from `adb devices`). If omitted the default adb device is used.
-    #[arg(short = 'd', long = "device")]
+    /// NOTE: short flag changed to `-D` to reserve `-d` for `--daemon`.
+    #[arg(short = 'D', long = "device")]
     pub device: Option<String>,
 
     /// Execute a single command inside Termux and exit (non-interactive).
     /// Example: kam termux -c "ls -la ~/.ssh"
     #[arg(short = 'c', long = "command")]
     pub command: Option<String>,
+
+    /// Start a persistent Termux session in the background (daemon mode).
+    /// Use `kam termux -l` to list the daemon or `kam termux -k` to kill it.
+    #[arg(short = 'd', long = "daemon", action = clap::ArgAction::SetTrue)]
+    pub daemon: bool,
+
+    /// List the current Termux daemon process (if any).
+    #[arg(short = 'l', long = "list", action = clap::ArgAction::SetTrue)]
+    pub list: bool,
+
+    /// Kill the current Termux daemon process.
+    #[arg(short = 'k', long = "kill", action = clap::ArgAction::SetTrue)]
+    pub kill: bool,
 
     /// Timeout in seconds for one-shot command execution (default: 60)
     #[arg(short = 't', long = "timeout", default_value_t = 60)]
@@ -75,17 +91,197 @@ pub struct TermuxArgs {
 
 /// Execute `termux` command.
 ///
-/// - If `args.command` is Some => run one-shot, print stdout/stderr and return.
-/// - Otherwise => run interactive session (`adb shell -t "<login>"`) inheriting stdin/stdout/stderr.
+/// Behavior:
+/// - If `--list` (`-l`) => show the current daemon process (if any) and return.
+/// - If `--kill` (`-k`) => kill the current daemon (if any) and return.
+/// - If `--daemon` (`-d`) => start a background (persistent) Termux session and return.
+/// - If `--command` (`-c`) is supplied => run one-shot, print stdout/stderr and return.
+/// - Otherwise => start an interactive session (`adb shell -t "<login>"`) inheriting tty.
+///
+/// Note: the daemon uses a pid file under $KAM_HOME/termux/daemon.pid and writes logs
+/// to $KAM_HOME/termux/daemon.log.
 pub fn run(args: TermuxArgs) -> Result<(), KamError> {
-    // Helper to build adb base args
+    // Helper to build adb base args (device selection)
     let mut adb_base: Vec<String> = Vec::new();
     if let Some(ref d) = args.device {
         adb_base.push("-s".to_string());
         adb_base.push(d.clone());
     }
 
-    // Check adb presence first for both modes
+    // Local helpers for daemon management (store pid/log under Kam home)
+    fn termux_daemon_dir() -> Result<PathBuf, KamError> {
+        let base = crate::utils::kam_home_dir()?;
+        let dir = base.join("termux");
+        if !dir.exists() {
+            fs::create_dir_all(&dir)?;
+        }
+        Ok(dir)
+    }
+
+    fn termux_pid_path() -> Result<PathBuf, KamError> {
+        Ok(termux_daemon_dir()?.join("daemon.pid"))
+    }
+
+    fn termux_log_path() -> Result<PathBuf, KamError> {
+        Ok(termux_daemon_dir()?.join("daemon.log"))
+    }
+
+    fn read_pidfile() -> Result<Option<u32>, KamError> {
+        let p = termux_pid_path()?;
+        if !p.exists() {
+            return Ok(None);
+        }
+        let s = fs::read_to_string(&p)?;
+        match s.trim().parse::<u32>() {
+            Ok(pid) => Ok(Some(pid)),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn write_pidfile(pid: u32) -> Result<(), KamError> {
+        let p = termux_pid_path()?;
+        fs::write(p, pid.to_string())?;
+        Ok(())
+    }
+
+    fn remove_pidfile() -> Result<(), KamError> {
+        let p = termux_pid_path()?;
+        if p.exists() {
+            fs::remove_file(p)?;
+        }
+        Ok(())
+    }
+
+    fn is_pid_running(pid: u32) -> bool {
+        match Command::new("ps")
+            .arg("-p")
+            .arg(pid.to_string())
+            .arg("-o")
+            .arg("pid=")
+            .output()
+        {
+            Ok(out) => out.status.success() && !out.stdout.is_empty(),
+            Err(_) => false,
+        }
+    }
+
+    // Validate conflicting action flags: only one of daemon/list/kill/command should be used at once.
+    let mut action_count = 0;
+    if args.list {
+        action_count += 1;
+    }
+    if args.kill {
+        action_count += 1;
+    }
+    if args.daemon {
+        action_count += 1;
+    }
+    if args.command.is_some() {
+        action_count += 1;
+    }
+    if action_count > 1 {
+        Utils::error(&trf!("cli.commands.termux.conflicting_options"));
+        return Ok(());
+    }
+
+    // Handle list/kill operations first (they do not require adb)
+    if args.list {
+        match read_pidfile() {
+            Ok(Some(pid)) => {
+                if is_pid_running(pid) {
+                    match Command::new("ps")
+                        .arg("-p")
+                        .arg(pid.to_string())
+                        .arg("-o")
+                        .arg("pid=,cmd=")
+                        .output()
+                    {
+                        Ok(out) => {
+                            let info = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                            if !info.is_empty() {
+                                Utils::info(&trf!("cli.commands.termux.daemon.listing", info));
+                            } else {
+                                Utils::info(&trf!(
+                                    "cli.commands.termux.daemon.listing",
+                                    format!("pid {}", pid)
+                                ));
+                            }
+                            if let Ok(lp) = termux_log_path() {
+                                Utils::info(&trf!("cli.commands.termux.daemon.logs", lp.display()));
+                            }
+                        }
+                        Err(e) => {
+                            Utils::error(&trf!(
+                                "cli.commands.termux.daemon.failed_to_query_process",
+                                e
+                            ));
+                        }
+                    }
+                } else {
+                    Utils::info(&trf!("cli.commands.termux.daemon.not_running"));
+                    // stale pidfile, remove it
+                    let _ = remove_pidfile();
+                }
+            }
+            Ok(None) => {
+                Utils::info(&trf!("cli.commands.termux.daemon.not_running"));
+            }
+            Err(e) => {
+                Utils::error(&format!("Failed to read daemon pidfile: {}", e));
+            }
+        }
+        return Ok(());
+    }
+
+    if args.kill {
+        match read_pidfile() {
+            Ok(Some(pid)) => {
+                if is_pid_running(pid) {
+                    match Command::new("kill").arg(pid.to_string()).status() {
+                        Ok(s) => {
+                            if s.success() {
+                                let _ = remove_pidfile();
+                                Utils::success(&trf!("cli.commands.termux.daemon.killed", pid));
+                            } else {
+                                let code = s
+                                    .code()
+                                    .map(|c| c.to_string())
+                                    .unwrap_or_else(|| "unknown".to_string());
+                                Utils::error(&trf!(
+                                    "cli.commands.termux.daemon.failed_to_kill",
+                                    pid,
+                                    code
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            Utils::error(&trf!(
+                                "cli.commands.termux.daemon.failed_to_kill",
+                                pid,
+                                e
+                            ));
+                        }
+                    }
+                } else {
+                    Utils::info(&trf!("cli.commands.termux.daemon.not_running"));
+                    let _ = remove_pidfile();
+                }
+            }
+            Ok(None) => {
+                Utils::info(&trf!("cli.commands.termux.daemon.not_running"));
+            }
+            Err(e) => {
+                Utils::error(&trf!(
+                    "cli.commands.termux.daemon.failed_to_read_pidfile",
+                    e
+                ));
+            }
+        }
+        return Ok(());
+    }
+
+    // At this point: either daemon start, one-shot, or interactive.
+    // Check for adb presence (required for starting daemon, one-shot or remote interactive)
     match Command::new("adb").arg("version").output() {
         Ok(v) => {
             if !v.status.success() {
@@ -101,6 +297,87 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
             );
             return Ok(());
         }
+    }
+
+    if args.daemon {
+        // Start background daemon session.
+        if !crate::utils::command_exists("nohup") {
+            Utils::error(&trf!("cli.commands.termux.daemon.no_nohup"));
+            return Ok(());
+        }
+
+        // Check existing pidfile
+        match read_pidfile() {
+            Ok(Some(pid)) if is_pid_running(pid) => {
+                Utils::error(&trf!("cli.commands.termux.daemon.already_running", pid));
+                return Ok(());
+            }
+            _ => {}
+        }
+
+        // Build the same login inner command as interactive mode
+        let login_inner = format!(
+            "D={}; U=$(stat -c %u $D/home); exec su $U -c \"cd $D/home && . $D/{}; exec $D/{}\"",
+            TERMUX_DATA_DIR, TERMUX_ENV_REL, TERMUX_LOGIN_REL
+        );
+        let remote_login = format!("su -c '{}'", login_inner);
+
+        // Prepare log file and spawn background process (nohup adb ... shell -t -t ...)
+        let log_path = match termux_log_path() {
+            Ok(p) => p,
+            Err(e) => {
+                Utils::error(&format!("Failed to create daemon log dir: {}", e));
+                return Ok(());
+            }
+        };
+
+        let mut log_file = match OpenOptions::new().create(true).append(true).open(&log_path) {
+            Ok(f) => f,
+            Err(e) => {
+                Utils::error(&format!("Failed to open daemon log file: {}", e));
+                return Ok(());
+            }
+        };
+        // Build nohup command
+        let mut cmd = Command::new("nohup");
+        cmd.arg("adb");
+        cmd.args(&adb_base);
+        cmd.arg("shell");
+        // Force remote PTY allocation for detached session by using `-t -t`
+        cmd.arg("-t");
+        cmd.arg("-t");
+        cmd.arg(remote_login);
+        cmd.stdin(Stdio::null());
+        // stdout/stderr -> log file
+        let log_clone = match log_file.try_clone() {
+            Ok(f) => f,
+            Err(e) => {
+                Utils::error(&format!("Failed to clone log file handle: {}", e));
+                return Ok(());
+            }
+        };
+        cmd.stdout(Stdio::from(log_file));
+        cmd.stderr(Stdio::from(log_clone));
+
+        match cmd.spawn() {
+            Ok(child) => {
+                let pid = child.id();
+                if let Err(e) = write_pidfile(pid) {
+                    Utils::error(&trf!(
+                        "cli.commands.termux.daemon.failed_to_write_pidfile",
+                        e
+                    ));
+                    // best-effort: still leave the child running
+                    return Ok(());
+                }
+                Utils::success(&trf!("cli.commands.termux.daemon.started", pid));
+                Utils::info(&trf!("cli.commands.termux.daemon.logs", log_path.display()));
+            }
+            Err(e) => {
+                Utils::error(&trf!("cli.commands.termux.daemon.failed_to_start", e));
+            }
+        }
+        return Ok(());
     }
 
     if let Some(cmd) = args.command {
@@ -214,12 +491,16 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn termux_args_struct_default() {
         let args = TermuxArgs {
             device: None,
             command: None,
+            daemon: false,
+            list: false,
+            kill: false,
             timeout: 60,
         };
         // In environments without adb available the command will return Ok(()) after printing an error.
@@ -241,6 +522,92 @@ mod tests {
         // Clean up to avoid leaking state to other tests
         unsafe {
             env::remove_var("TERMUX_VERSION");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn termux_daemon_list_no_daemon() {
+        use std::env;
+        use tempfile::TempDir;
+
+        // Ensure an isolated KAM_HOME so the daemon pidfile doesn't exist.
+        let tmp = TempDir::new().unwrap();
+        let orig = env::var_os("KAM_HOME");
+        unsafe {
+            env::set_var("KAM_HOME", tmp.path().to_str().unwrap());
+        }
+
+        let args = TermuxArgs {
+            device: None,
+            command: None,
+            daemon: false,
+            list: true,
+            kill: false,
+            timeout: 60,
+        };
+        // Should return Ok even when no adb is present; the command prints a friendly message.
+        assert!(run(args).is_ok());
+
+        // Verify we did not accidentally create a pidfile
+        let pid_path = crate::utils::kam_home_dir()
+            .unwrap()
+            .join("termux")
+            .join("daemon.pid");
+        assert!(!pid_path.exists());
+
+        // Restore original KAM_HOME
+        if let Some(v) = orig {
+            unsafe {
+                env::set_var("KAM_HOME", v);
+            }
+        } else {
+            unsafe {
+                env::remove_var("KAM_HOME");
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn termux_daemon_kill_no_daemon() {
+        use std::env;
+        use tempfile::TempDir;
+
+        // Ensure an isolated KAM_HOME so the daemon pidfile doesn't exist.
+        let tmp = TempDir::new().unwrap();
+        let orig = env::var_os("KAM_HOME");
+        unsafe {
+            env::set_var("KAM_HOME", tmp.path().to_str().unwrap());
+        }
+
+        let args = TermuxArgs {
+            device: None,
+            command: None,
+            daemon: false,
+            list: false,
+            kill: true,
+            timeout: 60,
+        };
+        // Should return Ok even when no adb is present; the command prints a friendly message.
+        assert!(run(args).is_ok());
+
+        // Verify we did not accidentally create a pidfile
+        let pid_path = crate::utils::kam_home_dir()
+            .unwrap()
+            .join("termux")
+            .join("daemon.pid");
+        assert!(!pid_path.exists());
+
+        // Restore original KAM_HOME
+        if let Some(v) = orig {
+            unsafe {
+                env::set_var("KAM_HOME", v);
+            }
+        } else {
+            unsafe {
+                env::remove_var("KAM_HOME");
+            }
         }
     }
 }

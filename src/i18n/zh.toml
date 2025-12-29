@@ -355,6 +355,35 @@ global = "此标志为一致性保留（无实际影响）"
 summary = "使用点路径键（get/set/unset/list）查看并编辑 `kam.toml`"
 
 [cli.commands.toml.flags]
+
+[cli.commands.termux]
+description = "与已连接设备上的 Termux 交互（启动交互式会话、运行一次性命令或管理后台守护进程）"
+summary = "在已连接的 Android 设备上与 Termux 交互"
+conflicting_options = "选项冲突：请仅使用 --daemon/--list/--kill/--command 中的一个。"
+
+[cli.commands.termux.flags]
+device = "可选的 adb 设备 id（来自 `adb devices`）。使用 -D/--device 指定。"
+daemon = "以后台守护进程模式启动持久的 Termux 会话"
+list = "列出当前的 Termux 守护进程（如果存在）"
+kill = "终止当前的 Termux 守护进程（如果存在）"
+
+[cli.commands.termux.daemon]
+starting = "正在启动 Termux 守护进程..."
+started = "Termux 守护进程已启动（pid：{}）"
+already_running = "Termux 守护進程已在运行（pid：{}）"
+not_running = "没有运行中的 Termux 守护进程。"
+killed = "已终止 Termux 守护進程（pid {}）"
+listing = "Termux 守护進程正在运行：{}"
+logs = "守护进程日志路径：{}"
+pidfile = "守护进程 PID 文件：{}"
+failed_to_start = "启动 Termux 守护進程失败：{}"
+failed_to_kill = "终止 Termux 守护進程失败（pid {}）：{}"
+failed_to_read_pidfile = "读取守护进程 PID 文件失败：{}"
+failed_to_query_process = "查询守护进程失败：{}"
+no_nohup = "未找到 nohup；请安装 coreutils（守护进程模式所需）。"
+failed_open_log = "打开守护进程日志文件失败：{}"
+failed_clone_log = "克隆日志文件句柄失败：{}"
+failed_to_write_pidfile = "写入守护进程 PID 文件失败：{}"
 file = "指定文件而非项目中的 kam.toml"
 
 [cli.commands.validate]

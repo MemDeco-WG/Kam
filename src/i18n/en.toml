@@ -153,6 +153,36 @@ summary = "Print environment variables starting with KAM_"
 describe = "Show descriptions of environment variables used by Kam"
 description = "Print all environment variables whose names start with KAM_, useful for debugging."
 
+[cli.commands.termux]
+description = "Interact with Termux on a connected device (start an interactive session, run a one-shot command, or manage a persistent daemon)"
+summary = "Interact with Termux on a connected Android device"
+conflicting_options = "Conflicting options: use only one of --daemon/--list/--kill/--command."
+
+[cli.commands.termux.flags]
+device = "Optional adb device id (from `adb devices`). Use with -D/--device."
+daemon = "Start a persistent Termux background session (daemon mode)"
+list = "List the current Termux daemon process (if any)"
+kill = "Kill the current Termux daemon process (if any)"
+
+[cli.commands.termux.daemon]
+starting = "Starting Termux daemon..."
+started = "Termux daemon started (pid: {})"
+already_running = "Termux daemon already running (pid: {})"
+not_running = "No Termux daemon running."
+killed = "Termux daemon (pid {}) killed."
+listing = "Termux daemon is running: {}"
+logs = "Daemon logs at: {}"
+pidfile = "Daemon PID file: {}"
+failed_to_start = "Failed to start Termux daemon: {}"
+failed_to_kill = "Failed to kill Termux daemon (pid {}): {}"
+failed_to_read_pidfile = "Failed to read daemon pidfile: {}"
+failed_to_query_process = "Failed to query daemon process: {}"
+no_nohup = "nohup not found; please install coreutils (required for daemon mode)."
+failed_open_log = "Failed to open daemon log file: {}"
+failed_clone_log = "Failed to clone log file handle: {}"
+failed_to_write_pidfile = "Failed to write daemon pidfile: {}"
+conflicting_options = "Conflicting options: use only one of --daemon/--list/--kill/--command."
+
 [cli.commands.export]
 summary = "Export `kam.toml` to common formats (module.prop, module.json, repo.json, track.json, config.json, update.json)"
 
