@@ -1,4 +1,4 @@
-#!/system/bin/sh
+# shellcheck shell=ash
 #
 # boot-completed.sh - Metamodule Boot Completed Script
 #

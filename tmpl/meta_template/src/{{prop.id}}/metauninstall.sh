@@ -1,4 +1,4 @@
-#!/system/bin/sh
+# shellcheck shell=ash
 #
 # metauninstall.sh - Metamodule Cleanup Hook
 #

@@ -1,6 +1,7 @@
 # shellcheck shell=ash
 # post-mount.sh
-#
+MODDIR=${0%/*}
+[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
 # This script runs in the "post-mount" stage of the boot process.
 #
 # ---------------------------------------------------------------------------------------
@@ -21,6 +22,3 @@
 # - Interacting with other modules that might have just been mounted.
 #
 # ---------------------------------------------------------------------------------------
-
-MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'

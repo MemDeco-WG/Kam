@@ -1,6 +1,7 @@
 # shellcheck shell=ash
 # action.sh
-#
+MODDIR=${0%/*}
+[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
 # 🚨 模块卡片按钮点击时执行，需新版
 # This script is executed when the user clicks the "Action" button in the KernelSU Manager
 # or triggers an action via the Module WebUI.
@@ -47,7 +48,4 @@
 # List all:       ksud module config list
 #
 # ---------------------------------------------------------------------------------------
-
-MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
 import __runtime__

@@ -2,7 +2,6 @@
 # boot-completed.sh
 MODDIR=${0%/*}
 [ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
-
 # 🚨这是ksu新增的，开机后执行，常规做法是service.sh里面等待开机。
 # This script runs when the Android system has finished booting.
 # Specifically, it triggers when the "ACTION_BOOT_COMPLETED" broadcast is sent.
@@ -26,5 +25,3 @@ MODDIR=${0%/*}
 #
 # ---------------------------------------------------------------------------------------
 import __runtime__
-# print
-print "$(i18n "USAGE_GUIDE")"

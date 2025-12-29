@@ -1,4 +1,4 @@
-#!/system/bin/sh
+# shellcheck shell=ash
 #
 # post-fs-data.sh - Metamodule Post-FS-Data Script
 #

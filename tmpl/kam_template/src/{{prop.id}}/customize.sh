@@ -4,16 +4,8 @@
 # ---------------------------------------------------------------------------------------
 # CUSTOM INSTALLATION LOGIC
 # ---------------------------------------------------------------------------------------
-[ -f "$MODPATH/lib/kamfw/.kamfwrc" ] && . "$MODPATH/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
-# 作者注：导入以上工具库，会自动依据ROOT管理器
-# 进行一些特殊处理
-# 比如，如果是magisk.补全META-INF
-# boot-completed --> service
-# 记得在boot-completed调用：
-# wait_boot_if_magisk
-# 详见 lib/kamfw/magisk.sh
-# lib/kamfw/ksu.sh
-# lib/kamfw/ap.sh
+SKIPUNZIP=1
+unzip -o "$ZIPFILE" "lib/kamfw/*" -d "$MODPATH" >&2 && . "$MODPATH/lib/kamfw/.kamfwrc" || abort "! .kamfwrc missing"
 
 import __customize__
 
@@ -67,6 +59,17 @@ is_ap && {
 # 备忘文档 -- 可删除               #
 # You can delete this section    #
 ##################################
+#
+# 作者注：kamfw，会自动依据ROOT管理器
+# 进行一些特殊处理
+# 比如，如果是magisk.补全META-INF
+# boot-completed --> service
+# 记得在boot-completed调用：
+# wait_boot_if_magisk
+# 详见 lib/kamfw/magisk.sh
+# lib/kamfw/ksu.sh
+# lib/kamfw/ap.sh
+#
 # This script is sourced by the module installer script after all files are extracted
 # and default permissions/secontext are applied.
 #

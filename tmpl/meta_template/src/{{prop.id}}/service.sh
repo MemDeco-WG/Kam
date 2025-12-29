@@ -1,4 +1,4 @@
-#!/system/bin/sh
+# shellcheck shell=ash
 #
 # service.sh - Metamodule Late Start Service Script
 #

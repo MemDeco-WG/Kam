@@ -1,4 +1,4 @@
-#!/system/bin/sh
+# shellcheck shell=ash
 #
 # metainstall.sh - Metamodule Installation Hook
 #
