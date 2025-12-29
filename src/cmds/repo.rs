@@ -1542,15 +1542,15 @@ mod tests {
     #[test]
     fn test_parse_confirm_input() {
         // empty -> default false (prompt shows (y/N))
-        assert_eq!(parse_confirm_input("", false), false);
+        assert!(!parse_confirm_input("", false));
         // empty -> default true when default_yes is true
-        assert_eq!(parse_confirm_input("", true), true);
-        assert_eq!(parse_confirm_input("y", false), true);
-        assert_eq!(parse_confirm_input("Y", false), true);
-        assert_eq!(parse_confirm_input("yes", false), true);
-        assert_eq!(parse_confirm_input("n", true), false);
+        assert!(parse_confirm_input("", true));
+        assert!(parse_confirm_input("y", false));
+        assert!(parse_confirm_input("Y", false));
+        assert!(parse_confirm_input("yes", false));
+        assert!(!parse_confirm_input("n", true));
         // whitespace counts as empty
-        assert_eq!(parse_confirm_input("   ", false), false);
+        assert!(!parse_confirm_input("   ", false));
     }
 
     #[test]

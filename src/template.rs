@@ -1028,8 +1028,8 @@ cache_dir = "~/my_config_cache_dir"
             &vars,
             true,
             "test_template",
-            excludes.clone(),
-            includes.clone(),
+            excludes,
+            includes,
         )
         .expect("copy_and_replace failed");
 

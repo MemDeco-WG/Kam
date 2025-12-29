@@ -45,6 +45,24 @@ print "$(i18n "USAGE_GUIDE")"
 import arch
 support_arch arm64 # arm x86 x64
 
+is_magisk && {
+    info "Hello Magisk user!"
+} || {
+    info "Not AP user."
+}
+
+is_ksu && {
+    info "Hello Ksu user!"
+} || {
+    info "Not AP user."
+}
+
+is_ap && {
+    info "Hello AP user!"
+} || {
+    info "Not AP user."
+}
+
 ##################################
 # 备忘文档 -- 可删除               #
 # You can delete this section    #

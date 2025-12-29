@@ -290,7 +290,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
     if args.interactive {
         if args.command.is_some() {
             return Err(KamError::CommandFailed(
-                "The -i/--interactive flag cannot be used with subcommands. Use `kam config -i` alone."
+                crate::i18n::tr_key("config.interactive.error.conflict_with_subcommand")
                     .to_string(),
             ));
         }
@@ -302,8 +302,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
         Some(c) => c,
         None => {
             return Err(KamError::CommandFailed(
-                "No subcommand provided. Use `kam config -h` for help or run `kam config -i` to enter interactive mode."
-                    .to_string(),
+                crate::i18n::tr_key("config.interactive.error.no_subcommand").to_string(),
             ));
         }
     };
@@ -490,7 +489,7 @@ fn prompt_confirm(prompt: &str, default: bool) -> Result<bool, KamError> {
                 } else if resp == "n" || resp == "no" {
                     return Ok(false);
                 } else {
-                    println!("Please enter 'y' or 'n'.");
+                    println!("{}", crate::i18n::tr_key("init.interactive.enter_yes_no"));
                     continue;
                 }
             }
@@ -502,8 +501,9 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
     use crate::i18n::tr_key;
     use crate::utils::Utils;
 
-    println!("{}", tr_key("config.interactive.intro"));
-    println!("{}", tr_key("config.interactive.view_builtins"));
+    Utils::banner(tr_key("config.interactive.title"));
+    Utils::info(tr_key("config.interactive.view_builtins"));
+    Utils::info(tr_key("config.interactive.press_enter"));
     println!();
 
     // Determine which config file to edit: global or local
@@ -518,12 +518,12 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
             .unwrap_or(false);
         let choices = vec![
             if in_project {
-                "Local (project)".to_string()
+                tr_key("config.interactive.local_project_detected").to_string()
             } else {
-                "Local (project - not detected)".to_string()
+                tr_key("config.interactive.local_project_not_detected").to_string()
             },
-            "Global (~/.kam/config.toml)".to_string(),
-            "Cancel".to_string(),
+            tr_key("config.interactive.global").to_string(),
+            tr_key("config.interactive.cancel").to_string(),
         ];
 
         let pick = Select::with_theme(&ColorfulTheme::default())
@@ -566,12 +566,12 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
             .unwrap_or_else(|| "<not set>".to_string());
 
         let menu = vec![
-            format!("Set UI language (current: {})", cur_lang),
-            format!("Set root manager (current: {})", cur_root),
+            crate::trf!("config.interactive.menu.set_ui_language", cur_lang),
+            crate::trf!("config.interactive.menu.set_root_manager", cur_root),
             tr_key("config.interactive.set_custom_key").to_string(),
-            "Show built-in config keys".to_string(),
-            "Show current config file".to_string(),
-            "Exit".to_string(),
+            tr_key("config.interactive.view_builtins").to_string(),
+            tr_key("config.interactive.show_current_config").to_string(),
+            tr_key("config.interactive.exit").to_string(),
         ];
 
         let pick = Select::with_theme(&ColorfulTheme::default())
@@ -583,11 +583,11 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
         let idx = match pick {
             Ok(Some(i)) => i,
             _ => {
-                let input = prompt_input("Select an option number", Some("1"))?;
+                let input = prompt_input(tr_key("config.interactive.select_option"), Some("1"))?;
                 match input.trim().parse::<usize>() {
                     Ok(n) if n >= 1 && n <= menu.len() => n - 1,
                     _ => {
-                        println!("Invalid selection.");
+                        println!("{}", tr_key("config.interactive.invalid_selection"));
                         continue;
                     }
                 }
@@ -610,7 +610,7 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                         path.display()
                     ));
                 } else {
-                    println!("No change.");
+                    println!("{}", tr_key("config.interactive.no_change"));
                 }
             }
             1 => {
@@ -649,7 +649,7 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                         path.display()
                     ));
                 } else {
-                    println!("No change.");
+                    println!("{}", tr_key("config.interactive.no_change"));
                 }
             }
             2 => {
@@ -657,12 +657,12 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                 let key_prompt = tr_key("config.interactive.enter_custom_key");
                 let key = prompt_input(key_prompt, None)?;
                 if key.trim().is_empty() {
-                    println!("No key entered, skipping.");
+                    println!("{}", tr_key("config.interactive.no_key_entered"));
                 } else {
                     let val_prompt = crate::trf!("config.interactive.enter_value_for_key", key);
                     let value = prompt_input(&val_prompt, None)?;
                     if value.trim().is_empty() {
-                        println!("No change.");
+                        println!("{}", tr_key("config.interactive.no_change"));
                     } else {
                         let mut toml_v = read_toml(&path)?;
                         set_value_by_path(&mut toml_v, &key, &value);

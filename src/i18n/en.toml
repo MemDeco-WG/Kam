@@ -349,6 +349,10 @@ yes = 'Assume "yes" to all confirmation prompts (equivalent to -y). Use `-y` or 
 file_fixed = "{} (fixed)"
 
 [config.interactive]
+title = "Interactive configuration"
+intro = "Interactive configuration - guided setup for common preferences."
+press_enter = "You may press Enter to accept a default value shown in brackets."
+view_builtins = "You can view available built-in config keys with: `kam config show`"
 aborted = "Aborted."
 builtin_keys = "Built-in configuration keys:"
 choose_action = "Choose an action"
@@ -357,14 +361,30 @@ enter_custom_key = "Enter configuration key (dot-separated path, e.g., ui.langua
 enter_ui_language = "Enter UI language (e.g., en, zh, zh-CN)"
 enter_value_for_key = "Enter value for {}"
 example = "Example:"
-intro = "Interactive configuration - guided setup for common preferences."
 make_more_changes = "Make more changes?"
 note_custom_keys = "Note: You can also set custom keys. Use 'kam config list' to see all configured values."
 select_target = "Select target config to edit"
 set_custom_key = "Set other configuration key"
 set_success = "Set {} = {} in {}"
 unset_success = "Unset {} in {}"
-view_builtins = "You can view available built-in config keys with: `kam config show`"
+error.conflict_with_subcommand = "The -i/--interactive flag cannot be used with subcommands. Use `kam config -i` alone."
+error.no_subcommand = "No subcommand provided. Use `kam config -h` for help or run `kam config -i` to enter interactive mode."
+
+# Choices shown when selecting target config
+local_project_detected = "Local (project)"
+local_project_not_detected = "Local (project - not detected)"
+global = "Global (~/.kam/config.toml)"
+cancel = "Cancel"
+
+# Menu options
+show_current_config = "Show current config file"
+exit = "Exit"
+
+# Fallback prompts & messages
+select_option = "Select an option number"
+invalid_selection = "Invalid selection."
+no_key_entered = "No key entered, skipping."
+no_change = "No change."
 
 [env]
 no_kam_vars = "No KAM_ environment variables found."
@@ -586,8 +606,59 @@ failed_read_ca = "Failed to read CA: {}"
 failed_retrieve_public_key = "Failed to retrieve public key for secret '{}': {}"
 fetching_cert_from_github = "Fetching certificate from GitHub issue {}..."
 imported = "Secret '{}' imported"
+saved = "Secret '{}' saved."
+confirm_remove = "Remove secret '{}' ?"
 no_secrets_stored = "No secrets stored."
 no_trusted_root_cas = "No trusted Root CAs."
+error.no_subcommand = "No subcommand provided. Use `kam secret -h` for help or run `kam secret -i` to enter interactive mode."
+
+[secret.interactive]
+title = "Interactive secret management"
+intro = "Interactive secrets - guided setup for adding, listing, getting and removing secrets."
+choose_action = "Choose an action"
+menu.add = "Add a secret"
+menu.list = "List secrets"
+menu.get = "Get a secret"
+menu.remove = "Remove a secret"
+menu.exit = "Exit"
+storage.keyring = "Keyring (default)"
+storage.file = "File: {}"
+choose_input_method = "Choose how to provide the secret value"
+select_input_method = "Select input method number"
+input_method.direct = "Enter value directly"
+input_method.file = "Read from file"
+enter_name = "Enter secret name"
+enter_value = "Enter secret value"
+enter_file_path = "Enter path to file containing the secret"
+select_option = "Select an option number"
+invalid_selection = "Invalid selection."
+no_name_entered = "No name entered, skipping."
+no_value_entered = "No value entered, skipping."
+no_file_entered = "No file provided, skipping."
+file_not_found = "File not found"
+encryption_password = "Encryption password: "
+confirm_encryption_password = "Confirm encryption password: "
+error.password_mismatch = "Passwords do not match; aborting"
+
+# UI summary keys for interactive flows
+summary = "Summary"
+summary_name = "Name"
+summary_storage = "Storage"
+summary_encrypted = "Encrypted"
+yes = "Yes"
+no = "No"
+aborted = "Aborted."
+
+# Confirmation & summary messages for interactive flows
+confirm_before_add = "Create secret '{}' and store it to {} ({} bytes)?"
+confirm_overwrite = "Secret '{}' already exists. Overwrite?"
+summary_added = "Secret '{}' saved to {} ({} bytes)."
+summary_removed = "Secret '{}' removed."
+summary_retrieved = "Secret '{}' retrieved ({} bytes)."
+
+# Interactive error messages
+error.conflict_with_subcommand = "The -i/--interactive flag cannot be used with subcommands. Use `kam secret -i` alone."
+error.no_subcommand = "No subcommand provided. Use `kam secret -h` for help or run `kam secret -i` to enter interactive mode."
 plain = "(plain)"
 public_key_exported = "Public key for secret '{}' exported to {}"
 removed = "Secret '{}' removed"

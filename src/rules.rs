@@ -114,14 +114,15 @@ pub fn apply_all_rules_with_fix(
         let mut enabled: bool = true;
         let mut allow_fix: bool = true;
         if let Some(cfg_map) = rules_cfg
-            && let Some(cfg) = cfg_map.get(id) {
-                if let Some(e) = cfg.enabled {
-                    enabled = e;
-                }
-                if let Some(f) = cfg.fix {
-                    allow_fix = f;
-                }
+            && let Some(cfg) = cfg_map.get(id)
+        {
+            if let Some(e) = cfg.enabled {
+                enabled = e;
             }
+            if let Some(f) = cfg.fix {
+                allow_fix = f;
+            }
+        }
 
         if !enabled {
             // Rule explicitly disabled in project config, skip it entirely.
@@ -134,10 +135,11 @@ pub fn apply_all_rules_with_fix(
         if should_apply_fix {
             // Let the rule perform its analysis + optional fix and return modified content.
             if let Some(new_content) = rule.run_with_fix(path, &cur, fr, true)
-                && new_content != cur {
-                    cur = new_content;
-                    fr.fixed = true;
-                }
+                && new_content != cur
+            {
+                cur = new_content;
+                fr.fixed = true;
+            }
         } else {
             // Analysis-only run (no fixes allowed for this rule). Default run_with_fix
             // delegates to run() when do_fix is false, so this also covers rules that
@@ -175,9 +177,11 @@ mod tests {
         };
 
         // Ensure the builtin rule set contains our sample rule
-        let ids: Vec<_> = load_builtin_rules().iter().map(|r| r.id()).collect();
         assert!(
-            ids.contains(&"chmod_777"),
+            load_builtin_rules()
+                .iter()
+                .map(|r| r.id())
+                .any(|x| x == "chmod_777"),
             "expected builtin chmod_777 rule to be present"
         );
 

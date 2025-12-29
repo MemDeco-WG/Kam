@@ -241,7 +241,7 @@ mod tests {
             }
         });
 
-        let res = init_theme_for_tests(desired.clone());
+        let res = init_theme_for_tests(desired);
         if res.is_ok() {
             let global_theme = get_theme();
             match global_theme.error {

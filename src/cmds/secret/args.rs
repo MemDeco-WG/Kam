@@ -3,8 +3,12 @@ use std::path::PathBuf;
 
 #[derive(Args, Debug)]
 pub struct SecretArgs {
+    /// Interactive mode: guide the user through secret management (add/list/get/remove, etc.)
+    #[arg(short = 'i', long = "interactive")]
+    pub interactive: bool,
+
     #[command(subcommand)]
-    pub command: SecretCommands,
+    pub command: Option<SecretCommands>,
 }
 
 #[derive(Subcommand, Debug)]
