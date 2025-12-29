@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 SKIPUNZIP=1
 unzip -o "$ZIPFILE" "lib/kamfw/*" -d "$MODPATH" >&2 && . "$MODPATH/lib/kamfw/.kamfwrc" || abort "! .kamfwrc missing"
-
+# export KAM_LOGFILE=${MODDIR}/kam.log
 import __customize__
 
 # i18n

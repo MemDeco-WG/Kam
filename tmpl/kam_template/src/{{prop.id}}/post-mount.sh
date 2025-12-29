@@ -22,3 +22,4 @@ MODDIR=${0%/*}
 # - Interacting with other modules that might have just been mounted.
 #
 # ---------------------------------------------------------------------------------------
+# export KAM_LOGFILE=${MODDIR}/kam.log
