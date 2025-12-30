@@ -28,7 +28,7 @@ fn list_templates() -> Result<(), KamError> {
 
     use crate::utils::Utils;
     if templates.is_empty() {
-        Utils::warn(crate::i18n::tr_key("tmpl.no_templates_in_cache"));
+        Utils::warn(crate::i18n::tr("tmpl.no_templates_in_cache"));
         println!();
         Utils::info(&trf!("tmpl.use_import_command", "kam tmpl import".bold()));
     } else {
@@ -37,7 +37,7 @@ fn list_templates() -> Result<(), KamError> {
             Utils::info(template);
         }
         println!();
-        Utils::success(&format!("{} template(s) available", templates.len()));
+        Utils::success(format!("{} template(s) available", templates.len()));
     }
 
     Ok(())
@@ -46,7 +46,7 @@ fn list_templates() -> Result<(), KamError> {
 fn remove_template(name: &str) -> Result<(), KamError> {
     TemplateCacheManager::remove_template(name)?;
     use crate::utils::Utils;
-    Utils::success(&format!("Template '{}' removed successfully", name));
+    Utils::success(format!("Template '{}' removed successfully", name));
     Ok(())
 }
 

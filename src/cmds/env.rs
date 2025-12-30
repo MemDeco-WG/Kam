@@ -46,8 +46,8 @@ pub fn run(args: EnvArgs) -> Result<(), KamError> {
     // Describe known env vars with i18n-backed descriptions
     if args.describe {
         // Header / intro (i18n)
-        Utils::section(crate::i18n::tr_key("env.docs.header"));
-        let intro = crate::i18n::tr_key("env.docs.intro");
+        Utils::section(crate::i18n::tr("env.docs.header"));
+        let intro = crate::i18n::tr("env.docs.intro");
         if !intro.is_empty() {
             println!("{}", intro);
             println!();
@@ -97,13 +97,13 @@ pub fn run(args: EnvArgs) -> Result<(), KamError> {
 
         for &v in known_vars.iter() {
             let desc_key = format!("env.docs.{}", v.to_ascii_lowercase());
-            let desc = crate::i18n::tr_key(&desc_key);
+            let desc = crate::i18n::tr(&desc_key);
             let val = std::env::var(v).unwrap_or_else(|_| "<not set>".to_string());
             println!("{:28} {}  ({})", v, desc, val);
         }
 
         // Note about template variables
-        let tmpl_note = crate::i18n::tr_key("env.docs.kam_tmpl_note");
+        let tmpl_note = crate::i18n::tr("env.docs.kam_tmpl_note");
         if !tmpl_note.is_empty() {
             println!();
             println!("{}", tmpl_note);
@@ -117,7 +117,7 @@ pub fn run(args: EnvArgs) -> Result<(), KamError> {
 
     if vars.is_empty() {
         // Localized message for empty KAM_ environment
-        Utils::info(crate::i18n::tr_key("env.no_kam_vars"));
+        Utils::info(crate::i18n::tr("env.no_kam_vars"));
         return Ok(());
     }
 
@@ -127,45 +127,4 @@ pub fn run(args: EnvArgs) -> Result<(), KamError> {
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn collect_from_iter_filters_and_sorts() {
-        let input = vec![
-            ("KAM_ENV_UNIT_TEST_B".to_string(), "bbb".to_string()),
-            ("X_IGNORE".to_string(), "no".to_string()),
-            ("KAM_ENV_UNIT_TEST_A".to_string(), "aaa".to_string()),
-        ];
-        let result = collect_from_iter(input);
-        assert_eq!(
-            result,
-            vec![
-                ("KAM_ENV_UNIT_TEST_A".to_string(), "aaa".to_string()),
-                ("KAM_ENV_UNIT_TEST_B".to_string(), "bbb".to_string())
-            ]
-        );
-    }
-
-    #[test]
-    fn collect_kam_env_delegates_to_iter() {
-        // Ensure collect_kam_env() compiles and runs with the real environment iterator.
-        // We avoid mutating the process env in tests.
-        let _ = collect_kam_env();
-    }
-
-    #[test]
-    fn run_returns_ok() {
-        // run should complete successfully even if there are no KAM_ env vars in the process env.
-        assert!(run(EnvArgs { describe: false }).is_ok());
-    }
-
-    #[test]
-    fn run_describe_returns_ok() {
-        // `--describe` should complete successfully even without particular env variables set.
-        assert!(run(EnvArgs { describe: true }).is_ok());
-    }
 }

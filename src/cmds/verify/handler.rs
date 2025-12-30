@@ -153,7 +153,7 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
 
     if args.verbose {
         use crate::utils::Utils;
-        Utils::executing(crate::i18n::tr_key("verify.verifying_signature"));
+        Utils::executing(crate::i18n::tr("verify.verifying_signature"));
     }
     // 更新验证器（把文件内容加进去）
     verifier
@@ -169,9 +169,9 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         // 验证成功！
         use crate::utils::Utils;
         if args.verbose {
-            Utils::success(crate::i18n::tr_key("Verification successful"));
+            Utils::success(crate::i18n::tr("Verification successful"));
         } else {
-            Utils::success(crate::i18n::tr_key("Verified"));
+            Utils::success(crate::i18n::tr("Verified"));
         }
         Ok(())
     } else {

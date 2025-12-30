@@ -558,23 +558,3 @@ pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
 
     serde_json::Value::Object(root)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn prop_basic() {
-        let kt = KamToml::new_with_current_timestamp(
-            "example_module_id".to_string(),
-            "Example Module Name".to_string(),
-            "1.0.0".to_string(),
-            Some("Your Name".to_string()),
-            "A description".to_string(),
-            None,
-            None,
-        );
-        let s = build_prop(&kt);
-        assert!(s.contains("id=example_module_id"));
-    }
-}

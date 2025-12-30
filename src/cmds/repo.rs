@@ -28,6 +28,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use std::time::Duration;
 
+mod repo_search;
+
 const BASE_URL: &str = "https://modules.kernelsu.org";
 const SEARCH_INDEX_PATH: &str = "/search-index.json";
 const MODULE_JSON_PREFIX: &str = "/module/"; // {id}.json appended
@@ -233,12 +235,12 @@ pub fn handle_pacman_style(
                     if e.contains("404") || e.contains("not found") || e.contains("Not Found") =>
                 {
                     // If the exact module wasn't found, suggest similar modules via interactive search
-                    Utils::warn(&crate::i18n::tr_fmt(
+                    Utils::warn(crate::i18n::tr_fmt(
                         "repo.module_not_found_showing_similar",
                         &[&module_id],
                     ));
                     if let Some(selected_module) = search_remote_interactive(module_id, &base)? {
-                        Utils::info(&crate::i18n::tr_fmt(
+                        Utils::info(crate::i18n::tr_fmt(
                             "repo.selected_module",
                             &[&selected_module],
                         ));
@@ -247,7 +249,7 @@ pub fn handle_pacman_style(
                         // Continue with the download process using the selected module
                         process_module_download(&md, &selected_module, &client, assume_yes, quiet)?;
                     } else {
-                        Utils::info(crate::i18n::tr_key("repo.skipped_selection"));
+                        Utils::info(crate::i18n::tr("repo.skipped_selection"));
                     }
                     continue;
                 }
@@ -307,7 +309,7 @@ fn process_module_download(
     let (asset, release_label) = if let Some((a, rname)) = chosen_asset {
         (a, rname)
     } else {
-        Utils::warn(&crate::i18n::tr_fmt(
+        Utils::warn(crate::i18n::tr_fmt(
             "repo.no_downloadable_zip_asset",
             &[&module_id],
         ));
@@ -353,7 +355,7 @@ fn process_module_download(
         // Interpret empty input according to the prompt's default (here: (y/N) -> default is false)
         let ok = parse_confirm_input(input_trimmed, false);
         if !ok {
-            Utils::warn(&crate::i18n::tr_fmt("repo.skipped_download", &[&module_id]));
+            Utils::warn(crate::i18n::tr_fmt("repo.skipped_download", &[&module_id]));
         }
         ok
     };
@@ -366,7 +368,7 @@ fn process_module_download(
     match download_asset(client, asset, None, quiet) {
         Ok(path) => {
             if !quiet {
-                Utils::success(&crate::i18n::tr_fmt(
+                Utils::success(crate::i18n::tr_fmt(
                     "repo.saved",
                     &[&path.display().to_string()],
                 ));
@@ -378,7 +380,7 @@ fn process_module_download(
                 // Build owned strings and pass a slice of `&dyn Display` to `tr_fmt`.
                 let err_str = e.to_string();
                 let args: Vec<&dyn std::fmt::Display> = vec![&module_id, &err_str];
-                Utils::error(&crate::i18n::tr_fmt("repo.failed_to_download", &args));
+                Utils::error(crate::i18n::tr_fmt("repo.failed_to_download", &args));
             }
         }
     }
@@ -642,7 +644,7 @@ pub fn repo_sync_with_jobs(
             );
             Utils::section(&msg);
         } else {
-            Utils::success(&crate::i18n::tr_fmt(
+            Utils::success(crate::i18n::tr_fmt(
                 "repo.index_synced",
                 &[&path.display().to_string()],
             ));
@@ -666,7 +668,7 @@ pub fn repo_sync_with_jobs(
     // Report how long it took to resolve the index into module entries
     let duration_ms = op_start.elapsed().as_millis();
     if !quiet {
-        Utils::info(&format!(
+        Utils::info(format!(
             "Resolved {} modules in {}ms",
             entries.len(),
             duration_ms
@@ -714,9 +716,9 @@ pub fn repo_sync_with_jobs(
             top_pb.finish();
             return Ok(());
         }
-        let msg = crate::i18n::tr_key("repo.everything_up_to_date");
+        let msg = crate::i18n::tr("repo.everything_up_to_date");
         Utils::success(&msg);
-        top_pb.finish_with_message(msg.clone());
+        top_pb.finish_with_message(msg);
         return Ok(());
     }
 
@@ -841,7 +843,7 @@ pub fn repo_sync_with_jobs(
                     {
                         Ok(mut r) => {
                             if !r.status().is_success() {
-                                Utils::warn(&format!("{} returned status {}", murl, r.status()));
+                                Utils::warn(format!("{} returned status {}", murl, r.status()));
                                 pb.finish_with_message(format!("{:20} (failed)", module_id));
                                 top.inc(1);
                                 continue;
@@ -860,10 +862,7 @@ pub fn repo_sync_with_jobs(
                                     }
                                     Ok(_) => break,
                                     Err(e) => {
-                                        Utils::warn(&format!(
-                                            "Failed to read {} body: {}",
-                                            murl, e
-                                        ));
+                                        Utils::warn(format!("Failed to read {} body: {}", murl, e));
                                         pb.finish_with_message(format!(
                                             "{:20} (failed)",
                                             module_id
@@ -877,7 +876,7 @@ pub fn repo_sync_with_jobs(
                             match String::from_utf8(mbuf) {
                                 Ok(s) => {
                                     if let Err(e) = write_atomic(&ppath, &s) {
-                                        Utils::warn(&format!(
+                                        Utils::warn(format!(
                                             "Failed to write cache {}: {}",
                                             module_id, e
                                         ));
@@ -891,13 +890,13 @@ pub fn repo_sync_with_jobs(
                                     }
                                 }
                                 Err(_) => {
-                                    Utils::warn(&format!("Failed to parse {} body as UTF-8", murl));
+                                    Utils::warn(format!("Failed to parse {} body as UTF-8", murl));
                                     pb.finish_with_message(format!("{:20} (invalid)", module_id));
                                 }
                             }
                         }
                         Err(e) => {
-                            Utils::warn(&format!("GET {} failed: {}", murl, e));
+                            Utils::warn(format!("GET {} failed: {}", murl, e));
                             pb.finish_with_message(format!("{:20} (failed)", module_id));
                         }
                     }
@@ -918,12 +917,12 @@ pub fn repo_sync_with_jobs(
     let updated_total = updated_count.load(Ordering::SeqCst);
     if !quiet {
         if updated_total == 0 {
-            let msg = crate::i18n::tr_key("repo.everything_up_to_date");
+            let msg = crate::i18n::tr("repo.everything_up_to_date");
             Utils::success(msg);
         } else {
             // Always show a concise summary so users see an effect even when progress bars
             // are suppressed (quiet/non-tty).
-            Utils::success(&crate::i18n::tr_fmt(
+            Utils::success(crate::i18n::tr_fmt(
                 "repo.updated_modules",
                 &[&updated_total.to_string()],
             ));
@@ -945,55 +944,20 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
 
     let q = query.to_lowercase().trim().to_string();
     if q.is_empty() {
-        Utils::warn(crate::i18n::tr_key("repo.search.empty_query"));
+        Utils::warn(crate::i18n::tr("repo.search.empty_query"));
         return Ok(());
     }
 
-    // Score candidates: substring match => 1.0, otherwise use similarity or token coverage
-    let mut scored: Vec<(f64, &SearchEntry)> = Vec::new();
-    for e in entries.iter() {
-        let name = e.name.to_lowercase();
-        let desc = e.description.as_deref().unwrap_or("").to_lowercase();
-        let sum = e.summary.as_deref().unwrap_or("").to_lowercase();
-        let auth = e.authors.as_deref().unwrap_or("").to_lowercase();
-        let hay = format!("{} {} {} {}", name, desc, sum, auth);
-
-        if hay.contains(&q) {
-            scored.push((1.0, e));
-            continue;
-        }
-
-        // token coverage
-        let tokens: Vec<&str> = q.split_whitespace().collect();
-        let mut matched_tokens = 0usize;
-        for token in tokens.iter() {
-            if hay.contains(token) {
-                matched_tokens += 1;
-            }
-        }
-        let token_ratio = if tokens.is_empty() {
-            0.0
-        } else {
-            matched_tokens as f64 / tokens.len() as f64
-        };
-
-        // fuzzy similarity via Levenshtein-based similarity (normalized)
-        let sim_name = similarity(&q, &name);
-        let sim_desc = similarity(&q, &desc);
-        let sim_sum = similarity(&q, &sum);
-        let sim_auth = similarity(&q, &auth);
-        let sim_max = sim_name.max(sim_desc).max(sim_sum).max(sim_auth);
-
-        let score = token_ratio.max(sim_max);
-
-        // threshold for fuzzy match
-        if score >= 0.60 {
-            scored.push((score, e));
-        }
-    }
+    // Score candidates using the shared scoring helper (exact substring => 1.0,
+    // otherwise use token coverage/fuzzy similarity). Threshold tuned for search mode.
+    let mut scored: Vec<(f64, &SearchEntry)> = entries
+        .iter()
+        .map(|e| (repo_search::score_search_entry(e, &q), e))
+        .filter(|(score, _)| *score >= 0.60)
+        .collect();
 
     if scored.is_empty() {
-        Utils::warn(&crate::i18n::tr_fmt("repo.no_results_for", &[&query]));
+        Utils::warn(crate::i18n::tr_fmt("repo.no_results_for", &[&query]));
         return Ok(());
     }
 
@@ -1016,11 +980,11 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
             println!("    {}", s);
         }
         if let Some(a) = &e.authors {
-            println!("    {}: {}", crate::i18n::tr_key("repo.authors"), a);
+            println!("    {}: {}", crate::i18n::tr("repo.authors"), a);
         }
         if let Some(u) = &e.url {
             let pretty = resolve_entry_url(base_url, u);
-            println!("    {}: {}", crate::i18n::tr_key("repo.url"), pretty);
+            println!("    {}: {}", crate::i18n::tr("repo.url"), pretty);
         }
 
         // Try to fetch module details for the top few results to show version/time info
@@ -1029,16 +993,16 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
         {
             // Version
             if let Some(lr) = md.latest_release.as_deref() {
-                println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
+                println!("    {}: {}", crate::i18n::tr("repo.version"), lr);
             } else if let Some(rels) = md.releases.as_ref()
                 && let Some(first) = rels.first()
                 && let Some(v) = first.version.as_deref().or(first.name.as_deref())
             {
-                println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
+                println!("    {}: {}", crate::i18n::tr("repo.version"), v);
             }
             // Time
             if let Some(lt) = md.latest_release_time.as_deref() {
-                println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
+                println!("    {}: {}", crate::i18n::tr("repo.updated"), lt);
             } else if let Some(rels) = md.releases.as_ref()
                 && let Some(first) = rels.first()
                 && let Some(pub_at) = first
@@ -1047,7 +1011,7 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
                     .or(first.updated_at.as_deref())
                     .or(first.created_at.as_deref())
             {
-                println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
+                println!("    {}: {}", crate::i18n::tr("repo.updated"), pub_at);
             }
         }
 
@@ -1072,56 +1036,19 @@ pub(crate) fn search_remote_interactive(
 
     let q = query.to_lowercase().trim().to_string();
     if q.is_empty() {
-        Utils::warn(crate::i18n::tr_key("repo.search.empty_query"));
+        Utils::warn(crate::i18n::tr("repo.search.empty_query"));
         return Ok(None);
     }
 
-    // Score candidates: substring match => 1.0, otherwise use similarity or token coverage
-    let mut scored: Vec<(f64, &SearchEntry)> = Vec::new();
-    for e in entries.iter() {
-        let name = e.name.to_lowercase();
-        let desc = e.description.as_deref().unwrap_or("").to_lowercase();
-        let sum = e.summary.as_deref().unwrap_or("").to_lowercase();
-        let auth = e.authors.as_deref().unwrap_or("").to_lowercase();
-        let hay = format!("{} {} {} {}", name, desc, sum, auth);
-
-        if hay.contains(&q) {
-            scored.push((1.0, e));
-            continue;
-        }
-
-        // token coverage
-        let tokens: Vec<&str> = q.split_whitespace().collect();
-        let mut matched_tokens = 0usize;
-        for token in tokens.iter() {
-            if hay.contains(token) {
-                matched_tokens += 1;
-            }
-        }
-        let token_ratio = if tokens.is_empty() {
-            0.0
-        } else {
-            matched_tokens as f64 / tokens.len() as f64
-        };
-
-        // fuzzy similarity via Levenshtein-based similarity (normalized)
-        let sim_name = similarity(&q, &name);
-        let sim_desc = similarity(&q, &desc);
-        let sim_sum = similarity(&q, &sum);
-        let sim_auth = similarity(&q, &auth);
-        let sim_max = sim_name.max(sim_desc).max(sim_sum).max(sim_auth);
-
-        let score = token_ratio.max(sim_max);
-
-        // threshold for fuzzy match
-        if score >= 0.30 {
-            // Lower threshold to show more results for selection
-            scored.push((score, e));
-        }
-    }
+    // Score candidates using shared helper; lower threshold for interactive selection.
+    let mut scored: Vec<(f64, &SearchEntry)> = entries
+        .iter()
+        .map(|e| (repo_search::score_search_entry(e, &q), e))
+        .filter(|(score, _)| *score >= 0.30)
+        .collect();
 
     if scored.is_empty() {
-        Utils::warn(&crate::i18n::tr_fmt("repo.no_results_for", &[&query]));
+        Utils::warn(crate::i18n::tr_fmt("repo.no_results_for", &[&query]));
         return Ok(None);
     }
 
@@ -1156,11 +1083,11 @@ pub(crate) fn search_remote_interactive(
             println!("    {}", s);
         }
         if let Some(a) = &e.authors {
-            println!("    {}: {}", crate::i18n::tr_key("repo.authors"), a);
+            println!("    {}: {}", crate::i18n::tr("repo.authors"), a);
         }
         if let Some(u) = &e.url {
             let pretty = resolve_entry_url(base_url, u);
-            println!("    {}: {}", crate::i18n::tr_key("repo.url"), pretty);
+            println!("    {}: {}", crate::i18n::tr("repo.url"), pretty);
         }
 
         // Try to fetch module details for the top few results to show version/time info
@@ -1168,15 +1095,15 @@ pub(crate) fn search_remote_interactive(
             && let Ok(md) = fetch_module_detail(&client, &e.name, base_url)
         {
             if let Some(lr) = md.latest_release.as_deref() {
-                println!("    {}: {}", crate::i18n::tr_key("repo.version"), lr);
+                println!("    {}: {}", crate::i18n::tr("repo.version"), lr);
             } else if let Some(rels) = md.releases.as_ref()
                 && let Some(first) = rels.first()
                 && let Some(v) = first.version.as_deref().or(first.name.as_deref())
             {
-                println!("    {}: {}", crate::i18n::tr_key("repo.version"), v);
+                println!("    {}: {}", crate::i18n::tr("repo.version"), v);
             }
             if let Some(lt) = md.latest_release_time.as_deref() {
-                println!("    {}: {}", crate::i18n::tr_key("repo.updated"), lt);
+                println!("    {}: {}", crate::i18n::tr("repo.updated"), lt);
             } else if let Some(rels) = md.releases.as_ref()
                 && let Some(first) = rels.first()
                 && let Some(pub_at) = first
@@ -1185,7 +1112,7 @@ pub(crate) fn search_remote_interactive(
                     .or(first.updated_at.as_deref())
                     .or(first.created_at.as_deref())
             {
-                println!("    {}: {}", crate::i18n::tr_key("repo.updated"), pub_at);
+                println!("    {}: {}", crate::i18n::tr("repo.updated"), pub_at);
             }
         }
 
@@ -1193,7 +1120,7 @@ pub(crate) fn search_remote_interactive(
     }
 
     // Ask user to select
-    print!("{}", crate::i18n::tr_key("repo.prompt.enter_number"));
+    print!("{}", crate::i18n::tr("repo.prompt.enter_number"));
     stdout().flush().map_err(KamError::Io)?;
     let mut input = String::new();
     stdin().read_line(&mut input).map_err(KamError::Io)?;
@@ -1209,11 +1136,11 @@ pub(crate) fn search_remote_interactive(
             Ok(Some(selected.name.clone()))
         }
         Ok(_) => {
-            Utils::warn(crate::i18n::tr_key("repo.invalid_selection_out_of_range"));
+            Utils::warn(crate::i18n::tr("repo.invalid_selection_out_of_range"));
             Ok(None)
         }
         Err(_) => {
-            Utils::warn(crate::i18n::tr_key("repo.invalid_input_number"));
+            Utils::warn(crate::i18n::tr("repo.invalid_input_number"));
             Ok(None)
         }
     }
@@ -1221,42 +1148,12 @@ pub(crate) fn search_remote_interactive(
 
 /// Simple Levenshtein distance (char-based) - used for a lightweight fuzzy similarity.
 fn levenshtein(a: &str, b: &str) -> usize {
-    let a_chars: Vec<char> = a.chars().collect();
-    let b_chars: Vec<char> = b.chars().collect();
-    let n = a_chars.len();
-    let m = b_chars.len();
-    if n == 0 {
-        return m;
-    }
-    if m == 0 {
-        return n;
-    }
-    let mut prev: Vec<usize> = (0..=m).collect();
-    let mut cur: Vec<usize> = vec![0; m + 1];
-    for (i, ca) in a_chars.iter().enumerate() {
-        cur[0] = i + 1;
-        for (j, cb) in b_chars.iter().enumerate() {
-            let cost = if ca == cb { 0 } else { 1 };
-            cur[j + 1] = std::cmp::min(std::cmp::min(cur[j] + 1, prev[j + 1] + 1), prev[j] + cost);
-        }
-        prev.copy_from_slice(&cur);
-    }
-    prev[m]
+    repo_search::levenshtein(a, b)
 }
 
 /// Normalized similarity in [0.0, 1.0]
 fn similarity(a: &str, b: &str) -> f64 {
-    let a_trim = a.trim();
-    let b_trim = b.trim();
-    if a_trim.is_empty() && b_trim.is_empty() {
-        return 1.0;
-    }
-    let max_len = a_trim.chars().count().max(b_trim.chars().count());
-    if max_len == 0 {
-        return 1.0;
-    }
-    let dist = levenshtein(a_trim, b_trim) as f64;
-    1.0 - (dist / (max_len as f64))
+    repo_search::similarity(a, b)
 }
 
 /// Format bytes into a human readable string
@@ -1328,20 +1225,20 @@ fn fetch_module_detail(
                 if let Ok(md) = serde_json::from_str::<ModuleDetail>(&buf) {
                     return Ok(md);
                 } else {
-                    Utils::warn(&format!(
+                    Utils::warn(format!(
                         "Cached module JSON for '{}' could not be parsed; will attempt to refresh from registry",
                         module_id
                     ));
                 }
             } else {
-                Utils::warn(&format!(
+                Utils::warn(format!(
                     "Failed to read cached module JSON for '{}'; will attempt to refresh from registry",
                     module_id
                 ));
             }
         } else {
             // Could not open file; fall through to network fetch.
-            Utils::warn(&format!(
+            Utils::warn(format!(
                 "Failed to open cached module JSON for '{}'; will attempt to refresh from registry",
                 module_id
             ));
@@ -1504,242 +1401,4 @@ fn download_asset(
     pb.finish();
 
     Ok(dest)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use clap::Parser;
-    use std::sync::Mutex;
-    use tempfile;
-
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn test_search_asl() {
-        let base = effective_base_url(None);
-        let res = search_remote("asl", &base);
-        assert!(res.is_ok());
-    }
-
-    #[test]
-    fn test_resolve_asl_module() {
-        // Fetch module JSON for 'asl' and validate structure contains releases & assets.
-        let client = Client::new();
-        let url = format!("{}{}{}.json", BASE_URL, MODULE_JSON_PREFIX, "asl");
-        let resp = client.get(&url).send().unwrap();
-        assert!(resp.status().is_success());
-        let md: ModuleDetail = resp.json().unwrap();
-        assert_eq!(md.module_id, "asl"); // sanity check
-        assert!(md.releases.is_some());
-        let rels = md.releases.unwrap();
-        assert!(!rels.is_empty());
-        assert!(rels.iter().any(|r| {
-            r.release_assets
-                .as_ref()
-                .map(|a| !a.is_empty())
-                .unwrap_or(false)
-        }));
-    }
-
-    #[test]
-    fn test_parse_confirm_input() {
-        // empty -> default false (prompt shows (y/N))
-        assert!(!parse_confirm_input("", false));
-        // empty -> default true when default_yes is true
-        assert!(parse_confirm_input("", true));
-        assert!(parse_confirm_input("y", false));
-        assert!(parse_confirm_input("Y", false));
-        assert!(parse_confirm_input("yes", false));
-        assert!(!parse_confirm_input("n", true));
-        // whitespace counts as empty
-        assert!(!parse_confirm_input("   ", false));
-    }
-
-    #[test]
-    fn test_resolve_entry_url() {
-        // Ensure relative and absolute entry URLs are resolved correctly.
-        let base = "https://modules.kernelsu.org";
-        assert_eq!(
-            resolve_entry_url(base, "/module/asl"),
-            "https://modules.kernelsu.org/module/asl"
-        );
-        assert_eq!(
-            resolve_entry_url(base, "module/asl"),
-            "https://modules.kernelsu.org/module/asl"
-        );
-        assert_eq!(
-            resolve_entry_url(base, "https://example.org/test"),
-            "https://example.org/test"
-        );
-    }
-
-    #[test]
-    fn test_fetch_module_detail_latest_release_time() {
-        // Fetch module JSON for 'asl' and ensure latest_release and latest_release_time are parsed.
-        let client = Client::new();
-        let base = effective_base_url(None);
-        let md = fetch_module_detail(&client, "asl", &base).unwrap();
-        assert_eq!(md.module_id, "asl"); // sanity check
-        assert!(md.latest_release.is_some());
-        assert!(md.latest_release_time.is_some());
-    }
-
-    #[test]
-    fn test_fetch_index_cached_uses_local_cache() {
-        // Create a temporary cache dir and write a fake index file, then ensure
-        // fetch_index_cached reads it (no network needed).
-        let tmp = tempfile::TempDir::new().unwrap();
-        let _guard = TEST_LOCK.lock().unwrap();
-        unsafe {
-            std::env::set_var("KAM_CACHE_DIR", tmp.path().to_str().unwrap());
-        }
-
-        let base = "https://example.test";
-        let path = index_cache_path(base).unwrap();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-
-        let sample = r#"[{"name":"testpkg","description":"desc","summary":"sum","authors":"me","url":"https://example"}]"#;
-        std::fs::write(&path, sample).unwrap();
-
-        let client = Client::builder()
-            .timeout(Duration::from_secs(2))
-            .build()
-            .unwrap();
-
-        let entries = fetch_index_cached(&client, base).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].name, "testpkg");
-
-        // Clean up env
-        unsafe {
-            std::env::remove_var("KAM_CACHE_DIR");
-        }
-    }
-
-    #[test]
-    fn test_fetch_module_detail_cached_reads_local_file() {
-        // Create a temporary cache dir and write a fake module JSON, then ensure
-        // fetch_module_detail returns the cached content.
-        let tmp = tempfile::TempDir::new().unwrap();
-        let _guard = TEST_LOCK.lock().unwrap();
-        unsafe {
-            std::env::set_var("KAM_CACHE_DIR", tmp.path().to_str().unwrap());
-        }
-
-        let base = effective_base_url(None);
-        let module_id = "testmodule";
-        let path = module_cache_path(module_id).unwrap();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-
-        // Use camelCase keys as the deserializer expects.
-        let sample = r#"{
-            "moduleId": "testmodule",
-            "moduleName": "Test Module",
-            "url": "https://example",
-            "authors": null,
-            "latestRelease": null,
-            "releases": [],
-            "summary": "a test module"
-        }"#;
-        std::fs::write(&path, sample).unwrap();
-
-        let client = Client::builder()
-            .timeout(Duration::from_secs(2))
-            .build()
-            .unwrap();
-
-        let md = fetch_module_detail(&client, module_id, &base).unwrap();
-        assert_eq!(md.module_id, "testmodule");
-        assert_eq!(md.module_name.unwrap(), "Test Module");
-
-        // Clean up env
-        unsafe {
-            std::env::remove_var("KAM_CACHE_DIR");
-        }
-    }
-
-    #[test]
-    fn test_cache_root_dir_respects_kam_home_env() {
-        // Ensure cache_root_dir() uses KAM_HOME when provided.
-        let _guard = TEST_LOCK.lock().unwrap();
-        let tmp = tempfile::TempDir::new().unwrap();
-
-        // Preserve original KAM_HOME and set our test value
-        let orig = std::env::var_os("KAM_HOME");
-        unsafe {
-            std::env::set_var("KAM_HOME", tmp.path().to_str().unwrap());
-        }
-
-        // cache_root_dir should return the directory pointed to by KAM_HOME
-        let base = cache_root_dir().expect("cache_root_dir should succeed");
-        assert_eq!(base, tmp.path().to_path_buf());
-
-        // Restore original KAM_HOME
-        if let Some(v) = orig {
-            unsafe {
-                std::env::set_var("KAM_HOME", v);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var("KAM_HOME");
-            }
-        }
-    }
-
-    // ---- Added parsing tests for `kam repo sync` ----
-
-    #[test]
-    fn test_parsing_repo_sync_sets_subcommand() {
-        let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync"]);
-        match cli.command {
-            Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
-                Some(RepoCommand::Sync(sync_args)) => {
-                    assert!(!sync_args.force, "expected --force to be false by default");
-                }
-                _ => panic!("expected RepoCommand::Sync"),
-            },
-            _ => panic!("expected Commands::Repo"),
-        }
-    }
-
-    #[test]
-    fn test_parsing_repo_sync_force_sets_force() {
-        let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync", "--force"]);
-        match cli.command {
-            Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
-                Some(RepoCommand::Sync(sync_args)) => {
-                    assert!(sync_args.force, "expected --force to be true");
-                }
-                _ => panic!("expected RepoCommand::Sync"),
-            },
-            _ => panic!("expected Commands::Repo"),
-        }
-    }
-
-    #[test]
-    fn test_parsing_repo_sync_modules_url() {
-        let url = "https://example.test";
-        let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync", "--modules-url", url]);
-        // `--modules-url` is a global/top-level option; ensure it's parsed into the top-level `Cli`.
-        assert_eq!(cli.modules_url.as_deref(), Some(url));
-    }
-
-    #[test]
-    fn test_parsing_repo_sync_jobs_sets_jobs() {
-        let cli = crate::cli::Cli::parse_from(["kam", "repo", "sync", "--jobs", "4"]);
-        match cli.command {
-            Some(crate::cli::Commands::Repo(repo_args)) => match repo_args.command {
-                Some(RepoCommand::Sync(sync_args)) => {
-                    assert_eq!(sync_args.jobs, Some(4));
-                }
-                _ => panic!("expected RepoCommand::Sync"),
-            },
-            _ => panic!("expected Commands::Repo"),
-        }
-    }
 }

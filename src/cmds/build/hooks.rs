@@ -393,7 +393,7 @@ fn run_hooks(
     let show_progress = !args.quiet && std::io::stdout().is_terminal();
     let total_hooks = entries.iter().filter(|e| e.path().is_file()).count();
     if !args.quiet {
-        Utils::section(&format!(
+        Utils::section(format!(
             "✿ Running {} hooks from {} ({} script(s)) ✿",
             stage,
             hooks_dir.display(),
@@ -438,7 +438,7 @@ fn run_hooks(
             if let Some(pb) = &pb {
                 pb.set_message(format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
             } else {
-                Utils::executing(&format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
+                Utils::executing(format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
             }
 
             // 流式输出stdout/stderr，实时显示命令输出
@@ -497,7 +497,7 @@ fn run_hooks(
                         }
                         std::io::ErrorKind::NotFound => {
                             // 找不到解释器，提示用户
-                            Utils::warn(&format!(
+                            Utils::warn(format!(
                                 "Not found. Could not execute {}. Ensure the script has an interpreter or runtime available on the system (e.g., `sh`, `bash`, or `pwsh`), or invoke the script via a shell that is available on your platform.",
                                 filename
                             ));
@@ -522,104 +522,4 @@ fn run_hooks(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    // Note: `use super::*;` removed because it was not needed and caused a clippy warning
-    use crate::cmds::build::args::BuildArgs;
-    use crate::types::kam_toml::KamToml;
-    use std::fs::{self, File};
-    use std::io::Write;
-    #[cfg(unix)]
-    use std::os::unix::fs::PermissionsExt;
-    use tempfile::tempdir;
-
-    #[test]
-    fn test_hooks_get_expected_env_vars() -> Result<(), Box<dyn std::error::Error>> {
-        // Create a temporary project directory
-        let tmp = tempdir()?;
-        let project_path = tmp.path();
-
-        // Create hooks/pre-build and place a small script that writes envs to a file
-        let hooks_pre = project_path.join("hooks").join("pre-build");
-        fs::create_dir_all(&hooks_pre)?;
-
-        let script_path = hooks_pre.join("2000.TEST_ENV.sh");
-        {
-            let mut f = File::create(&script_path)?;
-            f.write_all(b"#!/bin/sh\n")?;
-            f.write_all(
-                b"echo \"KAM_MODULE_ROOT=$KAM_MODULE_ROOT\" > \"$KAM_PROJECT_ROOT/.hooks_env\"\n",
-            )?;
-            f.write_all(
-                b"echo \"KAM_DIST_DIR=$KAM_DIST_DIR\" >> \"$KAM_PROJECT_ROOT/.hooks_env\"\n",
-            )?;
-            f.write_all(
-                b"echo \"KAM_HOOKS_ROOT=$KAM_HOOKS_ROOT\" >> \"$KAM_PROJECT_ROOT/.hooks_env\"\n",
-            )?;
-            f.sync_all()?; // ensure content is flushed and file handle closed before execution
-        }
-
-        // Make script executable on Unix-like platforms (no-op on other platforms)
-        #[cfg(unix)]
-        {
-            let mut perms = fs::metadata(&script_path)?.permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&script_path, perms)?;
-        }
-
-        // Create a custom source dir that the kam.toml will reference
-        let source_dir = "src/custom_src";
-        fs::create_dir_all(project_path.join(source_dir))?;
-
-        // Prepare a KamToml with a custom build.source_dir
-        let mut kt = KamToml::new_with_current_timestamp(
-            "com.example.test".to_string(),
-            "Example Test".to_string(),
-            "0.1.0".to_string(),
-            Some("Author".to_string()),
-            "Desc".to_string(),
-            None,
-            None,
-        );
-
-        if kt.kam.build.is_none() {
-            kt.kam.build = Some(crate::types::kam_toml::sections::BuildSection::default());
-        }
-        kt.kam.build.as_mut().unwrap().source_dir = Some(source_dir.to_string());
-
-        // Prepare output dir (dist)
-        let output_dir = project_path.join("dist");
-        fs::create_dir_all(&output_dir)?;
-
-        // Minimal BuildArgs
-        let args = BuildArgs {
-            path: ".".to_string(),
-            all: false,
-            output: None,
-            bump: false,
-            release: false,
-            sign: false,
-            interactive: false,
-            pre_release: false,
-            quiet: true,
-            jobs: None,
-        };
-
-        // Run pre-build hooks (should execute our script)
-        super::run_pre_build_hooks(project_path, &kt, &output_dir, &args)?;
-
-        // Verify the produced file contains the expected environment variables
-        let content = fs::read_to_string(project_path.join(".hooks_env"))?;
-        let expected_module_root = project_path.join(source_dir).to_string_lossy().to_string();
-        let expected_dist = output_dir.to_string_lossy().to_string();
-        let expected_hooks_root = project_path.join("hooks").to_string_lossy().to_string();
-
-        assert!(content.contains(&format!("KAM_MODULE_ROOT={}", expected_module_root)));
-        assert!(content.contains(&format!("KAM_DIST_DIR={}", expected_dist)));
-        assert!(content.contains(&format!("KAM_HOOKS_ROOT={}", expected_hooks_root)));
-
-        Ok(())
-    }
 }

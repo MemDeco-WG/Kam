@@ -113,21 +113,20 @@ pub fn build_project(
             .load_preset(comfy_table::presets::UTF8_FULL)
             .set_content_arrangement(comfy_table::ContentArrangement::Dynamic)
             .set_header(vec![
-                Cell::new(crate::i18n::tr_key("table.header.stat"))
+                Cell::new(crate::i18n::tr("table.header.stat"))
                     .fg(comfy_table::Color::Cyan)
                     .add_attribute(comfy_table::Attribute::Bold),
-                Cell::new(crate::i18n::tr_key("table.header.value"))
+                Cell::new(crate::i18n::tr("table.header.value"))
                     .fg(comfy_table::Color::Cyan)
                     .add_attribute(comfy_table::Attribute::Bold),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("table.header.module")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr("table.header.module")).fg(comfy_table::Color::Cyan),
                 Cell::new(format!("{} {}", module_id, display_version))
                     .fg(comfy_table::Color::Green),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("project.output_directory"))
-                    .fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr("project.output_directory")).fg(comfy_table::Color::Cyan),
                 Cell::new(output_dir.display().to_string()).fg(comfy_table::Color::White),
             ]);
 
@@ -163,7 +162,7 @@ pub fn build_project(
     // Run pre-build hooks only for non-template modules
     if !is_template_build {
         if let Some(pb) = &build_pb {
-            pb.set_message(crate::i18n::tr_key("hooks.running_pre"));
+            pb.set_message(crate::i18n::tr("hooks.running_pre"));
         }
         // Suspend the top-level progress bar while running pre-build hooks so any
         // interactive prompts or command output are not overwritten.
@@ -174,16 +173,16 @@ pub fn build_project(
             pb.inc(1);
         }
     } else if !args.quiet {
-        Utils::info(crate::i18n::tr_key("hooks.skipping_template_packaging"));
+        Utils::info(crate::i18n::tr("hooks.skipping_template_packaging"));
     }
 
     // For non-interactive environments, print a section separator for packaging; if we have a top-level build progress bar show its message
     let show_top_build_progress = build_pb.is_some();
     if !show_top_build_progress && !args.quiet {
-        Utils::section(crate::i18n::tr_key("build.packaging_artifacts"));
+        Utils::section(crate::i18n::tr("build.packaging_artifacts"));
     }
     if let Some(pb) = &build_pb {
-        pb.set_message(crate::i18n::tr_key("build.packaging_artifacts"));
+        pb.set_message(crate::i18n::tr("build.packaging_artifacts"));
     }
 
     let basename = determine_basename(&kam_toml)?;
@@ -221,27 +220,27 @@ pub fn build_project(
             .load_preset(comfy_table::presets::UTF8_FULL)
             .set_content_arrangement(comfy_table::ContentArrangement::Dynamic)
             .set_header(vec![
-                Cell::new(crate::i18n::tr_key("project.header"))
+                Cell::new(crate::i18n::tr("project.header"))
                     .fg(comfy_table::Color::Cyan)
                     .add_attribute(comfy_table::Attribute::Bold),
-                Cell::new(crate::i18n::tr_key("table.header.value"))
+                Cell::new(crate::i18n::tr("table.header.value"))
                     .fg(comfy_table::Color::Cyan)
                     .add_attribute(comfy_table::Attribute::Bold),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("project.build_time")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr("project.build_time")).fg(comfy_table::Color::Cyan),
                 Cell::new(format!("{:.2}s", build_duration.as_secs_f64()))
                     .fg(comfy_table::Color::Green)
                     .add_attribute(comfy_table::Attribute::Bold),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("project.package_size")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr("project.package_size")).fg(comfy_table::Color::Cyan),
                 Cell::new(&size_str)
                     .fg(comfy_table::Color::Green)
                     .add_attribute(comfy_table::Attribute::Bold),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("project.output_file")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr("project.output_file")).fg(comfy_table::Color::Cyan),
                 Cell::new(output_file.display().to_string()).fg(comfy_table::Color::White),
             ]);
         println!("{}", table);
@@ -251,7 +250,7 @@ pub fn build_project(
     // Run post-build hooks only for non-template modules
     if !is_template_build {
         if let Some(pb) = &build_pb {
-            pb.set_message(crate::i18n::tr_key("hooks.running_post"));
+            pb.set_message(crate::i18n::tr("hooks.running_post"));
         }
         // Suspend the top-level progress bar while running post-build hooks so that
         // any interactive prompts or subtree command outputs remain visible to the user.
@@ -260,7 +259,7 @@ pub fn build_project(
         })?;
         if let Some(pb) = &build_pb {
             pb.inc(1);
-            pb.finish_with_message(crate::i18n::tr_key("build.complete"));
+            pb.finish_with_message(crate::i18n::tr("build.complete"));
         }
     }
 
@@ -336,7 +335,7 @@ pub fn create_kam_module_zip(
     if !module_prop_exists {
         // Generate module.prop if it doesn't exist
         if !args.quiet {
-            Utils::info(crate::i18n::tr_key("packaging.generating_module_prop"));
+            Utils::info(crate::i18n::tr("packaging.generating_module_prop"));
         }
         let mut prop_content = String::new();
         prop_content.push_str(&format!("id={}\n", kam_toml.prop.id));
@@ -358,7 +357,7 @@ pub fn create_kam_module_zip(
         zip.start_file("module.prop", options)?;
         zip.write_all(prop_content.as_bytes())?;
     } else if !args.quiet {
-        Utils::info(crate::i18n::tr_key(
+        Utils::info(crate::i18n::tr(
             "packaging.using_existing_module_prop_from_hook",
         ));
     }
@@ -444,7 +443,7 @@ pub fn create_kam_module_zip(
             };
             pb.set_style(style);
             pb.enable_steady_tick(std::time::Duration::from_millis(100));
-            pb.set_message(crate::i18n::tr_key("packaging.files"));
+            pb.set_message(crate::i18n::tr("packaging.files"));
             Some(pb)
         };
         // Progress bar created only if not quiet
@@ -488,7 +487,7 @@ pub fn create_kam_module_zip(
                 if let Some(p) = &pb {
                     p.set_message(format!(
                         "{} {}",
-                        crate::i18n::tr_key("packaging.packaging"),
+                        crate::i18n::tr("packaging.packaging"),
                         display_name
                     ));
                 }
@@ -676,7 +675,7 @@ pub fn create_template_archive(
         };
         pb.set_style(style);
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
-        pb.set_message(crate::i18n::tr_key("packaging.files"));
+        pb.set_message(crate::i18n::tr("packaging.files"));
         Some(pb)
     };
 
@@ -723,7 +722,7 @@ pub fn create_template_archive(
             if let Some(p) = &pb {
                 p.set_message(format!(
                     "{} {}",
-                    crate::i18n::tr_key("packaging.packaging"),
+                    crate::i18n::tr("packaging.packaging"),
                     display_name
                 ));
             }

@@ -134,9 +134,10 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
 pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamError> {
     let start_time = Instant::now();
     let root_kam_toml = KamToml::load_from_dir(project_path)?;
-    let workspace = root_kam_toml.kam.workspace.as_ref().ok_or_else(|| {
-        KamError::InvalidConfig(crate::i18n::tr_key("build.no_workspace_section").to_string())
-    })?;
+    let workspace =
+        root_kam_toml.kam.workspace.as_ref().ok_or_else(|| {
+            KamError::InvalidConfig(crate::i18n::tr("build.no_workspace_section"))
+        })?;
 
     let mut results = Vec::new();
 
@@ -288,9 +289,9 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
         }
 
         if results.is_empty() {
-            return Err(KamError::InvalidConfig(
-                crate::i18n::tr_key("build.no_workspace_members").to_string(),
-            ));
+            return Err(KamError::InvalidConfig(crate::i18n::tr(
+                "build.no_workspace_members",
+            )));
         }
     } else {
         build_project(project_path, args, None)?;
@@ -302,7 +303,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     // 打印总结，让用户知道哪些成功了哪些失败了
     if !args.quiet {
         println!();
-        Utils::section(crate::i18n::tr_key("workspace.summary.title"));
+        Utils::section(crate::i18n::tr("workspace.summary.title"));
     }
 
     // 统计成功和失败的数量
@@ -312,15 +313,15 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
     if !args.quiet {
         let mut summary_table = Table::new();
         summary_table.set_header(vec![
-            crate::i18n::tr_key("table.header.module"),
-            crate::i18n::tr_key("table.header.status"),
+            crate::i18n::tr("table.header.module"),
+            crate::i18n::tr("table.header.status"),
         ]);
 
         for result in &results {
             if result.success {
                 summary_table.add_row(vec![
                     Cell::new(&result.member).fg(comfy_table::Color::White),
-                    Cell::new(crate::i18n::tr_key("status.success")).fg(comfy_table::Color::Green),
+                    Cell::new(crate::i18n::tr("status.success")).fg(comfy_table::Color::Green),
                 ]);
             } else {
                 let default_error = "unknown error".to_string();
@@ -340,23 +341,23 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
         let mut stats_table = Table::new();
         stats_table
             .set_header(vec![
-                crate::i18n::tr_key("table.header.stat"),
-                crate::i18n::tr_key("table.header.value"),
+                crate::i18n::tr("table.header.stat"),
+                crate::i18n::tr("table.header.value"),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("table.stat.total")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr("table.stat.total")).fg(comfy_table::Color::Cyan),
                 Cell::new(results.len().to_string()).fg(comfy_table::Color::White),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("table.stat.succeeded")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr("table.stat.succeeded")).fg(comfy_table::Color::Cyan),
                 Cell::new(success_count.to_string()).fg(comfy_table::Color::Green),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("table.stat.failed")).fg(comfy_table::Color::Cyan),
+                Cell::new(crate::i18n::tr("table.stat.failed")).fg(comfy_table::Color::Cyan),
                 Cell::new(failed_count.to_string()).fg(comfy_table::Color::Red),
             ])
             .add_row(vec![
-                Cell::new(crate::i18n::tr_key("table.stat.total_duration"))
+                Cell::new(crate::i18n::tr("table.stat.total_duration"))
                     .fg(comfy_table::Color::Cyan),
                 Cell::new(format!("{:.2}s", total_duration.as_secs_f64()))
                     .fg(comfy_table::Color::White),

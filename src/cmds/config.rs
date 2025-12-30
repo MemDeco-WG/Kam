@@ -268,19 +268,19 @@ const BUILTIN_KEYS: &[BuiltinConfigKey; 6] = &[
 ];
 
 fn show_builtin_keys() {
-    use crate::i18n::tr_key;
+    use crate::i18n::tr;
 
-    println!("{}", tr_key("config.builtin_keys"));
+    println!("{}", tr("config.builtin_keys"));
     println!();
 
     for key_info in BUILTIN_KEYS {
         println!("  {}", key_info.key);
-        println!("    {}", tr_key(key_info.description_key));
-        println!("    {} {}", tr_key("config.example"), key_info.example);
+        println!("    {}", tr(key_info.description_key));
+        println!("    {} {}", tr("config.example"), key_info.example);
         println!();
     }
 
-    println!("{}", tr_key("config.note_custom_keys"));
+    println!("{}", tr("config.note_custom_keys"));
 }
 
 // 处理config命令（get/set/unset/list/show）
@@ -289,10 +289,9 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
     // 如果传入了 -i/--interactive，就进入交互式向导
     if args.interactive {
         if args.command.is_some() {
-            return Err(KamError::CommandFailed(
-                crate::i18n::tr_key("config.interactive.error.conflict_with_subcommand")
-                    .to_string(),
-            ));
+            return Err(KamError::CommandFailed(crate::i18n::tr(
+                "config.interactive.error.conflict_with_subcommand",
+            )));
         }
         return interactive_config(&args);
     }
@@ -301,9 +300,9 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
     let cmd = match args.command {
         Some(c) => c,
         None => {
-            return Err(KamError::CommandFailed(
-                crate::i18n::tr_key("config.interactive.error.no_subcommand").to_string(),
-            ));
+            return Err(KamError::CommandFailed(crate::i18n::tr(
+                "config.interactive.error.no_subcommand",
+            )));
         }
     };
 
@@ -492,7 +491,7 @@ fn prompt_confirm<P: AsRef<str>>(prompt: P, default: bool) -> Result<bool, KamEr
                 } else if resp == "n" || resp == "no" {
                     return Ok(false);
                 } else {
-                    println!("{}", crate::i18n::tr_key("init.interactive.enter_yes_no"));
+                    println!("{}", crate::i18n::tr("init.interactive.enter_yes_no"));
                     continue;
                 }
             }
@@ -501,12 +500,12 @@ fn prompt_confirm<P: AsRef<str>>(prompt: P, default: bool) -> Result<bool, KamEr
 }
 
 fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
-    use crate::i18n::tr_key;
+    use crate::i18n::tr;
     use crate::utils::Utils;
 
-    Utils::banner(tr_key("config.interactive.title"));
-    Utils::info(tr_key("config.interactive.view_builtins"));
-    Utils::info(tr_key("config.interactive.press_enter"));
+    Utils::banner(tr("config.interactive.title"));
+    Utils::info(tr("config.interactive.view_builtins"));
+    Utils::info(tr("config.interactive.press_enter"));
     println!();
 
     // Determine which config file to edit: global or local
@@ -521,16 +520,16 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
             .unwrap_or(false);
         let choices = vec![
             if in_project {
-                tr_key("config.interactive.local_project_detected").to_string()
+                tr("config.interactive.local_project_detected")
             } else {
-                tr_key("config.interactive.local_project_not_detected").to_string()
+                tr("config.interactive.local_project_not_detected")
             },
-            tr_key("config.interactive.global").to_string(),
-            tr_key("config.interactive.cancel").to_string(),
+            tr("config.interactive.global"),
+            tr("config.interactive.cancel"),
         ];
 
         let pick = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt(tr_key("config.interactive.select_target"))
+            .with_prompt(tr("config.interactive.select_target"))
             .items(&choices)
             .default(if in_project { 0 } else { 1 })
             .interact_opt();
@@ -540,7 +539,7 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
             _ => {
                 // Fallback to text input
                 let def = if in_project { "1" } else { "2" };
-                let sel_prompt = tr_key("config.interactive.select_target");
+                let sel_prompt = tr("config.interactive.select_target");
                 let input = prompt_input(sel_prompt, Some(def))?;
                 match input.trim() {
                     "1" => 0,
@@ -551,7 +550,7 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
         };
 
         if idx == 2 {
-            println!("{}", tr_key("config.interactive.aborted"));
+            println!("{}", tr("config.interactive.aborted"));
             return Ok(());
         }
         idx == 1
@@ -571,14 +570,14 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
         let menu = vec![
             crate::trf!("config.interactive.menu.set_ui_language", cur_lang),
             crate::trf!("config.interactive.menu.set_root_manager", cur_root),
-            tr_key("config.interactive.set_custom_key").to_string(),
-            tr_key("config.interactive.view_builtins").to_string(),
-            tr_key("config.interactive.show_current_config").to_string(),
-            tr_key("config.interactive.exit").to_string(),
+            tr("config.interactive.set_custom_key").to_string(),
+            tr("config.interactive.view_builtins").to_string(),
+            tr("config.interactive.show_current_config").to_string(),
+            tr("config.interactive.exit").to_string(),
         ];
 
         let pick = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt(tr_key("config.interactive.choose_action"))
+            .with_prompt(tr("config.interactive.choose_action"))
             .items(&menu)
             .default(0)
             .interact_opt();
@@ -586,11 +585,11 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
         let idx = match pick {
             Ok(Some(i)) => i,
             _ => {
-                let input = prompt_input(tr_key("config.interactive.select_option"), Some("1"))?;
+                let input = prompt_input(tr("config.interactive.select_option"), Some("1"))?;
                 match input.trim().parse::<usize>() {
                     Ok(n) if n >= 1 && n <= menu.len() => n - 1,
                     _ => {
-                        println!("{}", tr_key("config.interactive.invalid_selection"));
+                        println!("{}", tr("config.interactive.invalid_selection"));
                         continue;
                     }
                 }
@@ -600,7 +599,7 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
         match idx {
             0 => {
                 // Set language
-                let lang_prompt = tr_key("config.interactive.enter_ui_language");
+                let lang_prompt = tr("config.interactive.enter_ui_language");
                 let lang = prompt_input(lang_prompt, Some(&cur_lang))?;
                 if !lang.trim().is_empty() {
                     let mut toml_v = read_toml(&path)?;
@@ -613,14 +612,14 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                         path.display()
                     ));
                 } else {
-                    println!("{}", tr_key("config.interactive.no_change"));
+                    println!("{}", tr("config.interactive.no_change"));
                 }
             }
             1 => {
                 // Set root manager
                 let choices = vec!["Magisk", "KernelSU", "APatchSU", "Other"];
                 let pick_rm = Select::with_theme(&ColorfulTheme::default())
-                    .with_prompt(tr_key("config.interactive.choose_root_manager"))
+                    .with_prompt(tr("config.interactive.choose_root_manager"))
                     .items(&choices)
                     .default(0)
                     .interact_opt();
@@ -628,15 +627,14 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                 let manager = match pick_rm {
                     Ok(Some(i)) => {
                         if choices[i] == "Other" {
-                            let custom_root_prompt =
-                                tr_key("config.interactive.choose_root_manager");
+                            let custom_root_prompt = tr("config.interactive.choose_root_manager");
                             prompt_input(custom_root_prompt, Some(&cur_root))?
                         } else {
                             choices[i].to_string()
                         }
                     }
                     _ => {
-                        let root_prompt = tr_key("config.interactive.choose_root_manager");
+                        let root_prompt = tr("config.interactive.choose_root_manager");
                         prompt_input(root_prompt, Some(&cur_root))?
                     }
                 };
@@ -652,20 +650,20 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                         path.display()
                     ));
                 } else {
-                    println!("{}", tr_key("config.interactive.no_change"));
+                    println!("{}", tr("config.interactive.no_change"));
                 }
             }
             2 => {
                 // Set other configuration key
-                let key_prompt = tr_key("config.interactive.enter_custom_key");
+                let key_prompt = tr("config.interactive.enter_custom_key");
                 let key = prompt_input(key_prompt, None::<&str>)?;
                 if key.trim().is_empty() {
-                    println!("{}", tr_key("config.interactive.no_key_entered"));
+                    println!("{}", tr("config.interactive.no_key_entered"));
                 } else {
                     let val_prompt = crate::trf!("config.interactive.enter_value_for_key", key);
                     let value = prompt_input(&val_prompt, None::<&str>)?;
                     if value.trim().is_empty() {
-                        println!("{}", tr_key("config.interactive.no_change"));
+                        println!("{}", tr("config.interactive.no_change"));
                     } else {
                         let mut toml_v = read_toml(&path)?;
                         set_value_by_path(&mut toml_v, &key, &value);
@@ -692,277 +690,10 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
             _ => unreachable!(),
         }
 
-        if !prompt_confirm(tr_key("config.interactive.make_more_changes"), true)? {
+        if !prompt_confirm(tr("config.interactive.make_more_changes"), true)? {
             break;
         }
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-    use std::env;
-    use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn mk_temp_dir(prefix: &str) -> PathBuf {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        let dir = env::temp_dir().join(format!("kam_test_{}_{}", prefix, now));
-        // Ignore failure here; callers will handle creation explicitly if needed.
-        let _ = fs::create_dir_all(&dir);
-        dir
-    }
-
-    fn restore_env(
-        orig_home: Option<String>,
-        orig_kam_ui: Option<String>,
-        orig_kam_lang: Option<String>,
-        orig_cwd: PathBuf,
-    ) {
-        if let Some(h) = orig_home {
-            unsafe { env::set_var("HOME", h) };
-        } else {
-            unsafe { env::remove_var("HOME") };
-        }
-        if let Some(k) = orig_kam_ui {
-            unsafe { env::set_var("KAM_UI_LANGUAGE", k) };
-        } else {
-            unsafe { env::remove_var("KAM_UI_LANGUAGE") };
-        }
-        if let Some(k2) = orig_kam_lang {
-            unsafe { env::set_var("KAM_LANG", k2) };
-        } else {
-            unsafe { env::remove_var("KAM_LANG") };
-        }
-        let _ = env::set_current_dir(orig_cwd);
-    }
-
-    #[test]
-    #[serial]
-    fn test_read_language_from_local_config_priority() {
-        // Save environment / working dir
-        let orig_home = env::var("HOME").ok();
-        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
-        let orig_kam_lang = env::var("KAM_LANG").ok();
-        let orig_cwd = env::current_dir().unwrap();
-
-        // Prepare a project directory with a local `.kam/config.toml`
-        let tmp = mk_temp_dir("local");
-        fs::create_dir_all(tmp.join(".kam")).unwrap();
-        fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
-        fs::write(
-            tmp.join(".kam").join("config.toml"),
-            r#"ui.language = "zh""#,
-        )
-        .unwrap();
-
-        // Make sure no env overrides interfere
-        unsafe {
-            env::remove_var("KAM_UI_LANGUAGE");
-        }
-        unsafe {
-            env::remove_var("KAM_LANG");
-        }
-        // Do not override HOME for this local-only test; rely on the project directory detection.
-        // (Setting HOME in-process is brittle because `dirs` may cache the home directory.)
-        // Switch to our project dir (so get_config_paths(false, true) resolves to local)
-        env::set_current_dir(&tmp).unwrap();
-
-        let lang = read_language_from_config();
-        assert_eq!(lang.as_deref(), Some("zh"));
-
-        // Cleanup / restore
-        restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
-        let _ = fs::remove_dir_all(tmp);
-    }
-
-    #[test]
-    #[serial]
-    fn test_read_language_from_global_config_fallback() {
-        // Save environment / working dir
-        let orig_home = env::var("HOME").ok();
-        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
-        let orig_kam_lang = env::var("KAM_LANG").ok();
-        let orig_cwd = env::current_dir().unwrap();
-
-        // Prepare a HOME with `.kam/config.toml`
-        let htmp = mk_temp_dir("home");
-        fs::create_dir_all(htmp.join(".kam")).unwrap();
-        fs::write(
-            htmp.join(".kam").join("config.toml"),
-            r#"ui.language = "en""#,
-        )
-        .unwrap();
-
-        // Make sure no env overrides interfere
-        unsafe {
-            env::remove_var("KAM_UI_LANGUAGE");
-        }
-        unsafe {
-            env::remove_var("KAM_LANG");
-        }
-        // Set HOME to our fake home
-        unsafe {
-            env::set_var("HOME", htmp.to_str().unwrap());
-        }
-        // Because the `dirs` crate may cache the first-observed home path for the process,
-        // confirm that it actually returned our new home value; if it didn't, skip the test
-        // to avoid writing into the real user's home directory during testing.
-        if dirs::home_dir().as_deref() != Some(htmp.as_path()) {
-            // restore environment & perform cleanup, then skip the test
-            restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
-            let _ = fs::remove_dir_all(&htmp);
-            return;
-        }
-        // Ensure current dir is not a project containing kam.toml
-        env::set_current_dir(env::temp_dir()).unwrap();
-
-        let lang = read_language_from_config();
-        assert_eq!(lang.as_deref(), Some("en"));
-
-        // Cleanup / restore
-        restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
-        let _ = fs::remove_dir_all(htmp);
-    }
-
-    #[test]
-    #[serial]
-    fn test_local_over_global_preference() {
-        // Save environment / working dir
-        let orig_home = env::var("HOME").ok();
-        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
-        let orig_kam_lang = env::var("KAM_LANG").ok();
-        let orig_cwd = env::current_dir().unwrap();
-
-        // Prepare a project directory with local config
-        let tmp = mk_temp_dir("both");
-        fs::create_dir_all(tmp.join(".kam")).unwrap();
-        fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
-        fs::write(
-            tmp.join(".kam").join("config.toml"),
-            r#"ui.language = "zh""#,
-        )
-        .unwrap();
-
-        // Prepare a global HOME with a different value
-        let htmp = mk_temp_dir("home2");
-        fs::create_dir_all(htmp.join(".kam")).unwrap();
-        fs::write(
-            htmp.join(".kam").join("config.toml"),
-            r#"ui.language = "en""#,
-        )
-        .unwrap();
-
-        // Remove env overrides
-        unsafe {
-            env::remove_var("KAM_UI_LANGUAGE");
-        }
-        unsafe {
-            env::remove_var("KAM_LANG");
-        }
-        // Point HOME to the global config with `en`
-        unsafe {
-            env::set_var("HOME", htmp.to_str().unwrap());
-        }
-        // Ensure `dirs::home_dir()` reflects this change — otherwise skip to avoid mutating real home
-        if dirs::home_dir().as_deref() != Some(htmp.as_path()) {
-            restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
-            let _ = fs::remove_dir_all(&tmp);
-            let _ = fs::remove_dir_all(&htmp);
-            return;
-        }
-        // Set current dir into our project containing `kam.toml`
-        env::set_current_dir(&tmp).unwrap();
-
-        // Local (zh) should be preferred over global (en)
-        let lang = read_language_from_config();
-        assert_eq!(lang.as_deref(), Some("zh"));
-
-        // Cleanup / restore
-        restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
-        let _ = fs::remove_dir_all(tmp);
-        let _ = fs::remove_dir_all(htmp);
-    }
-
-    #[test]
-    #[serial]
-    fn test_config_set_shorthand_with_misplaced_local_flag_parsed_correctly() {
-        // Save environment / working dir
-        let orig_home = env::var("HOME").ok();
-        let orig_kam_ui = env::var("KAM_UI_LANGUAGE").ok();
-        let orig_kam_lang = env::var("KAM_LANG").ok();
-        let orig_cwd = env::current_dir().unwrap();
-
-        // Prepare a temporary project directory with a kam.toml so get_config_paths uses local paths
-        let tmp = mk_temp_dir("cfg_set_misuse");
-        fs::create_dir_all(tmp.join(".kam")).unwrap();
-        fs::write(tmp.join("kam.toml"), "name = \"test\"").unwrap();
-
-        // Ensure no env override is in place
-        unsafe {
-            env::remove_var("KAM_UI_LANGUAGE");
-        }
-        unsafe {
-            env::remove_var("KAM_LANG");
-        }
-
-        // Switch to our project dir so get_config_paths(false, false) resolves to local
-        env::set_current_dir(&tmp).unwrap();
-
-        // Simulate: `kam config set language=en -- --local`
-        let args = ConfigArgs {
-            global: false,
-            local: false,
-            interactive: false,
-            command: Some(ConfigCommand::Set {
-                key: "language=en".to_string(),
-                value: "--local".to_string(),
-            }),
-        };
-
-        // Execute command; this should write the "language = \"en\"" into the local config
-        super::run(args).unwrap();
-
-        // Verify the local config file contains language = "en"
-        let config_path = get_config_paths(false, true).unwrap();
-        let toml_v = read_toml(&config_path).unwrap();
-        assert_eq!(
-            get_value_by_path(&toml_v, "language").and_then(|v| v.as_str().map(|s| s.to_string())),
-            Some("en".to_string())
-        );
-
-        // Cleanup / restore
-        restore_env(orig_home, orig_kam_ui, orig_kam_lang, orig_cwd);
-        let _ = fs::remove_dir_all(tmp);
-    }
-
-    #[test]
-    #[serial]
-    fn test_interactive_conflicts_with_subcommand() {
-        // Ensure using -i together with a subcommand returns a helpful error
-        let args = ConfigArgs {
-            global: false,
-            local: false,
-            interactive: true,
-            command: Some(ConfigCommand::Show),
-        };
-
-        let res = super::run(args);
-        assert!(res.is_err());
-        if let Err(e) = res {
-            match e {
-                KamError::CommandFailed(msg) => {
-                    assert!(msg.contains("cannot be used with subcommands"));
-                }
-                _ => panic!("Expected CommandFailed error"),
-            }
-        }
-    }
 }

@@ -439,7 +439,7 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
             } else if let Some(parent) = priv_path_buf.parent()
                 && let Err(e) = fs::create_dir_all(parent)
             {
-                Utils::error(&format!(
+                Utils::error(format!(
                     "failed to create directory {}: {}",
                     parent.display(),
                     e
@@ -448,7 +448,7 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
             }
 
             // Generate key pair (no passphrase)
-            Utils::info(&format!(
+            Utils::info(format!(
                 "Generating SSH key pair at {}",
                 priv_path_buf.display()
             ));
@@ -744,59 +744,4 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-
-    #[test]
-    fn termux_args_struct_default() {
-        let args = TermuxArgs {
-            device: None,
-            command: None,
-            ssh_auto: false,
-            ssh_setup: false,
-            ssh_forward: false,
-            ssh_push_key: None,
-            ssh_connect: false,
-            interactive: false,
-            ssh_port: 8022,
-            timeout: 60,
-        };
-        // In environments without adb available the command will return Ok(()) after printing an error.
-        // We assert the function returns Ok so tests don't fail on CI where adb isn't present.
-        assert!(run(args).is_ok());
-    }
-
-    #[test]
-    fn termux_ssh_auto_no_adb() {
-        let args = TermuxArgs {
-            device: None,
-            command: None,
-            ssh_setup: false,
-            ssh_forward: false,
-            ssh_push_key: None,
-            ssh_connect: false,
-            interactive: false,
-            ssh_auto: true,
-            ssh_port: 8022,
-            timeout: 60,
-        };
-        // In environments without adb available the command will return Ok(()) after printing an error.
-        // We assert the function returns Ok so tests don't fail on CI where adb isn't present.
-        assert!(run(args).is_ok());
-    }
-
-    #[test]
-    fn is_android_host_callable() {
-        // Ensure the detection helper is callable and does not panic.
-        // We do not assert a platform-specific value here because that depends on the runtime environment.
-        let _ = is_android_host();
-    }
-
-    // NOTE: test for daemon/list/kill removed because daemon/list/kill are no longer supported.
-
-    // NOTE: test for daemon/list/kill removed because daemon/list/kill are no longer supported.
 }

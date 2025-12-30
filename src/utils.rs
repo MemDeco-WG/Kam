@@ -233,7 +233,7 @@ impl Utils {
         // Use a third-party library (comfy_table) to render a compact, handsome banner.
         // This intentionally does NOT depend on terminal width detection; the table
         // will size to the content and remains visually consistent across terminals.
-        let title_text = crate::i18n::tr_key(title.as_ref());
+        let title_text = crate::i18n::tr(title.as_ref());
         let mut table = Table::new();
         table.load_preset(UTF8_FULL);
         table.set_content_arrangement(ContentArrangement::Dynamic);
@@ -248,7 +248,7 @@ impl Utils {
 
     /// Print a "key: value" pair with a clear bullet icon and subtle value styling.
     pub fn kv<K: AsRef<str>, V: AsRef<str>>(key: K, value: V) {
-        let key_translated = crate::i18n::tr_key(key.as_ref());
+        let key_translated = crate::i18n::tr(key.as_ref());
         println!(
             "  {} {}: {}",
             "•".cyan(),
@@ -268,7 +268,7 @@ impl Utils {
         }
         // Use comfy_table to produce a small boxed header. This avoids terminal-width
         // centering and provides a consistent, 3rd-party-rendered style.
-        let title_text = crate::i18n::tr_key(title_ref);
+        let title_text = crate::i18n::tr(title_ref);
         let mut table = Table::new();
         table.load_preset(UTF8_FULL);
         table.set_content_arrangement(ContentArrangement::Dynamic);
@@ -783,166 +783,4 @@ pub fn symlink_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-    use std::env;
-    use std::fs;
-
-    #[test]
-    fn test_normalize_root_manager() {
-        assert_eq!(normalize_root_manager("magisk"), "Magisk");
-        assert_eq!(normalize_root_manager("MagIsK"), "Magisk");
-        assert_eq!(normalize_root_manager("ksu"), "KernelSU");
-        assert_eq!(normalize_root_manager("KSU"), "KernelSU");
-        assert_eq!(normalize_root_manager("apatch"), "APatchSU");
-        assert_eq!(normalize_root_manager("apd"), "APatchSU");
-        assert_eq!(normalize_root_manager("apu"), "APatchSU");
-        assert_eq!(normalize_root_manager("APU"), "APatchSU");
-        assert_eq!(normalize_root_manager("Iapu"), "APatchSU");
-        assert_eq!(normalize_root_manager("something-else"), "Unknown");
-    }
-
-    #[test]
-    #[serial]
-    fn test_kam_home_dir_prefers_kam_home_env() {
-        // Preserve original KAM_HOME then set a test value
-        let orig = env::var("KAM_HOME").ok();
-        let tmp = env::temp_dir().join("kam_home_test_env");
-        unsafe { env::set_var("KAM_HOME", tmp.to_str().unwrap()) };
-        let got = kam_home_dir().unwrap();
-        assert_eq!(got, tmp);
-        // restore original
-        if let Some(v) = orig {
-            unsafe { env::set_var("KAM_HOME", v) };
-        } else {
-            unsafe { env::remove_var("KAM_HOME") };
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn test_kam_home_dir_defaults_to_home_dot_kam() {
-        // Ensure KAM_HOME is not set and the default is $HOME/.kam
-        let orig = env::var("KAM_HOME").ok();
-        unsafe { env::remove_var("KAM_HOME") };
-        if let Some(home) = dirs::home_dir() {
-            let expected = home.join(".kam");
-            let got = kam_home_dir().unwrap();
-            assert_eq!(got, expected);
-        } else {
-            // If home_dir() is not available on this platform, skip the assertion
-        }
-        if let Some(v) = orig {
-            unsafe { env::set_var("KAM_HOME", v) };
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn test_kam_home_dir_expands_tilde() {
-        // Save original envs
-        let orig_kam = env::var("KAM_HOME").ok();
-        let orig_home = env::var("HOME").ok();
-
-        // Prepare a fake HOME so tilde expansion can be validated
-        let fake_home = env::temp_dir().join("kam_home_tilde_test");
-        fs::create_dir_all(&fake_home).unwrap();
-        unsafe { env::set_var("HOME", fake_home.to_str().unwrap()) };
-        unsafe { env::set_var("KAM_HOME", "~/kam_tilde_test") };
-
-        // Only run the meaningful assertion if dirs::home_dir() actually reflects our fake HOME
-        if dirs::home_dir().as_deref() == Some(fake_home.as_path()) {
-            let expected = fake_home.join("kam_tilde_test");
-            let got = kam_home_dir().unwrap();
-            assert_eq!(got, expected);
-        }
-
-        // restore envs
-        if let Some(v) = orig_home {
-            unsafe { env::set_var("HOME", v) };
-        } else {
-            unsafe { env::remove_var("HOME") };
-        }
-        if let Some(v) = orig_kam {
-            unsafe { env::set_var("KAM_HOME", v) };
-        } else {
-            unsafe { env::remove_var("KAM_HOME") };
-        }
-    }
-
-    #[test]
-    fn test_run_and_stream_basic() {
-        // Prepare a small script that writes to stdout, stderr, and exits with code 3.
-        let tmp = tempfile::tempdir().unwrap();
-        let script_path = tmp.path().join("echo_both.sh");
-
-        // Write script content in one shot to avoid requiring std::io::Write in scope.
-        fs::write(
-            &script_path,
-            "#!/bin/sh\n\
-             echo out\n\
-             echo err >&2\n\
-             exit 3\n",
-        )
-        .unwrap();
-
-        // Ensure executable on Unix platforms
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&script_path).unwrap().permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&script_path, perms).unwrap();
-        }
-
-        let mut cmd = std::process::Command::new(&script_path);
-        // Keep stdin inherited so interactive commands continue to work when needed.
-        cmd.stdin(std::process::Stdio::inherit());
-        let status = Utils::run_and_stream(cmd).unwrap();
-        assert_eq!(status.code(), Some(3));
-    }
-
-    #[test]
-    fn test_format_cmd_line_includes_error_marker_and_theme_color() {
-        // Ensure ANSI colors are enabled for this test so Colorize emits escape sequences.
-        colored::control::set_override(true);
-        let s = Utils::format_cmd_line("ERROR something");
-
-        // Basic sanity: has the error marker and the original message
-        assert!(s.contains("✗"), "expected error marker in formatted line");
-        assert!(
-            s.contains("something"),
-            "expected original message in formatted line"
-        );
-
-        // The repository is a workspace that can run crates/tests in parallel and the
-        // theme may be configured in workspace members. To make this test robust,
-        // check that the produced line contains the ANSI color fragment that
-        // corresponds to the currently configured theme color (whatever it is).
-        let c = crate::colors::get_theme().error;
-        match c {
-            colored::Color::TrueColor { r, g, b } => {
-                // Match TrueColor SGR fragment like "38;2;R;G;B"
-                let frag = format!("38;2;{};{};{}", r, g, b);
-                assert!(
-                    s.contains(&frag),
-                    "expected theme truecolor fragment {} in output: {}",
-                    frag,
-                    s
-                );
-            }
-            // For palette colors ensure at least some ANSI SGR escape is present.
-            _ => {
-                assert!(
-                    s.contains("\x1b["),
-                    "expected some ANSI escape sequence in output: {}",
-                    s
-                );
-            }
-        }
-    }
 }

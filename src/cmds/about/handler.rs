@@ -128,25 +128,25 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
 
     // Rows:
     table.add_row(Row::from(vec![
-        Cell::new(crate::i18n::tr_key("about.author")).add_attribute(Attribute::Bold),
+        Cell::new(crate::i18n::tr("about.author")).add_attribute(Attribute::Bold),
         Cell::new(author_raw),
     ]));
 
     if let Some(email) = email {
         table.add_row(Row::from(vec![
-            Cell::new(crate::i18n::tr_key("about.email")).add_attribute(Attribute::Bold),
+            Cell::new(crate::i18n::tr("about.email")).add_attribute(Attribute::Bold),
             Cell::new(email),
         ]));
     }
 
     table.add_row(Row::from(vec![
-        Cell::new(crate::i18n::tr_key("about.developer")).add_attribute(Attribute::Bold),
+        Cell::new(crate::i18n::tr("about.developer")).add_attribute(Attribute::Bold),
         Cell::new(dev_site),
     ]));
 
     if !description.is_empty() {
         table.add_row(Row::from(vec![
-            Cell::new(crate::i18n::tr_key("about.description")).add_attribute(Attribute::Bold),
+            Cell::new(crate::i18n::tr("about.description")).add_attribute(Attribute::Bold),
             Cell::new(description),
         ]));
     }
@@ -156,23 +156,23 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
         && !repo.trim().is_empty()
     {
         table.add_row(Row::from(vec![
-            Cell::new(crate::i18n::tr_key("about.repository")).add_attribute(Attribute::Bold),
+            Cell::new(crate::i18n::tr("about.repository")).add_attribute(Attribute::Bold),
             Cell::new(repo),
         ]));
     }
 
     // 打印banner和表格，看起来比较专业（虽然其实没啥用）
-    Utils::banner(&format!("{} {}", name, display_version));
+    Utils::banner(format!("{} {}", name, display_version));
     println!("{}", table);
     println!(); // 空行，视觉上舒服点
 
-    Utils::info(crate::i18n::tr_key("about.info.command_informational"));
-    Utils::info(crate::i18n::tr_key("about.info.use_other_commands"));
+    Utils::info(crate::i18n::tr("about.info.command_informational"));
+    Utils::info(crate::i18n::tr("about.info.use_other_commands"));
     println!();
 
-    Utils::section(crate::i18n::tr_key("about.thanks"));
-    Utils::info(crate::i18n::tr_key("about.enjoy"));
-    Utils::success(crate::i18n::tr_key("about.powered")); // 这句有点中二，但留着吧
+    Utils::section(crate::i18n::tr("about.thanks"));
+    Utils::info(crate::i18n::tr("about.enjoy"));
+    Utils::success(crate::i18n::tr("about.powered")); // 这句有点中二，但留着吧
     // 其实这个命令没啥用，就是显示个信息，但至少看起来比较专业（？）
 
     Ok(())

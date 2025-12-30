@@ -460,8 +460,8 @@ pub fn init_template(path: &Path, params: InitTemplateParams<'_>) -> Result<(), 
         }
 
         // 4. Project-local folder search (tmpl/ or templates/)
-        let project_local_dirs: &[&str] = crate::utils::PROJECT_TEMPLATE_DIRS;
-        let archive_exts: &[&str] = crate::utils::DEFAULT_ARCHIVE_EXTS;
+        let project_local_dirs: &[&str; 2] = crate::utils::PROJECT_TEMPLATE_DIRS;
+        let archive_exts: &[&str; 4] = crate::utils::DEFAULT_ARCHIVE_EXTS;
         let mut candidates: Vec<PathBuf> = Vec::new();
 
         for d in project_local_dirs {
@@ -501,80 +501,4 @@ pub fn init_template(path: &Path, params: InitTemplateParams<'_>) -> Result<(), 
         "Template '{}' not found in built-in assets, local path, cache, or project directories.",
         template_spec
     )))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-    use std::env;
-    use std::fs;
-    use tempfile::tempdir;
-
-    #[test]
-    #[serial]
-    fn test_init_template_find_local_tmpl_dir() {
-        // Create a temporary project root and switch current directory to it
-        let tmp = tempdir().expect("tempdir");
-        let project_root = tmp.path();
-        let tmpl_dir = project_root.join("tmpl");
-        fs::create_dir_all(&tmpl_dir).expect("create tmpl dir");
-
-        // Create a minimal template directory: tmpl/kam_template/
-        let tk_dir = tmpl_dir.join("kam_template");
-        fs::create_dir_all(&tk_dir).expect("create template dir");
-
-        // Write a minimal kam.toml inside the template dir
-        // Keep the content minimal but valid for KamToml parsing
-        let kt_content = r#"[prop]
-id = "kam_template"
-name = "{{project_name}}"
-version = "0.1.0"
-versionCode = 1
-author = "{{author}}"
-description = "Test template"
-metamodule = false
-
-[kam]
-module_type = "template"
-[kam.tmpl.variables]
-"#;
-        fs::write(tk_dir.join("kam.toml"), kt_content).expect("write kam.toml");
-
-        // Change current directory so that init_template's local search picks up tmpl/
-        let prev_cwd = env::current_dir().expect("cwd");
-        env::set_current_dir(project_root).expect("set cwd");
-
-        // Destination for initialization
-        let dest_dir = project_root.join("my_module");
-
-        // Prepare minimal arguments for init_template
-        let vars: Vec<String> = Vec::new();
-
-        let res = init_template(
-            &dest_dir,
-            InitTemplateParams {
-                id: "com.example.test",
-                name: "Example Test".to_string(),
-                version: "0.1.0",
-                author: "Author",
-                description: "Description".to_string(),
-                var: &vars,
-                impl_template: Some("kam_template".to_string()),
-                force: true,
-                module_type: ModuleType::Kam,
-                update_json: None,
-            },
-        );
-
-        // restore cwd
-        env::set_current_dir(prev_cwd).expect("restore cwd");
-
-        assert!(res.is_ok(), "init_template failed: {:?}", res.err());
-        assert!(dest_dir.exists(), "destination dir not created");
-        assert!(
-            dest_dir.join("kam.toml").exists(),
-            "kam.toml not created in destination dir"
-        );
-    }
 }

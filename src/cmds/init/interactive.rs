@@ -850,15 +850,15 @@ fn save_global_config(
 
 pub fn run(args: InitArgs) -> Result<(), KamError> {
     use crate::utils::Utils;
-    Utils::banner(crate::i18n::tr_key("init.interactive.title"));
-    Utils::info(crate::i18n::tr_key("init.interactive.press_enter"));
+    Utils::banner(crate::i18n::tr("init.interactive.title"));
+    Utils::info(crate::i18n::tr("init.interactive.press_enter"));
     println!();
 
     // Prepare defaults (non-interactive sanity pass)
     let mut data = match pre_init::prepare_init(&args) {
         Ok(d) => d,
         Err(e) => {
-            Utils::error(&format!("Failed to prepare initialization defaults: {}", e));
+            Utils::error(format!("Failed to prepare initialization defaults: {}", e));
             return Err(e);
         }
     };
@@ -1052,7 +1052,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     Utils::section("init.interactive.summary_title");
     Utils::kv(
         "init.interactive.summary.path",
-        &data.path.display().to_string(),
+        data.path.display().to_string(),
     );
     Utils::kv("init.interactive.summary.module_id", &data.id);
     Utils::kv("init.interactive.summary.project_name", &data.name);
@@ -1063,7 +1063,7 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         println!(
             "  {} {}",
             "•".cyan(),
-            crate::i18n::tr_key("init.interactive.template_variables").bold()
+            crate::i18n::tr("init.interactive.template_variables").bold()
         );
         for (k, v) in &data.template_vars {
             println!("    {} {} = {}", "→".blue().dimmed(), k.bold(), v.dimmed());
@@ -1105,11 +1105,9 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     // Post-process
     post_init::post_process(&data.path)?;
 
-    Utils::success(crate::i18n::tr_key(
-        "init.interactive.completed_successfully",
-    ));
+    Utils::success(crate::i18n::tr("init.interactive.completed_successfully"));
     println!();
-    Utils::info(crate::i18n::tr_key("init.interactive.next_steps"));
+    Utils::info(crate::i18n::tr("init.interactive.next_steps"));
     println!("  {} cd {}", "→".blue(), data.path.display());
     println!("  {} kam build", "→".blue());
     Ok(())

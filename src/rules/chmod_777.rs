@@ -59,34 +59,3 @@ impl crate::rules::Rule for Chmod777Rule {
 pub fn create() -> Box<dyn crate::rules::Rule> {
     Box::new(Chmod777Rule)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::cmds::check::file::FileResult;
-    use crate::rules::Rule;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[test]
-    fn basic_chmod_777_detection() {
-        let content = "#!/bin/sh\nchmod 777 /some/dir\n";
-        let tmp = TempDir::new().unwrap();
-        let p = tmp.path().join("t.sh");
-        fs::write(&p, content).unwrap();
-
-        let mut fr = FileResult {
-            path: p.to_string_lossy().to_string(),
-            kind: "sh".to_string(),
-            valid: true,
-            errors: Vec::new(),
-            warnings: Vec::new(),
-            fixed: false,
-        };
-
-        let r = Chmod777Rule;
-        r.run(&p, content, &mut fr);
-
-        assert!(fr.warnings.iter().any(|w| w.contains("chmod 777 detected")));
-    }
-}

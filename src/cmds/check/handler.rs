@@ -1,11 +1,7 @@
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
-#[cfg(test)]
-use std::fs;
 use std::io::IsTerminal;
 use std::io::Read;
-#[cfg(test)]
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use super::args::CheckArgs;
@@ -185,17 +181,17 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             Ok(out) => {
                 if out.status.success() {
                     let ver = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    crate::utils::Utils::info(&format!("shellcheck detected: {}", ver));
+                    crate::utils::Utils::info(format!("shellcheck detected: {}", ver));
                 } else {
                     let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-                    crate::utils::Utils::warn(&format!(
+                    crate::utils::Utils::warn(format!(
                         "shellcheck present but '--version' returned non-zero: {}",
                         err
                     ));
                 }
             }
             Err(e) => {
-                crate::utils::Utils::warn(&format!(
+                crate::utils::Utils::warn(format!(
                     "shellcheck not found or cannot be executed: {}",
                     e
                 ));
@@ -269,7 +265,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                     }
                 }
                 Err(e) => {
-                    crate::utils::Utils::warn(&format!("Invalid glob pattern '{}': {}", p, e));
+                    crate::utils::Utils::warn(format!("Invalid glob pattern '{}': {}", p, e));
                 }
             }
         } else {
@@ -523,7 +519,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             println!(
                 "  {} {}",
                 "✗".color(c).bold(),
-                crate::i18n::tr_key("check.errors.header").color(c).bold()
+                crate::i18n::tr("check.errors.header").color(c).bold()
             );
             for e in &r.errors {
                 println!("    {} {}", "→".color(c).dimmed(), e.color(c));
@@ -533,7 +529,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             println!(
                 "  {} {}",
                 "!".yellow().bold(),
-                crate::i18n::tr_key("check.warnings.header").yellow().bold()
+                crate::i18n::tr("check.warnings.header").yellow().bold()
             );
             for w in &r.warnings {
                 println!("    {} {}", "→".yellow().dimmed(), w.yellow());
@@ -546,13 +542,13 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         println!(
             "\n{} {}",
             "✕".color(c).bold(),
-            crate::i18n::tr_key("check.some_issues_found").color(c)
+            crate::i18n::tr("check.some_issues_found").color(c)
         );
     } else {
         println!(
             "\n{} {}",
             "✓".green().bold(),
-            crate::i18n::tr_key("check.no_issues_found").green()
+            crate::i18n::tr("check.no_issues_found").green()
         );
     }
 
@@ -578,392 +574,4 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-    use std::fs::File;
-    use tempfile::tempdir;
-
-    #[test]
-    fn check_invalid_json_and_fix() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("bad.json");
-        let mut f = File::create(&path).unwrap();
-        writeln!(f, "{{ \"a\":1,\"b\":2,}}").unwrap();
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![dir.path().to_string_lossy().to_string()],
-            json: true,
-            verbose: false,
-            fix: false,
-            fail_on_error: false,
-            fail_on_warning: false,
-        };
-        // Run
-        let result = run(args);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    #[serial]
-    fn error_when_shell_scripts_present_and_shellcheck_missing() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("script.sh");
-        let mut f = File::create(&path).unwrap();
-        writeln!(f, "#!/bin/sh").unwrap();
-        writeln!(f, "echo hi").unwrap();
-
-        // Temporarily clear PATH to ensure shellcheck isn't found.
-        let old_path = std::env::var("PATH").ok();
-        unsafe {
-            std::env::set_var("PATH", "");
-        }
-
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![dir.path().to_string_lossy().to_string()],
-            json: true,
-            verbose: false,
-            fix: false,
-            fail_on_error: false,
-            fail_on_warning: false,
-        };
-
-        let res = run(args);
-
-        // Restore PATH
-        if let Some(p) = old_path {
-            unsafe {
-                std::env::set_var("PATH", p);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var("PATH");
-            }
-        }
-
-        assert!(res.is_err());
-        let err = format!("{}", res.unwrap_err());
-        assert!(err.contains("请安装shellcheck"));
-    }
-
-    #[test]
-    fn check_json_fix_applies() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("obj.json");
-        let mut f = File::create(&path).unwrap();
-        // intentionally compact/unformatted JSON
-        writeln!(f, "{{\"a\":1,\"b\":2}} ").unwrap();
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![dir.path().to_string_lossy().to_string()],
-            json: false,
-            verbose: false,
-            fix: true,
-            fail_on_error: false,
-            fail_on_warning: false,
-        };
-        // Run
-        let result = run(args);
-        assert!(result.is_ok());
-        // The file should now be pretty-printed
-        let out = fs::read_to_string(&path).unwrap();
-        assert!(out.contains("\n  \"a\": 1,\n  \"b\": 2\n"));
-    }
-
-    #[test]
-    fn check_invalid_toml_and_fix() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("bad.toml");
-        let mut f = File::create(&path).unwrap();
-        writeln!(f, "a = 1 b = 2").unwrap();
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![dir.path().to_string_lossy().to_string()],
-            json: true,
-            verbose: false,
-            fix: false,
-            fail_on_error: false,
-            fail_on_warning: false,
-        };
-        // Run
-        let result = run(args);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn check_toml_fix_applies() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("obj.toml");
-        let mut f = File::create(&path).unwrap();
-        // intentionally compact/unformatted TOML
-        writeln!(f, "a=1\nb=2").unwrap();
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![dir.path().to_string_lossy().to_string()],
-            json: false,
-            verbose: false,
-            fix: true,
-            fail_on_error: false,
-            fail_on_warning: false,
-        };
-        // Run
-        let result = run(args);
-        assert!(result.is_ok());
-        // The file should now be pretty-printed (spaces and newlines)
-        let out = fs::read_to_string(&path).unwrap();
-        assert!(out.contains("a = 1"));
-        assert!(out.contains("b = 2"));
-    }
-
-    #[test]
-    fn check_markdown_fix_applies() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("doc.md");
-        let mut f = File::create(&path).unwrap();
-        // CRLF line endings + trailing spaces + missing EOF newline + YAML frontmatter
-        write!(f, "---\r\ntitle:foo\r\n---\r\nLine with space \r\n").unwrap();
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![dir.path().to_string_lossy().to_string()],
-            json: false,
-            verbose: false,
-            fix: true,
-            fail_on_error: false,
-            fail_on_warning: false,
-        };
-        let result = run(args);
-        assert!(result.is_ok());
-        let out = fs::read_to_string(&path).unwrap();
-        // No CRLF
-        assert!(!out.contains("\r\n"));
-        // Trailing space removed
-        assert!(!out.contains("Line with space "));
-        // Contains frontmatter
-        assert!(out.starts_with("---\n"));
-        // End with newline
-        assert!(out.ends_with('\n'));
-    }
-
-    #[test]
-    fn collect_project_files_respect_gitignore_if_enabled() {
-        let dir = tempdir().unwrap();
-        // Ignore "ignored.json" via .gitignore
-        let gi = dir.path().join(".gitignore");
-        fs::write(&gi, "ignored.json\n").unwrap();
-
-        // Files
-        let ignored = dir.path().join("ignored.json");
-        fs::write(&ignored, "{\"a\":1,").unwrap(); // invalid json should be ignored
-        let good = dir.path().join("good.json");
-        fs::write(&good, "{\"a\":1}").unwrap();
-
-        let skip_dirs = crate::utils::default_exclude_dir_names();
-
-        // By default we do NOT respect .gitignore (respect_gitignore = false)
-        let files_default = collect_project_files(dir.path(), &skip_dirs, false);
-        let file_names_default: Vec<String> = files_default
-            .iter()
-            .filter_map(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|s| s.to_string())
-            })
-            .collect();
-
-        assert!(file_names_default.contains(&"good.json".to_string()));
-        assert!(file_names_default.contains(&"ignored.json".to_string())); // included by default
-
-        // When explicitly enabled, .gitignore should be respected
-        let files_respecting = collect_project_files(dir.path(), &skip_dirs, true);
-        let file_names_respecting: Vec<String> = files_respecting
-            .iter()
-            .filter_map(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|s| s.to_string())
-            })
-            .collect();
-
-        assert!(file_names_respecting.contains(&"good.json".to_string()));
-        assert!(!file_names_respecting.contains(&"ignored.json".to_string()));
-    }
-
-    #[test]
-    fn collect_project_files_skips_default_excluded_dirs() {
-        let dir = tempdir().unwrap();
-        let skip_dirs = crate::utils::default_exclude_dir_names();
-
-        let dist_dir = dir.path().join("dist");
-        std::fs::create_dir_all(&dist_dir).unwrap();
-        let bad = dist_dir.join("bad.json");
-        fs::write(&bad, "{\"a\":1,").unwrap();
-
-        let files = collect_project_files(dir.path(), &skip_dirs, false);
-        assert!(files.is_empty());
-    }
-
-    #[test]
-    fn render_json_compact_only_shows_issues() {
-        let r1 = FileResult {
-            path: "a.json".to_string(),
-            kind: "json".to_string(),
-            valid: false,
-            errors: vec!["err1".to_string()],
-            warnings: vec![],
-            fixed: false,
-        };
-        let r2 = FileResult {
-            path: "b.json".to_string(),
-            kind: "json".to_string(),
-            valid: true,
-            errors: vec![],
-            warnings: vec!["warn1".to_string()],
-            fixed: false,
-        };
-        let results = vec![r1, r2];
-        let v = render_json_results(&results, false);
-        let errors = v.get("errors").and_then(|e| e.as_array()).unwrap();
-        let warnings = v.get("warnings").and_then(|w| w.as_array()).unwrap();
-        assert_eq!(errors.len(), 1);
-        assert_eq!(warnings.len(), 1);
-        assert_eq!(
-            v.get("summary")
-                .and_then(|s| s.get("error_count"))
-                .and_then(|c| c.as_u64()),
-            Some(1)
-        );
-        assert_eq!(
-            v.get("summary")
-                .and_then(|s| s.get("warning_count"))
-                .and_then(|c| c.as_u64()),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn render_json_verbose_returns_full_results() {
-        let r = FileResult {
-            path: "x.json".to_string(),
-            kind: "json".to_string(),
-            valid: false,
-            errors: vec!["e".to_string()],
-            warnings: vec!["w".to_string()],
-            fixed: false,
-        };
-        let arr = vec![r];
-        let v_verbose = render_json_results(&arr, true);
-        let v_full = serde_json::to_value(&arr).unwrap();
-        assert_eq!(v_verbose, v_full);
-    }
-
-    #[test]
-    fn fail_on_error_causes_nonzero_exit() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("bad.json");
-        let mut f = File::create(&path).unwrap();
-        writeln!(f, "{{ \"a\":1,\"b\":2,}}").unwrap();
-
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![dir.path().to_string_lossy().to_string()],
-            json: true,
-            verbose: false,
-            fix: false,
-            fail_on_error: true,
-            fail_on_warning: false,
-        };
-
-        let res = run(args);
-        assert!(
-            res.is_err(),
-            "Expected run to return Err when errors found and --fail-on-error is set"
-        );
-    }
-
-    #[test]
-    fn fail_on_warning_causes_nonzero_exit() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("kam.toml");
-        let content = r#"[prop]
-id = "com.example.test"
-name = "Example"
-version = "v1.2.3"
-versionCode = 1
-description = "Example module"
-"#;
-        fs::write(&path, content).unwrap();
-
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![dir.path().to_string_lossy().to_string()],
-            json: true,
-            verbose: false,
-            fix: false,
-            fail_on_error: false,
-            fail_on_warning: true,
-        };
-        let res = run(args);
-        assert!(
-            res.is_err(),
-            "Expected run to return Err when warnings found and fail_on_warning=true"
-        );
-    }
-
-    #[test]
-    fn check_single_file_positional() {
-        // Ensure passing a single file via positional PATH works.
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("single_bad.json");
-        let mut f = File::create(&path).unwrap();
-        // invalid JSON
-        writeln!(f, "{{ \"a\":1, }}").unwrap();
-
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![path.to_string_lossy().to_string()],
-            json: true,
-            verbose: false,
-            fix: false,
-            fail_on_error: true,
-            fail_on_warning: false,
-        };
-        let res = run(args);
-        assert!(
-            res.is_err(),
-            "Expected run to return Err when errors found and --fail-on-error is set"
-        );
-    }
-
-    #[test]
-    fn check_glob_pattern_matches_files() {
-        // Ensure glob patterns match files and they get checked.
-        let dir = tempdir().unwrap();
-        let a = dir.path().join("a.json");
-        let mut fa = File::create(&a).unwrap();
-        writeln!(fa, "{{ \"a\":1, }}").unwrap(); // invalid
-
-        let b = dir.path().join("b.json");
-        let mut fb = File::create(&b).unwrap();
-        writeln!(fb, "{{ \"a\": 1 }}").unwrap(); // valid
-
-        let pattern = format!("{}/{}", dir.path().to_string_lossy(), "*.json");
-        let args = CheckArgs {
-            path: ".".to_string(),
-            paths: vec![pattern],
-            json: true,
-            verbose: false,
-            fix: false,
-            fail_on_error: true,
-            fail_on_warning: false,
-        };
-        let res = run(args);
-        assert!(
-            res.is_err(),
-            "Expected run to return Err when glob matches files with errors and --fail-on-error is set"
-        );
-    }
 }

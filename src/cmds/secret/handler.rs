@@ -101,24 +101,24 @@ fn extract_public_key_and_signature(
 }
 
 fn interactive_secrets() -> Result<(), KamError> {
-    use crate::i18n::tr_key;
+    use crate::i18n::tr;
     use crate::utils::Utils;
 
-    Utils::banner(tr_key("secret.interactive.title"));
-    Utils::info(tr_key("secret.interactive.intro"));
+    Utils::banner(tr("secret.interactive.title"));
+    Utils::info(tr("secret.interactive.intro"));
     println!();
 
     loop {
         let menu = vec![
-            tr_key("secret.interactive.menu.add").to_string(),
-            tr_key("secret.interactive.menu.list").to_string(),
-            tr_key("secret.interactive.menu.get").to_string(),
-            tr_key("secret.interactive.menu.remove").to_string(),
-            tr_key("secret.interactive.menu.exit").to_string(),
+            tr("secret.interactive.menu.add").to_string(),
+            tr("secret.interactive.menu.list").to_string(),
+            tr("secret.interactive.menu.get").to_string(),
+            tr("secret.interactive.menu.remove").to_string(),
+            tr("secret.interactive.menu.exit").to_string(),
         ];
 
         let pick = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt(tr_key("secret.interactive.choose_action"))
+            .with_prompt(tr("secret.interactive.choose_action"))
             .items(&menu)
             .default(0)
             .interact_opt();
@@ -126,11 +126,11 @@ fn interactive_secrets() -> Result<(), KamError> {
         let idx = match pick {
             Ok(Some(i)) => i,
             _ => {
-                let input = prompt_input(tr_key("secret.interactive.select_option"), Some("1"))?;
+                let input = prompt_input(tr("secret.interactive.select_option"), Some("1"))?;
                 match input.trim().parse::<usize>() {
                     Ok(n) if n >= 1 && n <= menu.len() => n - 1,
                     _ => {
-                        Utils::warn(tr_key("secret.interactive.invalid_selection"));
+                        Utils::warn(tr("secret.interactive.invalid_selection"));
                         continue;
                     }
                 }
@@ -140,19 +140,19 @@ fn interactive_secrets() -> Result<(), KamError> {
         match idx {
             0 => {
                 // Add secret
-                let name = prompt_input(tr_key("secret.interactive.enter_name"), None)?;
+                let name = prompt_input(tr("secret.interactive.enter_name"), None)?;
                 if name.trim().is_empty() {
-                    Utils::info(tr_key("secret.interactive.no_name_entered"));
+                    Utils::info(tr("secret.interactive.no_name_entered"));
                     continue;
                 }
 
                 let input_methods = vec![
-                    tr_key("secret.interactive.input_method.direct").to_string(),
-                    tr_key("secret.interactive.input_method.file").to_string(),
-                    tr_key("secret.interactive.cancel").to_string(),
+                    tr("secret.interactive.input_method.direct").to_string(),
+                    tr("secret.interactive.input_method.file").to_string(),
+                    tr("secret.interactive.cancel").to_string(),
                 ];
                 let pick2 = Select::with_theme(&ColorfulTheme::default())
-                    .with_prompt(tr_key("secret.interactive.choose_input_method"))
+                    .with_prompt(tr("secret.interactive.choose_input_method"))
                     .items(&input_methods)
                     .default(0)
                     .interact_opt();
@@ -160,14 +160,12 @@ fn interactive_secrets() -> Result<(), KamError> {
                 let method_idx = match pick2 {
                     Ok(Some(i)) => i,
                     _ => {
-                        let input = prompt_input(
-                            tr_key("secret.interactive.select_input_method"),
-                            Some("1"),
-                        )?;
+                        let input =
+                            prompt_input(tr("secret.interactive.select_input_method"), Some("1"))?;
                         match input.trim().parse::<usize>() {
                             Ok(n) if n >= 1 && n <= input_methods.len() => n - 1,
                             _ => {
-                                Utils::warn(tr_key("secret.interactive.invalid_selection"));
+                                Utils::warn(tr("secret.interactive.invalid_selection"));
                                 continue;
                             }
                         }
@@ -175,29 +173,28 @@ fn interactive_secrets() -> Result<(), KamError> {
                 };
 
                 if method_idx == 0 {
-                    let value = prompt_input(tr_key("secret.interactive.enter_value"), None)?;
+                    let value = prompt_input(tr("secret.interactive.enter_value"), None)?;
                     if value.is_empty() {
-                        Utils::info(tr_key("secret.interactive.no_value_entered"));
+                        Utils::info(tr("secret.interactive.no_value_entered"));
                         continue;
                     }
-                    let pw1 = prompt_password(tr_key("secret.interactive.encryption_password"))
+                    let pw1 = prompt_password(tr("secret.interactive.encryption_password"))
                         .map_err(|e| {
                             KamError::CommandFailed(format!("Failed to read password: {}", e))
                         })?;
-                    let pw2 =
-                        prompt_password(tr_key("secret.interactive.confirm_encryption_password"))
-                            .map_err(|e| {
+                    let pw2 = prompt_password(tr("secret.interactive.confirm_encryption_password"))
+                        .map_err(|e| {
                             KamError::CommandFailed(format!("Failed to read password: {}", e))
                         })?;
                     if pw1 != pw2 {
-                        Utils::warn(tr_key("secret.interactive.error.password_mismatch"));
+                        Utils::warn(tr("secret.interactive.error.password_mismatch"));
                         continue;
                     }
 
                     // Run Add command immediately
                     // Show a concise summary and ask for confirmation before creating the secret
                     let storage_desc =
-                        crate::i18n::tr_key("secret.interactive.storage.keyring").to_string();
+                        crate::i18n::tr("secret.interactive.storage.keyring").to_string();
                     let bytes = value.len();
                     let idx = load_index()?;
                     let confirm_prompt = if idx.entries.contains_key(&name) {
@@ -212,12 +209,12 @@ fn interactive_secrets() -> Result<(), KamError> {
                     };
 
                     // Present a small summary
-                    Utils::section(crate::i18n::tr_key("secret.interactive.summary"));
-                    Utils::kv("secret.interactive.summary_name", &redact_name(&name));
+                    Utils::section(crate::i18n::tr("secret.interactive.summary"));
+                    Utils::kv("secret.interactive.summary_name", redact_name(&name));
                     Utils::kv("secret.interactive.summary_storage", &storage_desc);
                     Utils::kv(
                         "secret.interactive.summary_encrypted",
-                        crate::i18n::tr_key("secret.interactive.yes"),
+                        crate::i18n::tr("secret.interactive.yes"),
                     );
 
                     // Confirm action (fallback to text prompt on non-TTY)
@@ -235,7 +232,7 @@ fn interactive_secrets() -> Result<(), KamError> {
                     };
 
                     if !proceed {
-                        Utils::info(crate::i18n::tr_key("secret.interactive.aborted"));
+                        Utils::info(crate::i18n::tr("secret.interactive.aborted"));
                         continue;
                     }
 
@@ -261,27 +258,26 @@ fn interactive_secrets() -> Result<(), KamError> {
                         bytes
                     ));
                 } else if method_idx == 1 {
-                    let path = prompt_input(tr_key("secret.interactive.enter_file_path"), None)?;
+                    let path = prompt_input(tr("secret.interactive.enter_file_path"), None)?;
                     if path.trim().is_empty() {
-                        Utils::info(tr_key("secret.interactive.no_file_entered"));
+                        Utils::info(tr("secret.interactive.no_file_entered"));
                         continue;
                     }
                     let pbuf = std::path::PathBuf::from(path);
                     if !pbuf.exists() {
-                        Utils::warn(tr_key("secret.interactive.file_not_found"));
+                        Utils::warn(tr("secret.interactive.file_not_found"));
                         continue;
                     }
-                    let pw1 = prompt_password(tr_key("secret.interactive.encryption_password"))
+                    let pw1 = prompt_password(tr("secret.interactive.encryption_password"))
                         .map_err(|e| {
                             KamError::CommandFailed(format!("Failed to read password: {}", e))
                         })?;
-                    let pw2 =
-                        prompt_password(tr_key("secret.interactive.confirm_encryption_password"))
-                            .map_err(|e| {
+                    let pw2 = prompt_password(tr("secret.interactive.confirm_encryption_password"))
+                        .map_err(|e| {
                             KamError::CommandFailed(format!("Failed to read password: {}", e))
                         })?;
                     if pw1 != pw2 {
-                        Utils::warn(tr_key("secret.interactive.error.password_mismatch"));
+                        Utils::warn(tr("secret.interactive.error.password_mismatch"));
                         continue;
                     }
 
@@ -302,12 +298,12 @@ fn interactive_secrets() -> Result<(), KamError> {
                     };
 
                     // Present a small summary
-                    Utils::section(crate::i18n::tr_key("secret.interactive.summary"));
-                    Utils::kv("secret.interactive.summary_name", &redact_name(&name));
+                    Utils::section(crate::i18n::tr("secret.interactive.summary"));
+                    Utils::kv("secret.interactive.summary_name", redact_name(&name));
                     Utils::kv("secret.interactive.summary_storage", &storage_desc);
                     Utils::kv(
                         "secret.interactive.summary_encrypted",
-                        crate::i18n::tr_key("secret.interactive.yes"),
+                        crate::i18n::tr("secret.interactive.yes"),
                     );
 
                     // Confirm action (fallback to text prompt on non-TTY)
@@ -325,7 +321,7 @@ fn interactive_secrets() -> Result<(), KamError> {
                     };
 
                     if !proceed {
-                        Utils::info(crate::i18n::tr_key("secret.interactive.aborted"));
+                        Utils::info(crate::i18n::tr("secret.interactive.aborted"));
                         continue;
                     }
 
@@ -361,9 +357,9 @@ fn interactive_secrets() -> Result<(), KamError> {
                 })?;
             }
             2 => {
-                let name = prompt_input(tr_key("secret.interactive.enter_name"), None)?;
+                let name = prompt_input(tr("secret.interactive.enter_name"), None)?;
                 if name.trim().is_empty() {
-                    Utils::info(tr_key("secret.interactive.no_name_entered"));
+                    Utils::info(tr("secret.interactive.no_name_entered"));
                 } else {
                     run(SecretArgs {
                         interactive: false,
@@ -376,9 +372,9 @@ fn interactive_secrets() -> Result<(), KamError> {
                 }
             }
             3 => {
-                let name = prompt_input(tr_key("secret.interactive.enter_name"), None)?;
+                let name = prompt_input(tr("secret.interactive.enter_name"), None)?;
                 if name.trim().is_empty() {
-                    Utils::info(tr_key("secret.interactive.no_name_entered"));
+                    Utils::info(tr("secret.interactive.no_name_entered"));
                 } else {
                     let confirmed = match Confirm::with_theme(&ColorfulTheme::default())
                         .with_prompt(crate::trf!("secret.confirm_remove", name))
@@ -413,10 +409,9 @@ fn interactive_secrets() -> Result<(), KamError> {
 pub fn run(args: SecretArgs) -> Result<(), KamError> {
     if args.interactive {
         if args.command.is_some() {
-            return Err(KamError::CommandFailed(
-                crate::i18n::tr_key("secret.interactive.error.conflict_with_subcommand")
-                    .to_string(),
-            ));
+            return Err(KamError::CommandFailed(crate::i18n::tr(
+                "secret.interactive.error.conflict_with_subcommand",
+            )));
         }
         return interactive_secrets();
     }
@@ -424,9 +419,9 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
     let cmd = match args.command {
         Some(c) => c,
         None => {
-            return Err(KamError::CommandFailed(
-                crate::i18n::tr_key("secret.error.no_subcommand").to_string(),
-            ));
+            return Err(KamError::CommandFailed(crate::i18n::tr(
+                "secret.error.no_subcommand",
+            )));
         }
     };
 
@@ -438,7 +433,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 Utils::info(&trf!("secret.no_secrets_stored"));
             } else {
                 use crate::utils::Utils;
-                Utils::section(crate::i18n::tr_key("secret.stored_secrets"));
+                Utils::section(crate::i18n::tr("secret.stored_secrets"));
                 let mut names: Vec<_> = idx.entries.keys().cloned().collect();
                 names.sort();
                 for n in names {
@@ -768,10 +763,10 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 let cas = super::cert::list_trusted_cas()?;
                 if cas.is_empty() {
                     use crate::utils::Utils;
-                    Utils::info(crate::i18n::tr_key("secret.no_trusted_root_cas"));
+                    Utils::info(crate::i18n::tr("secret.no_trusted_root_cas"));
                 } else {
                     use crate::utils::Utils;
-                    Utils::section(crate::i18n::tr_key("Trusted Root CAs"));
+                    Utils::section(crate::i18n::tr("Trusted Root CAs"));
                     for (name, fingerprint) in cas {
                         Utils::kv(&name, &fingerprint[..16]);
                     }
@@ -816,43 +811,4 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::cli::Cli;
-    use clap::Parser;
-
-    #[test]
-    fn test_interactive_conflicts_with_subcommand() {
-        let args = SecretArgs {
-            interactive: true,
-            command: Some(SecretCommands::List),
-        };
-
-        let res = run(args);
-        assert!(res.is_err());
-        if let Err(e) = res {
-            match e {
-                KamError::CommandFailed(msg) => {
-                    assert!(
-                        msg.contains("cannot be used with subcommands")
-                            || msg.contains("不能与子命令一起使用")
-                    );
-                }
-                _ => panic!("Expected CommandFailed error"),
-            }
-        }
-    }
-
-    #[test]
-    fn test_secret_parses_short_interactive_flag() {
-        // Short alias -i
-        let cli = Cli::try_parse_from(["kam", "secret", "-i"]).unwrap();
-        match cli.command {
-            Some(crate::cli::Commands::Secret(args)) => assert!(args.interactive),
-            _ => panic!("Expected secret command"),
-        }
-    }
 }

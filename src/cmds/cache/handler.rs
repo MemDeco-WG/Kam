@@ -11,9 +11,9 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
             let templates = TemplateCacheManager::list_local_templates()?;
             use crate::utils::Utils;
             if templates.is_empty() {
-                Utils::info(crate::i18n::tr_key("cache.no_templates"));
+                Utils::info(crate::i18n::tr("cache.no_templates"));
             } else {
-                Utils::section(crate::i18n::tr_key("cache.local_cached_templates"));
+                Utils::section(crate::i18n::tr("cache.local_cached_templates"));
                 for tmpl in templates {
                     Utils::info(&tmpl);
                 }
@@ -27,10 +27,10 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                 std::fs::remove_dir_all(&cache_dir).map_err(KamError::Io)?;
                 std::fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
                 use crate::utils::Utils;
-                Utils::success(crate::i18n::tr_key("cache.cleaned_successfully"));
+                Utils::success(crate::i18n::tr("cache.cleaned_successfully"));
             } else {
                 use crate::utils::Utils;
-                Utils::info(crate::i18n::tr_key("cache.directory_empty_or_not_exists"));
+                Utils::info(crate::i18n::tr("cache.directory_empty_or_not_exists"));
             }
         }
         CacheCommands::Add { name, path } => {
@@ -80,9 +80,7 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                                 && name.ends_with(".json")
                             {
                                 if !found_index {
-                                    Utils::section(crate::i18n::tr_key(
-                                        "cache.modules.index_files",
-                                    ));
+                                    Utils::section(crate::i18n::tr("cache.modules.index_files"));
                                     found_index = true;
                                 }
                                 if let Ok(meta) = p.metadata() {
@@ -98,14 +96,14 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                         }
                     }
                     if !found_index {
-                        Utils::info(crate::i18n::tr_key("cache.modules.no_index_files"));
+                        Utils::info(crate::i18n::tr("cache.modules.no_index_files"));
                     }
 
                     let modules_dir = cache_root.join("modules");
                     if modules_dir.exists()
                         && let Ok(rd) = std::fs::read_dir(&modules_dir)
                     {
-                        Utils::section(crate::i18n::tr_key("cache.modules.detail_cache"));
+                        Utils::section(crate::i18n::tr("cache.modules.detail_cache"));
                         for e in rd.flatten() {
                             let p = e.path();
                             if p.is_file()
@@ -137,9 +135,9 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                         if modules_dir.exists() {
                             let _ = std::fs::remove_dir_all(&modules_dir);
                         }
-                        Utils::success(crate::i18n::tr_key("cache.modules.cleaned_successfully"));
+                        Utils::success(crate::i18n::tr("cache.modules.cleaned_successfully"));
                     } else {
-                        Utils::info(crate::i18n::tr_key(
+                        Utils::info(crate::i18n::tr(
                             "cache.modules.directory_empty_or_not_exists",
                         ));
                     }

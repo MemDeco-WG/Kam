@@ -54,19 +54,19 @@ fn try_format_with_ftl(locale: &str, ftl: &str, id: &str, args: &[&dyn Display])
     if let Ok(resource) = FluentResource::try_new(ftl.to_string()) {
         let _ = bundle.add_resource(resource);
     }
-    if let Some(message) = bundle.get_message(id) {
-        if let Some(value) = message.value() {
-            let mut fargs = FluentArgs::new();
-            for (i, arg) in args.iter().enumerate() {
-                let key = format!("arg{}", i);
-                fargs.set(key, FluentValue::from(arg.to_string()));
-            }
-            let mut errors = Vec::new();
-            let s = bundle
-                .format_pattern(value, Some(&fargs), &mut errors)
-                .to_string();
-            return Some(s);
+    if let Some(message) = bundle.get_message(id)
+        && let Some(value) = message.value()
+    {
+        let mut fargs = FluentArgs::new();
+        for (i, arg) in args.iter().enumerate() {
+            let key = format!("arg{}", i);
+            fargs.set(key, FluentValue::from(arg.to_string()));
         }
+        let mut errors = Vec::new();
+        let s = bundle
+            .format_pattern(value, Some(&fargs), &mut errors)
+            .to_string();
+        return Some(s);
     }
     None
 }
@@ -84,47 +84,23 @@ pub fn tr_fmt(key: &str, args: &[&dyn Display]) -> String {
         if let Some(s) = try_format_with_ftl("zh-CN", ZH_FTL, &id, args) {
             return s;
         }
-        // Fallback to naive `{}` replacement if no FTL entry exists.
-        format_with_braces(key, args)
-    } else {
-        format_with_braces(key, args)
     }
+    // Fallback to naive `{}` replacement if no FTL entry exists or key is non-dotted.
+    format_with_braces(key, args)
 }
 
 /// Simple translation helper (no formatting). For dotted keys this attempts to
 /// return the compiled FTL message; otherwise it returns the provided string.
 pub fn tr(key: &str) -> String {
-    if key.contains('.') {
-        let id = dotted_to_ftl_id(key);
-        if let Some(s) = try_format_with_ftl("en-US", EN_FTL, &id, &[]) {
-            return s;
-        }
-        if let Some(s) = try_format_with_ftl("zh-CN", ZH_FTL, &id, &[]) {
-            return s;
-        }
-        key.to_string()
-    } else {
-        // Try to look up by converted id as a convenience; if not found return
-        // the string unchanged.
-        let id = dotted_to_ftl_id(key);
-        if let Some(s) = try_format_with_ftl("en-US", EN_FTL, &id, &[]) {
-            return s;
-        }
-        if let Some(s) = try_format_with_ftl("zh-CN", ZH_FTL, &id, &[]) {
-            return s;
-        }
-        key.to_string()
-    }
+    // Delegate to `tr_fmt` using an empty arg slice to avoid duplicating logic.
+    tr_fmt(key, &[] as &[&dyn Display])
 }
 
-/// Convenience alias used across the codebase.
-pub fn tr_key(key: &str) -> String {
-    tr(key)
-}
-
-/// Ensure i18n subsystem is initialized. Old callers expect an `init()`
-/// function to exist; with the current on-demand design this is effectively a
-/// no-op but kept for compatibility and future initialization needs.
-pub fn init() {
+/// Ensure the i18n subsystem is initialized.
+///
+/// Old callers expect an `init()` function to exist; with the current
+/// on-demand design this is effectively a no-op but kept for compatibility and
+/// future initialization needs.
+pub const fn init() {
     // intentionally no-op
 }

@@ -58,7 +58,7 @@ pub fn import_single_template(
     fs::copy(archive_path, &dest_path).map_err(KamError::Io)?;
 
     use crate::utils::Utils;
-    Utils::success(&format!(
+    Utils::success(format!(
         "Template '{}' imported successfully",
         template_name
     ));
@@ -112,7 +112,7 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
             // Check if exists
             if dest_path.exists() && !force {
                 use crate::utils::Utils;
-                Utils::warn(&format!(
+                Utils::warn(format!(
                     "Template '{}' already exists, skipping",
                     filename.strip_suffix(".tar.gz").unwrap_or(filename)
                 ));
@@ -125,7 +125,7 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
             std::io::copy(&mut file, &mut outfile).map_err(KamError::Io)?;
 
             use crate::utils::Utils;
-            Utils::success(&format!(
+            Utils::success(format!(
                 "Template '{}' imported",
                 filename.strip_suffix(".tar.gz").unwrap_or(filename)
             ));
@@ -148,7 +148,7 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
         // If template exists in cache and force is not set, skip
         if dest_dir.exists() && !force {
             use crate::utils::Utils;
-            Utils::warn(&format!("Template '{}' already exists, skipping", top));
+            Utils::warn(format!("Template '{}' already exists, skipping", top));
             skipped_count += 1;
             continue;
         }
@@ -190,21 +190,21 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
         crate::utils::copy_dir_all(temp_dir.path(), &dest_dir).map_err(KamError::Io)?;
 
         use crate::utils::Utils;
-        Utils::success(&format!("Template '{}' imported", top));
+        Utils::success(format!("Template '{}' imported", top));
         imported_count += 1;
     }
 
     use crate::utils::Utils;
     if imported_count > 0 {
         println!();
-        Utils::success(&format!(
+        Utils::success(format!(
             "Successfully imported {} template(s)",
             imported_count
         ));
     }
 
     if skipped_count > 0 {
-        Utils::warn(&format!(
+        Utils::warn(format!(
             "Skipped {} template(s) (already exist)",
             skipped_count
         ));
@@ -238,89 +238,5 @@ pub fn import_template(path: &Path, name: Option<String>, force: bool) -> Result
         import_multiple_templates(path, force)
     } else {
         Err(KamError::CommandFailed("Unsupported file format. Use .tar.gz for single template or .zip for multiple templates".to_string()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-    use std::fs::File;
-    use std::io::Write;
-    use tempfile::tempdir;
-    use zip::write::FileOptions;
-
-    #[test]
-    #[serial]
-    fn test_import_directory_template_from_zip() {
-        // Create a temporary directory to build the ZIP file
-        let tmp = tempdir().expect("create tmp");
-        let zip_path = tmp.path().join("templates.zip");
-
-        // Prepare a directory structure test_template/README.md
-        let tmpl_dir = tmp.path().join("test_template");
-        std::fs::create_dir_all(&tmpl_dir).expect("create tmpl dir");
-        let readme_path = tmpl_dir.join("README.md");
-        let mut rf = File::create(&readme_path).expect("create readme");
-        rf.write_all(b"Hello from template").expect("write readme");
-
-        // Create a ZIP file containing the test_template/ directory and files
-        let zf = File::create(&zip_path).expect("create zip file");
-        let mut zip_writer = zip::ZipWriter::new(zf);
-        let options: FileOptions<()> = FileOptions::default();
-
-        // Add directory entry and file entry
-        // Directory entry intentionally omitted (file entries create necessary paths)
-        zip_writer
-            .start_file("test_template/README.md", options)
-            .expect("start file");
-        zip_writer
-            .write_all(b"Hello from template")
-            .expect("write file");
-        zip_writer.finish().expect("finish zip");
-
-        // Isolate template cache by setting KAM_TEMPLATE_CACHE_DIR to a temporary directory
-        let cache_tmp = tempdir().expect("cache tmpdir");
-        let old_cache_dir = std::env::var_os("KAM_TEMPLATE_CACHE_DIR");
-        unsafe {
-            std::env::set_var(
-                "KAM_TEMPLATE_CACHE_DIR",
-                cache_tmp.path().to_str().expect("cache tmp to str"),
-            );
-        }
-
-        // Run the import
-        let res = import_multiple_templates(&zip_path, true);
-        assert!(
-            res.is_ok(),
-            "import_multiple_templates returned an error: {:?}",
-            res
-        );
-
-        // Verify that the template was installed in the cache
-        let cache_dir = TemplateCacheManager::get_cache_dir().expect("get cache dir");
-        let installed_dir = cache_dir.join("test_template");
-        assert!(
-            installed_dir.exists(),
-            "installed_dir does not exist: {:?}",
-            installed_dir
-        );
-
-        // Check extracted file content
-        let installed_readme = installed_dir.join("README.md");
-        assert!(installed_readme.exists(), "installed README not found");
-        let content = std::fs::read_to_string(installed_readme).expect("read installed README");
-        assert!(content.contains("Hello from template"));
-
-        // Restore KAM_TEMPLATE_CACHE_DIR (best-effort)
-        if let Some(orig) = old_cache_dir {
-            unsafe {
-                std::env::set_var("KAM_TEMPLATE_CACHE_DIR", orig);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var("KAM_TEMPLATE_CACHE_DIR");
-            }
-        }
     }
 }

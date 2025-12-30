@@ -69,7 +69,7 @@ pub fn export_single_template(
         // 如果已经是压缩包了，直接复制就行（不用再打包）
         fs::copy(&template_path, output_path).map_err(KamError::Io)?;
         use crate::utils::Utils;
-        Utils::success(&format!(
+        Utils::success(format!(
             "Template '{}' exported to {}",
             template_name,
             output_path.display()
@@ -80,7 +80,7 @@ pub fn export_single_template(
     archive.finish().map_err(KamError::Io)?;
 
     use crate::utils::Utils;
-    Utils::success(&format!(
+    Utils::success(format!(
         "Template '{}' exported to {}",
         template_name,
         output_path.display()
@@ -124,7 +124,7 @@ pub fn export_multiple_templates(
             Some(path) => path,
             None => {
                 use crate::utils::Utils;
-                Utils::warn(&format!("Template '{}' not found, skipping", template_name));
+                Utils::warn(format!("Template '{}' not found, skipping", template_name));
                 continue;
             }
         };
@@ -175,7 +175,7 @@ pub fn export_multiple_templates(
         std::io::copy(&mut temp_file, &mut zip).map_err(KamError::Io)?;
 
         use crate::utils::Utils;
-        Utils::success(&format!("Template '{}' added to archive", template_name));
+        Utils::success(format!("Template '{}' added to archive", template_name));
         exported_count += 1;
     }
 
@@ -185,15 +185,15 @@ pub fn export_multiple_templates(
     use crate::utils::Utils;
     if exported_count > 0 {
         println!();
-        Utils::success(&format!(
+        Utils::success(format!(
             "Successfully exported {} template(s) to {}",
             exported_count,
             output_path.display()
         ));
     } else {
-        return Err(KamError::CommandFailed(
-            crate::i18n::tr_key("tmpl.export.no_templates_exported").to_string(),
-        ));
+        return Err(KamError::CommandFailed(crate::i18n::tr(
+            "tmpl.export.no_templates_exported",
+        )));
     }
 
     Ok(())
@@ -207,9 +207,9 @@ pub fn export_template(
     force: bool,
 ) -> Result<(), KamError> {
     if template_names.is_empty() {
-        return Err(KamError::CommandFailed(
-            crate::i18n::tr_key("tmpl.export.no_templates_specified").to_string(),
-        ));
+        return Err(KamError::CommandFailed(crate::i18n::tr(
+            "tmpl.export.no_templates_specified",
+        )));
     }
 
     let extension = output_path

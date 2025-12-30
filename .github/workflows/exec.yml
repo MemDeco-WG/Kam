@@ -24,35 +24,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Cache Cargo & Rustup
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.rustup
-          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
-          restore-keys: |
-            ${{ runner.os }}-rust-cache-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Cache JavaScript package manager caches (npm / yarn / pnpm / bun)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ~/.cache/yarn
-            ~/.yarn/cache
-            ~/.pnpm-store
-            ~/.bun
-          key: ${{ runner.os }}-js-cache-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/bun.lockb') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-js-cache-
+      # Caching is now handled by `setup-kam` (set with `enable-cache: "true"`).
+      # Removed redundant manual cache steps.
       - name: Setup kam
         uses: MemDeco-WG/setup-kam@main
         with:
@@ -101,35 +74,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Restore Cargo & Rustup
-        uses: actions/cache@v4
+      - name: Setup kam
+        uses: MemDeco-WG/setup-kam@main
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.rustup
-          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
-          restore-keys: |
-            ${{ runner.os }}-rust-cache-
-      - name: Restore pip cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Restore JS caches
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ~/.cache/yarn
-            ~/.yarn/cache
-            ~/.pnpm-store
-            ~/.bun
-          key: ${{ runner.os }}-js-cache-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/bun.lockb') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-js-cache-
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          enable-cache: "true"
+          private-key: ${{ secrets.KAM_PRIVATE_KEY }}
       - name: Update working tree to include build job commits
         run: |
           set -eu
@@ -138,20 +88,13 @@ jobs:
           git reset --hard origin/$BRANCH || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Setup kam (fallback)
-        if: ${{ needs.build.kam-present != 'true' }}
-        uses: MemDeco-WG/setup-kam@main
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          enable-cache: "true"
-          private-key: ${{ secrets.KAM_PRIVATE_KEY }}
+      # `setup-kam` is executed earlier in this job to restore caches and ensure `kam` is available.
+      # The previous fallback-only invocation is removed to avoid duplication.
       - name: Verify kam installation
         run: kam --version
       - name: Run kam command
         shell: bash
         run: |
-          git submodule update --init --recursive
-          git submodule update --remote --merge --recursive
           kam build --help
           rm -rf dist
           chmod +x hooks/**/* || echo "hooks not found! "

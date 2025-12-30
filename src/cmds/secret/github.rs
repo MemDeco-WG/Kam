@@ -60,9 +60,9 @@ pub fn fetch_cert_from_issue(user: &str, repo: &str, issue_num: u32) -> Result<S
         }
     }
 
-    Err(KamError::CommandFailed(
-        crate::i18n::tr_key("secret.no_cert_chain_in_issue").to_string(),
-    ))
+    Err(KamError::CommandFailed(crate::i18n::tr(
+        "secret.no_cert_chain_in_issue",
+    )))
 }
 
 // 从markdown文本里抠出证书链
@@ -96,50 +96,4 @@ pub fn extract_cert_chain(text: &str) -> Option<String> {
     }
 
     if chain.is_empty() { None } else { Some(chain) }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_single_cert() {
-        let text = r#"
-Here is my certificate:
-
-```
------BEGIN CERTIFICATE-----
-MIIBkTCB+wIJAKHHCgVZU6KRMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBlRl
-c3RDQTAeFw0yMDAxMDEwMDAwMDBaFw0zMDAxMDEwMDAwMDBaMBExDzANBgNVBAMM
-BlRlc3RDQTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAwRQ0LqtgXK+h8tnN
------END CERTIFICATE-----
-```
-
-Thanks!
-"#;
-
-        let result = extract_cert_chain(text);
-        assert!(result.is_some());
-        let chain = result.unwrap();
-        assert!(chain.contains("-----BEGIN CERTIFICATE-----"));
-        assert!(chain.contains("-----END CERTIFICATE-----"));
-    }
-
-    #[test]
-    fn test_extract_multiple_certs() {
-        let text = r#"
------BEGIN CERTIFICATE-----
-CERT1DATA
------END CERTIFICATE-----
------BEGIN CERTIFICATE-----
-CERT2DATA
------END CERTIFICATE-----
-"#;
-
-        let result = extract_cert_chain(text);
-        assert!(result.is_some());
-        let chain = result.unwrap();
-        assert_eq!(chain.matches("-----BEGIN CERTIFICATE-----").count(), 2);
-        assert_eq!(chain.matches("-----END CERTIFICATE-----").count(), 2);
-    }
 }

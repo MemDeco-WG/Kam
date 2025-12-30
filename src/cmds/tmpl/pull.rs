@@ -88,7 +88,7 @@ pub fn run_pull(url: Option<String>, _global: bool, quiet: bool) -> Result<(), K
     let download_url = url.as_deref().unwrap_or(DEFAULT_TEMPLATES_URL);
     use crate::utils::Utils;
     if !quiet {
-        Utils::executing(&format!("Downloading templates from: {}", download_url));
+        Utils::executing(format!("Downloading templates from: {}", download_url));
     }
 
     // 创建HTTP客户端，设置30秒超时

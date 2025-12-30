@@ -16,10 +16,15 @@ on:
         type: string
         default: kam init . -t kam_template
       enable-cache:
-        description: Toggle version-aware caching for kam and Cargo
+        description: Toggle version-aware caching for kam and Cargo (legacy top-level toggle; set to 'false' to disable all caching)
         required: false
         type: string
         default: "true"
+      cache-types:
+        description: "Which caches to enable: 'all' (default), 'none', or a comma-separated list containing any of: 'cargo','pip','js','kam'. Example: 'cargo,pip'"
+        required: false
+        type: string
+        default: "all"
 jobs:
   build:
     name: Prepare kam (build & cache)
@@ -27,63 +32,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Cache bun
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.bun
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-bun-
-      - name: Cache npm
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ~/.cache/npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-npm-
-      - name: Cache Yarn
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/yarn
-            ~/.yarn
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-yarn-
-      - name: Cache pnpm
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-      - name: Cache Cargo & Rustup
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.rustup
-          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
-          restore-keys: |
-            ${{ runner.os }}-rust-cache-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-pip-
+      # Caching is now handled by `setup-kam` (set with `enable-cache: ${{ github.event.inputs.enable-cache }}`).
+      # Removed redundant manual cache steps.
       - name: Setup kam (prepare and populate cache)
         uses: MemDeco-WG/setup-kam@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           enable-cache: ${{ github.event.inputs.enable-cache }}
+          # Per-cache controls: use 'all'|'none' or a comma-separated list (e.g. 'cargo,pip')
+          cache-types: ${{ github.event.inputs.cache-types }}
       - name: Verify kam installation
         run: kam --version
 
@@ -94,64 +51,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Restore bun cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.bun
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-bun-
-      - name: Restore npm cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ~/.cache/npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-npm-
-      - name: Restore Yarn cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/yarn
-            ~/.yarn
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-yarn-
-      - name: Restore pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-      - name: Restore Cargo & Rustup cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.rustup
-          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
-          restore-keys: |
-            ${{ runner.os }}-rust-cache-
-      - name: Restore pip cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
-          restore-keys: |
-            ${{ runner.os }}-pip-
+      # Caching is now handled by `setup-kam` (set with `enable-cache: ${{ github.event.inputs.enable-cache }}`).
+      # Removed redundant manual restore steps.
       - name: Setup kam (import template in this workspace)
         uses: MemDeco-WG/setup-kam@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           template-url: ${{ github.event.inputs.template-url }}
           enable-cache: ${{ github.event.inputs.enable-cache }}
+          # Per-cache controls: use 'all'|'none' or a comma-separated list (e.g. 'cargo,pip')
+          cache-types: ${{ github.event.inputs.cache-types }}
       - name: Verify kam installation
         run: kam --version
       - name: Run initialization command

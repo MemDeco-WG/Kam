@@ -34,7 +34,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
     // --- [prop] Section ---
     // 检查必需字段和格式
     if kam_toml.prop.id.trim().is_empty() {
-        errors.push(crate::i18n::tr_key("validate.prop.id_required").to_string());
+        errors.push(crate::i18n::tr("validate.prop.id_required"));
     } else if !kam_toml
         .prop
         .id
@@ -42,24 +42,25 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
     {
         // id只能包含字母数字、下划线、横线、点号
-        errors.push(crate::i18n::tr_key("validate.prop.id_invalid_characters").to_string());
+        errors.push(crate::i18n::tr("validate.prop.id_invalid_characters"));
     }
 
     if kam_toml.prop.name.trim().is_empty() {
-        errors.push(crate::i18n::tr_key("validate.prop.name_required").to_string());
+        errors.push(crate::i18n::tr("validate.prop.name_required"));
     }
 
     if kam_toml.prop.version.trim().is_empty() {
-        errors.push(crate::i18n::tr_key("validate.prop.version_required").to_string());
+        errors.push(crate::i18n::tr("validate.prop.version_required"));
     }
 
     if kam_toml.prop.versionCode <= 0 {
-        errors
-            .push(crate::i18n::tr_key("validate.prop.version_code_should_be_positive").to_string());
+        errors.push(crate::i18n::tr(
+            "validate.prop.version_code_should_be_positive",
+        ));
     }
 
     if kam_toml.prop.description.trim().is_empty() {
-        errors.push(crate::i18n::tr_key("validate.prop.description_required").to_string());
+        errors.push(crate::i18n::tr("validate.prop.description_required"));
     }
 
     // author是可选的，但建议填写（所以是warning不是error）
@@ -70,7 +71,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
         .map(|a| a.trim().is_empty())
         .unwrap_or(true)
     {
-        warnings.push(crate::i18n::tr_key("validate.prop.author_empty_recommended").to_string());
+        warnings.push(crate::i18n::tr("validate.prop.author_empty_recommended"));
     }
 
     // --- [mmrl.repo] Section ---
@@ -80,27 +81,26 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
     {
         // 检查推荐字段（license建议填写）
         if repo.license.as_deref().unwrap_or("").is_empty() {
-            warnings
-                .push(crate::i18n::tr_key("validate.mmrl.repo.license_recommended").to_string());
+            warnings.push(crate::i18n::tr("validate.mmrl.repo.license_recommended"));
         }
 
         // 检查文件是否存在（如果配置了但文件不存在就是错误）
         check_file_exists(
             project_path,
             &repo.license_file,
-            crate::i18n::tr_key("validate.mmrl.repo.license_file"),
+            crate::i18n::tr("validate.mmrl.repo.license_file"),
             &mut errors,
         );
         check_file_exists(
             project_path,
             &repo.readme_file,
-            crate::i18n::tr_key("validate.mmrl.repo.readme_file"),
+            crate::i18n::tr("validate.mmrl.repo.readme_file"),
             &mut errors,
         );
         check_file_exists(
             project_path,
             &repo.changelog_file,
-            crate::i18n::tr_key("validate.mmrl.repo.changelog_file"),
+            crate::i18n::tr("validate.mmrl.repo.changelog_file"),
             &mut errors,
         );
     }
@@ -150,7 +150,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
     println!();
     if errors.is_empty() && warnings.is_empty() {
         use crate::utils::Utils;
-        Utils::success(crate::i18n::tr_key("validate.no_issues_kam_toml_valid"));
+        Utils::success(crate::i18n::tr("validate.no_issues_kam_toml_valid"));
         // 完美！没有任何问题
     } else {
         // 有错误或警告，打印出来
@@ -158,9 +158,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
             let c = crate::utils::Utils::error_color();
             println!(
                 "{}",
-                crate::i18n::tr_key("validate.errors.header")
-                    .color(c)
-                    .bold()
+                crate::i18n::tr("validate.errors.header").color(c).bold()
             );
             for e in &errors {
                 println!("  {} {}", "✗".color(c).bold(), e.color(c));
@@ -172,9 +170,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
             }
             println!(
                 "{}",
-                crate::i18n::tr_key("validate.warnings.header")
-                    .yellow()
-                    .bold()
+                crate::i18n::tr("validate.warnings.header").yellow().bold()
             );
             for w in &warnings {
                 println!("  {} {}", "!".yellow().bold(), w.yellow());
@@ -184,10 +180,10 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
         println!();
         if !errors.is_empty() {
             use crate::utils::Utils;
-            Utils::error(crate::i18n::tr_key("validate.failed"));
+            Utils::error(crate::i18n::tr("validate.failed"));
         } else {
             use crate::utils::Utils;
-            Utils::warn(crate::i18n::tr_key("validate.passed_with_warnings"));
+            Utils::warn(crate::i18n::tr("validate.passed_with_warnings"));
             // 只有警告，不算失败，但建议修复
         }
     }

@@ -166,9 +166,9 @@ fn parse_x509_pem_chain(pem: &str) -> Result<(), KamError> {
     }
 
     if count == 0 {
-        return Err(KamError::CommandFailed(
-            crate::i18n::tr_key("secret.no_valid_cert_in_chain").to_string(),
-        ));
+        return Err(KamError::CommandFailed(crate::i18n::tr(
+            "secret.no_valid_cert_in_chain",
+        )));
     }
 
     Ok(())
@@ -194,9 +194,9 @@ pub fn verify_cert_chain(chain_pem: &str, trusted_cas_pem: &[String]) -> Result<
     }
 
     if der_blobs.is_empty() {
-        return Err(KamError::CommandFailed(
-            crate::i18n::tr_key("secret.no_valid_cert_in_chain").to_string(),
-        ));
+        return Err(KamError::CommandFailed(crate::i18n::tr(
+            "secret.no_valid_cert_in_chain",
+        )));
     }
 
     // 基本验证：检查issuer-subject关系

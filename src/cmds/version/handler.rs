@@ -83,9 +83,9 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
 fn validate_version(version: &str) -> Result<(), KamError> {
     let s = version.trim();
     if s.is_empty() {
-        return Err(KamError::InvalidConfig(
-            crate::i18n::tr_key("Version cannot be empty").to_string(),
-        ));
+        return Err(KamError::InvalidConfig(crate::i18n::tr(
+            "Version cannot be empty",
+        )));
     }
 
     // 不允许多重 v 前缀（例如 vv1.2.3）
@@ -141,9 +141,9 @@ fn bump_version(current: &str, index: usize) -> Result<String, KamError> {
             ver.patch += 1;
         }
         _ => {
-            return Err(KamError::InvalidConfig(
-                crate::i18n::tr_key("Invalid version format for bumping").to_string(),
-            ));
+            return Err(KamError::InvalidConfig(crate::i18n::tr(
+                "Invalid version format for bumping",
+            )));
         }
     }
 

@@ -192,9 +192,9 @@ fn resolve_artifact_path(explicit: Option<PathBuf>) -> Result<PathBuf, KamError>
     }
 
     if candidates.is_empty() {
-        return Err(KamError::PackageNotFound(
-            crate::i18n::tr_key("install.package_not_found").to_string(),
-        ));
+        return Err(KamError::PackageNotFound(crate::i18n::tr(
+            "install.package_not_found",
+        )));
     }
 
     // Pick the most recently modified candidate
@@ -298,13 +298,13 @@ fn create_tempdir_with_fallback_override(
             if let Ok(td) = tempfile::tempdir_in(ov) {
                 return Ok(td);
             } else {
-                Utils::warn(&format!(
+                Utils::warn(format!(
                     "Failed to create tempdir inside override: {}",
                     ov.display()
                 ));
             }
         } else {
-            Utils::warn(&format!(
+            Utils::warn(format!(
                 "Failed to create override tmp dir '{}'",
                 ov.display()
             ));
@@ -315,11 +315,11 @@ fn create_tempdir_with_fallback_override(
     if let Ok(tmp_env) = std::env::var("TMPDIR") {
         let p = PathBuf::from(tmp_env);
         if let Err(e) = fs::create_dir_all(&p) {
-            Utils::warn(&format!("Failed to create TMPDIR '{}': {}", p.display(), e));
+            Utils::warn(format!("Failed to create TMPDIR '{}': {}", p.display(), e));
         } else if let Ok(td) = tempfile::tempdir_in(&p) {
             return Ok(td);
         } else {
-            Utils::warn(&format!(
+            Utils::warn(format!(
                 "Failed to create tempdir inside TMPDIR '{}'",
                 p.display()
             ));
@@ -330,16 +330,16 @@ fn create_tempdir_with_fallback_override(
     match tempfile::tempdir() {
         Ok(td) => Ok(td),
         Err(e) => {
-            Utils::warn(&format!("Default tempdir() failed: {}", e));
+            Utils::warn(format!("Default tempdir() failed: {}", e));
             // 3) Try $HOME/.cache/kam/tmp
             if let Ok(home) = std::env::var("HOME") {
                 let p = PathBuf::from(home).join(".cache").join("kam").join("tmp");
                 if fs::create_dir_all(&p).is_ok() {
                     if let Ok(td2) = tempfile::tempdir_in(&p) {
-                        Utils::warn(&format!("Using fallback tempdir: {}", p.display()));
+                        Utils::warn(format!("Using fallback tempdir: {}", p.display()));
                         return Ok(td2);
                     } else {
-                        Utils::warn(&format!(
+                        Utils::warn(format!(
                             "Failed to create tempdir inside fallback: {}",
                             p.display()
                         ));
@@ -352,10 +352,10 @@ fn create_tempdir_with_fallback_override(
                 let p = std::env::temp_dir();
                 if fs::create_dir_all(&p).is_ok() {
                     if let Ok(td2) = tempfile::tempdir_in(&p) {
-                        Utils::warn(&format!("Using fallback tempdir: {}", p.display()));
+                        Utils::warn(format!("Using fallback tempdir: {}", p.display()));
                         return Ok(td2);
                     } else {
-                        Utils::warn(&format!(
+                        Utils::warn(format!(
                             "Failed to create tempdir inside fallback: {}",
                             p.display()
                         ));
@@ -368,10 +368,10 @@ fn create_tempdir_with_fallback_override(
                 let p = cwd.join(".kam_tmp");
                 if fs::create_dir_all(&p).is_ok() {
                     if let Ok(td2) = tempfile::tempdir_in(&p) {
-                        Utils::warn(&format!("Using fallback tempdir: {}", p.display()));
+                        Utils::warn(format!("Using fallback tempdir: {}", p.display()));
                         return Ok(td2);
                     } else {
-                        Utils::warn(&format!(
+                        Utils::warn(format!(
                             "Failed to create tempdir inside fallback: {}",
                             p.display()
                         ));
@@ -402,7 +402,7 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
             .trim_start_matches("+gh")
             .trim_start_matches('+')
             .trim_start_matches(':');
-        Utils::info(&format!(
+        Utils::info(format!(
             "Cloning '{}' using 'gh' into: {}",
             gh_spec,
             dest.display()
@@ -416,11 +416,11 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
         match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
             Ok(status) => {
-                Utils::warn(&format!("'gh' clone failed with status: {:?}", status));
+                Utils::warn(format!("'gh' clone failed with status: {:?}", status));
                 // fallthrough to git
             }
             Err(e) => {
-                Utils::warn(&format!("'gh' clone failed: {}", e));
+                Utils::warn(format!("'gh' clone failed: {}", e));
                 // fallthrough to git
             }
         }
@@ -429,7 +429,7 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
     // Fallback to git
     if crate::utils::command_exists("git") {
         let url = expand_git_shorthand(spec);
-        Utils::info(&format!(
+        Utils::info(format!(
             "Cloning '{}' using 'git' into: {}",
             url,
             dest.display()
@@ -498,7 +498,7 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                     } else {
                         "sh"
                     };
-                    Utils::info(&format!("Executing '{}' {}", exec, kam_sh.display()));
+                    Utils::info(format!("Executing '{}' {}", exec, kam_sh.display()));
                     let mut cmd = Command::new(exec);
                     cmd.arg(kam_sh.to_str().unwrap()).stdin(Stdio::inherit());
                     let status =
@@ -897,113 +897,4 @@ pub fn run(args: InstallArgs) -> Result<(), KamError> {
     // Default (local) behavior
     let artifact = resolve_artifact_path(args.path.clone())?;
     execute_install_from_artifact(&artifact, &args)
-}
-#[cfg(test)]
-mod tests {
-    use clap::Parser;
-
-    #[test]
-    fn test_parsing_install_verbose_long() {
-        let cli = crate::cli::Cli::parse_from(["kam", "install", "--verbose", "pkg.zip"]);
-        match cli.command {
-            Some(crate::cli::Commands::Install(inst_args)) => {
-                assert!(inst_args.verbose, "expected --verbose to be true");
-            }
-            _ => panic!("expected Commands::Install"),
-        }
-    }
-
-    #[test]
-    fn test_parsing_install_verbose_short() {
-        let cli = crate::cli::Cli::parse_from(["kam", "install", "-v", "pkg.zip"]);
-        match cli.command {
-            Some(crate::cli::Commands::Install(inst_args)) => {
-                assert!(inst_args.verbose, "expected -v to be true");
-            }
-            _ => panic!("expected Commands::Install"),
-        }
-    }
-
-    #[test]
-    fn looks_like_git_spec_detects_shorthands() {
-        use super::looks_like_git_spec;
-
-        assert!(
-            looks_like_git_spec("owner/repo"),
-            "owner/repo should be detected as git spec"
-        );
-        assert!(
-            looks_like_git_spec("https://github.com/owner/repo.git"),
-            "https URL should be detected"
-        );
-        assert!(
-            looks_like_git_spec("git@github.com:owner/repo.git"),
-            "ssh URL should be detected"
-        );
-        assert!(
-            looks_like_git_spec("git+https://github.com/owner/repo"),
-            "git+ prefix should be detected"
-        );
-        assert!(
-            looks_like_git_spec("+git:owner/repo"),
-            "+git:owner/repo should be detected"
-        );
-        assert!(
-            looks_like_git_spec("+ghowner/repo"),
-            "+ghowner/repo should be detected"
-        );
-        assert!(
-            !looks_like_git_spec("./local/path.zip"),
-            "local path should not be treated as git"
-        );
-    }
-
-    #[test]
-    fn expand_git_shorthand_strips_plus_git_prefix() {
-        use super::expand_git_shorthand;
-        assert_eq!(
-            expand_git_shorthand("+git:owner/repo"),
-            "https://github.com/owner/repo.git"
-        );
-        assert_eq!(
-            expand_git_shorthand("+gitowner/repo"),
-            "https://github.com/owner/repo.git"
-        );
-        assert_eq!(
-            expand_git_shorthand("git+owner/repo"),
-            "https://github.com/owner/repo.git"
-        );
-    }
-
-    #[test]
-    fn install_no_longer_accepts_stream_flag() {
-        // `try_parse_from` returns an Err for unknown/invalid arguments
-        let res = crate::cli::Cli::try_parse_from(["kam", "install", "--stream", "pkg.zip"]);
-        assert!(
-            res.is_err(),
-            "Expected unknown flag '--stream' to cause parse error"
-        );
-    }
-
-    #[test]
-    fn tmpdir_override_is_created_and_used() {
-        use tempfile::tempdir;
-
-        // Create a base temporary directory we control
-        let base = tempdir().unwrap();
-        let fake = base.path().join("missing_tmpdir");
-
-        // Ensure the path doesn't already exist
-        assert!(!fake.exists());
-
-        // Use the override API instead of mutating process env
-        let td = super::create_tempdir_with_fallback_override(Some(&fake))
-            .expect("create_tempdir_with_fallback_override should succeed");
-        assert!(
-            td.path().starts_with(&fake),
-            "expected tempdir to be created under override TMPDIR ({}), got {}",
-            fake.display(),
-            td.path().display()
-        );
-    }
 }

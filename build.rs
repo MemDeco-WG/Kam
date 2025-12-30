@@ -174,13 +174,11 @@ fn visit_rs_files<F: FnMut(&Path)>(dir: &Path, visit: &mut F) {
             let path = entry.path();
             if path.is_dir() {
                 inner(&path, visit);
-            } else if path.is_file() {
-                if let Some(ext) = path.extension() {
-                    if ext == "rs" {
+            } else if path.is_file()
+                && let Some(ext) = path.extension()
+                    && ext == "rs" {
                         visit(&path);
                     }
-                }
-            }
         }
     }
     inner(dir, visit);

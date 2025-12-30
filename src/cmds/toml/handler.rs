@@ -206,7 +206,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             set_value_by_path(&mut v, &key, &new_value);
             write_toml(&path, &v)?;
             use crate::utils::Utils;
-            Utils::success(&format!(
+            Utils::success(format!(
                 "Set {} = {} in {}",
                 key,
                 new_value,
@@ -221,7 +221,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             if removed {
                 write_toml(&path, &v)?;
                 use crate::utils::Utils;
-                Utils::success(&format!("Unset {} in {}", key, path.display()));
+                Utils::success(format!("Unset {} in {}", key, path.display()));
                 Ok(())
             } else {
                 Err(KamError::CommandFailed(format!(

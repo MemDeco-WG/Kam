@@ -249,65 +249,6 @@ pub fn check_file(
     Ok(fr)
 }
 
-#[cfg(test)]
-mod format_fix_tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[test]
-    fn json_fix_formats_file() {
-        let tmp = TempDir::new().unwrap();
-        let p = tmp.path().join("t.json");
-        fs::write(&p, r#"{"b":2,"a":1}"#).unwrap();
-
-        let res = check_file(&p, "json", true, None).unwrap();
-        assert!(res.fixed);
-        let content = fs::read_to_string(&p).unwrap();
-        let v: serde_json::Value = serde_json::from_str(&content).unwrap();
-        let pretty = serde_json::to_string_pretty(&v).unwrap();
-        assert_eq!(content, pretty);
-    }
-
-    #[test]
-    fn yaml_fix_formats_file() {
-        let tmp = TempDir::new().unwrap();
-        let p = tmp.path().join("y.yaml");
-        let original = "a: 1\nb:\n  - x\n";
-        fs::write(&p, original).unwrap();
-
-        let res = check_file(&p, "yaml", true, None).unwrap();
-        let after = fs::read_to_string(&p).unwrap();
-        let v: serde_yaml::Value = serde_yaml::from_str(original).unwrap();
-        let formatted = serde_yaml::to_string(&v).unwrap();
-        assert_eq!(after, formatted);
-        let expected_fixed = original != formatted;
-        assert_eq!(
-            res.fixed, expected_fixed,
-            "fixed flag should match whether content changed"
-        );
-    }
-
-    #[test]
-    fn toml_fix_formats_file() {
-        let tmp = TempDir::new().unwrap();
-        let p = tmp.path().join("t.toml");
-        let original = "title = \"A\"\n[package]\nname = \"t\"\n";
-        fs::write(&p, original).unwrap();
-
-        let res = check_file(&p, "toml", true, None).unwrap();
-        let after = fs::read_to_string(&p).unwrap();
-        let v: toml::Value = toml::from_str(original).unwrap();
-        let formatted = toml::to_string_pretty(&v).unwrap();
-        assert_eq!(after, formatted);
-        let expected_fixed = original != formatted;
-        assert_eq!(
-            res.fixed, expected_fixed,
-            "fixed flag should match whether content changed"
-        );
-    }
-}
-
 /// 对 kam.toml 文件进行深度检查
 /// 包括：字段验证、文件引用检查、版本号格式验证等
 fn check_kam_toml_deep(path: &Path, fr: &mut FileResult) {

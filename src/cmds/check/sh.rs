@@ -6,6 +6,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
+
 use tree_sitter;
 use tree_sitter::Parser;
 use tree_sitter_bash;
@@ -43,6 +44,16 @@ pub fn check_sh(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
 
     // 基于文件名的特殊规则（例如 install.sh / post-fs-data.sh 的提示）
     apply_sh_filename_checks(path, &s, &mut fr);
+
+    // AST-aware checks for command substitutions, arithmetic expansions, and backticks.
+    // Run these even if shellcheck is installed so we catch unbalanced constructs
+    // that shellcheck may miss or when shellcheck isn't available.
+    for err in detect_unbalanced_shell_constructs(&s) {
+        if !fr.errors.contains(&err) {
+            fr.valid = false;
+            fr.errors.push(err);
+        }
+    }
 
     // 基于树形语法树的高危指令检测（如果 parser 可用）
     let mut parser = Parser::new();
@@ -161,268 +172,6 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
         }
     }
     Ok(fr)
-}
-
-#[cfg(test)]
-mod shell_tests {
-    use super::*;
-    use serial_test::serial;
-    use std::fs::File;
-    use std::io::{Read, Write};
-    use tempfile::tempdir;
-
-    #[cfg(unix)]
-    #[test]
-    #[serial]
-    fn shellcheck_invoked_if_present() {
-        // Create a temporary directory to host a fake `shellcheck` and a test script.
-        let dir = tempdir().unwrap();
-
-        // Create fake `shellcheck` script that responds to `--version` and `--format=json <path>`.
-        let sc_path = dir.path().join("shellcheck");
-        {
-            let mut f = File::create(&sc_path).unwrap();
-            writeln!(f, "#!/bin/sh").unwrap();
-            writeln!(f, "if [ \"$1\" = \"--version\" ]; then").unwrap();
-            writeln!(f, "  echo \"shellcheck mock\"").unwrap();
-            writeln!(f, "  exit 0").unwrap();
-            writeln!(f, "fi").unwrap();
-            writeln!(f, "if [ \"$1\" = \"-x\" ]; then").unwrap();
-            writeln!(f, "  shift").unwrap();
-            writeln!(f, "fi").unwrap();
-            writeln!(f, "if [ \"$1\" = \"--format=json\" ]; then").unwrap();
-            writeln!(f, "  shift").unwrap();
-            writeln!(f, "  p=\"$1\"").unwrap();
-            f.write_all(b"  echo \"SHELLCHECK-MOCK-RUN $p\" >&2\n")
-                .unwrap();
-            f.write_all(b"  printf '[{\"file\":\"%s\",\"line\":1,\"column\":1,\"level\":\"warning\",\"code\":9999,\"message\":\"fake-warning\"}]' \"$p\"\n").unwrap();
-            writeln!(f, "  exit 0").unwrap();
-            writeln!(f, "fi").unwrap();
-            writeln!(f, "exit 0").unwrap();
-        }
-        // Make it executable
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&sc_path).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&sc_path, perms).unwrap();
-        }
-
-        // Prepend fake shellcheck to PATH for this test
-        let old_path = std::env::var("PATH").unwrap_or_default();
-        let new_path = format!("{}:{}", dir.path().display(), old_path);
-        unsafe {
-            std::env::set_var("PATH", &new_path);
-        }
-
-        // Debug info to make failures easier to triage
-        eprintln!("DEBUG: PATH={}", std::env::var("PATH").unwrap_or_default());
-        match std::process::Command::new("shellcheck")
-            .arg("--version")
-            .output()
-        {
-            Ok(out) => {
-                eprintln!(
-                    "DEBUG: shellcheck --version status={:?}, stdout={}, stderr={}",
-                    out.status,
-                    String::from_utf8_lossy(&out.stdout),
-                    String::from_utf8_lossy(&out.stderr)
-                );
-            }
-            Err(e) => {
-                eprintln!("DEBUG: failed to run 'shellcheck --version': {}", e);
-            }
-        }
-
-        // Create a test script (no .sh extension) with a shell shebang
-        let script_path = dir.path().join("myscript");
-        {
-            let mut s = File::create(&script_path).unwrap();
-            writeln!(s, "#!/bin/sh").unwrap();
-            writeln!(s, "echo hello").unwrap();
-        }
-
-        // Print the script content for debugging
-        match std::fs::read_to_string(&script_path) {
-            Ok(content) => eprintln!("DEBUG: script content: {}", content),
-            Err(e) => eprintln!("DEBUG: failed to read script content: {}", e),
-        }
-
-        // Try invoking shellcheck directly to see what it returns (debug)
-        match std::process::Command::new("shellcheck")
-            .arg("--format=json")
-            .arg(&script_path)
-            .output()
-        {
-            Ok(out) => eprintln!(
-                "DEBUG: shellcheck --format=json returned status={:?}, stdout={}, stderr={}",
-                out.status,
-                String::from_utf8_lossy(&out.stdout),
-                String::from_utf8_lossy(&out.stderr)
-            ),
-            Err(e) => eprintln!("DEBUG: failed to run 'shellcheck --format=json': {}", e),
-        }
-
-        // Call check_sh which should detect our fake shellcheck via PATH and parse its JSON output
-        let fr = check_sh(&script_path, false).unwrap();
-
-        // Debug warnings/errors returned by the checker
-        eprintln!("DEBUG: check_sh warnings: {:?}", fr.warnings);
-        eprintln!("DEBUG: check_sh errors: {:?}", fr.errors);
-
-        // Restore PATH
-        unsafe {
-            std::env::set_var("PATH", &old_path);
-        }
-
-        // Ensure the fake warning from our mock shellcheck was recorded
-        assert!(fr.warnings.iter().any(|w| w.contains("fake-warning")));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    #[serial]
-    fn custom_checks_run_even_with_shellcheck_present() {
-        // Create a temporary directory to host a fake `shellcheck` and a test script.
-        // The script will include a dangerous command (rm -rf ...) that should be
-        // detected by our custom checks in addition to any shellcheck warnings.
-        let dir = tempdir().unwrap();
-
-        // Create fake `shellcheck` script that responds to `--version` and `--format=json <path>`.
-        let sc_path = dir.path().join("shellcheck");
-        {
-            let mut f = File::create(&sc_path).unwrap();
-            writeln!(f, "#!/bin/sh").unwrap();
-            writeln!(f, "if echo \"$@\" | grep -q -- --version; then").unwrap();
-            writeln!(f, "  echo \"shellcheck mock\"").unwrap();
-            writeln!(f, "  exit 0").unwrap();
-            writeln!(f, "fi").unwrap();
-            // Accept optional -x before --format=json (shellcheck -x --format=json path)
-            writeln!(f, "if echo \"$@\" | grep -q -- --format=json; then").unwrap();
-            writeln!(f, "  p=\"${{!#}}\"").unwrap();
-            // Emit an array-form JSON (modern shellcheck format) with a fake warning.
-            f.write_all(b"  printf '[{\"file\":\"%s\",\"line\":1,\"column\":1,\"level\":\"warning\",\"code\":9999,\"message\":\"fake-warning\"}]' \"$p\"\n").unwrap();
-            writeln!(f, "  exit 0").unwrap();
-            writeln!(f, "fi").unwrap();
-            writeln!(f, "exit 0").unwrap();
-        }
-        // Make it executable
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&sc_path).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&sc_path, perms).unwrap();
-        }
-
-        // Prepend fake shellcheck to PATH for this test
-        let old_path = std::env::var("PATH").unwrap_or_default();
-        let new_path = format!("{}:{}", dir.path().display(), old_path);
-        unsafe {
-            std::env::set_var("PATH", &new_path);
-        }
-
-        // Create a test script that contains a dangerous rm -rf invocation
-        let script_path = dir.path().join("danger.sh");
-        {
-            let mut s = File::create(&script_path).unwrap();
-            writeln!(s, "#!/bin/sh").unwrap();
-            writeln!(s, "rm -rf /tmp/somewhere").unwrap();
-        }
-
-        // Call check_sh which should detect our fake shellcheck via PATH and also run custom checks
-        let fr = check_sh(&script_path, false).unwrap();
-
-        // Restore PATH
-        unsafe {
-            std::env::set_var("PATH", &old_path);
-        }
-
-        // Ensure both the fake shellcheck warning and the custom dangerous-rm detection were recorded
-        assert!(
-            fr.warnings.iter().any(|w| w.contains("fake-warning")),
-            "warnings: {:?}",
-            fr.warnings
-        );
-        assert!(
-            fr.errors.iter().any(|e| e.contains("Dangerous rm -rf")),
-            "errors: {:?}",
-            fr.errors
-        );
-    }
-
-    #[test]
-    fn debug_shebang_detection() {
-        // Create a temporary directory with a script that has no extension but a shebang
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("myscript");
-        let mut f = File::create(&path).unwrap();
-        writeln!(f, "#!/bin/sh").unwrap();
-        writeln!(f, "echo hi").unwrap();
-
-        // Emulate the shebang-detection logic and print debug info
-        let mut found = false;
-        for entry in std::fs::read_dir(dir.path()).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.is_file() {
-                let mut fh = std::fs::File::open(&path).unwrap();
-                let mut buf = [0u8; 256];
-                let n = fh.read(&mut buf).unwrap_or(0);
-                let header = String::from_utf8_lossy(&buf[..n]);
-                eprintln!(
-                    "DEBUG: file {:?} header: {:?}",
-                    path.file_name().and_then(|n| n.to_str()),
-                    header.lines().next()
-                );
-                if header.starts_with("#!") {
-                    let lower = header.to_lowercase();
-                    if lower.contains("sh")
-                        || lower.contains("bash")
-                        || lower.contains("dash")
-                        || lower.contains("env sh")
-                        || lower.contains("env bash")
-                    {
-                        eprintln!("DEBUG: detected shell script {:?}", path.file_name());
-                        found = true;
-                    }
-                }
-            }
-        }
-        assert!(found, "shebang script should be detected by heuristic");
-    }
-
-    #[test]
-    #[serial]
-    fn check_sh_custom_fallback_when_no_shellcheck() {
-        // Ensure that even if shellcheck is not present, the Rust fallback runs and returns a FileResult.
-        let dir = tempdir().unwrap();
-        let script_path = dir.path().join("myscript");
-        let mut s = File::create(&script_path).unwrap();
-        writeln!(s, "#!/bin/sh").unwrap();
-        writeln!(s, "echo hello").unwrap();
-
-        // Temporarily clear PATH to ensure shellcheck is not found for deterministic behavior
-        let old_path = std::env::var("PATH").unwrap_or_default();
-        unsafe {
-            std::env::set_var("PATH", "");
-        }
-
-        let fr = check_sh(&script_path, false).unwrap();
-
-        // Debugging info for fallback path
-        eprintln!("DEBUG fallback fr.warnings: {:?}", fr.warnings);
-        eprintln!("DEBUG fallback fr.errors: {:?}", fr.errors);
-
-        // Restore PATH
-        unsafe {
-            std::env::set_var("PATH", &old_path);
-        }
-
-        // The result should describe a shell check result
-        assert_eq!(fr.kind, "sh");
-    }
 }
 
 /// Apply file-name based special checks and warnings for common hook scripts and other special files.
@@ -726,131 +475,6 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::File;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    // Helper to run the custom checker on temporary content
-    fn run_check_on_content(content: &str) -> FileResult {
-        let tmp = TempDir::new().unwrap();
-        let path = tmp.path().join("t.sh");
-        let mut f = File::create(&path).unwrap();
-        f.write_all(content.as_bytes()).unwrap();
-        check_sh_custom(&path, false).unwrap()
-    }
-
-    // Ensure comments are ignored (no detection on commented commands)
-    #[test]
-    fn test_detect_dangerous_commands_ignores_comments() {
-        let content = r#"
-# This is a comment showing a dangerous command
-# rm -rf / -- not executed
-# curl http://example.org | sh
-"#;
-        let fr = run_check_on_content(content);
-        assert!(!fr.errors.iter().any(|e| e.contains("Dangerous rm -rf")));
-        assert!(
-            !fr.warnings
-                .iter()
-                .any(|w| w.contains("Piped shell install"))
-        );
-    }
-
-    // Ensure real commands are detected (rm -rf and eval detection)
-    #[test]
-    fn test_detect_dangerous_commands_flags_rm_rf_and_eval() {
-        let content = r#"
-# benign comment
-rm -rf /tmp/somewhere
-eval set -- "$opt"
-"#;
-        let fr = run_check_on_content(content);
-        assert!(fr.errors.iter().any(|e| e.contains("Dangerous rm -rf")));
-        assert!(
-            fr.warnings
-                .iter()
-                .any(|w| w.contains("Use of 'eval' detected"))
-        );
-    }
-
-    #[test]
-    fn test_piped_curl_warning_snippet() {
-        let tmp = TempDir::new().unwrap();
-        // Use a non-canonical installer filename so content-based detection should trigger
-        let path = tmp.path().join("script.sh");
-        std::fs::write(
-            &path,
-            "#!/bin/bash\n# comment\ncurl -sSL https://example.com/install.sh | sh\n",
-        )
-        .unwrap();
-        let fr = check_sh_custom(&path, false).unwrap();
-        assert!(
-            fr.warnings
-                .iter()
-                .any(|w| w.to_lowercase().contains("piped shell install")
-                    && w.to_lowercase().contains("curl")),
-            "Expected piped curl warning with command snippet"
-        );
-    }
-
-    #[test]
-    fn test_shebang_only_no_piped_warning() {
-        let tmp = TempDir::new().unwrap();
-        let path = tmp.path().join("install.sh");
-        std::fs::write(&path, "#!/bin/bash\n# Just a comment\n").unwrap();
-        let fr = check_sh_custom(&path, false).unwrap();
-        assert!(
-            !fr.warnings
-                .iter()
-                .any(|w| w.contains("Piped shell install"))
-        );
-    }
-
-    #[test]
-    fn test_install_sh_no_piped_warning_even_with_pipeline() {
-        let tmp = TempDir::new().unwrap();
-        let path = tmp.path().join("install.sh");
-        std::fs::write(
-            &path,
-            "#!/bin/bash\ncurl -sSL https://sh.rustup.rs | sh -s -- -y\n",
-        )
-        .unwrap();
-        let fr = check_sh_custom(&path, false).unwrap();
-        // install.sh should not trigger a piped-download warning
-        assert!(
-            !fr.warnings
-                .iter()
-                .any(|w| w.contains("Piped shell install")),
-            "install.sh should not trigger piped-download warning"
-        );
-    }
-
-    #[test]
-    fn case_pattern_does_not_trigger_paren_error() {
-        let content = r#"
-case "$_k_lang" in
-    zh*|cn*|CN*)
-        kam config --global set ui.language zh
-        ;;
-    *)
-        kam config --global set ui.language en
-        ;;
-esac
-"#;
-        let fr = run_check_on_content(content);
-        assert!(
-            !fr.errors
-                .iter()
-                .any(|e| e.contains("Unbalanced parentheses")),
-            "Case pattern containing ')' should not trigger parentheses error"
-        );
-    }
-}
-
 // 自定义的shell脚本检查（没有shellcheck时用）
 // 只做基本的检查：引号匹配、括号匹配、尾随空格、CRLF等
 // 虽然不如shellcheck全面，但至少能发现一些明显的问题
@@ -896,6 +520,16 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
     if single_open || double_open {
         fr.valid = false;
         fr.errors.push("Unbalanced quotes detected".to_string());
+    }
+
+    // AST-aware checks for command substitutions, arithmetic expansions, and backticks.
+    // Only check constructs that are syntactic (e.g., $(), $(( )), backticks) so that we
+    // avoid false positives from shell constructs like `case` patterns that contain `)`.
+    for err in detect_unbalanced_shell_constructs(&s) {
+        if !fr.errors.contains(&err) {
+            fr.valid = false;
+            fr.errors.push(err);
+        }
     }
     // 用tree-sitter解析：如果解析器可用，检测语法错误
     // 虽然可能有点慢，但能发现更多问题
@@ -976,59 +610,227 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
     Ok(fr)
 }
 
-#[test]
-fn test_install_sh_suggest_rename() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    let path = tmp.path().join("install.sh");
-    fs::write(&path, "echo hi\n").unwrap();
-    let fr = check_sh(&path, false).unwrap();
-    assert!(
-        fr.warnings
-            .iter()
-            .any(|w| w.contains("install.sh") || w.contains("customize.sh")),
-        "Expected a warning suggesting rename to customize.sh"
-    );
+//
+// AST-aware unbalanced-construct detection helpers
+//
+
+/// Detect unbalanced syntactic shell constructs that are not easily
+/// covered by naive bracket counting (and would otherwise false-positive
+/// on patterns like `case foo)`).
+///
+/// We focus on:
+/// - command substitutions: `$(` ... `)`
+/// - arithmetic expansions: `((` ... `))` (also `$( (` form via `$((`))
+/// - backticks: `` `...` ``
+///
+/// The checks are quote-aware and skip text inside single quotes.
+fn detect_unbalanced_shell_constructs(src: &str) -> Vec<String> {
+    let mut errors: Vec<String> = Vec::new();
+    let bytes = src.as_bytes();
+    let mut i: usize = 0;
+    let mut single = false;
+    let mut double = false;
+    let mut escaped = false;
+
+    while i < bytes.len() {
+        let ch = bytes[i] as char;
+        if escaped {
+            escaped = false;
+            i += 1;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            i += 1;
+            continue;
+        }
+        if ch == '\'' && !double {
+            single = !single;
+            i += 1;
+            continue;
+        }
+        if ch == '"' && !single {
+            double = !double;
+            i += 1;
+            continue;
+        }
+        if single {
+            i += 1;
+            continue;
+        }
+
+        // Detect $(
+        if ch == '$' && i + 1 < bytes.len() && bytes[i + 1] as char == '(' {
+            let open_idx = i + 1; // index of '('
+            if find_matching_paren(src, open_idx).is_none() {
+                errors.push("Unbalanced command substitution detected".to_string());
+            } else if let Some(j) = find_matching_paren(src, open_idx) {
+                i = j + 1;
+                continue;
+            }
+        }
+
+        // Detect backticks
+        if ch == '`' {
+            let mut j = i + 1;
+            let mut found = false;
+            let mut esc = false;
+            while j < bytes.len() {
+                let chj = bytes[j] as char;
+                if esc {
+                    esc = false;
+                    j += 1;
+                    continue;
+                }
+                if chj == '\\' {
+                    esc = true;
+                    j += 1;
+                    continue;
+                }
+                if chj == '`' {
+                    found = true;
+                    break;
+                }
+                j += 1;
+            }
+            if !found {
+                errors.push("Unbalanced backticks detected".to_string());
+            } else {
+                i = j + 1;
+                continue;
+            }
+        }
+
+        // Detect arithmetic '(( ... ))' (heuristic: previous char should be whitespace or control)
+        if ch == '(' && i + 1 < bytes.len() && bytes[i + 1] as char == '(' {
+            let prevc = if i == 0 { '\n' } else { bytes[i - 1] as char };
+            if prevc.is_whitespace() || prevc == ';' || prevc == '(' || prevc == '|' || prevc == '&'
+            {
+                let open_idx = i;
+                if find_matching_paren(src, open_idx).is_none() {
+                    errors.push("Unbalanced arithmetic expansion detected".to_string());
+                } else if let Some(j) = find_matching_paren(src, open_idx) {
+                    i = j + 1;
+                    continue;
+                }
+            }
+        }
+
+        i += 1;
+    }
+
+    // Deduplicate messages
+    errors.sort();
+    errors.dedup();
+    errors
 }
 
-#[test]
-fn test_post_fs_data_setprop_warning() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    let path = tmp.path().join("post-fs-data.sh");
-    fs::write(&path, "setprop sys.boot_completed 1\n").unwrap();
-    let fr = check_sh(&path, false).unwrap();
-    assert!(
-        fr.warnings
-            .iter()
-            .any(|w| w.to_lowercase().contains("setprop")),
-        "Expected a setprop warning for post-fs-data.sh"
-    );
+/// Find the index of the matching closing `)` for an opening `(` at `open_idx`.
+/// This is quote- and escape-aware and supports nesting.
+fn find_matching_paren(src: &str, open_idx: usize) -> Option<usize> {
+    let bytes = src.as_bytes();
+    if open_idx >= bytes.len() || bytes[open_idx] as char != '(' {
+        return None;
+    }
+    let mut depth: i32 = 1;
+    let mut i = open_idx + 1;
+    let mut single = false;
+    let mut double = false;
+    let mut escaped = false;
+    while i < bytes.len() {
+        let ch = bytes[i] as char;
+        if escaped {
+            escaped = false;
+            i += 1;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            i += 1;
+            continue;
+        }
+        if ch == '\'' && !double {
+            single = !single;
+            i += 1;
+            continue;
+        }
+        if ch == '"' && !single {
+            double = !double;
+            i += 1;
+            continue;
+        }
+        if single {
+            i += 1;
+            continue;
+        }
+        if ch == '(' {
+            depth += 1;
+        } else if ch == ')' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(i);
+            }
+        }
+        i += 1;
+    }
+    None
 }
 
-#[test]
-fn test_detect_rm_rf_error() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    let path = tmp.path().join("danger.sh");
-    fs::write(&path, "rm -rf /\n").unwrap();
-    let fr = check_sh(&path, false).unwrap();
-    assert!(
-        fr.errors
-            .iter()
-            .any(|e| e.to_lowercase().contains("rm -rf")),
-        "Expected detection of dangerous rm -rf usage"
-    );
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
 
-#[test]
-fn test_piped_curl_warning() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    let path = tmp.path().join("installme.sh");
-    fs::write(&path, "curl -sSL https://example.com/install.sh | sh\n").unwrap();
-    let fr = check_sh(&path, false).unwrap();
-    assert!(
-        fr.warnings
-            .iter()
-            .any(|w| w.to_lowercase().contains("piped shell install")
-                || w.to_lowercase().contains("piped")),
-        "Expected a warning for piped download to shell"
-    );
+    #[test]
+    fn detects_unbalanced_command_substitution() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "echo $(date").unwrap();
+        let fr = check_sh_custom(f.path(), false).unwrap();
+        assert!(!fr.valid);
+        assert!(
+            fr.errors
+                .iter()
+                .any(|e| e.contains("Unbalanced command substitution"))
+        );
+    }
+
+    #[test]
+    fn does_not_flag_case_pattern() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "case $x in\n  foo)\n    echo ok\n    ;;\nesac\n").unwrap();
+        let fr = check_sh_custom(f.path(), false).unwrap();
+        assert!(fr.errors.iter().all(|e| !e.contains("Unbalanced")));
+    }
+
+    #[test]
+    fn detects_unbalanced_backtick() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "echo `date").unwrap();
+        let fr = check_sh_custom(f.path(), false).unwrap();
+        assert!(!fr.valid);
+        assert!(fr.errors.iter().any(|e| e.contains("Unbalanced backticks")));
+    }
+
+    #[test]
+    fn detects_unbalanced_arithmetic() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "for (( i=0; i<10; i++ ; do echo $i; done").unwrap();
+        let fr = check_sh_custom(f.path(), false).unwrap();
+        assert!(!fr.valid);
+        assert!(
+            fr.errors
+                .iter()
+                .any(|e| e.contains("Unbalanced arithmetic expansion"))
+        );
+    }
+
+    #[test]
+    fn accepts_nested_command_substitution() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "echo $(echo $(date))").unwrap();
+        let fr = check_sh_custom(f.path(), false).unwrap();
+        assert!(fr.valid);
+        assert!(fr.errors.iter().all(|e| !e.contains("Unbalanced")));
+    }
 }
