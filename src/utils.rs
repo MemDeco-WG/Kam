@@ -10,16 +10,24 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+/// Collection of small helper utilities used across the CLI and commands.
+///
+/// This type acts as a namespace for printing helpers, formatters, and other
+/// lightweight utilities that do not carry state.
 pub struct Utils;
 
-// 默认的模板目录
+/// Default folders to search for project templates.
 pub const PROJECT_TEMPLATE_DIRS: &[&str; 2] = &["tmpl", "templates"];
 
-// 支持的压缩包格式
+/// Supported archive file extensions (used when inspecting archive files).
 pub const DEFAULT_ARCHIVE_EXTS: &[&str; 4] = &[".tar.gz", ".tgz", ".zip", ".tar"];
 
-// 返回默认的排除目录名列表
-// 就是把那些带斜杠的路径模式转换成顶层目录名，方便检查
+/// Return the default list of directory names that should be excluded.
+///
+/// This list is computed from the build section defaults and extended with a
+/// few commonly excluded directories (e.g., `dist`, `templates`, `tmpl`) so
+/// that callers can efficiently check whether a top-level directory should be
+/// ignored when packaging or scanning a project.
 pub fn default_exclude_dir_names() -> Vec<String> {
     // 从BuildSection的默认值里拿排除列表
     // 这里主要是为了性能，避免每次都做完整的glob匹配
@@ -86,6 +94,13 @@ fn matches_exact(pattern: &str, text: &str) -> bool {
     text == pattern
 }
 
+/// Determine whether a pattern matches a relative path or optional file name.
+///
+/// Supported pattern formats:
+/// - Directory prefix (ends with `/`)
+/// - Suffix patterns like `*.ext`
+/// - Glob-like patterns containing `*` or `?`
+/// - Exact matches
 pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -> bool {
     let patt = pattern.trim();
     let rel = rel_path.trim();
@@ -130,6 +145,10 @@ pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -
 /// This simple helper checks each entry from the `PATH` environment variable.
 /// On Unix-like platforms it additionally verifies the file is executable by inspecting
 /// the permission bits. On non-Unix platforms existence is considered sufficient.
+/// Return true if a command with the given `cmd` name exists in the PATH and is executable.
+///
+/// On Unix-like platforms the file's execute permission is checked; on non-Unix
+/// platforms existence is considered sufficient.
 pub fn command_exists(cmd: &str) -> bool {
     if cmd.trim().is_empty() {
         return false;
@@ -159,21 +178,47 @@ pub fn command_exists(cmd: &str) -> bool {
     false
 }
 
-// 文件操作和打印相关的枚举
-// 设计成小函数是为了复用，避免到处重复代码
+/// Represents a file operation used for printing status messages to the user.
+///
+/// This enum is used by helpers to render what happened to a file or directory
+/// (created, updated, deleted, copied, symlinked, or skipped).
 #[derive(Debug)]
 pub enum PrintOp {
-    Create { is_dir: bool },
+    /// Creation of a file or directory.
+    ///
+    /// `is_dir` is true when the created entry is a directory (as opposed to a file).
+    Create {
+        /// Whether the created entry is a directory.
+        is_dir: bool,
+    },
+    /// File or directory content updated.
     Update,
+    /// File or directory deleted.
     Delete,
-    Copy { from: String, to: String },
-    Symlink { target: String, link_type: LinkType },
+    /// File or directory copied from one location to another.
+    Copy {
+        /// The source path to copy from.
+        from: String,
+        /// The destination path to copy to.
+        to: String,
+    },
+    /// A symbolic or hard link was created.
+    Symlink {
+        /// The target path the symlink points to.
+        target: String,
+        /// The type of link created (soft or hard).
+        link_type: LinkType,
+    },
+    /// The file was skipped (no change).
     Skip,
 }
 
+/// Type of link used when creating a link on the filesystem.
 #[derive(Debug)]
 pub enum LinkType {
+    /// A symbolic (soft) link.
     Soft,
+    /// A hard link.
     Hard,
 }
 
@@ -186,8 +231,9 @@ enum LogLevel<'a> {
 }
 
 impl Utils {
-    // 打印文件操作的状态信息
-    // 纯展示用的，没有副作用，就是打印一下
+    /// Print the status of a file operation (create, update, delete, etc).
+    ///
+    /// This helper is display-only and does not perform file system changes.
     pub fn print_status(_path: &Path, rel: &str, op: PrintOp, _force: bool) {
         match op {
             PrintOp::Skip => {
@@ -327,6 +373,9 @@ impl Utils {
         crate::colors::get_theme().error
     }
 
+    /// Print an error message using the configured error color from the theme.
+    ///
+    /// Message is printed to stderr with a leading colored '✗' marker.
     pub fn error<S: AsRef<str>>(msg: S) {
         let translated = crate::i18n::tr(msg.as_ref());
         let c = Self::error_color();
@@ -603,7 +652,10 @@ pub fn normalize_root_manager(raw: &str) -> String {
 }
 
 // 确保path的父目录存在
-// 如果path没有父目录（比如是根目录），就什么都做
+/// Ensure the parent directory of `path` exists.
+///
+/// If `path` has no parent (for example when it is a root path) this function
+/// is a no-op. Creates missing parent directories using `create_dir_all`.
 pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
     if let Some(parent) = path.parent()
         && !parent.exists()
@@ -613,13 +665,19 @@ pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-// 原子性地写入数据到path
-// 先写到临时文件，然后rename，这样即使进程被中断也不会留下部分写入的文件
+/// Atomically write `data` to `path`.
+///
+/// Data is written to a temporary file in the same directory (with an added
+/// `.kamtmp` extension) and then renamed into place. This provides a best-effort
+/// atomic write so that an interrupted write does not leave a partially written
+/// destination file. Note: on some filesystems or when renaming across devices,
+/// true atomicity is not guaranteed.
 pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    // 用简单的tmp扩展名，如果需要绝对唯一性，调用者应该自己保证
+    // Use a `.kamtmp` extension for the temporary file. Callers requiring
+    // stronger guarantees can implement their own temporary-file strategy.
     let tmp = path.with_extension("kamtmp");
     let mut f = fs::File::create(&tmp)?;
     f.write_all(data)?;
@@ -628,11 +686,18 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-// 递归复制目录（从src到dst）
-// - 目录会按需创建
-// - 普通文件直接复制
-// - 符号链接会尝试跟随并复制目标内容，如果目标不存在就尝试重新创建链接
-//   这个函数主要是为了统一复制逻辑，避免到处重复实现
+/// Recursively copy all entries from `src` to `dst`.
+///
+/// - Directories are created as needed.
+/// - Regular files are copied.
+/// - Symlink entries are handled by attempting to follow and copy the target;
+///   if the target cannot be resolved the function will try to recreate the
+///   symlink or fall back to copying file contents where appropriate.
+///
+/// This centralizes recursive copy logic for use across the codebase. Note that
+/// file permissions and ownership are attempted to be preserved where the OS
+/// APIs support it; callers that require exact metadata preservation should
+/// perform additional copy steps.
 pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
@@ -682,8 +747,11 @@ pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     Ok(())
 }
 
-// 根据模块名计算索引路径（类似cargo的索引结构）
-// 这个函数主要是为了分散文件，避免单个目录里文件太多
+/// Compute an index path for `module_name` under `index_base`.
+///
+/// The layout is similar to Cargo's index structure and disperses modules
+/// across subdirectories to avoid excessive files in a single directory.
+/// Returns a PathBuf relative to `index_base`.
 pub fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
     let name_lower = module_name.to_lowercase();
     let chars: Vec<char> = name_lower.chars().collect();
@@ -704,8 +772,14 @@ pub fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
     }
 }
 
-// 解压包（zip或tar.gz）
-// 根据文件扩展名判断格式
+/// Extract a package archive into `dest`.
+///
+/// Supported formats:
+/// - `.zip`
+/// - `.tar.gz`, `.tgz`, `.tar`
+///
+/// Returns a `KamError::UnsupportedFormat` if the archive type is unsupported
+/// or `KamError::ExtractFailed` when the extraction step fails.
 pub fn extract_package(source: &Path, dest: &Path) -> Result<(), crate::errors::kam::KamError> {
     let s = source.to_string_lossy().to_lowercase();
 
@@ -728,9 +802,14 @@ pub fn extract_package(source: &Path, dest: &Path) -> Result<(), crate::errors::
     Ok(())
 }
 
-// 为src目录里的所有文件在dst里创建符号链接（递归）
-// 如果不支持创建符号链接，就回退到复制文件
-// 这个函数主要是用来安装库文件到缓存（lib, lib64, bin等）
+/// Create symbolic links in `dst` for all entries under `src`, recursively.
+///
+/// On platforms or environments where symlink creation is not supported the
+/// function falls back to copying files so that the intended content is
+/// available in `dst`.
+///
+/// Commonly used to install library files into a cache (e.g. `lib`, `lib64`,
+/// `bin`) while preserving symlinks when possible.
 pub fn symlink_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {

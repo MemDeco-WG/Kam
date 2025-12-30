@@ -123,6 +123,7 @@ secret-no-valid-cert-in-chain = 证书链中无有效证书
 cache-template-removed = 缓存模板已移除
 env-docs-kam-tmpl-note = Kam 模板说明
 init-interactive-enter-true-false-for = 请为以下项选择 true/false：
+init-interactive-preview-file-header = 预览文件：{ $arg0 }
 init-interactive-preview-failed-read-file = 读取预览文件失败
 build-building-workspace-member = 正在构建工作区成员
 init-interactive-description = 描述

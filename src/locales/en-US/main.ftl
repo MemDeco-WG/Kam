@@ -55,6 +55,7 @@ install-section = Install section
 secret-error-no-subcommand = Error no subcommand
 config-interactive-error-conflict-with-subcommand = Interactive mode cannot be used with subcommands.
 init-interactive-preview-file-empty = Preview file empty
+init-interactive-preview-file-header = Preview file: { $arg0 }
 config-interactive-no-change = No change
 common-file-fixed = Common file fixed
 config-interactive-make-more-changes = Make more changes
