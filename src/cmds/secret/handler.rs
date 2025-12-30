@@ -35,12 +35,13 @@ fn redact_name(name: &str) -> String {
     }
 }
 
-fn prompt_input(prompt: &str, default: Option<&str>) -> Result<String, KamError> {
+fn prompt_input<P: AsRef<str>>(prompt: P, default: Option<&str>) -> Result<String, KamError> {
+    let prompt_ref = prompt.as_ref();
     let default_str = default.unwrap_or("").to_string();
 
     // Prefer dialoguer Input for a nicer interactive UI; fall back to stdio if it fails
     if let Ok(v) = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(prompt)
+        .with_prompt(prompt_ref)
         .allow_empty(true)
         .default(default_str.clone())
         .interact_text()
@@ -51,9 +52,9 @@ fn prompt_input(prompt: &str, default: Option<&str>) -> Result<String, KamError>
     // Fallback: standard input (non-TTY or dialoguer failure)
     use std::io::{self, Write};
     if default_str.is_empty() {
-        print!("{}: ", prompt);
+        print!("{}: ", prompt_ref);
     } else {
-        print!("{} [{}]: ", prompt, default_str);
+        print!("{} [{}]: ", prompt_ref, default_str);
     }
     io::stdout().flush().map_err(KamError::Io)?;
     let mut input = String::new();
@@ -767,7 +768,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
                 let cas = super::cert::list_trusted_cas()?;
                 if cas.is_empty() {
                     use crate::utils::Utils;
-                    Utils::info(crate::i18n::tr_key("No trusted Root CAs."));
+                    Utils::info(crate::i18n::tr_key("secret.no_trusted_root_cas"));
                 } else {
                     use crate::utils::Utils;
                     Utils::section(crate::i18n::tr_key("Trusted Root CAs"));

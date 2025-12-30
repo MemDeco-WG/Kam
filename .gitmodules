@@ -18,8 +18,8 @@
 	path = setup-kam
 	url = https://github.com/MemDeco-WG/setup-kam.git
 	branch = main
-[submodule "KamWEBUI"]
-	path = KamWEBUI
+[submodule "KamWiki"]
+	path = KamWiki
 	url = https://github.com/MemDeco-WG/KamWEBUI.git
         branch = main
 [submodule "Kamcp"]

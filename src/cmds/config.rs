@@ -234,7 +234,7 @@ struct BuiltinConfigKey {
     example: &'static str,
 }
 
-const BUILTIN_KEYS: &[BuiltinConfigKey] = &[
+const BUILTIN_KEYS: &[BuiltinConfigKey; 6] = &[
     BuiltinConfigKey {
         key: "ui.language",
         description_key: "UI language preference (preferred over 'language')",
@@ -443,12 +443,13 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
 }
 
 /// Prompt helpers & interactive flow
-fn prompt_input(prompt: &str, default: Option<&str>) -> Result<String, KamError> {
+fn prompt_input<P: AsRef<str>>(prompt: P, default: Option<&str>) -> Result<String, KamError> {
+    let prompt_ref = prompt.as_ref();
     let default_str = default.unwrap_or("").to_string();
 
     // Prefer dialoguer Input for a nicer interactive UI; fall back to stdio if it fails
     if let Ok(v) = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(prompt)
+        .with_prompt(prompt_ref)
         .allow_empty(true)
         .default(default_str.clone())
         .interact_text()
@@ -458,7 +459,7 @@ fn prompt_input(prompt: &str, default: Option<&str>) -> Result<String, KamError>
 
     // Fallback simple prompt (non-TTY)
     use std::io::{self, Write};
-    print!("{} ", prompt);
+    print!("{} ", prompt_ref);
     if !default_str.is_empty() {
         print!("({}) ", default_str);
     }
@@ -469,9 +470,10 @@ fn prompt_input(prompt: &str, default: Option<&str>) -> Result<String, KamError>
     if s.is_empty() { Ok(default_str) } else { Ok(s) }
 }
 
-fn prompt_confirm(prompt: &str, default: bool) -> Result<bool, KamError> {
+fn prompt_confirm<P: AsRef<str>>(prompt: P, default: bool) -> Result<bool, KamError> {
+    let prompt_ref = prompt.as_ref();
     match Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(prompt)
+        .with_prompt(prompt_ref)
         .default(default)
         .interact()
     {
@@ -480,7 +482,8 @@ fn prompt_confirm(prompt: &str, default: bool) -> Result<bool, KamError> {
             // Fallback to text prompt
             let suffix = if default { "[Y/n]" } else { "[y/N]" };
             loop {
-                let resp = prompt_input(&format!("{} {}", prompt, suffix), None)?;
+                let prompt_str = format!("{} {}", prompt_ref, suffix);
+                let resp = prompt_input(prompt_str, None::<&str>)?;
                 let resp = resp.trim().to_lowercase();
                 if resp.is_empty() {
                     return Ok(default);
@@ -655,12 +658,12 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
             2 => {
                 // Set other configuration key
                 let key_prompt = tr_key("config.interactive.enter_custom_key");
-                let key = prompt_input(key_prompt, None)?;
+                let key = prompt_input(key_prompt, None::<&str>)?;
                 if key.trim().is_empty() {
                     println!("{}", tr_key("config.interactive.no_key_entered"));
                 } else {
                     let val_prompt = crate::trf!("config.interactive.enter_value_for_key", key);
-                    let value = prompt_input(&val_prompt, None)?;
+                    let value = prompt_input(&val_prompt, None::<&str>)?;
                     if value.trim().is_empty() {
                         println!("{}", tr_key("config.interactive.no_change"));
                     } else {

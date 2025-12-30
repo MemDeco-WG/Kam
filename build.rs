@@ -80,41 +80,75 @@ fn main() {
     let zh_ftl = fs::read_to_string(manifest_dir.join("src/locales/zh-CN/main.ftl"))
         .unwrap_or_else(|_| String::new());
 
-    let mut missing: Vec<String> = Vec::new();
+    // Collect missing keys per-language: require coverage for both en and zh.
+    // For each dotted key we accept either a keyed entry in src/i18n.rs for the
+    // specific language or a Fluent message in the language's FTL file.
+    let mut missing: Vec<(String, Vec<&str>)> = Vec::new();
+
+    // Extract keyed-en/zh regions so we can detect keyed fallbacks per language.
+    // This keeps the checks explicit per-language rather than treating any keyed
+    // presence as covering both languages.
+    let keyed_en_region = if let Some(start) = i18n_rs.find("fn keyed_en") {
+        if let Some(end) = i18n_rs.find("fn keyed_zh") {
+            &i18n_rs[start..end]
+        } else {
+            &i18n_rs[start..]
+        }
+    } else {
+        ""
+    };
+    let keyed_zh_region = if let Some(start) = i18n_rs.find("fn keyed_zh") {
+        &i18n_rs[start..]
+    } else {
+        ""
+    };
 
     for key in dotted_keys.iter() {
-        let mut found = false;
+        let mut en_ok = false;
+        let mut zh_ok = false;
 
-        // 1) keyed map check (look for `"key" =>` in src/i18n.rs)
+        // Keyed-en/keyed-zh checks (language-specific)
         let keyed_pattern = format!(r#""{}"\s*=>"#, regex::escape(key));
-        if Regex::new(&keyed_pattern).unwrap().is_match(&i18n_rs) {
-            found = true;
+        let keyed_re = Regex::new(&keyed_pattern).unwrap();
+        if keyed_re.is_match(keyed_en_region) {
+            en_ok = true;
+        }
+        if keyed_re.is_match(keyed_zh_region) {
+            zh_ok = true;
         }
 
-        // 2) FTL check: dotted_to_fluent_id (replace '.' and '_' with '-')
-        if !found {
-            let ftl_id = key.replace(&['.', '_'][..], "-");
-            let ftl_re_pattern = format!(r"(?m)^\s*{}\s*=", regex::escape(&ftl_id));
-            let ftl_re = Regex::new(&ftl_re_pattern).unwrap();
+        // FTL id: dotted/underscore -> hyphen
+        let ftl_id = key.replace(&['.', '_'][..], "-");
+        let ftl_re_pattern = format!(r"(?m)^\s*{}\s*=", regex::escape(&ftl_id));
+        let ftl_re = Regex::new(&ftl_re_pattern).unwrap();
 
-            if ftl_re.is_match(&en_ftl) || ftl_re.is_match(&zh_ftl) {
-                found = true;
+        if !en_ok && ftl_re.is_match(&en_ftl) {
+            en_ok = true;
+        }
+        if !zh_ok && ftl_re.is_match(&zh_ftl) {
+            zh_ok = true;
+        }
+
+        if !en_ok || !zh_ok {
+            let mut langs: Vec<&str> = Vec::new();
+            if !en_ok {
+                langs.push("en");
             }
-        }
-
-        if !found {
-            missing.push(key.clone());
+            if !zh_ok {
+                langs.push("zh");
+            }
+            missing.push((key.clone(), langs));
         }
     }
 
     if !missing.is_empty() {
         eprintln!();
         eprintln!("ERROR: Missing i18n keys detected (build will fail):");
-        for k in &missing {
-            eprintln!("  - {}", k);
+        for (k, langs) in &missing {
+            eprintln!("  - {} (missing: {})", k, langs.join(", "));
         }
         eprintln!();
-        eprintln!("Please add these keys either as keyed entries in `src/i18n.rs`");
+        eprintln!("Please add these keys either as keyed entries in `src/i18n.rs` (per-language)");
         eprintln!(
             "or as Fluent messages in `src/locales/<lang>/main.ftl` (use id: dotted/underscore -> hyphen)"
         );

@@ -1,5 +1,6 @@
 use super::errors::KamError;
 use colored::{Color, Colorize};
+use comfy_table::{Attribute, Cell, ContentArrangement, Table, presets::UTF8_FULL};
 use indicatif::ProgressBar;
 use regex::Regex;
 use std::fs;
@@ -8,15 +9,14 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use terminal_size::{Width, terminal_size};
 
 pub struct Utils;
 
-// 默认的模板目录，到处都用这个
-pub const PROJECT_TEMPLATE_DIRS: &[&str] = &["tmpl", "templates"];
+// 默认的模板目录
+pub const PROJECT_TEMPLATE_DIRS: &[&str; 2] = &["tmpl", "templates"];
 
 // 支持的压缩包格式
-pub const DEFAULT_ARCHIVE_EXTS: &[&str] = &[".tar.gz", ".tgz", ".zip", ".tar"];
+pub const DEFAULT_ARCHIVE_EXTS: &[&str; 4] = &[".tar.gz", ".tgz", ".zip", ".tar"];
 
 // 返回默认的排除目录名列表
 // 就是把那些带斜杠的路径模式转换成顶层目录名，方便检查
@@ -223,53 +223,37 @@ impl Utils {
         }
     }
 
-    /// Helper function to format a centered title with decorative separators.
-    /// Returns the formatted string and terminal width.
-    fn format_centered_title(title: &str) -> (String, usize) {
-        let width: usize = terminal_size()
-            .map(|(Width(w), _)| w as usize)
-            .unwrap_or(80);
-        let title_text = format!(" ✿ {} ✿ ", title);
-        let title_len = title_text.chars().count();
-
-        let left_len = if width > title_len {
-            (width - title_len) / 2
-        } else {
-            0
-        };
-        let right_len = if width > title_len {
-            width - title_len - left_len
-        } else {
-            0
-        };
-
-        let left = "─".repeat(left_len);
-        let right = "─".repeat(right_len);
-        let formatted = format!("{}{}{}", left, title_text, right);
-        (formatted, width)
-    }
-
     /// Print a bold, centered banner to visually separate a logical operation.
     ///
     /// Uses a flower "✿" as a visual accent (梅花) and draws a simple separator.
     /// The banner attempt to center the title within an 80-column width; if the
     /// title is longer than the width it'll simply be printed without additional
     /// padding.
-    pub fn banner(title: &str) {
-        // Translate section/banners where possible before centering
-        let (formatted, _) = Self::format_centered_title(crate::i18n::tr_key(title));
-        println!("{}", formatted.cyan().bold());
+    pub fn banner<S: AsRef<str>>(title: S) {
+        // Use a third-party library (comfy_table) to render a compact, handsome banner.
+        // This intentionally does NOT depend on terminal width detection; the table
+        // will size to the content and remains visually consistent across terminals.
+        let title_text = crate::i18n::tr_key(title.as_ref());
+        let mut table = Table::new();
+        table.load_preset(UTF8_FULL);
+        table.set_content_arrangement(ContentArrangement::Dynamic);
+        table.set_header(vec![
+            Cell::new(title_text)
+                .add_attribute(Attribute::Bold)
+                .fg(comfy_table::Color::Cyan),
+        ]);
+        println!("{}", table);
         println!();
     }
 
     /// Print a "key: value" pair with a clear bullet icon and subtle value styling.
-    pub fn kv(key: &str, value: &str) {
-        let key_translated = crate::i18n::tr_key(key);
+    pub fn kv<K: AsRef<str>, V: AsRef<str>>(key: K, value: V) {
+        let key_translated = crate::i18n::tr_key(key.as_ref());
         println!(
             "  {} {}: {}",
             "•".cyan(),
             key_translated.bold(),
-            value.dimmed()
+            value.as_ref().dimmed()
         );
     }
 
@@ -277,41 +261,51 @@ impl Utils {
     ///
     /// This is intended for grouping output; it prints the title in bold cyan
     /// and a cyan horizontal line across the terminal width for readability.
-    pub fn section(title: &str) {
-        if title.is_empty() {
+    pub fn section<S: AsRef<str>>(title: S) {
+        let title_ref = title.as_ref();
+        if title_ref.is_empty() {
             return;
         }
-        // Translate section titles (if we have mapping), then format/center them.
-        let (formatted, _) = Self::format_centered_title(crate::i18n::tr_key(title));
+        // Use comfy_table to produce a small boxed header. This avoids terminal-width
+        // centering and provides a consistent, 3rd-party-rendered style.
+        let title_text = crate::i18n::tr_key(title_ref);
+        let mut table = Table::new();
+        table.load_preset(UTF8_FULL);
+        table.set_content_arrangement(ContentArrangement::Dynamic);
+        table.set_header(vec![
+            Cell::new(title_text)
+                .add_attribute(Attribute::Bold)
+                .fg(comfy_table::Color::Cyan),
+        ]);
         println!();
-        println!("{}", formatted.cyan().bold());
+        println!("{}", table);
         println!();
     }
 
     /// Print a generic informational line.
-    pub fn info(msg: &str) {
+    pub fn info<S: AsRef<str>>(msg: S) {
         // Attempt to translate the message (if we can map it). Useful for static
         // phrases and common messages. For complex templates consider using `trf!`.
-        let translated = crate::i18n::tr(msg);
+        let translated = crate::i18n::tr(msg.as_ref());
         println!("  {} {}", "•".cyan(), translated);
     }
 
     /// Print an executing line for tasks such as scripts or commands being run.
-    pub fn executing(msg: &str) {
-        let translated = crate::i18n::tr(msg);
+    pub fn executing<S: AsRef<str>>(msg: S) {
+        let translated = crate::i18n::tr(msg.as_ref());
         println!("  {} {}", "→".blue(), translated);
     }
 
     /// Print a success line with a prominent green check.
-    pub fn success(msg: &str) {
-        let translated = crate::i18n::tr(msg);
+    pub fn success<S: AsRef<str>>(msg: S) {
+        let translated = crate::i18n::tr(msg.as_ref());
         println!("{} {}", "✓".green().bold(), translated.green());
     }
 
     /// Print a warning line with yellow emphasis.
     /// Print a warning message in yellow.
-    pub fn warn(msg: &str) {
-        let translated = crate::i18n::tr(msg);
+    pub fn warn<S: AsRef<str>>(msg: S) {
+        let translated = crate::i18n::tr(msg.as_ref());
         println!("  {} {}", "!".yellow(), translated.yellow());
     }
 
@@ -320,8 +314,8 @@ impl Utils {
         crate::colors::get_theme().error
     }
 
-    pub fn error(msg: &str) {
-        let translated = crate::i18n::tr(msg);
+    pub fn error<S: AsRef<str>>(msg: S) {
+        let translated = crate::i18n::tr(msg.as_ref());
         let c = Self::error_color();
         eprintln!("{} {}", "✗".color(c).bold(), translated.color(c));
     }
@@ -381,8 +375,9 @@ impl Utils {
     /// Print a single stdout/stderr line using the same classification
     /// rules used by `print_cmd_output`. This is useful for streaming
     /// log consumers that read output line-by-line.
-    pub fn print_cmd_line(line: &str) {
-        match Self::classify_log_line(line) {
+    pub fn print_cmd_line<S: AsRef<str>>(line: S) {
+        let l = line.as_ref();
+        match Self::classify_log_line(l) {
             LogLevel::Warn(msg) => Self::warn(msg),
             LogLevel::Error(msg) => Self::error(msg),
             LogLevel::Info(msg) => Self::info(msg),
@@ -589,7 +584,7 @@ pub fn normalize_root_manager(raw: &str) -> String {
         "Magisk".to_string()
     } else if low.contains("kernel") || low.contains("ksu") {
         "KernelSU".to_string()
-    } else if low.contains("apatch") || low.contains("apd") || low.contains("apu") {
+    } else if low.contains("apatch") || low.contains("ap") || low.contains("apu") {
         "APatchSU".to_string()
     } else {
         "Unknown".to_string()

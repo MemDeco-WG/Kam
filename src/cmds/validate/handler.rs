@@ -12,18 +12,18 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
 
     if !kam_toml_path.exists() {
         use crate::utils::Utils;
-        Utils::error(&trf!("kam.toml not found at {}", &kam_toml_path.display()));
+        Utils::error(&trf!("kam.toml.not_found_at", &kam_toml_path.display()));
         return Ok(());
     }
 
     use crate::utils::Utils;
-    Utils::info(&trf!("Validating {}...", &kam_toml_path.display()));
+    Utils::info(&trf!("validate.validating", &kam_toml_path.display()));
 
     let kam_toml = match KamToml::load_from_file(&kam_toml_path) {
         Ok(kt) => kt,
         Err(e) => {
             use crate::utils::Utils;
-            Utils::error(&trf!("Failed to parse kam.toml: {}", &e));
+            Utils::error(&trf!("kam.toml.failed_to_parse", &e));
             return Ok(());
         }
     };
@@ -118,7 +118,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
         if !src_dir.exists() {
             // 源码目录不存在只是警告，因为可能还没创建
             warnings.push(trf!(
-                "Source directory '{}' does not exist. Build might fail or produce empty module.",
+                "validate.source_dir_missing_might_fail",
                 &src_dir.display()
             ));
         }
@@ -140,7 +140,7 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
         let default_src = project_path.join("src").join(&kam_toml.prop.id);
         if !default_src.exists() {
             warnings.push(trf!(
-                "Default source directory '{}' does not exist.",
+                "validate.default_source_dir_not_found",
                 &default_src.display()
             ));
         }
@@ -197,11 +197,16 @@ pub fn run(args: ValidateArgs) -> Result<(), KamError> {
 
 // 检查文件是否存在
 // 如果配置了文件路径但文件不存在，就加到错误列表里
-fn check_file_exists(base: &Path, file: &Option<String>, name: &str, errors: &mut Vec<String>) {
+fn check_file_exists<P: AsRef<str>>(
+    base: &Path,
+    file: &Option<String>,
+    name: P,
+    errors: &mut Vec<String>,
+) {
     if let Some(f) = file
         && !f.is_empty()
         && !base.join(f).exists()
     {
-        errors.push(trf!("{} '{}' not found", name, f));
+        errors.push(trf!("{} '{}' not found", name.as_ref(), f));
     }
 }

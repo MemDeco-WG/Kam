@@ -21,12 +21,6 @@ Workflow goals:
 - Provide a maintenance script to discover missing translation keys and generate skeletons.
 - Use CI to detect accidental regressions in CLI help localization.
 
-If you want to update WebUI translations locally, run:
-```bash
-python3 Kam/scripts/export_cli_i18n.py
-# then commit the resulting files under Kam/KamWEBUI/src/data/cli/
-```
-
 Contributions to extend translations and improve coverage are welcome. Use the skeleton script to discover gaps, add keys to `src/i18n/en.toml` (and provide translations in `src/i18n/zh.toml`), then run the exporter and commit results.
 
 Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android module packages and templates (ksu/APU/Magisk/AnyTemplate). It focuses on rapid project initialization, reproducible builds, template management, and convenient repository/metadata export for module maintainers and distribution channels.
@@ -59,6 +53,9 @@ git clone https://github.com/MemDeco-WG/Kam.git
 cd Kam
 cargo build --release
 ```
+
+<details>
+<summary>Details</summary>
 
 ### Create a New Module
 
@@ -870,6 +867,8 @@ Use in scripts:
 {% endif %}
 ```
 
+</details>
+
 ## 📋 Project Structure
 
 ```
@@ -889,6 +888,7 @@ my_module/
 ├── update.json                 # Update information (auto-generated)
 └── README.md
 ```
+
 
 ## 🤝 Contributing
 

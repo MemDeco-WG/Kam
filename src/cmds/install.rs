@@ -132,7 +132,7 @@ fn get_install_cli_for_manager(
             vec!["module".to_string(), "install".to_string(), p],
         )),
         _ => Err(KamError::CommandFailed(crate::i18n::tr(
-            "Unable to determine install CLI. Please set 'root.manager' in ~/.kam/config.toml or pass --manager",
+            "install.unable_to_determine",
         ))),
     }
 }
@@ -797,7 +797,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                     }
                 } else if is_command_not_found_error(&combined) {
                     Err(KamError::CommandFailed(trf!(
-                        "Install CLI '{}' not found on PATH. Please install it or set 'root.manager' in ~/.kam/config.toml",
+                        "install.cli_not_found",
                         cli_bin
                     )))
                 } else {

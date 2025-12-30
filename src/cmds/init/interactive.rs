@@ -173,7 +173,7 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
                         if num == 0 {
                             let p = prompt_input(
                                 &trf!("init.interactive.enter_path_to_local_template"),
-                                None,
+                                None::<&str>,
                             )?;
                             if !p.trim().is_empty() {
                                 return Ok(p);

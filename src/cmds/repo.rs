@@ -712,8 +712,8 @@ pub fn repo_sync_with_jobs(
             return Ok(());
         }
         let msg = crate::i18n::tr_key("repo.everything_up_to_date");
-        Utils::success(msg);
-        top_pb.finish_with_message(msg);
+        Utils::success(&msg);
+        top_pb.finish_with_message(msg.clone());
         return Ok(());
     }
 

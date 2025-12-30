@@ -64,8 +64,8 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         // Certificate chain from file
         if args.verbose {
             use crate::utils::Utils;
-            Utils::executing(&format!(
-                "Loading certificate chain from {}...",
+            Utils::executing(&trf!(
+                "verify.loading_certificate_chain_from",
                 cert_chain_path
             ));
         }
@@ -74,21 +74,21 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         // Load trusted CAs
         let trusted_cas = crate::cmds::secret::cert::load_trusted_cas()?;
         if trusted_cas.is_empty() {
-            return Err(KamError::CommandFailed(
-                "No trusted Root CAs found. Add one with: kam secret trust --add-root <ca.pem> --ca-name <name>".to_string()
-            ));
+            return Err(KamError::CommandFailed(trf!(
+                "secret.no_trusted_root_cas_add_one_with"
+            )));
         }
 
         // Verify chain and extract public key
         if args.verbose {
             use crate::utils::Utils;
-            Utils::executing("Verifying certificate chain...");
+            Utils::executing(&trf!("verify.verifying_certificate_chain"));
         }
         let pub_key_pem = crate::cmds::secret::cert::verify_cert_chain(&chain_pem, &trusted_cas)?;
 
         if args.verbose {
             use crate::utils::Utils;
-            Utils::success("Certificate chain verified successfully");
+            Utils::success(&trf!("verify.certificate_chain_verified_successfully"));
         }
 
         // Parse public key PEM
@@ -102,7 +102,7 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
         // Cached certificate
         if args.verbose {
             use crate::utils::Utils;
-            Utils::executing(&format!("Loading cached certificate '{}'...", cert_name));
+            Utils::executing(&trf!("verify.loading_cached_certificate", cert_name));
         }
         let chain_pem = crate::cmds::secret::cert::load_cert_chain(cert_name)?;
 
@@ -116,12 +116,12 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
 
         // Verify chain and extract public key
         if args.verbose {
-            println!("Verifying certificate chain...");
+            println!("{}", trf!("verify.verifying_certificate_chain"));
         }
         let pub_key_pem = crate::cmds::secret::cert::verify_cert_chain(&chain_pem, &trusted_cas)?;
 
         if args.verbose {
-            println!("Certificate chain verified successfully.");
+            println!("{}", trf!("verify.certificate_chain_verified_successfully"));
         }
 
         // Parse public key PEM
@@ -143,7 +143,7 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
 
     if args.verbose {
         use crate::utils::Utils;
-        Utils::executing(&trf!("Calculating hash for '{}'...", src_path.display()));
+        Utils::executing(&trf!("verify.calculating_hash", src_path.display()));
     }
 
     // 4. 验证签名
@@ -153,7 +153,7 @@ pub fn run(args: VerifyArgs) -> Result<(), KamError> {
 
     if args.verbose {
         use crate::utils::Utils;
-        Utils::executing(crate::i18n::tr_key("Verifying signature..."));
+        Utils::executing(crate::i18n::tr_key("verify.verifying_signature"));
     }
     // 更新验证器（把文件内容加进去）
     verifier

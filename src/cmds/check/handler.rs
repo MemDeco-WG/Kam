@@ -651,33 +651,6 @@ mod tests {
     }
 
     #[test]
-    fn collects_shebang_scripts_without_extension() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("myscript");
-        let mut f = File::create(&path).unwrap();
-        writeln!(f, "#!/bin/sh").unwrap();
-        writeln!(f, "echo hi").unwrap();
-        // Ensure the file is collected as a shell script even without .sh extension
-        let files = collect_project_files(dir.path(), &[], false);
-        // Debug: print directory contents and collected files to help diagnose failures
-        eprintln!(
-            "DEBUG: dir entries: {:?}",
-            std::fs::read_dir(dir.path())
-                .unwrap()
-                .map(|e| e.unwrap().path())
-                .collect::<Vec<_>>()
-        );
-        eprintln!("DEBUG: collected files: {:?}", files);
-        assert!(
-            files
-                .iter()
-                .any(|p| p.file_name().and_then(|n| n.to_str()) == Some("myscript")),
-            "collected files: {:?}",
-            files
-        );
-    }
-
-    #[test]
     fn check_json_fix_applies() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("obj.json");

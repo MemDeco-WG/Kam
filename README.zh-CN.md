@@ -37,6 +37,10 @@ cd Kam
 cargo build --release
 ```
 
+<details>
+
+<summary>详情</summary>
+
 ### 创建新模块
 
 使用 Kam 模板创建模块：
@@ -811,6 +815,8 @@ default = false
 # Feature X 相关代码
 {% endif %}
 ```
+
+</details>
 
 ## 📋 项目结构
 
