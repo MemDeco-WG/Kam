@@ -208,6 +208,48 @@ kam tmpl path
 
 ## 📖 命令参考
 
+### Termux（基于 SSH 的工作流）
+
+`kam termux` 子命令现在优先使用基于 SSH 的工作流（相较于先前基于 adb-shell 的守护进程方式更安全）。常用帮助选项：
+
+- `--ssh-setup` ：在设备上打印准备说明（安装 `openssh`、运行 `passwd` 设置密码、启动 `sshd`）。
+- `--ssh-forward` ：建立 `adb forward tcp:<port> tcp:<port>`（默认端口 `8022`）。
+- `--ssh-push-key <PATH>` ：使用 `adb push` 将本地公钥写入设备 `~/.ssh/authorized_keys`（尽量以安全方式进行）。
+- `--ssh-connect` ：尝试确保端口转发（best-effort），并运行 `ssh -p <port> localhost`。
+- `--ssh-auto` ：便捷流程：转发 + 推送默认公钥（存在时）+ 连接。
+- `-i` / `--interactive` ：交互式引导流程（推荐）：
+  - 优先尝试 `ssh-copy-id`（会交互提示密码）；
+  - 若 `ssh-copy-id` 不可用则回退到 `scp`；
+  - 若网络拷贝不可用则回退到 `adb push`（在无法直接写入 app-private 时会把公钥推到 `/sdcard` 并提示在设备上完成 append）。
+
+快速示例
+
+在设备（Termux）上：
+```bash
+pkg update && pkg upgrade
+pkg install openssh
+passwd    # 设置 SSH 密码
+sshd      # 启动 SSH 服务（默认端口 8022）
+```
+
+在电脑上：
+```bash
+# 交互式引导（会尝试 ssh-copy-id / scp / adb push 回退）
+kam termux -i
+
+# 或者便捷自动化：转发 + 推送默认公钥（若存在）+ 连接
+kam termux --ssh-auto
+
+# 手动示例
+kam termux --ssh-forward
+ssh -p 8022 user@localhost
+```
+
+说明：
+- 若本机有 `ssh-copy-id`，会优先使用（交互式输入远端密码）；若无则按上面回退顺序处理。
+- 在 CI / 非交互环境下，推荐使用 `--ssh-push-key <PATH>`（显式指定公钥），或手工在设备内完成钥匙安装。
+- 之前基于 adb-shell 的 `daemon/list/kill` 已移除；建议使用本节介绍的 SSH 工作流以提高安全性与可维护性。
+
 ### `kam init` - 初始化新项目
 
 从模板初始化一个新的 Kam 项目（支持元模块和内核模块模板）。

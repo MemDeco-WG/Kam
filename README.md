@@ -236,6 +236,47 @@ For more details on templates, see [templates/README.md](docs/templates.md).
 
 ## 📖 Commands Reference
 
+### Termux (SSH-based workflow)
+
+The `kam termux` helper now prefers an SSH-based workflow (safer than the previous adb-shell daemon approach). Use the SSH helpers:
+
+- `--ssh-setup` : prints concise Termux-side setup instructions (install `openssh`, set a password with `passwd`, start `sshd`).
+- `--ssh-forward` : run `adb forward tcp:<port> tcp:<port>` (default: `8022`).
+- `--ssh-push-key <PATH>` : push a local public key to Termux `~/.ssh/authorized_keys` (best-effort via `adb push`).
+- `--ssh-connect` : set up forwarding (best-effort) and spawn `ssh -p <port> localhost`.
+- `--ssh-auto` : convenience flow — forward, push a default public key if present, then connect.
+- `-i`, `--interactive` : guided interactive flow (preferred behavior):
+  - attempts `ssh-copy-id` (prompts for password if needed),
+  - falls back to `scp` if `ssh-copy-id` is not available,
+  - falls back to `adb push` if network-based copy is not possible (will instruct safe `/sdcard` fallback if necessary).
+
+Quick example
+On the device (Termux):
+```bash
+pkg update && pkg upgrade
+pkg install openssh
+passwd            # set a password for SSH login
+sshd              # start the SSH server (default port 8022)
+```
+
+On your PC:
+```bash
+# Interactive guided flow (prompts and will attempt ssh-copy-id/scp/adb push fallback)
+kam termux -i
+
+# Non-interactive convenience: forward + push default pubkey (if present) + connect
+kam termux --ssh-auto
+
+# Or manually forward then connect
+kam termux --ssh-forward
+ssh -p 8022 user@localhost
+```
+
+Notes
+- If `ssh-copy-id` is available locally it will be preferred (interactive password flow).
+- In CI / non-interactive environments prefer `--ssh-push-key <PATH>` (explicit pubkey) or handle key deployment manually.
+- The previous adb-shell daemon/list/kill feature has been removed in favor of this SSH-based workflow (safer and more portable).
+
 ### `kam init` - Initialize a New Project
 
 Initialize a new Kam project from templates (supports meta and kernel templates).

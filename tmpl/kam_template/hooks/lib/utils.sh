@@ -45,11 +45,11 @@ exit_if_sudo() {
     local do_return=0
 
     case "$2" in
-        --return|-r) do_return=1 ;;
+    --return | -r) do_return=1 ;;
     esac
 
     # Running as root or invoked via sudo (Bash-only).
-    if (( EUID == 0 )) || [[ -n "${SUDO_USER:-}" ]] || [[ -n "${SUDO_UID:-}" ]] || [[ -n "${SUDO_COMMAND:-}" ]]; then
+    if ((EUID == 0)) || [[ -n "${SUDO_USER:-}" ]] || [[ -n "${SUDO_UID:-}" ]] || [[ -n "${SUDO_COMMAND:-}" ]]; then
         if declare -F log_error >/dev/null 2>&1; then
             log_error "$message"
         else
@@ -57,7 +57,7 @@ exit_if_sudo() {
         fi
 
         # Explicit request to return instead of exit
-        if (( do_return != 0 )); then
+        if ((do_return != 0)); then
             return 1
         fi
 
@@ -78,7 +78,7 @@ has_command() {
 
     if [ -z "$cmd" ]; then
         log_error "has_command: command name is required"
-        return 1  # Changed to return 1 instead of exit to avoid terminating the script
+        return 1 # Changed to return 1 instead of exit to avoid terminating the script
     fi
 
     if command -v "$cmd" >/dev/null 2>&1; then
@@ -123,12 +123,12 @@ require_env() {
 is_github_actions() {
     # GitHub Actions sets GITHUB_ACTIONS to a truthy value. Treat common truthy forms as true.
     case "${GITHUB_ACTIONS:-}" in
-        true|TRUE|1|yes|YES)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
+    true | TRUE | 1 | yes | YES)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
     esac
 }
 
@@ -165,11 +165,11 @@ is_termux() {
 
     # Check common environment variables for Termux paths
     case "${PREFIX:-}" in
-        */data/data/com.termux*) return 0 ;;
+    */data/data/com.termux*) return 0 ;;
     esac
 
     case "${HOME:-}" in
-        */data/data/com.termux*) return 0 ;;
+    */data/data/com.termux*) return 0 ;;
     esac
 
     # Check for Termux-specific files/directories
@@ -183,7 +183,6 @@ is_termux() {
 
     return 1
 }
-
 
 run_as_root() {
     # Run a command as root using sudo if needed (and available), otherwise run as-is (best-effort).
@@ -215,7 +214,7 @@ ci_install() {
         return 1
     fi
 
-    pkgs=( "$@" )
+    pkgs=("$@")
 
     # Debian/Ubuntu: apt-get
     if command -v apt-get >/dev/null 2>&1; then
@@ -414,7 +413,7 @@ prompt() {
         if [ "$hide" = "--hide" ] || [ "$hide" = "true" ]; then
             if command -v stty >/dev/null 2>&1; then
                 stty -echo
-                IFS= read -r value || true  # Use IFS= to preserve leading/trailing spaces
+                IFS= read -r value || true # Use IFS= to preserve leading/trailing spaces
                 stty echo
                 printf "\n"
             else
@@ -422,7 +421,7 @@ prompt() {
                 IFS= read -r value || true
             fi
         else
-            IFS= read -r value || true  # Preserve spaces
+            IFS= read -r value || true # Preserve spaces
         fi
 
         if [ -z "$value" ]; then
@@ -514,7 +513,7 @@ choice() {
         max=$((idx - 1))
 
         printf "Choose [default: %s]: " "$default_val"
-        IFS= read -r ans || true  # Preserve spaces
+        IFS= read -r ans || true # Preserve spaces
 
         if [ -z "$ans" ]; then
             ans="$default_val"

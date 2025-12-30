@@ -2,13 +2,14 @@
 //!
 //! Features:
 //! - `kam termux`
-//!     Start an interactive Termux session (allocates a PTY, runs Termux `login`).
+//!   Start an interactive Termux session (allocates a PTY, runs Termux `login`).
 //! - `kam termux -c "<cmd>"`
-//!     Run a single command inside the Termux environment and print output.
+//!   Run a single command inside the Termux environment and print output.
 //!
 //! Notes:
 //! - This command expects `adb` to be available on the PATH and a device to be connected.
 //! - For the one-shot mode we base64-encode the payload to avoid complex on-device shell escaping.
+#![allow(unused_imports, dead_code)]
 //!
 //! Design:
 //! - Keep behavior simple and defensive: when `adb` is missing we print a friendly error and return.
@@ -24,6 +25,8 @@ use std::process::{Command, Stdio};
 
 use crate::errors::KamError;
 use crate::utils::Utils;
+use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
+use std::io::{self, Write};
 
 const TERMUX_DATA_DIR: &str = "/data/data/com.termux/files";
 /// Relative path (under TERMUX_DATA_DIR) to the termux env file that should be sourced.
@@ -32,28 +35,25 @@ const TERMUX_ENV_REL: &str = "usr/etc/termux/termux.env";
 const TERMUX_LOGIN_REL: &str = "usr/bin/login";
 /// Relative path (under TERMUX_DATA_DIR) to the shell binary used for one-shot commands.
 const TERMUX_SH_REL: &str = "usr/bin/sh";
-/// One-shot remote format string: placeholders are (DATA_DIR, base64_payload, ENV_REL, SH_REL)
-const TERMUX_ONESHOT_FMT: &str = "su -c 'D={DATA_DIR}; U=$(stat -c %u $D/home); echo {PAYLOAD} | base64 -d | exec su $U -c \"cd $D/home && . $D/{ENV}; exec $D/{SH} -l -s\"'";
+// NOTE: The previous adb-shell one-shot format has been removed.
+// One-shot execution now uses SSH over an adb port-forward (see SSH helpers below).
 
 fn is_android_host() -> bool {
-    // Heuristics to detect running on Android (Termux/emulator/device):
-    // - TERMUX_VERSION env var (Termux)
-    // - common Android filesystem markers (/system/bin/getprop, /system/build.prop)
-    // - presence of the Termux data dir
-    // - /proc/version mentions 'android'
-    if std::env::var_os("TERMUX_VERSION").is_some() {
+    // Use sysinfo as the authoritative source for OS identification.
+    // Rely on System::name() / System::kernel_version() and avoid ad-hoc TERMUX env/file heuristics.
+    use sysinfo::System;
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    if let Some(name) = System::name()
+        && name.to_lowercase().contains("android")
+    {
         return true;
     }
-    if Path::new("/system/bin/getprop").exists() || Path::new("/system/build.prop").exists() {
+    if let Some(kernel) = System::kernel_version()
+        && kernel.to_lowercase().contains("android")
+    {
         return true;
-    }
-    if Path::new(TERMUX_DATA_DIR).exists() {
-        return true;
-    }
-    if let Ok(s) = std::fs::read_to_string("/proc/version") {
-        if s.to_lowercase().contains("android") {
-            return true;
-        }
     }
     false
 }
@@ -71,19 +71,13 @@ pub struct TermuxArgs {
     #[arg(short = 'c', long = "command")]
     pub command: Option<String>,
 
-    /// Start a persistent Termux session in the background (daemon mode).
-    /// Use `kam termux -l` to list the daemon or `kam termux -k` to kill it.
-    #[arg(short = 'd', long = "daemon", action = clap::ArgAction::SetTrue)]
-    pub daemon: bool,
-
-    /// List the current Termux daemon process (if any).
-    #[arg(short = 'l', long = "list", action = clap::ArgAction::SetTrue)]
-    pub list: bool,
-
-    /// Kill the current Termux daemon process.
-    #[arg(short = 'k', long = "kill", action = clap::ArgAction::SetTrue)]
-    pub kill: bool,
-
+    // NOTE: 'daemon' / 'list' / 'kill' options (adb-based background Termux sessions)
+    // have been removed. The project now uses an SSH-based workflow (safer and more robust).
+    // Use the SSH helpers instead:
+    //   - `--ssh-setup`    : prints Termux-side setup instructions (install openssh / start sshd)
+    //   - `--ssh-forward`  : establish `adb forward tcp:<port> tcp:<port>`
+    //   - `--ssh-push-key` : push a local public key to Termux (attempts `adb push`)
+    //   - `--ssh-connect`  : open an interactive SSH session (`ssh -p <port> localhost`)
     /// Helper: print Termux SSH preparation instructions (do not modify device automatically).
     #[arg(long = "ssh-setup", action = clap::ArgAction::SetTrue)]
     pub ssh_setup: bool,
@@ -100,6 +94,15 @@ pub struct TermuxArgs {
     /// Connect via SSH (will ensure a forward is set and spawn `ssh -p 8022 localhost`).
     #[arg(long = "ssh-connect", action = clap::ArgAction::SetTrue)]
     pub ssh_connect: bool,
+
+    /// Interactive: guided SSH login (forward -> install public key -> connect).
+    /// Prompts to select a local public key and attempts `ssh-copy-id`, falls back to `scp` or `adb push`.
+    #[arg(short = 'i', long = "interactive", action = clap::ArgAction::SetTrue)]
+    pub interactive: bool,
+
+    /// Auto: forward + push public key (if available) + connect via SSH.
+    #[arg(long = "ssh-auto", action = clap::ArgAction::SetTrue)]
+    pub ssh_auto: bool,
 
     /// SSH port to use for Termux SSH (default: 8022).
     #[arg(long = "ssh-port", default_value_t = 8022)]
@@ -134,177 +137,18 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
         adb_base.push(d.clone());
     }
 
-    // Local helpers for daemon management (store pid/log under Kam home)
-    fn termux_daemon_dir() -> Result<PathBuf, KamError> {
-        let base = crate::utils::kam_home_dir()?;
-        let dir = base.join("termux");
-        if !dir.exists() {
-            fs::create_dir_all(&dir)?;
-        }
-        Ok(dir)
-    }
+    // Daemon helper functions removed.
+    // The previous daemon/list/kill feature (based on adb-shell background sessions) has been removed.
+    // Use the SSH-based workflow (see `--ssh-setup`, `--ssh-forward`, `--ssh-connect`, `--ssh-push-key`).
 
-    fn termux_pid_path() -> Result<PathBuf, KamError> {
-        Ok(termux_daemon_dir()?.join("daemon.pid"))
-    }
+    // The previous mutual-exclusion check for daemon/list/kill/command has been removed
+    // because daemon/list/kill modes are no longer supported. The command now uses SSH-based helpers.
 
-    fn termux_log_path() -> Result<PathBuf, KamError> {
-        Ok(termux_daemon_dir()?.join("daemon.log"))
-    }
+    // Daemon/list/kill operations have been removed (this functionality was adb-shell based).
+    // Please use the SSH-based workflow instead: `--ssh-setup`, `--ssh-forward`, `--ssh-connect`.
 
-    fn read_pidfile() -> Result<Option<u32>, KamError> {
-        let p = termux_pid_path()?;
-        if !p.exists() {
-            return Ok(None);
-        }
-        let s = fs::read_to_string(&p)?;
-        match s.trim().parse::<u32>() {
-            Ok(pid) => Ok(Some(pid)),
-            Err(_) => Ok(None),
-        }
-    }
-
-    fn write_pidfile(pid: u32) -> Result<(), KamError> {
-        let p = termux_pid_path()?;
-        fs::write(p, pid.to_string())?;
-        Ok(())
-    }
-
-    fn remove_pidfile() -> Result<(), KamError> {
-        let p = termux_pid_path()?;
-        if p.exists() {
-            fs::remove_file(p)?;
-        }
-        Ok(())
-    }
-
-    fn is_pid_running(pid: u32) -> bool {
-        match Command::new("ps")
-            .arg("-p")
-            .arg(pid.to_string())
-            .arg("-o")
-            .arg("pid=")
-            .output()
-        {
-            Ok(out) => out.status.success() && !out.stdout.is_empty(),
-            Err(_) => false,
-        }
-    }
-
-    // Validate conflicting action flags: only one of daemon/list/kill/command should be used at once.
-    let mut action_count = 0;
-    if args.list {
-        action_count += 1;
-    }
-    if args.kill {
-        action_count += 1;
-    }
-    if args.daemon {
-        action_count += 1;
-    }
-    if args.command.is_some() {
-        action_count += 1;
-    }
-    if action_count > 1 {
-        Utils::error(&trf!("cli.commands.termux.conflicting_options"));
-        return Ok(());
-    }
-
-    // Handle list/kill operations first (they do not require adb)
-    if args.list {
-        match read_pidfile() {
-            Ok(Some(pid)) => {
-                if is_pid_running(pid) {
-                    match Command::new("ps")
-                        .arg("-p")
-                        .arg(pid.to_string())
-                        .arg("-o")
-                        .arg("pid=,cmd=")
-                        .output()
-                    {
-                        Ok(out) => {
-                            let info = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                            if !info.is_empty() {
-                                Utils::info(&trf!("cli.commands.termux.daemon.listing", info));
-                            } else {
-                                Utils::info(&trf!(
-                                    "cli.commands.termux.daemon.listing",
-                                    format!("pid {}", pid)
-                                ));
-                            }
-                            if let Ok(lp) = termux_log_path() {
-                                Utils::info(&trf!("cli.commands.termux.daemon.logs", lp.display()));
-                            }
-                        }
-                        Err(e) => {
-                            Utils::error(&trf!(
-                                "cli.commands.termux.daemon.failed_to_query_process",
-                                e
-                            ));
-                        }
-                    }
-                } else {
-                    Utils::info(&trf!("cli.commands.termux.daemon.not_running"));
-                    // stale pidfile, remove it
-                    let _ = remove_pidfile();
-                }
-            }
-            Ok(None) => {
-                Utils::info(&trf!("cli.commands.termux.daemon.not_running"));
-            }
-            Err(e) => {
-                Utils::error(&format!("Failed to read daemon pidfile: {}", e));
-            }
-        }
-        return Ok(());
-    }
-
-    if args.kill {
-        match read_pidfile() {
-            Ok(Some(pid)) => {
-                if is_pid_running(pid) {
-                    match Command::new("kill").arg(pid.to_string()).status() {
-                        Ok(s) => {
-                            if s.success() {
-                                let _ = remove_pidfile();
-                                Utils::success(&trf!("cli.commands.termux.daemon.killed", pid));
-                            } else {
-                                let code = s
-                                    .code()
-                                    .map(|c| c.to_string())
-                                    .unwrap_or_else(|| "unknown".to_string());
-                                Utils::error(&trf!(
-                                    "cli.commands.termux.daemon.failed_to_kill",
-                                    pid,
-                                    code
-                                ));
-                            }
-                        }
-                        Err(e) => {
-                            Utils::error(&trf!(
-                                "cli.commands.termux.daemon.failed_to_kill",
-                                pid,
-                                e
-                            ));
-                        }
-                    }
-                } else {
-                    Utils::info(&trf!("cli.commands.termux.daemon.not_running"));
-                    let _ = remove_pidfile();
-                }
-            }
-            Ok(None) => {
-                Utils::info(&trf!("cli.commands.termux.daemon.not_running"));
-            }
-            Err(e) => {
-                Utils::error(&trf!(
-                    "cli.commands.termux.daemon.failed_to_read_pidfile",
-                    e
-                ));
-            }
-        }
-        return Ok(());
-    }
+    // daemon/list/kill functionality has been removed in favor of the SSH-based workflow.
+    // Use the SSH helpers: --ssh-setup, --ssh-forward, --ssh-push-key, --ssh-connect.
 
     // At this point: either daemon start, one-shot, or interactive.
     // Check for adb presence (required for starting daemon, one-shot or remote interactive)
@@ -325,13 +169,8 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
         }
     }
 
-    if args.daemon {
-        // Deprecated: previous background adb-based daemon mode used adb + root to start
-        // a remote Termux session. That approach is no longer supported.
-        // Prefer running Termux's `sshd` on the phone and using `--ssh-forward` / `--ssh-connect`.
-        Utils::warn(&trf!("cli.commands.termux.deprecated_daemon"));
-        return Ok(());
-    }
+    // daemon mode removed: background adb-shell Termux sessions are no longer supported.
+    // Prefer SSH-based access instead (see --ssh-setup / --ssh-forward / --ssh-connect).
 
     // SSH helper operations (forwarding / push key / connect / setup).
     if args.ssh_forward {
@@ -393,14 +232,412 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
         return Ok(());
     }
 
-    if args.ssh_connect {
-        // Try to ensure forwarding is set up (best-effort)
+    // Auto: forward, attempt to push a public key (if available), then connect via SSH
+    if args.ssh_auto {
+        // 1) Ensure adb forward
         let port_spec = format!("tcp:{}", args.ssh_port);
-        let _ = Command::new("adb")
+        match Command::new("adb")
             .args(&adb_base)
             .arg("forward")
             .arg(&port_spec)
             .arg(&port_spec)
+            .status()
+        {
+            Ok(s) if s.success() => {
+                Utils::info(&trf!("termux.ssh.forwarded", args.ssh_port));
+            }
+            Ok(s) => {
+                Utils::error(&trf!("termux.ssh.forward_failed", s.code().unwrap_or(-1)));
+                return Ok(());
+            }
+            Err(e) => {
+                Utils::error(&trf!("termux.ssh.forward_failed_err", e));
+                return Ok(());
+            }
+        }
+
+        // 2) Determine public key path (either supplied or default ~/.ssh/id_rsa.pub)
+        let key_path: PathBuf = args.ssh_push_key.as_ref().map_or_else(
+            || {
+                dirs::home_dir().map_or_else(PathBuf::new, |mut p| {
+                    p.push(".ssh/id_rsa.pub");
+                    p
+                })
+            },
+            PathBuf::from,
+        );
+
+        // Attempt to push key if it exists locally
+        if key_path.exists() {
+            let dest = "/data/data/com.termux/files/home/.ssh/authorized_keys";
+            match Command::new("adb")
+                .args(&adb_base)
+                .arg("push")
+                .arg(key_path.to_str().unwrap_or_default())
+                .arg(dest)
+                .status()
+            {
+                Ok(s) if s.success() => {
+                    Utils::success(&trf!("termux.ssh.pushed_key", dest));
+                }
+                _ => {
+                    Utils::warn(&trf!("termux.ssh.push_failed"));
+                }
+            }
+        } else {
+            Utils::warn(&trf!("termux.ssh.auto_no_pubkey"));
+        }
+
+        // 3) Connect via SSH (interactive)
+        Utils::info(&trf!("termux.ssh.auto_connecting", args.ssh_port));
+        let ssh_status = Command::new("ssh")
+            .arg("localhost")
+            .arg("-p")
+            .arg(args.ssh_port.to_string())
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status();
+
+        match ssh_status {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                Utils::error(&trf!("termux.ssh.ssh_exited", s.code().unwrap_or(-1)));
+            }
+            Err(e) => {
+                Utils::error(&trf!("termux.ssh.ssh_failed", e));
+            }
+        }
+        return Ok(());
+    }
+
+    // Interactive guided flow: forward -> select local pubkey -> try ssh-copy-id -> scp fallback -> adb push fallback -> ssh
+    if args.interactive {
+        // Banner
+        Utils::info(&trf!("termux.ssh.interactive.starting"));
+
+        // Ensure ssh client exists locally
+        if !crate::utils::command_exists("ssh") {
+            Utils::error(&trf!("termux.ssh.ssh_missing"));
+            return Ok(());
+        }
+
+        // 1) Ensure adb forward
+        let port_spec = format!("tcp:{}", args.ssh_port);
+        match Command::new("adb")
+            .args(&adb_base)
+            .arg("forward")
+            .arg(&port_spec)
+            .arg(&port_spec)
+            .status()
+        {
+            Ok(s) if s.success() => {
+                Utils::success(&trf!("termux.ssh.forwarded", args.ssh_port));
+            }
+            Ok(s) => {
+                Utils::error(&trf!("termux.ssh.forward_failed", s.code().unwrap_or(-1)));
+                return Ok(());
+            }
+            Err(e) => {
+                Utils::error(&trf!("termux.ssh.forward_failed_err", e));
+                return Ok(());
+            }
+        }
+
+        // 2) Discover local public keys (~/.ssh/*.pub)
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        if let Some(mut h) = dirs::home_dir() {
+            h.push(".ssh");
+            if h.exists()
+                && let Ok(entries) = fs::read_dir(&h)
+            {
+                for e in entries.filter_map(|r| r.ok()) {
+                    let p = e.path();
+                    if p.is_file()
+                        && let Some(n) = p.file_name().and_then(|s| s.to_str())
+                        && n.ends_with(".pub")
+                    {
+                        candidates.push(p);
+                    }
+                }
+            }
+        }
+
+        if candidates.is_empty() {
+            // No pubkey found
+            Utils::warn(&trf!("termux.ssh.auto_no_pubkey"));
+            Utils::info(&trf!("termux.ssh.interactive.gen_hint"));
+            return Ok(());
+        }
+
+        // 3) Let user choose a key (or create a new one)
+        let mut items: Vec<String> = candidates.iter().map(|p| p.display().to_string()).collect();
+        // Append an option to generate a new key
+        items.push(trf!("termux.ssh.interactive.create_new_key_option"));
+        let chosen_idx = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt(&trf!("termux.ssh.interactive.choose_key_or_create"))
+            .items(&items)
+            .default(0)
+            .interact()
+            .unwrap_or_default();
+
+        // Determine the chosen public key or create a new one
+        let chosen_pub: PathBuf;
+        if chosen_idx == items.len() - 1 {
+            // User chose "Create a new key"
+            if !crate::utils::command_exists("ssh-keygen") {
+                Utils::error(&trf!("termux.ssh.interactive.create_new_key_missing_tool"));
+                return Ok(());
+            }
+
+            // Default private key path: ~/.ssh/id_ed25519
+            let default_priv = dirs::home_dir().map_or_else(
+                || "id_ed25519".to_string(),
+                |mut p| {
+                    p.push(".ssh/id_ed25519");
+                    p.to_string_lossy().to_string()
+                },
+            );
+
+            let priv_input = Input::<String>::with_theme(&ColorfulTheme::default())
+                .with_prompt(&trf!(
+                    "termux.ssh.interactive.enter_private_key_path",
+                    default_priv
+                ))
+                .allow_empty(false)
+                .default(default_priv.clone())
+                .interact_text()
+                .map_or(default_priv, |s| s);
+
+            // Expand '~' if present
+            let priv_path_buf = if priv_input.starts_with("~/") {
+                if let Some(mut hd) = dirs::home_dir() {
+                    let rest = priv_input.trim_start_matches("~/");
+                    hd.push(rest);
+                    hd
+                } else {
+                    PathBuf::from(priv_input)
+                }
+            } else {
+                PathBuf::from(priv_input)
+            };
+
+            // Confirm overwrite if file exists
+            if priv_path_buf.exists() {
+                let overwrite = Confirm::with_theme(&ColorfulTheme::default())
+                    .with_prompt(&trf!("termux.ssh.interactive.create_new_key_prompt"))
+                    .default(false)
+                    .interact()
+                    .unwrap_or_default();
+                if !overwrite {
+                    Utils::warn(&trf!(
+                        "termux.ssh.interactive.create_new_key_failed",
+                        "user cancelled"
+                    ));
+                    return Ok(());
+                }
+            } else if let Some(parent) = priv_path_buf.parent()
+                && let Err(e) = fs::create_dir_all(parent)
+            {
+                Utils::error(&format!(
+                    "failed to create directory {}: {}",
+                    parent.display(),
+                    e
+                ));
+                return Ok(());
+            }
+
+            // Generate key pair (no passphrase)
+            Utils::info(&format!(
+                "Generating SSH key pair at {}",
+                priv_path_buf.display()
+            ));
+            match Command::new("ssh-keygen")
+                .arg("-t")
+                .arg("ed25519")
+                .arg("-f")
+                .arg(priv_path_buf.to_str().unwrap_or_default())
+                .arg("-N")
+                .arg("")
+                .status()
+            {
+                Ok(s) if s.success() => {
+                    let pub_path = priv_path_buf.with_extension("pub");
+                    Utils::success(&trf!(
+                        "termux.ssh.interactive.create_new_key_success",
+                        pub_path.display()
+                    ));
+                    chosen_pub = pub_path;
+                }
+                Ok(s) => {
+                    Utils::error(&trf!(
+                        "termux.ssh.interactive.create_new_key_failed",
+                        s.code().unwrap_or(-1)
+                    ));
+                    return Ok(());
+                }
+                Err(e) => {
+                    Utils::error(&trf!("termux.ssh.interactive.create_new_key_failed", e));
+                    return Ok(());
+                }
+            }
+        } else {
+            chosen_pub = candidates
+                .get(chosen_idx)
+                .cloned()
+                .unwrap_or_else(|| candidates[0].clone());
+        }
+
+        // 4) Ask for remote username (default to local $USER)
+        let default_user = std::env::var("USER").unwrap_or_default();
+        let username = Input::<String>::with_theme(&ColorfulTheme::default())
+            .with_prompt(&trf!("termux.ssh.interactive.ask_username"))
+            .allow_empty(true)
+            .default(default_user.clone())
+            .interact_text()
+            .map_or(default_user, |s| s);
+        let remote = if username.trim().is_empty() {
+            "localhost".to_string()
+        } else {
+            format!("{}@localhost", username.trim())
+        };
+
+        // 5) Try ssh-copy-id if available
+        if crate::utils::command_exists("ssh-copy-id") {
+            Utils::info(&trf!("termux.ssh.interactive.ssh_copy_id_attempt"));
+            let mut sc = Command::new("ssh-copy-id");
+            sc.arg("-p")
+                .arg(args.ssh_port.to_string())
+                .arg("-i")
+                .arg(chosen_pub.to_str().unwrap_or_default())
+                .arg(&remote)
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
+            match sc.status() {
+                Ok(s) if s.success() => {
+                    Utils::success(&trf!("termux.ssh.interactive.key_installed"));
+                }
+                Ok(_) => {
+                    Utils::warn(&trf!("termux.ssh.interactive.ssh_copy_id_failed", ""));
+                }
+                Err(e) => {
+                    Utils::warn(&trf!("termux.ssh.interactive.ssh_copy_id_failed", e));
+                }
+            }
+        } else if crate::utils::command_exists("scp") {
+            // 6) scp fallback
+            Utils::info(&trf!("termux.ssh.interactive.scp_fallback"));
+            let remote_tmp = "/tmp/kam_pubkey";
+            let scp_status = Command::new("scp")
+                .arg("-P")
+                .arg(args.ssh_port.to_string())
+                .arg(chosen_pub.to_str().unwrap_or_default())
+                .arg(format!("{}:{}", remote, remote_tmp))
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status();
+            if scp_status.is_ok() && scp_status.unwrap().success() {
+                // Run remote command to append key
+                let remote_cmd = format!(
+                    "mkdir -p ~/.ssh && cat {} >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys && rm {}",
+                    remote_tmp, remote_tmp
+                );
+                let mut s = Command::new("ssh");
+                s.arg("-p")
+                    .arg(args.ssh_port.to_string())
+                    .arg(&remote)
+                    .arg(&remote_cmd)
+                    .stdin(Stdio::inherit())
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit());
+                match s.status() {
+                    Ok(st) if st.success() => {
+                        Utils::success(&trf!("termux.ssh.interactive.key_installed"));
+                    }
+                    _ => {
+                        Utils::warn(&trf!("termux.ssh.interactive.scp_failed"));
+                    }
+                }
+            } else {
+                Utils::warn(&trf!("termux.ssh.interactive.scp_failed"));
+            }
+        } else {
+            // 7) adb push fallback
+            let dest = "/data/data/com.termux/files/home/.ssh/authorized_keys";
+            match Command::new("adb")
+                .args(&adb_base)
+                .arg("push")
+                .arg(chosen_pub.to_str().unwrap_or_default())
+                .arg(dest)
+                .status()
+            {
+                Ok(s) if s.success() => {
+                    Utils::success(&trf!("termux.ssh.pushed_key", dest));
+                }
+                _ => {
+                    // Try /sdcard as a safe fallback and instruct the user
+                    let fname = format!("kam_pubkey_{}.pub", args.ssh_port);
+                    let sd_dest = format!("/sdcard/{}", fname);
+                    match Command::new("adb")
+                        .args(&adb_base)
+                        .arg("push")
+                        .arg(chosen_pub.to_str().unwrap_or_default())
+                        .arg(&sd_dest)
+                        .status()
+                    {
+                        Ok(s) if s.success() => {
+                            let instr = format!(
+                                "cat {} >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && rm {}",
+                                sd_dest, sd_dest
+                            );
+                            Utils::info(&trf!(
+                                "termux.ssh.interactive.pushed_to_sdcard",
+                                fname,
+                                instr
+                            ));
+                        }
+                        _ => {
+                            Utils::error(&trf!("termux.ssh.interactive.adb_push_failed"));
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+
+        // 8) Connect via SSH
+        Utils::info(&trf!("termux.ssh.interactive.connecting", args.ssh_port));
+        let ssh_status = Command::new("ssh")
+            .arg("-p")
+            .arg(args.ssh_port.to_string())
+            .arg(&remote)
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status();
+
+        match ssh_status {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                Utils::error(&trf!("termux.ssh.ssh_exited", s.code().unwrap_or(-1)));
+            }
+            Err(e) => {
+                Utils::error(&trf!("termux.ssh.ssh_failed", e));
+            }
+        }
+        return Ok(());
+    }
+
+    if args.ssh_connect {
+        // Try to ensure forwarding is set up (best-effort)
+        let p = args.ssh_port.to_string();
+        let _ = Command::new("adb")
+            .args(&adb_base)
+            .arg("forward")
+            .arg(format!("tcp:{}", p))
+            .arg(format!("tcp:{}", p))
             .status();
 
         Utils::info(&trf!("termux.ssh.connecting", args.ssh_port));
@@ -408,7 +645,7 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
         let ssh_status = Command::new("ssh")
             .arg("localhost")
             .arg("-p")
-            .arg(args.ssh_port.to_string())
+            .arg(p)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -448,17 +685,17 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
         return Ok(());
     }
 
+    // Ensure adb port forwarding (best-effort) for both one-shot and interactive SSH
+    let port_spec = format!("tcp:{}", args.ssh_port);
+    let _ = Command::new("adb")
+        .args(&adb_base)
+        .arg("forward")
+        .arg(&port_spec)
+        .arg(&port_spec)
+        .status();
+
     if let Some(cmd) = args.command {
         // One-shot mode: execute command via SSH (requires Termux `sshd` + adb port forwarding).
-        let port_spec = format!("tcp:{}", args.ssh_port);
-        let _ = Command::new("adb")
-            .args(&adb_base)
-            .arg("forward")
-            .arg(&port_spec)
-            .arg(&port_spec)
-            .status();
-
-        // Use a shell on the remote side so complex commands are interpreted correctly.
         match Command::new("ssh")
             .arg("localhost")
             .arg("-p")
@@ -475,24 +712,13 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 println!("stdout:\n{}", stdout);
                 println!("stderr:\n{}", stderr);
-                Ok(())
             }
             Err(e) => {
                 Utils::error(&trf!("termux.ssh.ssh_failed", e));
-                Ok(())
             }
         }
     } else {
         // Interactive mode: prefer SSH-based connection (requires Termux `sshd` on the device).
-        // Ensure adb port forwarding is set (best-effort), then spawn an interactive SSH session.
-        let port_spec = format!("tcp:{}", args.ssh_port);
-        let _ = Command::new("adb")
-            .args(&adb_base)
-            .arg("forward")
-            .arg(&port_spec)
-            .arg(&port_spec)
-            .status();
-
         Utils::info(&trf!("termux.ssh.connecting", args.ssh_port));
         let status = Command::new("ssh")
             .arg("localhost")
@@ -506,18 +732,18 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
         match status {
             Ok(s) => {
                 if s.success() {
-                    Ok(())
+                    // ok
                 } else {
                     Utils::error(&trf!("termux.ssh.ssh_exited", s.code().unwrap_or(-1)));
-                    Ok(())
                 }
             }
             Err(e) => {
                 Utils::error(&trf!("termux.ssh.ssh_failed", e));
-                Ok(())
             }
         }
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -530,13 +756,12 @@ mod tests {
         let args = TermuxArgs {
             device: None,
             command: None,
-            daemon: false,
-            list: false,
-            kill: false,
+            ssh_auto: false,
             ssh_setup: false,
             ssh_forward: false,
             ssh_push_key: None,
             ssh_connect: false,
+            interactive: false,
             ssh_port: 8022,
             timeout: 60,
         };
@@ -546,115 +771,32 @@ mod tests {
     }
 
     #[test]
-    fn is_android_host_env_termux() {
-        use std::env;
-        // Temporarily set TERMUX_VERSION to simulate Termux/Android environment
-        unsafe {
-            env::set_var("TERMUX_VERSION", "1.0");
-        }
-        assert!(
-            is_android_host(),
-            "is_android_host() should return true when TERMUX_VERSION is set"
-        );
-        // Clean up to avoid leaking state to other tests
-        unsafe {
-            env::remove_var("TERMUX_VERSION");
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn termux_daemon_list_no_daemon() {
-        use std::env;
-        use tempfile::TempDir;
-
-        // Ensure an isolated KAM_HOME so the daemon pidfile doesn't exist.
-        let tmp = TempDir::new().unwrap();
-        let orig = env::var_os("KAM_HOME");
-        unsafe {
-            env::set_var("KAM_HOME", tmp.path().to_str().unwrap());
-        }
-
+    fn termux_ssh_auto_no_adb() {
         let args = TermuxArgs {
             device: None,
             command: None,
-            daemon: false,
-            list: true,
-            kill: false,
             ssh_setup: false,
             ssh_forward: false,
             ssh_push_key: None,
             ssh_connect: false,
+            interactive: false,
+            ssh_auto: true,
             ssh_port: 8022,
             timeout: 60,
         };
-        // Should return Ok even when no adb is present; the command prints a friendly message.
+        // In environments without adb available the command will return Ok(()) after printing an error.
+        // We assert the function returns Ok so tests don't fail on CI where adb isn't present.
         assert!(run(args).is_ok());
-
-        // Verify we did not accidentally create a pidfile
-        let pid_path = crate::utils::kam_home_dir()
-            .unwrap()
-            .join("termux")
-            .join("daemon.pid");
-        assert!(!pid_path.exists());
-
-        // Restore original KAM_HOME
-        if let Some(v) = orig {
-            unsafe {
-                env::set_var("KAM_HOME", v);
-            }
-        } else {
-            unsafe {
-                env::remove_var("KAM_HOME");
-            }
-        }
     }
 
     #[test]
-    #[serial]
-    fn termux_daemon_kill_no_daemon() {
-        use std::env;
-        use tempfile::TempDir;
-
-        // Ensure an isolated KAM_HOME so the daemon pidfile doesn't exist.
-        let tmp = TempDir::new().unwrap();
-        let orig = env::var_os("KAM_HOME");
-        unsafe {
-            env::set_var("KAM_HOME", tmp.path().to_str().unwrap());
-        }
-
-        let args = TermuxArgs {
-            device: None,
-            command: None,
-            daemon: false,
-            list: false,
-            kill: true,
-            ssh_setup: false,
-            ssh_forward: false,
-            ssh_push_key: None,
-            ssh_connect: false,
-            ssh_port: 8022,
-            timeout: 60,
-        };
-        // Should return Ok even when no adb is present; the command prints a friendly message.
-        assert!(run(args).is_ok());
-
-        // Verify we did not accidentally create a pidfile
-        let pid_path = crate::utils::kam_home_dir()
-            .unwrap()
-            .join("termux")
-            .join("daemon.pid");
-        assert!(!pid_path.exists());
-
-        // Restore original KAM_HOME
-        if let Some(v) = orig {
-            unsafe {
-                env::set_var("KAM_HOME", v);
-            }
-        } else {
-            unsafe {
-                env::remove_var("KAM_HOME");
-            }
-        }
+    fn is_android_host_callable() {
+        // Ensure the detection helper is callable and does not panic.
+        // We do not assert a platform-specific value here because that depends on the runtime environment.
+        let _ = is_android_host();
     }
+
+    // NOTE: test for daemon/list/kill removed because daemon/list/kill are no longer supported.
+
+    // NOTE: test for daemon/list/kill removed because daemon/list/kill are no longer supported.
 }

@@ -33,6 +33,9 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::{OnceLock, RwLock};
 
+use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
+use unic_langid::LanguageIdentifier;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum Language {
     #[default]
@@ -218,6 +221,12 @@ pub fn tr_key(key: &str) -> &str {
 /// Example:
 ///   let s = tr_fmt("Building module: {} v{}", &module_id, &version);
 pub fn tr_fmt(template_key: &str, args: &[&dyn Display]) -> String {
+    // Fluent-first formatting (hybrid migration).
+    // If a Fluent message exists for the key in the current language, prefer it.
+    if let Some(s) = format_for_current_lang(template_key, args) {
+        return s;
+    }
+
     let tmpl = tr_key(template_key);
     // Very simple formatting: we just pass into `format!` by building a string.
     // Since we can't expand varargs at runtime, we use an intermediate approach:
@@ -245,162 +254,42 @@ pub fn tr_fmt(template_key: &str, args: &[&dyn Display]) -> String {
 /// Helper for one-off translation. Fancy macros are provided (trf) but some
 /// code paths may prefer calling this directly.
 pub fn tr_fmt_single<T: Display>(template_key: &str, arg: T) -> String {
-    tr_fmt(template_key, &[&arg])
+    // Explicitly coerce the single argument to `&dyn Display` to avoid
+    // a typed `[&T; 1]` array which doesn't coerce implicitly.
+    tr_fmt(template_key, &[&arg as &dyn Display])
 }
 
-/// A map-backed keyed translation system with a minimal fallback to the previous
-/// literal match-based behavior (for backwards compatibility).
-///
-/// The translation file loader reads TOML resources embedded at compile time
-/// (`src/i18n/en.toml` and `src/i18n/zh.toml`) and flattens them into a simple
-/// string map (keys like `workspace.summary.title`). Maps are cached in static
-/// `OnceLock` containers so lookups are fast and thread-safe.
-fn parse_toml_string_to_map(inp: &str) -> HashMap<String, String> {
-    // We parse a toml::value::Table and recursively flatten into dotted keys.
-    let table = toml::from_str::<toml::value::Table>(inp).unwrap_or_default();
-    let mut out = HashMap::new();
+// A map-backed keyed translation system with a minimal fallback to the previous
+// literal match-based behavior (for backwards compatibility).
+//
+// The translation file loader reads TOML resources embedded at compile time
+// (`src/i18n/en.toml` and `src/i18n/zh.toml`) and flattens them into a simple
+// string map (keys like `workspace.summary.title`). Maps are cached in static
+// `OnceLock` containers so lookups are fast and thread-safe.
+// TOML-based runtime overrides were removed during the migration to Fluent (.ftl).
+// If TOML import/parsing is required in the future, implement it as a small,
+// focused utility (script or dedicated module) outside the runtime hot path.
 
-    fn flatten(prefix: &str, tbl: &toml::value::Table, out: &mut HashMap<String, String>) {
-        for (k, v) in tbl {
-            let key = if prefix.is_empty() {
-                k.clone()
-            } else {
-                format!("{}.{}", prefix, k)
-            };
-            match v {
-                toml::Value::String(s) => {
-                    out.insert(key, s.clone());
-                }
-                toml::Value::Table(t) => {
-                    flatten(&key, t, out);
-                }
-                other => {
-                    out.insert(key, other.to_string());
-                }
-            }
-        }
-    }
-
-    flatten("", &table, &mut out);
-    out
-}
-
-fn try_load_runtime_i18n() {
-    // Attempt to override compile-time translations by reading runtime i18n TOML files.
-    // 1. Prefer directory pointed to by KAM_I18N_DIR
-    // 2. Fallback to ./i18n folder within the current working dir
+const fn try_load_runtime_i18n() {
+    // No-op: this project now treats FTL files under `src/locales/<lang>/main.ftl`
+    // as the canonical translation source. Older TOML-based override logic has
+    // been removed as part of the migration.
     //
-    // Additional feature:
-    // - Support granular area files under `cli/` (e.g., `cli/en.toml` and `cli/zh.toml`)
-    //   and merge their keys into the main runtime map. This lets packaging or deploy
-    //   overrides target only CLI-specific translations without requiring a full locale dump.
-    //
-    // Only attempts to set a map once. Failures (I/O / parse) are ignored silently to keep init robust.
-    if let Ok(dir_str) = std::env::var("KAM_I18N_DIR") {
-        let dir = std::path::PathBuf::from(dir_str);
-        if dir.is_dir() {
-            // Build a combined EN map from en.toml + cli/en.toml (cli overlay overrides)
-            {
-                let mut combined_en: std::collections::HashMap<String, String> =
-                    std::collections::HashMap::new();
-                let en_path = dir.join("en.toml");
-                if en_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&en_path)
-                {
-                    combined_en.extend(parse_toml_string_to_map(&s));
-                }
-                let en_cli_path = dir.join("cli").join("en.toml");
-                if en_cli_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&en_cli_path)
-                {
-                    combined_en.extend(parse_toml_string_to_map(&s));
-                }
-                if !combined_en.is_empty() {
-                    let _ = KEYED_EN.set(combined_en);
-                }
-            }
-
-            // Build a combined ZH map from zh.toml + cli/zh.toml (cli overlay overrides)
-            {
-                let mut combined_zh: std::collections::HashMap<String, String> =
-                    std::collections::HashMap::new();
-                let zh_path = dir.join("zh.toml");
-                if zh_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&zh_path)
-                {
-                    combined_zh.extend(parse_toml_string_to_map(&s));
-                }
-                let zh_cli_path = dir.join("cli").join("zh.toml");
-                if zh_cli_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&zh_cli_path)
-                {
-                    combined_zh.extend(parse_toml_string_to_map(&s));
-                }
-                if !combined_zh.is_empty() {
-                    let _ = KEYED_ZH.set(combined_zh);
-                }
-            }
-
-            // If KAM_I18N_DIR was used, do not attempt other fallback paths.
-            return;
-        }
-    }
-
-    // Fallback: check ./i18n in current working dir
-    if let Ok(cwd) = std::env::current_dir() {
-        let dir = cwd.join("i18n");
-        if dir.is_dir() {
-            // EN: merge en.toml and cli/en.toml (cli overlay)
-            {
-                let mut combined_en: std::collections::HashMap<String, String> =
-                    std::collections::HashMap::new();
-                let en_path = dir.join("en.toml");
-                if en_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&en_path)
-                {
-                    combined_en.extend(parse_toml_string_to_map(&s));
-                }
-                let en_cli_path = dir.join("cli").join("en.toml");
-                if en_cli_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&en_cli_path)
-                {
-                    combined_en.extend(parse_toml_string_to_map(&s));
-                }
-                if !combined_en.is_empty() {
-                    let _ = KEYED_EN.set(combined_en);
-                }
-            }
-
-            // ZH: merge zh.toml and cli/zh.toml (cli overlay)
-            {
-                let mut combined_zh: std::collections::HashMap<String, String> =
-                    std::collections::HashMap::new();
-                let zh_path = dir.join("zh.toml");
-                if zh_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&zh_path)
-                {
-                    combined_zh.extend(parse_toml_string_to_map(&s));
-                }
-                let zh_cli_path = dir.join("cli").join("zh.toml");
-                if zh_cli_path.exists()
-                    && let Ok(s) = std::fs::read_to_string(&zh_cli_path)
-                {
-                    combined_zh.extend(parse_toml_string_to_map(&s));
-                }
-                if !combined_zh.is_empty() {
-                    let _ = KEYED_ZH.set(combined_zh);
-                }
-            }
-        }
-    }
+    // If a runtime override is needed, use `KAM_LOCALES_DIR` that contains
+    // `<lang>/main.ftl` files. The Fluent loader will consult those at runtime.
 }
 
 fn keyed_en_map() -> &'static HashMap<String, String> {
-    KEYED_EN.get_or_init(|| parse_toml_string_to_map(include_str!("i18n/en.toml")))
+    // TOML-based keyed maps have been deprecated in favor of Fluent (.ftl).
+    // Keep an empty runtime map here so the old `keyed_en` fallback will not
+    // attempt to load TOML resources.
+    KEYED_EN.get_or_init(HashMap::new)
 }
 
 fn keyed_zh_map() -> &'static HashMap<String, String> {
-    KEYED_ZH.get_or_init(|| parse_toml_string_to_map(include_str!("i18n/zh.toml")))
+    // TOML-based keyed maps have been deprecated in favor of Fluent (.ftl).
+    // Keep an empty runtime map here; inline zh fallbacks (keyed_zh) remain.
+    KEYED_ZH.get_or_init(HashMap::new)
 }
 
 fn keyed_en(key: &str) -> Option<&'static str> {
@@ -936,6 +825,103 @@ fn zh_to_en(s: &str) -> Option<&'static str> {
     }
 }
 
+// Fluent formatting helpers (loaded per-call; no global FluentBundle in statics).
+// These helpers attempt to format a dotted-key using Fluent (hyphenated id).
+// Behavior:
+//  - Check runtime override dir (KAM_LOCALES_DIR/<lang>/main.ftl) first (if present).
+//  - Otherwise include compiled-in FTL under `src/locales/<lang>/main.ftl`.
+// Notes:
+//  - We build a transient FluentBundle per call to avoid placing non-Send types
+//    inside static variables (avoids Sync/Send issues when embedding bundles).
+//  - Positional `{}` args are exposed to Fluent as `$arg0`, `$arg1`, ... and
+//    `count` is set from the first argument if it parses as an integer.
+
+fn dotted_to_fluent_id(dotted: &str) -> String {
+    dotted.replace(['.', '_'], "-")
+}
+
+fn bundle_from_ftl_str(lang_code: &str, ftl_str: &str) -> Option<FluentBundle<FluentResource>> {
+    let res = FluentResource::try_new(ftl_str.to_owned()).ok()?;
+    let langid: LanguageIdentifier = lang_code.parse().ok()?;
+    // Create a local bundle for the requested language
+    let mut bundle = FluentBundle::new(vec![langid]);
+    // Add the resource by value so the bundle owns it (avoids borrow/lifetime issues).
+    let _ = bundle.add_resource(res);
+    Some(bundle)
+}
+
+fn build_bundle_for_locale(lang_code: &str) -> Option<FluentBundle<FluentResource>> {
+    // 1) Runtime override (KAM_LOCALES_DIR/<lang>/main.ftl)
+    if let Ok(dir) = std::env::var("KAM_LOCALES_DIR") {
+        let candidate = std::path::Path::new(&dir).join(lang_code).join("main.ftl");
+        if candidate.exists()
+            && let Ok(contents) = std::fs::read_to_string(candidate)
+            && let Some(bundle) = bundle_from_ftl_str(lang_code, &contents)
+        {
+            return Some(bundle);
+        }
+    }
+
+    // 2) Fallback to compiled-in locales under src/locales/<lang>/main.ftl
+    match lang_code {
+        "en-US" => bundle_from_ftl_str("en-US", include_str!("locales/en-US/main.ftl")),
+        "zh-CN" => bundle_from_ftl_str("zh-CN", include_str!("locales/zh-CN/main.ftl")),
+        _ => None,
+    }
+}
+
+/// Format a dotted key (e.g., `termux.ssh.forwarded`) for a specific language.
+/// Returns `Some(String)` if a Fluent translation exists and formatting succeeded.
+pub fn format_for_lang(lang: Language, key: &str, args: &[&dyn Display]) -> Option<String> {
+    let id = dotted_to_fluent_id(key);
+    let lang_code = match lang {
+        Language::En => "en-US",
+        Language::Zh => "zh-CN",
+    };
+
+    let bundle = build_bundle_for_locale(lang_code)?;
+    let message = bundle.get_message(&id)?;
+    let value = message.value()?;
+
+    // Build FluentArgs: arg0, arg1, ... (and count if first arg is numeric)
+    let mut f_args = FluentArgs::new();
+    for (i, a) in args.iter().enumerate() {
+        let s = format!("{}", a);
+        // Create owned key + owned string values so nothing is borrowed from a temporary.
+        let key = format!("arg{}", i);
+        if let Ok(n) = s.parse::<i64>() {
+            f_args.set(key, FluentValue::from(n));
+        } else {
+            f_args.set(key, FluentValue::from(s));
+        }
+    }
+    if !args.is_empty() {
+        let first = format!("{}", args[0]);
+        if let Ok(n) = first.parse::<i64>() {
+            f_args.set("count", FluentValue::from(n));
+        }
+    }
+
+    let mut errs = vec![];
+    let formatted = bundle.format_pattern(value, Some(&f_args), &mut errs);
+    Some(formatted.to_string())
+}
+
+/// Convenience wrapper that formats for the *current* language, if available.
+pub fn format_for_current_lang(key: &str, args: &[&dyn Display]) -> Option<String> {
+    format_for_lang(current_language(), key, args)
+}
+
+/// Check existence of a Fluent message id for a given language/key
+pub fn has_message(lang: Language, key: &str) -> bool {
+    let id = dotted_to_fluent_id(key);
+    let lang_code = match lang {
+        Language::En => "en-US",
+        Language::Zh => "zh-CN",
+    };
+    build_bundle_for_locale(lang_code).is_some_and(|b| b.get_message(&id).is_some())
+}
+
 // --- Public helpers for config-based language retrieval ----------------------
 
 /// Tries to read `language` or `ui.language` from the effective `kam` config
@@ -1064,30 +1050,38 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_parse_en_toml() {
-        // Ensure the shipped English TOML is syntactically valid and contains a [repo] table.
-        let t = match toml::from_str::<toml::value::Table>(include_str!("i18n/en.toml")) {
-            Ok(tbl) => tbl,
-            Err(e) => panic!("Failed to parse src/i18n/en.toml as TOML: {}", e),
-        };
-        assert!(
-            t.get("repo").is_some(),
-            "Expected top-level [repo] table in src/i18n/en.toml"
-        );
-    }
+    fn test_ftl_key_coverage() {
+        use regex::Regex;
+        use std::fs;
 
-    #[test]
-    #[serial]
-    fn test_parse_zh_toml() {
-        // Ensure the shipped Chinese TOML is syntactically valid and contains a [repo] table.
-        let t = match toml::from_str::<toml::value::Table>(include_str!("i18n/zh.toml")) {
-            Ok(tbl) => tbl,
-            Err(e) => panic!("Failed to parse src/i18n/zh.toml as TOML: {}", e),
-        };
-        assert!(
-            t.get("repo").is_some(),
-            "Expected top-level [repo] table in src/i18n/zh.toml"
-        );
+        // Ensure the en-US FTL exists and all its message IDs are present in zh-CN as well.
+        let en_path = "src/locales/en-US/main.ftl";
+        let zh_path = "src/locales/zh-CN/main.ftl";
+
+        let en_s = fs::read_to_string(en_path).expect("Failed to read en-US FTL file");
+        let zh_s = fs::read_to_string(zh_path).expect("Failed to read zh-CN FTL file");
+
+        let id_re = Regex::new(r"^([A-Za-z0-9_-]+)\s*=").unwrap();
+
+        let mut en_keys = Vec::new();
+        for line in en_s.lines() {
+            if let Some(c) = id_re.captures(line) {
+                en_keys.push(c[1].to_string());
+            }
+        }
+
+        let mut zh_keys = std::collections::HashSet::new();
+        for line in zh_s.lines() {
+            if let Some(c) = id_re.captures(line) {
+                zh_keys.insert(c[1].to_string());
+            }
+        }
+
+        let missing: Vec<_> = en_keys
+            .into_iter()
+            .filter(|k| !zh_keys.contains(k))
+            .collect();
+        assert!(missing.is_empty(), "Missing keys in zh-CN: {:?}", missing);
     }
 
     #[test]
