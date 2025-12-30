@@ -373,10 +373,13 @@ fn process_module_download(
             }
         }
         Err(e) => {
-            Utils::error(&crate::i18n::tr_fmt(
-                "repo.failed_to_download",
-                &[&module_id, &e.to_string()],
-            ));
+            {
+                // Avoid referencing a temporary (`&e.to_string()`) directly in the slice.
+                // Build owned strings and pass a slice of `&dyn Display` to `tr_fmt`.
+                let err_str = e.to_string();
+                let args: Vec<&dyn std::fmt::Display> = vec![&module_id, &err_str];
+                Utils::error(&crate::i18n::tr_fmt("repo.failed_to_download", &args));
+            }
         }
     }
 
