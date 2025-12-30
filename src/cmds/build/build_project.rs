@@ -381,9 +381,17 @@ pub fn create_kam_module_zip(
             .unwrap_or_default();
 
         // First, count files to create a proper progress bar
+        // Respect the kam.toml `kam.build.respect_gitignore` flag (default false).
+        let respect_gitignore = kam_toml
+            .kam
+            .build
+            .as_ref()
+            .and_then(|b| b.respect_gitignore)
+            .unwrap_or(false);
+
         let file_count = {
             let temp_walker = ignore::WalkBuilder::new(&src_dir)
-                .git_ignore(true)
+                .git_ignore(respect_gitignore)
                 .hidden(false)
                 .build();
             temp_walker
@@ -410,7 +418,7 @@ pub fn create_kam_module_zip(
         };
 
         let walker = ignore::WalkBuilder::new(&src_dir)
-            .git_ignore(true)
+            .git_ignore(respect_gitignore)
             .hidden(false)
             .build();
 
@@ -593,10 +601,18 @@ pub fn create_template_archive(
     let exclude_dir_names = crate::utils::default_exclude_dir_names();
 
     // Count files first for proper progress bar
+    // Respect the kam.toml `kam.build.respect_gitignore` flag (default false).
+    let respect_gitignore = _kam_toml
+        .kam
+        .build
+        .as_ref()
+        .and_then(|b| b.respect_gitignore)
+        .unwrap_or(false);
+
     let file_count = {
         let exclude_dir_names_clone = exclude_dir_names.clone();
         let temp_walker = ignore::WalkBuilder::new(project_root)
-            .git_ignore(true)
+            .git_ignore(respect_gitignore)
             .hidden(false)
             .filter_entry(move |entry| {
                 let name = entry.file_name().to_string_lossy();
@@ -630,7 +646,7 @@ pub fn create_template_archive(
     };
 
     let walker = ignore::WalkBuilder::new(project_root)
-        .git_ignore(true)
+        .git_ignore(respect_gitignore)
         .hidden(false)
         .filter_entry(move |entry| {
             let name = entry.file_name().to_string_lossy();

@@ -20,6 +20,8 @@ pub struct ExtraInclude {
 // - extra_includes：额外包含的文件列表
 // - exclude：额外的排除路径列表（支持 glob 模式）
 // - include：强制包含的路径列表（覆盖 exclude，支持 glob 模式）
+// - respect_gitignore：是否尊重顶层 `.gitignore` 的规则（默认 false），
+//   由 `kam.toml` 中 `kam.build.respect_gitignore` 显式控制。
 pub struct BuildSection {
     pub source_dir: Option<String>,
     pub target_dir: Option<String>,
@@ -28,6 +30,7 @@ pub struct BuildSection {
     pub extra_includes: Option<Vec<ExtraInclude>>,
     pub exclude: Option<Vec<String>>,
     pub include: Option<Vec<String>>,
+    pub respect_gitignore: Option<bool>,
 }
 
 impl Default for BuildSection {
@@ -58,6 +61,8 @@ impl Default for BuildSection {
                 "post-fs-data.sh".to_string(),
                 "uninstall.sh".to_string(),
             ]),
+            // By default do NOT respect .gitignore; explicit control via kam.toml.
+            respect_gitignore: Some(false),
         }
     }
 }

@@ -237,22 +237,37 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
                         rendered_kt.prop.description = params.description.clone();
                         rendered_kt.prop.versionCode = kt.prop.versionCode;
 
-                        // Reset template-specific build settings to sane defaults
-                        if let Some(ref mut build) = rendered_kt.kam.build {
-                            // Reset target_dir to "dist" (template may have ../../src/assets/tmpl)
+                        // Ensure build section exists and populate missing fields with sensible defaults.
+                        // Use BuildSection::default() as authoritative defaults so the generated kam.toml
+                        // includes explicit, reasonable defaults for all build-related fields.
+                        let default_build =
+                            crate::types::kam_toml::sections::BuildSection::default();
+                        let build = rendered_kt
+                            .kam
+                            .build
+                            .get_or_insert_with(|| default_build.clone());
+
+                        // Apply defaults for common fields when they are not present.
+                        if build.target_dir.is_none() {
                             build.target_dir = Some("dist".to_string());
-                            // Reset output_file to use the new module ID (simple id-only default)
+                        }
+                        if build.output_file.is_none() {
                             build.output_file = Some("{{id}}".to_string());
-                            // Clear template-specific exclude list
-                            build.exclude = None;
+                        }
+                        if build.hooks_dir.is_none() {
+                            build.hooks_dir = Some("hooks".to_string());
+                        }
+                        if build.exclude.is_none() {
+                            build.exclude = default_build.exclude.clone();
+                        }
+                        if build.include.is_none() {
+                            build.include = default_build.include.clone();
+                        }
+                        if build.respect_gitignore.is_none() {
+                            build.respect_gitignore = default_build.respect_gitignore;
                         }
 
-                        // Ensure build section/source_dir exists and set a sensible default if missing.
-                        // Use the actual module id here (rendered_kt.prop.id) so the final kam.toml contains a usable path
-                        // (this helps users discover the `kam.build.source_dir` field and ensures a valid default).
-                        let build = rendered_kt.kam.build.get_or_insert_with(|| {
-                            crate::types::kam_toml::sections::BuildSection::default()
-                        });
+                        // Ensure build.source_dir uses the new module id if missing
                         if build.source_dir.is_none() {
                             build.source_dir = Some(format!("src/{}", rendered_kt.prop.id));
                         }

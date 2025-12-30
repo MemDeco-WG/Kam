@@ -16,28 +16,32 @@ use crate::types::kam_toml::RuleConfig;
 fn collect_project_files(
     project_path: &Path,
     skip_dirs: &[String],
-    is_kam_project: bool,
+    respect_gitignore: bool,
 ) -> Vec<PathBuf> {
-    // Read top-level .gitignore and compile a basic include/exclude list.
+    // Optionally read top-level .gitignore and compile a basic include/exclude list.
     // This supports simple patterns and negations (lines starting with '!').
-    let gitignore_file = project_path.join(".gitignore");
+    // NOTE: we no longer respect .gitignore by default; callers must pass
+    // `respect_gitignore = true` when they want .gitignore processing.
     let mut gi_patterns: Vec<String> = Vec::new();
     let mut gi_whitelist: Vec<String> = Vec::new();
-    if gitignore_file.exists()
-        && let Ok(contents) = std::fs::read_to_string(&gitignore_file)
-    {
-        for raw in contents.lines() {
-            let line = raw.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            if let Some(stripped) = line.strip_prefix('!') {
-                let pat = stripped.trim();
-                if !pat.is_empty() {
-                    gi_whitelist.push(pat.to_string());
+    if respect_gitignore {
+        let gitignore_file = project_path.join(".gitignore");
+        if gitignore_file.exists()
+            && let Ok(contents) = std::fs::read_to_string(&gitignore_file)
+        {
+            for raw in contents.lines() {
+                let line = raw.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
                 }
-            } else {
-                gi_patterns.push(line.to_string());
+                if let Some(stripped) = line.strip_prefix('!') {
+                    let pat = stripped.trim();
+                    if !pat.is_empty() {
+                        gi_whitelist.push(pat.to_string());
+                    }
+                } else {
+                    gi_patterns.push(line.to_string());
+                }
             }
         }
     }
@@ -48,7 +52,7 @@ fn collect_project_files(
     let skip_clone = skip_dirs.to_owned();
 
     let walker = ignore::WalkBuilder::new(project_path)
-        .git_ignore(true)
+        .git_ignore(respect_gitignore)
         .hidden(false)
         .filter_entry(move |entry| {
             // Keep root
@@ -99,7 +103,9 @@ fn collect_project_files(
         }
 
         // kam.toml is handled separately; don't include it in the generic list
-        if is_kam_project && path.file_name().and_then(|n| n.to_str()) == Some("kam.toml") {
+        if project_path.join("kam.toml").exists()
+            && path.file_name().and_then(|n| n.to_str()) == Some("kam.toml")
+        {
             continue;
         }
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
@@ -228,6 +234,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                 Ok(entries) => {
                     for entry in entries.filter_map(Result::ok) {
                         if entry.is_dir() {
+                            let mut respect_gitignore = false;
                             if entry.join("kam.toml").exists() {
                                 if let Ok(res) = super::file::check_file(
                                     &entry.join("kam.toml"),
@@ -245,13 +252,16 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                                     let key =
                                         entry.canonicalize().unwrap_or_else(|_| entry.clone());
                                     project_rules_cache.insert(key, kt.rules);
+                                    respect_gitignore = kt
+                                        .kam
+                                        .build
+                                        .as_ref()
+                                        .and_then(|b| b.respect_gitignore)
+                                        .unwrap_or(false);
                                 }
                             }
-                            let dir_files = collect_project_files(
-                                &entry,
-                                &skip_dirs,
-                                entry.join("kam.toml").exists(),
-                            );
+                            let dir_files =
+                                collect_project_files(&entry, &skip_dirs, respect_gitignore);
                             collected_files.extend(dir_files);
                         } else if entry.is_file() {
                             collected_files.push(entry);
@@ -266,6 +276,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             let pathp = Path::new(&p);
             if pathp.exists() {
                 if pathp.is_dir() {
+                    let mut respect_gitignore = false;
                     if pathp.join("kam.toml").exists() {
                         if let Ok(res) =
                             super::file::check_file(&pathp.join("kam.toml"), "toml", args.fix, None)
@@ -278,10 +289,15 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                         {
                             let key = pathp.canonicalize().unwrap_or_else(|_| pathp.to_path_buf());
                             project_rules_cache.insert(key, kt.rules);
+                            respect_gitignore = kt
+                                .kam
+                                .build
+                                .as_ref()
+                                .and_then(|b| b.respect_gitignore)
+                                .unwrap_or(false);
                         }
                     }
-                    let dir_files =
-                        collect_project_files(pathp, &skip_dirs, pathp.join("kam.toml").exists());
+                    let dir_files = collect_project_files(pathp, &skip_dirs, respect_gitignore);
                     collected_files.extend(dir_files);
                 } else if pathp.is_file() {
                     collected_files.push(pathp.to_path_buf());
@@ -760,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    fn collect_project_files_respects_gitignore() {
+    fn collect_project_files_respect_gitignore_if_enabled() {
         let dir = tempdir().unwrap();
         // Ignore "ignored.json" via .gitignore
         let gi = dir.path().join(".gitignore");
@@ -773,8 +789,10 @@ mod tests {
         fs::write(&good, "{\"a\":1}").unwrap();
 
         let skip_dirs = crate::utils::default_exclude_dir_names();
-        let files = collect_project_files(dir.path(), &skip_dirs, false);
-        let file_names: Vec<String> = files
+
+        // By default we do NOT respect .gitignore (respect_gitignore = false)
+        let files_default = collect_project_files(dir.path(), &skip_dirs, false);
+        let file_names_default: Vec<String> = files_default
             .iter()
             .filter_map(|p| {
                 p.file_name()
@@ -783,8 +801,22 @@ mod tests {
             })
             .collect();
 
-        assert!(file_names.contains(&"good.json".to_string()));
-        assert!(!file_names.contains(&"ignored.json".to_string()));
+        assert!(file_names_default.contains(&"good.json".to_string()));
+        assert!(file_names_default.contains(&"ignored.json".to_string())); // included by default
+
+        // When explicitly enabled, .gitignore should be respected
+        let files_respecting = collect_project_files(dir.path(), &skip_dirs, true);
+        let file_names_respecting: Vec<String> = files_respecting
+            .iter()
+            .filter_map(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            })
+            .collect();
+
+        assert!(file_names_respecting.contains(&"good.json".to_string()));
+        assert!(!file_names_respecting.contains(&"ignored.json".to_string()));
     }
 
     #[test]
