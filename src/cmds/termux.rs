@@ -9,54 +9,19 @@
 //! Notes:
 //! - This command expects `adb` to be available on the PATH and a device to be connected.
 //! - For the one-shot mode we base64-encode the payload to avoid complex on-device shell escaping.
-#![allow(unused_imports, dead_code)]
 //!
 //! Design:
 //! - Keep behavior simple and defensive: when `adb` is missing we print a friendly error and return.
 //! - Interactive mode uses `adb shell -t` + the Termux login command (switch to Termux UID and exec login).
 //! - Non-interactive (one-shot) mode decodes a base64 payload on the device and pipes it into the user's shell.
-use base64::engine::Engine as _;
-use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
 use clap::Args;
 use std::fs;
-use std::fs::OpenOptions;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::errors::KamError;
 use crate::utils::Utils;
 use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
-use std::io::{self, Write};
-
-const TERMUX_DATA_DIR: &str = "/data/data/com.termux/files";
-/// Relative path (under TERMUX_DATA_DIR) to the termux env file that should be sourced.
-const TERMUX_ENV_REL: &str = "usr/etc/termux/termux.env";
-/// Relative path (under TERMUX_DATA_DIR) to the termux login binary.
-const TERMUX_LOGIN_REL: &str = "usr/bin/login";
-/// Relative path (under TERMUX_DATA_DIR) to the shell binary used for one-shot commands.
-const TERMUX_SH_REL: &str = "usr/bin/sh";
-// NOTE: The previous adb-shell one-shot format has been removed.
-// One-shot execution now uses SSH over an adb port-forward (see SSH helpers below).
-
-fn is_android_host() -> bool {
-    // Use sysinfo as the authoritative source for OS identification.
-    // Rely on System::name() / System::kernel_version() and avoid ad-hoc TERMUX env/file heuristics.
-    use sysinfo::System;
-    let mut sys = System::new_all();
-    sys.refresh_all();
-
-    if let Some(name) = System::name()
-        && name.to_lowercase().contains("android")
-    {
-        return true;
-    }
-    if let Some(kernel) = System::kernel_version()
-        && kernel.to_lowercase().contains("android")
-    {
-        return true;
-    }
-    false
-}
 
 /// Arguments for `kam termux`
 #[derive(Args, Debug)]
@@ -351,7 +316,7 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
             if h.exists()
                 && let Ok(entries) = fs::read_dir(&h)
             {
-                for e in entries.filter_map(|r| r.ok()) {
+                for e in entries.filter_map(Result::ok) {
                     let p = e.path();
                     if p.is_file()
                         && let Some(n) = p.file_name().and_then(|s| s.to_str())

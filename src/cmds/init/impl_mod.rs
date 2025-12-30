@@ -11,13 +11,25 @@ use tera::{Context, Tera};
 // 支持tar.gz和zip，根据扩展名判断（简单粗暴）
 fn extract_archive(path: &Path, dst: &Path) -> Result<(), KamError> {
     let file = fs::File::open(path).map_err(KamError::Io)?;
-    // 转小写再判断，避免大小写问题
-    let path_str = path.to_string_lossy().to_lowercase();
-    if path_str.ends_with(".tar.gz") || path_str.ends_with(".tgz") {
+    // Use case-insensitive extension checks when possible and
+    // normalize the file name for `.tar.gz` checks.
+    let file_name_lower = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    if file_name_lower.ends_with(".tar.gz")
+        || path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("tgz"))
+    {
         let tar = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(tar);
         archive.unpack(dst).map_err(KamError::Io)?;
-    } else if path_str.ends_with(".zip") {
+    } else if path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
+    {
         let mut archive = zip::ZipArchive::new(file).map_err(KamError::Zip)?;
         archive.extract(dst).map_err(KamError::Zip)?;
     } else {
@@ -73,7 +85,14 @@ pub struct InitTemplateParams<'a> {
     pub update_json: Option<String>,
 }
 
-pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError> {
+/// Initialize a project implementation from a template source.
+///
+/// # Errors
+///
+/// Returns `Err(KamError)` if filesystem operations, archive extraction, or template rendering fail.
+// TODO: split this function into smaller functions to satisfy clippy::too_many_lines
+#[allow(clippy::too_many_lines)]
+pub fn init_impl(path: &Path, params: &mut InitImplParams<'_>) -> Result<(), KamError> {
     // 如果需要解压，先准备个临时目录
     let temp_dir = tempfile::tempdir().map_err(KamError::Io)?;
     let mut template_path = params.impl_source.to_path_buf();
@@ -98,7 +117,7 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
     if template_path.is_dir() {
         let entries: Vec<_> = fs::read_dir(&template_path)
             .map_err(KamError::Io)?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .collect();
 
         // 只有一个目录就进去，避免多一层嵌套
@@ -110,7 +129,7 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
     // 确定模板ID，如果用户没指定就用默认的"template"
     let archive_id = params
         .explicit_template_id
-        .map_or_else(|| "template".to_string(), |eid| eid.to_string());
+        .map_or_else(|| "template".to_string(), ToString::to_string);
 
     // Load template variables from template's kam.toml
     let template_kam_path = template_path.join("kam.toml");
@@ -218,12 +237,12 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
     // Only process if force is set OR kam.toml was just created (didn't exist before copy_and_replace)
     if kam_toml_path.exists() && (params.force || !kam_toml_existed_before_copy) {
         let content = fs::read_to_string(&kam_toml_path).map_err(KamError::Io)?;
-        let mut context = Context::new();
+        let mut tera_ctx = Context::new();
         for (k, v) in params.template_vars.iter() {
-            context.insert(k, v);
+            tera_ctx.insert(k, v);
         }
         let mut tera = Tera::default();
-        match tera.render_str(&content, &context) {
+        match tera.render_str(&content, &tera_ctx) {
             Ok(rendered) => {
                 // Parse rendered kam.toml and fix template-specific values
                 match toml::from_str::<KamToml>(&rendered) {
@@ -231,10 +250,10 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
                         // Override with user-provided values
                         rendered_kt.prop.id = params.id.to_string();
                         // 更新渲染后的kam.toml，用实际的值替换模板变量
-                        rendered_kt.prop.name = params.name.clone();
+                        rendered_kt.prop.name.clone_from(&params.name);
                         rendered_kt.prop.version = params.version.to_string();
                         rendered_kt.prop.author = Some(params.author.to_string()); // author现在是Option了
-                        rendered_kt.prop.description = params.description.clone();
+                        rendered_kt.prop.description.clone_from(&params.description);
                         rendered_kt.prop.versionCode = kt.prop.versionCode;
 
                         // Ensure build section exists and populate missing fields with sensible defaults.
@@ -258,10 +277,10 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
                             build.hooks_dir = Some("hooks".to_string());
                         }
                         if build.exclude.is_none() {
-                            build.exclude = default_build.exclude.clone();
+                            build.exclude.clone_from(&default_build.exclude);
                         }
                         if build.include.is_none() {
-                            build.include = default_build.include.clone();
+                            build.include.clone_from(&default_build.include);
                         }
                         if build.respect_gitignore.is_none() {
                             build.respect_gitignore = default_build.respect_gitignore;
@@ -296,7 +315,7 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to render kam.toml template: {}", e);
+                eprintln!("Warning: Failed to render kam.toml template: {e}");
             }
         }
     }
@@ -310,40 +329,49 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
     let mut env_lines: Vec<String> = Vec::new();
 
     // 先写一些基本的项目信息
-    env_lines.push(format!("KAM_PROJECT_ROOT=\"{}\"", path.to_string_lossy()));
-    env_lines.push(format!("KAM_MODULE_ID=\"{}\"", kt.prop.id));
-    env_lines.push(format!("KAM_MODULE_VERSION=\"{}\"", kt.prop.version));
     env_lines.push(format!(
-        "KAM_MODULE_VERSION_CODE=\"{}\"",
-        kt.prop.versionCode
+        "KAM_PROJECT_ROOT=\"{root}\"",
+        root = path.to_string_lossy()
     ));
-    env_lines.push(format!("KAM_MODULE_NAME=\"{}\"", kt.prop.get_name()));
+    env_lines.push(format!("KAM_MODULE_ID=\"{id}\"", id = kt.prop.id));
+    env_lines.push(format!(
+        "KAM_MODULE_VERSION=\"{version}\"",
+        version = kt.prop.version
+    ));
+    env_lines.push(format!(
+        "KAM_MODULE_VERSION_CODE=\"{versionCode}\"",
+        versionCode = kt.prop.versionCode
+    ));
+    env_lines.push(format!(
+        "KAM_MODULE_NAME=\"{name}\"",
+        name = kt.prop.get_name()
+    ));
     // author可能是None，用空字符串作为默认值
     env_lines.push(format!(
-        "KAM_MODULE_AUTHOR=\"{}\"",
-        kt.prop.author.as_ref().unwrap_or(&String::new())
+        "KAM_MODULE_AUTHOR=\"{author}\"",
+        author = kt.prop.author.as_ref().unwrap_or(&String::new())
     ));
     env_lines.push(format!(
-        "KAM_MODULE_DESCRIPTION=\"{}\"",
-        kt.prop.get_description()
+        "KAM_MODULE_DESCRIPTION=\"{description}\"",
+        description = kt.prop.get_description()
     ));
 
     // 把kam.toml的所有键值对扁平化后也加进去
     // 这样hooks就能访问到kam.toml里的所有配置了
     let kt_flatvars = crate::template::TemplateVariableProcessor::flatten_kam_toml(&kt);
-    for (k, v) in kt_flatvars.iter() {
+    for (k, v) in &kt_flatvars {
         let base = k.to_ascii_uppercase().replace(['.', '-'], "_");
-        let key = format!("KAM_{}", base);
+        let key = format!("KAM_{base}");
         let v_escaped = v.replace('"', "\\\""); // 转义引号
-        env_lines.push(format!("{}=\"{}\"", key, v_escaped));
+        env_lines.push(format!("{key}=\"{v_escaped}\""));
     }
 
     // 再加上模板定义的变量，用KAM_TMPL_前缀
     // 优先用用户提供的值，没有就用默认值
     if let Some(tmpl_section) = &kt.kam.tmpl {
-        for (var_name, var_def) in tmpl_section.variables.iter() {
+        for (var_name, var_def) in &tmpl_section.variables {
             let nm = var_name.to_ascii_uppercase().replace(['.', '-'], "_");
-            let key = format!("KAM_TMPL_{}", nm);
+            let key = format!("KAM_TMPL_{nm}");
             let val = params
                 .template_vars
                 .get(var_name)
@@ -351,7 +379,7 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
                 .or_else(|| var_def.default.clone())
                 .unwrap_or_default();
             let val_escaped = val.replace('"', "\\\"");
-            env_lines.push(format!("{}=\"{}\"", key, val_escaped));
+            env_lines.push(format!("{key}=\"{val_escaped}\""));
         }
     }
 
@@ -366,7 +394,14 @@ pub fn init_impl(path: &Path, params: InitImplParams<'_>) -> Result<(), KamError
 /* legacy wrapper removed - use `InitTemplateParams`-based signature:
 `init_template(path, InitTemplateParams { ... })` */
 
-pub fn init_template(path: &Path, params: InitTemplateParams<'_>) -> Result<(), KamError> {
+/// Create a project from a named template.
+///
+/// # Errors
+///
+/// Returns `Err(KamError)` when the template cannot be found or I/O/rendering fails.
+// TODO: split this function into smaller units to reduce complexity
+#[allow(clippy::too_many_lines)]
+pub fn init_template(path: &Path, params: &InitTemplateParams<'_>) -> Result<(), KamError> {
     let mut template_vars = crate::template::TemplateManager::parse_template_vars(params.var)?;
 
     let template_spec = params
@@ -387,76 +422,72 @@ pub fn init_template(path: &Path, params: InitTemplateParams<'_>) -> Result<(), 
     // If it doesn't have an extension and doesn't end in _template, try appending it as a fallback
     let is_archive_or_path = template_spec.contains('/')
         || template_spec.contains('\\')
-        || template_spec.ends_with(".tar.gz")
-        || template_spec.ends_with(".zip");
+        || template_spec.to_ascii_lowercase().ends_with(".tar.gz")
+        || std::path::Path::new(&template_spec)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"));
 
     if !template_spec.ends_with("_template") && !is_archive_or_path {
-        potential_names.push(format!("{}_template", template_spec));
+        potential_names.push(format!("{template_spec}_template"));
     }
 
-    for spec in potential_names.iter() {
+    for spec in &potential_names {
         // 1. Direct local path (only for the first/raw spec, or if we really want to support 'foo_template' local dir)
         let spec_path = Path::new(spec);
         if spec_path.exists() {
-            return init_impl(
-                path,
-                InitImplParams {
-                    id: params.id,
-                    name: params.name.clone(),
-                    version: params.version,
-                    author: params.author,
-                    description: params.description.clone(),
-                    impl_source: spec_path,
-                    template_vars: &mut template_vars,
-                    force: params.force,
-                    explicit_template_id: Some(spec.as_str()),
-                },
-            );
+            let mut init_params = InitImplParams {
+                id: params.id,
+                name: params.name.clone(),
+                version: params.version,
+                author: params.author,
+                description: params.description.clone(),
+                impl_source: spec_path,
+                template_vars: &mut template_vars,
+                force: params.force,
+                explicit_template_id: Some(spec.as_str()),
+            };
+            return init_impl(path, &mut init_params);
         }
 
         // 2. Built-in assets
         // We typically store built-ins as "kam_template.tar.gz" -> check spec
         // If the spec is "kam", we might be in the second iteration where spec="kam_template"
-        let asset_name = format!("{}.tar.gz", spec);
+        let asset_name = format!("{spec}.tar.gz");
         if let Some(asset) = crate::assets::tmpl::TmplAssets::get(&asset_name) {
             let temp_dir = tempfile::tempdir().map_err(KamError::Io)?;
-            let temp_path = temp_dir.path().join(format!("{}.tar.gz", spec));
+            let temp_path = temp_dir.path().join(format!("{spec}.tar.gz"));
             fs::write(&temp_path, &asset.data).map_err(KamError::Io)?;
 
-            return init_impl(
-                path,
-                InitImplParams {
-                    id: params.id,
-                    name: params.name.clone(),
-                    version: params.version,
-                    author: params.author,
-                    description: params.description.clone(),
-                    impl_source: &temp_path,
-                    template_vars: &mut template_vars,
-                    force: params.force,
-                    explicit_template_id: Some(spec.as_str()),
-                },
-            );
+            let mut init_params = InitImplParams {
+                id: params.id,
+                name: params.name.clone(),
+                version: params.version,
+                author: params.author,
+                description: params.description.clone(),
+                impl_source: &temp_path,
+                template_vars: &mut template_vars,
+                force: params.force,
+                explicit_template_id: Some(spec.as_str()),
+            };
+            return init_impl(path, &mut init_params);
         }
 
         // 3. Cache
         if let Ok(Some(cached_path)) =
             crate::template::TemplateCacheManager::resolve_template_path(spec)
         {
-            return init_impl(
-                path,
-                InitImplParams {
-                    id: params.id,
-                    name: params.name.clone(),
-                    version: params.version,
-                    author: params.author,
-                    description: params.description.clone(),
-                    impl_source: &cached_path,
-                    template_vars: &mut template_vars,
-                    force: params.force,
-                    explicit_template_id: Some(spec.as_str()),
-                },
-            );
+            let mut init_params = InitImplParams {
+                id: params.id,
+                name: params.name.clone(),
+                version: params.version,
+                author: params.author,
+                description: params.description.clone(),
+                impl_source: &cached_path,
+                template_vars: &mut template_vars,
+                force: params.force,
+                explicit_template_id: Some(spec.as_str()),
+            };
+            return init_impl(path, &mut init_params);
         }
 
         // 4. Project-local folder search (tmpl/ or templates/)
@@ -468,37 +499,34 @@ pub fn init_template(path: &Path, params: InitTemplateParams<'_>) -> Result<(), 
             let base = Path::new(d);
             candidates.push(base.join(spec));
             for ext in archive_exts {
-                candidates.push(base.join(format!("{}{}", spec, ext)));
+                candidates.push(base.join(format!("{spec}{ext}")));
             }
         }
         // Also check project root for archives
         for ext in archive_exts {
-            candidates.push(Path::new(&format!("{}{}", spec, ext)).to_path_buf());
+            candidates.push(Path::new(&format!("{spec}{ext}")).to_path_buf());
         }
 
         for candidate in candidates {
             if candidate.exists() {
-                return init_impl(
-                    path,
-                    InitImplParams {
-                        id: params.id,
-                        name: params.name.clone(),
-                        version: params.version,
-                        author: params.author,
-                        description: params.description.clone(),
-                        impl_source: &candidate,
-                        template_vars: &mut template_vars,
-                        force: params.force,
-                        explicit_template_id: Some(spec.as_str()),
-                    },
-                );
+                let mut init_params = InitImplParams {
+                    id: params.id,
+                    name: params.name.clone(),
+                    version: params.version,
+                    author: params.author,
+                    description: params.description.clone(),
+                    impl_source: &candidate,
+                    template_vars: &mut template_vars,
+                    force: params.force,
+                    explicit_template_id: Some(spec.as_str()),
+                };
+                return init_impl(path, &mut init_params);
             }
         }
     }
 
     // Final failure
     Err(KamError::TemplateNotFound(format!(
-        "Template '{}' not found in built-in assets, local path, cache, or project directories.",
-        template_spec
+        "Template '{template_spec}' not found in built-in assets, local path, cache, or project directories."
     )))
 }

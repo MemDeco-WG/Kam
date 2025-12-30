@@ -58,12 +58,10 @@ fn read_config_value(global: bool, key: &str) -> Result<Option<String>, KamError
                     return Ok(Some(current.to_string().trim_matches('\"').to_string()));
                 }
                 continue;
-            } else {
-                return Ok(None);
             }
-        } else {
             return Ok(None);
         }
+        return Ok(None);
     }
     Ok(None)
 }

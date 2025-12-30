@@ -41,18 +41,19 @@ fn should_skip_file(
     }
 }
 
+/// # Errors
+/// Returns `KamError` if the output directory cannot be created or resolved.
 pub fn determine_output_dir(
     project_root: &Path,
     _args: &BuildArgs,
-    _kam_toml: &KamToml,
+    kam_toml: &KamToml,
 ) -> Result<PathBuf, KamError> {
-    let target_dir = _kam_toml
+    let target_dir = kam_toml
         .kam
         .build
         .as_ref()
         .and_then(|b| b.target_dir.as_ref())
-        .map(|s| s.as_str())
-        .unwrap_or("dist");
+        .map_or("dist", |s| s.as_str());
 
     let output_dir = if Path::new(target_dir).is_absolute() {
         PathBuf::from(target_dir)
@@ -64,6 +65,9 @@ pub fn determine_output_dir(
     Ok(output_dir.canonicalize().unwrap_or(output_dir))
 }
 
+/// # Errors
+/// Returns `KamError` when build steps, I/O operations, or hooks fail.
+#[allow(clippy::too_many_lines)] // TODO: split this function into smaller helpers
 pub fn build_project(
     project_path: &Path,
     args: &BuildArgs,
@@ -93,9 +97,9 @@ pub fn build_project(
     let version = &kam_toml.prop.version;
     // Normalize displayed version to avoid double leading 'v' (e.g. avoid printing "vv1.2.3")
     let display_version = if version.to_lowercase().starts_with('v') {
-        version.to_string()
+        version.clone()
     } else {
-        format!("v{}", version)
+        format!("v{version}")
     };
 
     let output_dir = determine_output_dir(&project_root, args, &kam_toml)?;
@@ -122,15 +126,14 @@ pub fn build_project(
             ])
             .add_row(vec![
                 Cell::new(crate::i18n::tr("table.header.module")).fg(comfy_table::Color::Cyan),
-                Cell::new(format!("{} {}", module_id, display_version))
-                    .fg(comfy_table::Color::Green),
+                Cell::new(format!("{module_id} {display_version}")).fg(comfy_table::Color::Green),
             ])
             .add_row(vec![
                 Cell::new(crate::i18n::tr("project.output_directory")).fg(comfy_table::Color::Cyan),
                 Cell::new(output_dir.display().to_string()).fg(comfy_table::Color::White),
             ]);
 
-        println!("{}", info_table);
+        println!("{info_table}");
         println!();
     }
 
@@ -138,9 +141,9 @@ pub fn build_project(
     // 所以如果是模板类型，就跳过pre/post build hooks
     let is_template_build = kam_toml.kam.module_type == ModuleType::Template;
 
-    let total_steps = if is_template_build { 1 } else { 3 };
+    let total_steps: u64 = if is_template_build { 1 } else { 3 };
     let build_pb = if !args.quiet && std::io::stdout().is_terminal() {
-        let pb = ProgressBar::new(total_steps as u64);
+        let pb = ProgressBar::new(total_steps);
         let style = ProgressStyle::with_template(
             "{spinner:.green.bold} {msg:.bold} [{bar:40.cyan/blue}] {pos}/{len} {elapsed_precise}",
         )
@@ -193,8 +196,8 @@ pub fn build_project(
             &kam_toml,
             &output_dir,
             &basename,
-            project_path,
             module_id,
+            project_path,
             args,
         )?,
         ModuleType::Template => {
@@ -207,11 +210,14 @@ pub fn build_project(
     if !args.quiet
         && let Ok(metadata) = fs::metadata(&output_file)
     {
-        let size_kb = metadata.len() as f64 / 1024.0;
-        let size_str = if size_kb < 1024.0 {
-            format!("{:.1} KB", size_kb)
+        #[allow(clippy::cast_precision_loss)]
+        // Use clearer, less-similar names to satisfy `similar_names`
+        let size_kilobytes = metadata.len() as f64 / 1024.0;
+        let size_megabytes = size_kilobytes / 1024.0;
+        let size_str = if size_kilobytes < 1024.0 {
+            format!("{size_kilobytes:.1} KB")
         } else {
-            format!("{:.1} MB", size_kb / 1024.0)
+            format!("{size_megabytes:.1} MB")
         };
 
         println!();
@@ -243,7 +249,7 @@ pub fn build_project(
                 Cell::new(crate::i18n::tr("project.output_file")).fg(comfy_table::Color::Cyan),
                 Cell::new(output_file.display().to_string()).fg(comfy_table::Color::White),
             ]);
-        println!("{}", table);
+        println!("{table}");
         println!();
     }
 
@@ -266,6 +272,8 @@ pub fn build_project(
     Ok(())
 }
 
+/// # Errors
+/// Returns `KamError` if required fields are missing or invalid when computing a basename.
 pub fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
     if let Some(build) = &kam_toml.kam.build
         && let Some(output_file) = &build.output_file
@@ -285,15 +293,19 @@ pub fn determine_basename(kam_toml: &KamToml) -> Result<String, KamError> {
     ))
 }
 
+/// # Errors
+///
+/// Returns `KamError` if any I/O, serialization, archive, or compression operations fail.
+#[allow(clippy::too_many_lines)]
 pub fn create_kam_module_zip(
     kam_toml: &KamToml,
     output_dir: &Path,
     basename: &str,
-    project_path: &Path,
     module_id: &str,
+    project_path: &Path,
     args: &BuildArgs,
 ) -> Result<PathBuf, KamError> {
-    let module_output_file = output_dir.join(format!("{}.zip", basename));
+    let module_output_file = output_dir.join(format!("{basename}.zip"));
 
     let src_dir = kam_toml.kam.build.as_ref().map_or_else(
         || project_path.join("src").join(module_id),
@@ -338,22 +350,56 @@ pub fn create_kam_module_zip(
             Utils::info(crate::i18n::tr("packaging.generating_module_prop"));
         }
         let mut prop_content = String::new();
-        prop_content.push_str(&format!("id={}\n", kam_toml.prop.id));
-        prop_content.push_str(&format!("name={}\n", kam_toml.prop.get_name()));
-        prop_content.push_str(&format!("version={}\n", kam_toml.prop.version));
-        prop_content.push_str(&format!("versionCode={}\n", kam_toml.prop.versionCode));
+        // Use `std::fmt::Write`'s `write_fmt` via fully-qualified call to avoid temporary
+        // allocations from `format!` + `push_str`, and map formatting errors to KamError.
+        std::fmt::Write::write_fmt(
+            &mut prop_content,
+            format_args!("id={id}\n", id = kam_toml.prop.id),
+        )
+        .map_err(|_| KamError::CommandFailed("failed to format module.prop".to_string()))?;
+        std::fmt::Write::write_fmt(
+            &mut prop_content,
+            format_args!("name={name}\n", name = kam_toml.prop.get_name()),
+        )
+        .map_err(|_| KamError::CommandFailed("failed to format module.prop".to_string()))?;
+        std::fmt::Write::write_fmt(
+            &mut prop_content,
+            format_args!("version={version}\n", version = kam_toml.prop.version),
+        )
+        .map_err(|_| KamError::CommandFailed("failed to format module.prop".to_string()))?;
+        std::fmt::Write::write_fmt(
+            &mut prop_content,
+            format_args!(
+                "versionCode={versionCode}\n",
+                versionCode = kam_toml.prop.versionCode
+            ),
+        )
+        .map_err(|_| KamError::CommandFailed("failed to format module.prop".to_string()))?;
         // author是可选的，有的话才写进去
         if let Some(author) = &kam_toml.prop.author {
-            prop_content.push_str(&format!("author={}\n", author));
+            std::fmt::Write::write_fmt(&mut prop_content, format_args!("author={author}\n"))
+                .map_err(|_| KamError::CommandFailed("failed to format module.prop".to_string()))?;
         }
-        prop_content.push_str(&format!(
-            "description={}\n",
-            kam_toml.prop.get_description()
-        ));
+        std::fmt::Write::write_fmt(
+            &mut prop_content,
+            format_args!(
+                "description={desc}\n",
+                desc = kam_toml.prop.get_description()
+            ),
+        )
+        .map_err(|_| KamError::CommandFailed("failed to format module.prop".to_string()))?;
         if let Some(uj) = &kam_toml.prop.updateJson {
-            prop_content.push_str(&format!("updateJson={}\n", uj));
+            std::fmt::Write::write_fmt(&mut prop_content, format_args!("updateJson={uj}\n"))
+                .map_err(|_| KamError::CommandFailed("failed to format module.prop".to_string()))?;
         }
-        prop_content.push_str(&format!("metamodule={}\n", kam_toml.prop.metamodule));
+        std::fmt::Write::write_fmt(
+            &mut prop_content,
+            format_args!(
+                "metamodule={metamodule}\n",
+                metamodule = kam_toml.prop.metamodule
+            ),
+        )
+        .map_err(|_| KamError::CommandFailed("failed to format module.prop".to_string()))?;
         zip.start_file("module.prop", options)?;
         zip.write_all(prop_content.as_bytes())?;
     } else if !args.quiet {
@@ -394,15 +440,14 @@ pub fn create_kam_module_zip(
                 .hidden(false)
                 .build();
             temp_walker
-                .filter_map(|e| e.ok())
+                .filter_map(Result::ok)
                 .filter(|e| {
                     let path = e.path();
                     if path == src_dir || path.is_dir() {
                         return false;
                     }
-                    let rel_path = match path.strip_prefix(&src_dir) {
-                        Ok(p) => p,
-                        Err(_) => return false,
+                    let Ok(rel_path) = path.strip_prefix(&src_dir) else {
+                        return false;
                     };
                     let rel_str = rel_path.to_string_lossy();
                     let file_name_opt = path.file_name().and_then(|s| s.to_str());
@@ -459,7 +504,7 @@ pub fn create_kam_module_zip(
 
             let rel_path = path
                 .strip_prefix(&src_dir)
-                .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {}", e)))?;
+                .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {e}")))?;
 
             let rel_str = rel_path.to_string_lossy();
 
@@ -494,9 +539,10 @@ pub fn create_kam_module_zip(
 
                 zip.start_file(rel_str.to_string(), options)?;
                 let mut f = File::open(path).map_err(|e| {
+                    let pd = path.display();
                     KamError::Io(std::io::Error::new(
                         e.kind(),
-                        format!("Failed to open source file '{}': {}", path.display(), e),
+                        format!("Failed to open source file '{pd}': {e}"),
                     ))
                 })?;
                 std::io::copy(&mut f, &mut zip)?;
@@ -508,7 +554,7 @@ pub fn create_kam_module_zip(
             }
         }
         if let Some(p) = pb {
-            p.finish_with_message(format!("✓ Packaged {} files", count));
+            p.finish_with_message(format!("✓ Packaged {count} files"));
         }
     }
 
@@ -566,28 +612,31 @@ pub fn create_kam_module_zip(
     Ok(module_output_file)
 }
 
+/// # Errors
+/// Returns `KamError` if packaging or I/O fails while creating a template archive.
+#[allow(clippy::too_many_lines)] // TODO: split logic and reduce body size
 pub fn create_template_archive(
-    _kam_toml: &KamToml,
+    kam_toml: &KamToml,
     output_dir: &Path,
     basename: &str,
     project_root: &Path,
     args: &BuildArgs,
 ) -> Result<PathBuf, KamError> {
-    let source_filename = format!("{}.tar.gz", basename);
+    let source_filename = format!("{basename}.tar.gz");
     let source_output_file = output_dir.join(&source_filename);
     let tar_gz = File::create(&source_output_file)?;
     let enc = flate2::write::GzEncoder::new(tar_gz, flate2::Compression::default());
     let mut tar = TarBuilder::new(enc);
 
     // Compile exclude and include patterns as raw strings and use the central matcher at runtime
-    let exclude_patterns: Vec<String> = _kam_toml
+    let exclude_patterns: Vec<String> = kam_toml
         .kam
         .build
         .as_ref()
         .and_then(|build| build.exclude.clone())
         .unwrap_or_default();
 
-    let include_patterns: Vec<String> = _kam_toml
+    let include_patterns: Vec<String> = kam_toml
         .kam
         .build
         .as_ref()
@@ -601,7 +650,7 @@ pub fn create_template_archive(
 
     // Count files first for proper progress bar
     // Respect the kam.toml `kam.build.respect_gitignore` flag (default false).
-    let respect_gitignore = _kam_toml
+    let respect_gitignore = kam_toml
         .kam
         .build
         .as_ref()
@@ -619,15 +668,14 @@ pub fn create_template_archive(
             })
             .build();
         temp_walker
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter(|e| {
                 let path = e.path();
                 if path == project_root || path.is_dir() {
                     return false;
                 }
-                let rel_path = match path.strip_prefix(project_root) {
-                    Ok(p) => p,
-                    Err(_) => return false,
+                let Ok(rel_path) = path.strip_prefix(project_root) else {
+                    return false;
                 };
                 if path.starts_with(output_dir) {
                     return false;
@@ -691,7 +739,7 @@ pub fn create_template_archive(
         // Calculate relative path from project_root
         let rel_path = path
             .strip_prefix(project_root)
-            .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {}", e)))?;
+            .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {e}")))?;
 
         // Skip output directory
         if path.starts_with(output_dir) {
@@ -736,7 +784,7 @@ pub fn create_template_archive(
         }
     }
     if let Some(p) = pb {
-        p.finish_with_message(format!("✓ Packaged {} files", count));
+        p.finish_with_message(format!("✓ Packaged {count} files"));
     }
 
     tar.finish()?;

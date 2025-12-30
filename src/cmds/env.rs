@@ -24,6 +24,7 @@ pub struct EnvArgs {
 
 /// 收集所有以 `KAM_` 开头的环境变量，按键名排序后返回 Vec<(key, value)>
 /// 通过 `collect_from_iter` 实现，方便在测试中传入自定义迭代器而不修改进程环境
+#[must_use]
 pub fn collect_kam_env() -> Vec<(String, String)> {
     collect_from_iter(std::env::vars())
 }
@@ -42,14 +43,19 @@ where
 }
 
 /// 执行 `kam env` 命令：根据 args 的不同打印环境变量或说明
-pub fn run(args: EnvArgs) -> Result<(), KamError> {
+///
+/// # Errors
+///
+/// Returns `KamError` when I/O operations or other failures occur while collecting
+/// or printing environment information.
+pub fn run(args: &EnvArgs) -> Result<(), KamError> {
     // Describe known env vars with i18n-backed descriptions
     if args.describe {
         // Header / intro (i18n)
         Utils::section(crate::i18n::tr("env.docs.header"));
         let intro = crate::i18n::tr("env.docs.intro");
         if !intro.is_empty() {
-            println!("{}", intro);
+            println!("{intro}");
             println!();
         }
 
@@ -60,7 +66,6 @@ pub fn run(args: EnvArgs) -> Result<(), KamError> {
             "KAM_CACHE_DIR",
             "KAM_ROOT_MANAGER",
             "KAM_UI_LANGUAGE",
-            "KAM_LANG",
             "KAM_AUTHOR_EMAIL",
             "KAM_BUMP_ENABLED",
             "KAM_RELEASE_ENABLED",
@@ -95,18 +100,18 @@ pub fn run(args: EnvArgs) -> Result<(), KamError> {
             "KAM_REPO_CONCURRENCY",
         ];
 
-        for &v in known_vars.iter() {
+        for v in &known_vars {
             let desc_key = format!("env.docs.{}", v.to_ascii_lowercase());
             let desc = crate::i18n::tr(&desc_key);
             let val = std::env::var(v).unwrap_or_else(|_| "<not set>".to_string());
-            println!("{:28} {}  ({})", v, desc, val);
+            println!("{v:28} {desc}  ({val})");
         }
 
         // Note about template variables
         let tmpl_note = crate::i18n::tr("env.docs.kam_tmpl_note");
         if !tmpl_note.is_empty() {
             println!();
-            println!("{}", tmpl_note);
+            println!("{tmpl_note}");
         }
 
         return Ok(());
@@ -123,7 +128,7 @@ pub fn run(args: EnvArgs) -> Result<(), KamError> {
 
     Utils::section("KAM_ environment variables");
     for (k, v) in vars {
-        println!("{}={}", k, v);
+        println!("{k}={v}");
     }
 
     Ok(())

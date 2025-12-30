@@ -50,6 +50,8 @@ fn pick_first<'a>(candidates: Vec<Option<&'a str>>, fallback: &'a str) -> String
 
 // 执行 kam about 命令
 // 就是显示一些项目信息，用表格展示，看起来比较好看
+/// # Errors
+/// Returns `KamError` when IO or parsing fails.
 pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     // 优先用当前目录的kam.toml，没有就用Cargo的metadata
     let cwd = std::env::current_dir().map_err(KamError::Io)?;
@@ -76,7 +78,7 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     let display_version = if version.to_lowercase().starts_with('v') {
         version.clone()
     } else {
-        format!("v{}", version)
+        format!("v{version}")
     };
 
     let description = pick_first(
@@ -120,7 +122,7 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
 
     // 表头：名字和版本，加粗和颜色
     table.set_header(vec![
-        Cell::new(format!("{} v{}", name, version))
+        Cell::new(format!("{name} v{version}"))
             .add_attribute(Attribute::Bold)
             .fg(comfy_table::Color::Cyan),
         Cell::new(""),
@@ -162,8 +164,8 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
     }
 
     // 打印banner和表格，看起来比较专业（虽然其实没啥用）
-    Utils::banner(format!("{} {}", name, display_version));
-    println!("{}", table);
+    Utils::banner(format!("{name} {display_version}"));
+    println!("{table}");
     println!(); // 空行，视觉上舒服点
 
     Utils::info(crate::i18n::tr("about.info.command_informational"));

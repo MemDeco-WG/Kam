@@ -29,17 +29,45 @@ fn main() {
     println!("cargo:rerun-if-changed=src/locales/en-US/main.ftl");
     println!("cargo:rerun-if-changed=src/locales/zh-CN/main.ftl");
 
-    let manifest_dir = PathBuf::from(
-        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set by Cargo"),
-    );
+    let manifest_dir = PathBuf::from(match env::var("CARGO_MANIFEST_DIR") {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("ERROR: CARGO_MANIFEST_DIR must be set by Cargo: {}", e);
+            std::process::exit(1);
+        }
+    });
     let src_root = manifest_dir.join("src");
 
     // Patterns to capture literal keys passed to i18n helpers/macros.
     // Note: keep these intentionally conservative (literal double-quoted strings).
-    let re_tr_key = Regex::new(r#"tr_key\s*\(\s*"([^"]+)""#).unwrap();
-    let re_tr_fmt = Regex::new(r#"tr_fmt\s*\(\s*"([^"]+)""#).unwrap();
-    let re_trf = Regex::new(r#"trf!\s*\(\s*"([^"]+)""#).unwrap();
-    let re_tr = Regex::new(r#"\btr\s*\(\s*"([^"]+)""#).unwrap();
+    let re_tr_key = match Regex::new(r#"tr_key\s*\(\s*"([^"]+)""#) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to compile regex for tr_key: {}", e);
+            std::process::exit(1);
+        }
+    };
+    let re_tr_fmt = match Regex::new(r#"tr_fmt\s*\(\s*"([^"]+)""#) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to compile regex for tr_fmt: {}", e);
+            std::process::exit(1);
+        }
+    };
+    let re_trf = match Regex::new(r#"trf!\s*\(\s*"([^"]+)""#) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to compile regex for trf!: {}", e);
+            std::process::exit(1);
+        }
+    };
+    let re_tr = match Regex::new(r#"\btr\s*\(\s*"([^"]+)""#) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to compile regex for tr: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     // Collect all literal keys found.
     let mut keys: HashSet<String> = HashSet::new();
@@ -109,7 +137,13 @@ fn main() {
 
         // Keyed-en/keyed-zh checks (language-specific)
         let keyed_pattern = format!(r#""{}"\s*=>"#, regex::escape(key));
-        let keyed_re = Regex::new(&keyed_pattern).unwrap();
+        let keyed_re = match Regex::new(&keyed_pattern) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Failed to compile keyed regex for key '{}': {}", key, e);
+                std::process::exit(1);
+            }
+        };
         if keyed_re.is_match(keyed_en_region) {
             en_ok = true;
         }
@@ -120,7 +154,13 @@ fn main() {
         // FTL id: dotted/underscore -> hyphen
         let ftl_id = key.replace(&['.', '_'][..], "-");
         let ftl_re_pattern = format!(r"(?m)^\s*{}\s*=", regex::escape(&ftl_id));
-        let ftl_re = Regex::new(&ftl_re_pattern).unwrap();
+        let ftl_re = match Regex::new(&ftl_re_pattern) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Failed to compile ftl regex for id '{}': {}", ftl_id, e);
+                std::process::exit(1);
+            }
+        };
 
         if !en_ok && ftl_re.is_match(&en_ftl) {
             en_ok = true;
@@ -156,10 +196,11 @@ fn main() {
         eprintln!("  repo-result-line-simple = ...");
         eprintln!();
         // Fail the build explicitly.
-        panic!(
+        eprintln!(
             "Missing i18n keys found ({} missing). Aborting build to enforce i18n coverage.",
             missing.len()
         );
+        std::process::exit(1);
     }
 }
 
@@ -176,9 +217,10 @@ fn visit_rs_files<F: FnMut(&Path)>(dir: &Path, visit: &mut F) {
                 inner(&path, visit);
             } else if path.is_file()
                 && let Some(ext) = path.extension()
-                    && ext == "rs" {
-                        visit(&path);
-                    }
+                && ext == "rs"
+            {
+                visit(&path);
+            }
         }
     }
     inner(dir, visit);

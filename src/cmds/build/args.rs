@@ -1,5 +1,6 @@
 use clap::Args;
 
+#[allow(clippy::struct_excessive_bools)] // TODO: refactor BuildArgs: group boolean flags into enums/state and reduce number of bool fields
 #[derive(Args, Debug, Clone)]
 pub struct BuildArgs {
     /// Path to the project (default: current directory)
@@ -14,15 +15,15 @@ pub struct BuildArgs {
     #[arg(short, long)]
     pub output: Option<String>,
 
-    /// Enable KAM_BUMP_ENABLED environment variable (set to 1)
+    /// Enable `KAM_BUMP_ENABLED` environment variable (set to 1)
     #[arg(short, long)]
     pub bump: bool,
 
-    /// Enable KAM_RELEASE_ENABLED environment variable (set to 1)
+    /// Enable `KAM_RELEASE_ENABLED` environment variable (set to 1)
     #[arg(short, long)]
     pub release: bool,
 
-    /// Enable KAM_SIGN_ENABLE environment variable (set to 1)
+    /// Enable `KAM_SIGN_ENABLE` environment variable (set to 1)
     #[arg(short = 's', long)]
     pub sign: bool,
 
@@ -30,7 +31,7 @@ pub struct BuildArgs {
     #[arg(short = 'i', long = "interactive")]
     pub interactive: bool,
 
-    /// Enable KAM_PRE_RELEASE environment variable (set to 1)
+    /// Enable `KAM_PRE_RELEASE` environment variable (set to 1)
     #[arg(short = 'P', long = "pre-release")]
     pub pre_release: bool,
 

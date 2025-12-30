@@ -10,4 +10,3 @@ pub struct NoteSection {
     // 通知正文/消息
     pub message: String,
 }
-

@@ -1,26 +1,29 @@
 use crate::types::kam_toml::KamToml;
+use std::fmt::Write;
 
 // 构建module.prop文件内容
 // 就是简单的key=value格式，一行一行拼起来
+#[must_use]
 pub fn build_prop(kt: &KamToml) -> String {
     let mut content = String::new();
-    content.push_str(&format!("id={}\n", kt.prop.id));
-    content.push_str(&format!("name={}\n", kt.prop.name));
-    content.push_str(&format!("version={}\n", kt.prop.version));
-    content.push_str(&format!("versionCode={}\n", kt.prop.versionCode));
+    let _ = writeln!(content, "id={}", kt.prop.id);
+    let _ = writeln!(content, "name={}", kt.prop.name);
+    let _ = writeln!(content, "version={}", kt.prop.version);
+    let _ = writeln!(content, "versionCode={}", kt.prop.versionCode);
     // author是可选的，有的话才写
     if let Some(author) = &kt.prop.author {
-        content.push_str(&format!("author={}\n", author));
+        let _ = writeln!(content, "author={author}");
     }
-    content.push_str(&format!("description={}\n", kt.prop.description));
+    let _ = writeln!(content, "description={}", kt.prop.description);
     if let Some(uj) = &kt.prop.updateJson {
-        content.push_str(&format!("updateJson={}\n", uj));
+        let _ = writeln!(content, "updateJson={uj}");
     }
     content
 }
 
 // 构建module.json内容（MMRL格式）
 // 这个函数有点复杂，主要是处理各种可选字段和嵌套结构
+#[must_use]
 pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
     let metamodule = kt.prop.metamodule;
     let summary = kt.prop.description.clone();
@@ -109,6 +112,7 @@ pub fn build_module_json(kt: &KamToml) -> serde_json::Value {
 
 // 构建update.json内容
 // 包含版本、下载链接、changelog等
+#[must_use]
 pub fn build_update_json(kt: &KamToml) -> serde_json::Value {
     let version = kt.prop.version.clone();
     let version_code = kt.prop.versionCode;
@@ -188,6 +192,9 @@ pub fn build_update_json(kt: &KamToml) -> serde_json::Value {
 
 // 构建repo.json内容（MMRL仓库格式）
 // 这个函数也很长，主要是把kam.toml的mmrl.repo字段转成JSON
+// TODO: split this function into smaller units to address clippy::too_many_lines
+#[allow(clippy::too_many_lines)]
+#[must_use]
 pub fn build_repo_json(kt: &KamToml) -> serde_json::Value {
     let mut root = serde_json::Map::new();
 
@@ -366,6 +373,7 @@ pub fn build_repo_json(kt: &KamToml) -> serde_json::Value {
 
 // 构建track.json内容
 // 这个格式可能不太常用，但留着总没错
+#[must_use]
 pub fn build_track_json(kt: &KamToml) -> serde_json::Value {
     let mut root = serde_json::Map::new();
 
@@ -410,7 +418,7 @@ pub fn build_track_json(kt: &KamToml) -> serde_json::Value {
                 })
                 .unwrap_or_else(|| kt.prop.version.clone())
         },
-        |uj| uj.clone(),
+        String::clone,
     );
     root.insert(
         "update_to".to_string(),
@@ -462,6 +470,7 @@ pub fn build_track_json(kt: &KamToml) -> serde_json::Value {
 
 // 构建config.json内容
 // 这个格式可能也不太常用，但为了完整性还是实现了
+#[must_use]
 pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
     let mut root = serde_json::Map::new();
 
@@ -471,8 +480,10 @@ pub fn build_config_json(kt: &KamToml) -> serde_json::Value {
         .as_ref()
         .and_then(|m| m.repo.as_ref())
         .and_then(|r| r.repository.as_ref())
-        .map(|s| s.split('/').next_back().unwrap_or(s).to_string()) // 取URL最后一部分
-        .unwrap_or_else(|| kt.prop.id.clone());
+        .map_or_else(
+            || kt.prop.id.clone(),
+            |s| s.split('/').next_back().unwrap_or(s).to_string(),
+        ); // 取URL最后一部分
     root.insert("id".to_string(), serde_json::Value::String(id));
 
     root.insert(

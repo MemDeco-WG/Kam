@@ -1,5 +1,6 @@
-use colored::*;
+use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::HashSet;
 use std::io::IsTerminal;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -55,7 +56,7 @@ fn collect_project_files(
             if entry.depth() == 0 {
                 return true;
             }
-            if entry.file_type().map(|f| f.is_dir()).unwrap_or(false) {
+            if entry.file_type().is_some_and(|f| f.is_dir()) {
                 let name = entry.file_name().to_string_lossy();
                 return !skip_clone.iter().any(|s| s == name.as_ref());
             }
@@ -161,7 +162,41 @@ fn render_json_results(results: &Vec<FileResult>, verbose: bool) -> serde_json::
     }
 }
 
-pub fn run(args: CheckArgs) -> Result<(), KamError> {
+// Determine per-project rule configuration (if any) by walking up to the nearest
+// ancestor directory that had a cached kam.toml.
+fn find_project_rules<'a>(
+    p: &std::path::Path,
+    cache: &'a std::collections::HashMap<
+        std::path::PathBuf,
+        Option<std::collections::HashMap<String, RuleConfig>>,
+    >,
+) -> Option<&'a std::collections::HashMap<String, RuleConfig>> {
+    let mut cur = p;
+    while let Some(parent) = cur.parent() {
+        if let Ok(canon) = parent.canonicalize() {
+            if let Some(opt) = cache.get(&canon) {
+                return opt.as_ref();
+            }
+        } else if let Some(opt) = cache.get(parent) {
+            return opt.as_ref();
+        }
+        cur = parent;
+    }
+    None
+}
+
+/// # Errors
+///
+/// Returns `KamError` when I/O operations, parsing errors, or external tool
+/// invocations fail while running the check command.
+///
+/// # Notes
+///
+/// This function is currently large and handles several responsibilities
+/// (glob expansion, pre-checks, collection, result aggregation, output).
+/// Consider splitting it into smaller helpers in a follow-up refactor.
+#[allow(clippy::too_many_lines)] // TODO: split this function into smaller helpers
+pub fn run(args: &CheckArgs) -> Result<(), KamError> {
     // Determine input paths: use positional `PATHS` (files/dirs/globs) when provided,
     // otherwise fall back to the configured `--project-path` (`args.path`, default ".").
     let input_paths: Vec<String> = if args.paths.is_empty() {
@@ -181,19 +216,17 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             Ok(out) => {
                 if out.status.success() {
                     let ver = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    crate::utils::Utils::info(format!("shellcheck detected: {}", ver));
+                    crate::utils::Utils::info(format!("shellcheck detected: {ver}"));
                 } else {
                     let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
                     crate::utils::Utils::warn(format!(
-                        "shellcheck present but '--version' returned non-zero: {}",
-                        err
+                        "shellcheck present but '--version' returned non-zero: {err}"
                     ));
                 }
             }
             Err(e) => {
                 crate::utils::Utils::warn(format!(
-                    "shellcheck not found or cannot be executed: {}",
-                    e
+                    "shellcheck not found or cannot be executed: {e}"
                 ));
             }
         }
@@ -204,7 +237,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     // 获取默认排除目录，再加几个常见的
     // 这些目录通常不需要检查（比如构建产物、模板等）
     let mut skip_dirs = crate::utils::default_exclude_dir_names();
-    for d in ["dist", "templates", "tmpl"].iter() {
+    for d in &["dist", "templates", "tmpl"] {
         if !skip_dirs.iter().any(|s| s == d) {
             skip_dirs.push(d.to_string());
         }
@@ -265,7 +298,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
                     }
                 }
                 Err(e) => {
-                    crate::utils::Utils::warn(format!("Invalid glob pattern '{}': {}", p, e));
+                    crate::utils::Utils::warn(format!("Invalid glob pattern '{p}': {e}"));
                 }
             }
         } else {
@@ -308,7 +341,6 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
     }
 
     // Deduplicate files (canonicalized where possible).
-    use std::collections::HashSet;
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut files: Vec<PathBuf> = Vec::new();
     for f in collected_files {
@@ -373,7 +405,7 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         let style = ProgressStyle::with_template(
             "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
         )
-        .unwrap()
+        .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("#>-"); // 进度条字符，看起来比较好看
         pb.set_style(style);
         // 如果已经预检过一些 kam.toml，则把进度条先推进相应的数量
@@ -426,33 +458,11 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             }
         };
 
-        // Determine per-project rule configuration (if any) by walking up to the nearest
-        // ancestor directory that had a cached kam.toml.
-        fn find_project_rules<'a>(
-            p: &std::path::Path,
-            cache: &'a std::collections::HashMap<
-                std::path::PathBuf,
-                Option<std::collections::HashMap<String, RuleConfig>>,
-            >,
-        ) -> Option<&'a std::collections::HashMap<String, RuleConfig>> {
-            let mut cur = p;
-            while let Some(parent) = cur.parent() {
-                if let Ok(canon) = parent.canonicalize() {
-                    if let Some(opt) = cache.get(&canon) {
-                        return opt.as_ref();
-                    }
-                } else if let Some(opt) = cache.get(parent) {
-                    return opt.as_ref();
-                }
-                cur = parent;
-            }
-            None
-        }
         let project_rules = find_project_rules(path, &project_rules_cache);
         let res = check_file(path, kind, args.fix, project_rules)?;
         results.push(res);
         if let Some(ref p) = pb {
-            p.set_message(format!("{}", path.display()));
+            p.set_message(path.display().to_string());
             p.inc(1);
         }
     }
@@ -468,10 +478,10 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
         let out = if args.verbose {
             serde_json::to_string_pretty(&jv).unwrap_or_else(|_| "[]".into())
         } else {
-            // Compact one-line JSON for minimal token consumption
+            // Compact one-line JSON for minimal token/output size
             serde_json::to_string(&jv).unwrap_or_else(|_| "{}".into())
         };
-        println!("{}", out);
+        println!("{out}");
 
         // Compute totals so JSON mode honors fail-on-error / fail-on-warning flags.
         let mut total_errors: usize = 0;
@@ -483,14 +493,12 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
 
         if args.fail_on_error && total_errors > 0 {
             return Err(KamError::CommandFailed(format!(
-                "check failed: {} error(s) found",
-                total_errors
+                "check failed: {total_errors} error(s) found"
             )));
         }
         if args.fail_on_warning && total_warnings > 0 {
             return Err(KamError::CommandFailed(format!(
-                "check failed: {} warning(s) found",
-                total_warnings
+                "check failed: {total_warnings} warning(s) found"
             )));
         }
 
@@ -506,11 +514,11 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
             (true, false) => println!("{} {}", "✓".green(), path),
             (false, true) => {
                 any_errors = true;
-                println!("{} {}", "✕".yellow(), trf!("common.file_fixed", path))
+                println!("{} {}", "✕".yellow(), trf!("common.file_fixed", path));
             }
             (false, false) => {
                 any_errors = true;
-                println!("{} {}", "✕".color(crate::utils::Utils::error_color()), path)
+                println!("{} {}", "✕".color(crate::utils::Utils::error_color()), path);
             }
         }
 
@@ -562,14 +570,12 @@ pub fn run(args: CheckArgs) -> Result<(), KamError> {
 
     if args.fail_on_error && total_errors > 0 {
         return Err(KamError::CommandFailed(format!(
-            "check failed: {} error(s) found",
-            total_errors
+            "check failed: {total_errors} error(s) found"
         )));
     }
     if args.fail_on_warning && total_warnings > 0 {
         return Err(KamError::CommandFailed(format!(
-            "check failed: {} warning(s) found",
-            total_warnings
+            "check failed: {total_warnings} warning(s) found"
         )));
     }
 

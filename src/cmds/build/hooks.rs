@@ -14,6 +14,10 @@ use std::process::{Command, Stdio};
 
 // 运行pre-build hooks
 // 在构建之前执行，比如生成一些文件、检查环境等
+/// Run pre-build hooks (e.g., user-provided scripts).
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
 pub fn run_pre_build_hooks(
     project_root: &Path,
     kam_toml: &KamToml,
@@ -25,6 +29,10 @@ pub fn run_pre_build_hooks(
 
 // 运行post-build hooks
 // 在构建之后执行，比如签名、上传、清理等
+/// Run post-build hooks (e.g., cleanup or packaging steps).
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
 pub fn run_post_build_hooks(
     project_root: &Path,
     kam_toml: &KamToml,
@@ -36,6 +44,11 @@ pub fn run_post_build_hooks(
 
 // 运行hooks的核心函数
 // 这个函数有点长，但逻辑还算清晰
+/// Execute hooks for the given stage (pre-build or post-build).
+///
+/// # Errors
+/// Returns `KamError` if hook discovery, validation, or execution fails.
+#[allow(clippy::too_many_lines)] // TODO: refactor into smaller helper functions and re-enable lint
 fn run_hooks(
     project_root: &Path,
     kam_toml: &KamToml,
@@ -65,7 +78,14 @@ fn run_hooks(
 
                 // Handle 'export KEY=VALUE' format (common in shell scripts)
                 let line = if line.starts_with("export ") {
-                    line.strip_prefix("export ").unwrap().trim()
+                    // Be defensive: do not unwrap from `strip_prefix`. If the prefix
+                    // removal unexpectedly fails, skip this line instead of panicking.
+                    if let Some(s) = line.strip_prefix("export ") {
+                        s.trim()
+                    } else {
+                        // Malformed export line; skip it.
+                        continue;
+                    }
                 } else {
                     line
                 };
@@ -126,8 +146,7 @@ fn run_hooks(
         .build
         .as_ref()
         .and_then(|b| b.hooks_dir.as_ref())
-        .map(|s| s.as_str())
-        .unwrap_or("hooks");
+        .map_or("hooks", |s| s.as_str());
 
     let hooks_root = project_root.join(hooks_dir_name);
     let hooks_dir = hooks_root.join(stage);
@@ -153,7 +172,7 @@ fn run_hooks(
     let mut detected_repo = String::new();
     if let Some(repo) = parsed_env.get("GITHUB_REPOSITORY") {
         // .env 中的值优先
-        detected_repo = repo.clone();
+        detected_repo.clone_from(repo);
     } else if let Ok(repo) = std::env::var("GITHUB_REPOSITORY") {
         // GitHub Actions环境
         detected_repo = repo;
@@ -165,14 +184,15 @@ fn run_hooks(
         .unwrap_or(&String::new())
         .is_empty()
     {
-        // 从kam.toml读取
-        detected_repo = kam_toml
-            .mmrl
-            .as_ref()
-            .and_then(|m| m.repo.as_ref())
-            .and_then(|r| r.repository.as_ref())
-            .unwrap_or(&String::new())
-            .clone();
+        // 从kam.toml读取（避免额外的临时 clone，使用 `clone_from`）
+        detected_repo.clone_from(
+            kam_toml
+                .mmrl
+                .as_ref()
+                .and_then(|m| m.repo.as_ref())
+                .and_then(|r| r.repository.as_ref())
+                .unwrap_or(&String::new()),
+        );
     }
 
     // 确定仓库ref（分支名）
@@ -220,7 +240,7 @@ fn run_hooks(
     };
 
     // 将 .env（parsed_env）中的变量先加入 env_vars（优先级最高）
-    for (k, v) in parsed_env.iter() {
+    for (k, v) in &parsed_env {
         add_env(k, v.clone());
     }
 
@@ -354,7 +374,7 @@ fn run_hooks(
 
     // Add templated variables from kam.tmpl.variables as environment variables KAM_TMPL_<NAME>
     if let Some(tmpl_section) = &kam_toml.kam.tmpl {
-        for (var_name, var_def) in tmpl_section.variables.iter() {
+        for (var_name, var_def) in &tmpl_section.variables {
             // Upper-case and normalize var name into env var (dots and hyphens will be normalized to underscores)
             let env_key = format!(
                 "KAM_TMPL_{}",
@@ -371,7 +391,7 @@ fn run_hooks(
     let kt_vars = crate::template::TemplateVariableProcessor::flatten_kam_toml(kam_toml);
     for (k, v) in kt_vars {
         let env_key_base = k.to_ascii_uppercase().replace(['.', '-'], "_");
-        let env_key = format!("KAM_{}", env_key_base);
+        let env_key = format!("KAM_{env_key_base}");
         add_env(&env_key, v);
     }
 
@@ -382,22 +402,20 @@ fn run_hooks(
 
     let mut entries: Vec<_> = fs::read_dir(&hooks_dir)
         .map_err(KamError::Io)?
-        .filter_map(|e| e.ok()) // 忽略读取失败的条目
+        .filter_map(Result::ok) // 忽略读取失败的条目
         .collect();
 
     // 按文件名排序，确保执行顺序确定（01-init.sh, 02-build.sh等）
     // 这样用户可以控制执行顺序
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by_key(std::fs::DirEntry::file_name);
 
     // Determine if we should show a progress bar
     let show_progress = !args.quiet && std::io::stdout().is_terminal();
     let total_hooks = entries.iter().filter(|e| e.path().is_file()).count();
     if !args.quiet {
+        let hd = hooks_dir.display();
         Utils::section(format!(
-            "✿ Running {} hooks from {} ({} script(s)) ✿",
-            stage,
-            hooks_dir.display(),
-            total_hooks
+            "✿ Running {stage} hooks from {hd} ({total_hooks} script(s)) ✿"
         ));
     }
     let pb = if show_progress && total_hooks > 0 {
@@ -405,7 +423,7 @@ fn run_hooks(
         let style = ProgressStyle::with_template(
             "{spinner:.green.bold} {msg:.bold} [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) {elapsed_precise}",
         )
-        .unwrap()
+        .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("█▉▊▋▌▍▎▏  ")
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
         pb.set_style(style);
@@ -426,19 +444,21 @@ fn run_hooks(
             if path
                 .file_name()
                 .and_then(|n| n.to_str())
-                .map(|s| s.starts_with('.'))
-                .unwrap_or(false)
+                .is_some_and(|s| s.starts_with('.'))
             {
                 continue;
             }
 
-            let filename = path.file_name().unwrap().to_string_lossy();
+            let filename = match path.file_name() {
+                Some(n) => n.to_string_lossy(),
+                None => continue,
+            };
             idx += 1;
             // Set progress bar message if present; otherwise print executing line with index info
             if let Some(pb) = &pb {
-                pb.set_message(format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
+                pb.set_message(format!("[{stage} {idx}/{total_hooks}] {filename}"));
             } else {
-                Utils::executing(format!("[{} {}/{}] {}", stage, idx, total_hooks, filename));
+                Utils::executing(format!("[{stage} {idx}/{total_hooks}] {filename}"));
             }
 
             // 流式输出stdout/stderr，实时显示命令输出
@@ -466,11 +486,9 @@ fn run_hooks(
 
                         let status_code = status
                             .code()
-                            .map(|c| c.to_string())
-                            .unwrap_or_else(|| status.to_string());
+                            .map_or_else(|| status.to_string(), |c| c.to_string());
                         return Err(KamError::CommandFailed(format!(
-                            "Hook script {} failed with status: {}. (Output above)",
-                            filename, status_code
+                            "Hook script {filename} failed with status: {status_code}. (Output above)"
                         )));
                     }
                     // 命令执行成功
@@ -498,8 +516,7 @@ fn run_hooks(
                         std::io::ErrorKind::NotFound => {
                             // 找不到解释器，提示用户
                             Utils::warn(format!(
-                                "Not found. Could not execute {}. Ensure the script has an interpreter or runtime available on the system (e.g., `sh`, `bash`, or `pwsh`), or invoke the script via a shell that is available on your platform.",
-                                filename
+                                "Not found. Could not execute {filename}. Ensure the script has an interpreter or runtime available on the system (e.g., `sh`, `bash`, or `pwsh`), or invoke the script via a shell that is available on your platform."
                             ));
                         }
                         _ => {}
@@ -508,8 +525,7 @@ fn run_hooks(
                         pb.finish_and_clear();
                     }
                     return Err(KamError::CommandFailed(format!(
-                        "Failed to execute hook {}: {}",
-                        filename, e
+                        "Failed to execute hook {filename}: {e}"
                     )));
                 }
             }

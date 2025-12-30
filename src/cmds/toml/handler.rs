@@ -51,21 +51,13 @@ fn write_toml(path: &PathBuf, v: &toml::Value) -> Result<(), KamError> {
 }
 
 fn get_value_by_path(value: &toml::Value, path: &str) -> Option<toml::Value> {
-    let parts: Vec<&str> = path.split('.').collect();
+    let mut it = path.split('.').peekable();
     let mut current = value;
-    for (i, &part) in parts.iter().enumerate() {
-        if let Some(tbl) = current.as_table() {
-            if let Some(next) = tbl.get(part) {
-                current = next;
-                if i == parts.len() - 1 {
-                    return Some(current.clone());
-                }
-                continue;
-            } else {
-                return None;
-            }
-        } else {
-            return None;
+    while let Some(part) = it.next() {
+        let tbl = current.as_table()?;
+        current = tbl.get(part)?;
+        if it.peek().is_none() {
+            return Some(current.clone());
         }
     }
     None
@@ -206,12 +198,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             set_value_by_path(&mut v, &key, &new_value);
             write_toml(&path, &v)?;
             use crate::utils::Utils;
-            Utils::success(format!(
-                "Set {} = {} in {}",
-                key,
-                new_value,
-                path.display()
-            ));
+            Utils::success(format!("Set {} = {} in {}", key, new_value, path.display()));
             Ok(())
         }
         crate::cmds::toml::args::TomlCommand::Unset { key } => {

@@ -30,7 +30,7 @@ impl Chmod777Rule {
         lazy_static::lazy_static! {
             static ref RE: Regex = Regex::new(r"\bchmod\s+(?:-R\s+)?7{3}\b").unwrap();
         }
-        &RE
+        &*RE
     }
 }
 

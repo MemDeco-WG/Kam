@@ -9,4 +9,3 @@ pub struct ToolSection {
     // 暂时用JSON值存储，需要时再扩展
     pub data: Option<serde_json::Value>,
 }
-

@@ -297,12 +297,11 @@ fn create_tempdir_with_fallback_override(
         if fs::create_dir_all(ov).is_ok() {
             if let Ok(td) = tempfile::tempdir_in(ov) {
                 return Ok(td);
-            } else {
-                Utils::warn(format!(
-                    "Failed to create tempdir inside override: {}",
-                    ov.display()
-                ));
             }
+            Utils::warn(format!(
+                "Failed to create tempdir inside override: {}",
+                ov.display()
+            ));
         } else {
             Utils::warn(format!(
                 "Failed to create override tmp dir '{}'",
@@ -318,12 +317,11 @@ fn create_tempdir_with_fallback_override(
             Utils::warn(format!("Failed to create TMPDIR '{}': {}", p.display(), e));
         } else if let Ok(td) = tempfile::tempdir_in(&p) {
             return Ok(td);
-        } else {
-            Utils::warn(format!(
-                "Failed to create tempdir inside TMPDIR '{}'",
-                p.display()
-            ));
         }
+        Utils::warn(format!(
+            "Failed to create tempdir inside TMPDIR '{}'",
+            p.display()
+        ));
     }
 
     // 2) Try the system default temp dir
@@ -338,12 +336,11 @@ fn create_tempdir_with_fallback_override(
                     if let Ok(td2) = tempfile::tempdir_in(&p) {
                         Utils::warn(format!("Using fallback tempdir: {}", p.display()));
                         return Ok(td2);
-                    } else {
-                        Utils::warn(format!(
-                            "Failed to create tempdir inside fallback: {}",
-                            p.display()
-                        ));
                     }
+                    Utils::warn(format!(
+                        "Failed to create tempdir inside fallback: {}",
+                        p.display()
+                    ));
                 }
             }
 
@@ -354,12 +351,11 @@ fn create_tempdir_with_fallback_override(
                     if let Ok(td2) = tempfile::tempdir_in(&p) {
                         Utils::warn(format!("Using fallback tempdir: {}", p.display()));
                         return Ok(td2);
-                    } else {
-                        Utils::warn(format!(
-                            "Failed to create tempdir inside fallback: {}",
-                            p.display()
-                        ));
                     }
+                    Utils::warn(format!(
+                        "Failed to create tempdir inside fallback: {}",
+                        p.display()
+                    ));
                 }
             }
 
@@ -370,12 +366,11 @@ fn create_tempdir_with_fallback_override(
                     if let Ok(td2) = tempfile::tempdir_in(&p) {
                         Utils::warn(format!("Using fallback tempdir: {}", p.display()));
                         return Ok(td2);
-                    } else {
-                        Utils::warn(format!(
-                            "Failed to create tempdir inside fallback: {}",
-                            p.display()
-                        ));
                     }
+                    Utils::warn(format!(
+                        "Failed to create tempdir inside fallback: {}",
+                        p.display()
+                    ));
                 }
             }
 
@@ -473,7 +468,7 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
             // Present the file to the user for review
             if let Ok(content) = fs::read_to_string(&kam_sh) {
                 Utils::section("Preview: kam.sh");
-                println!("{}", content);
+                println!("{content}");
                 let assume_yes = std::env::args().any(|a| a == "-y" || a == "--yes");
                 let run_script = if assume_yes {
                     true
@@ -677,66 +672,66 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         Utils::success(&trf!("install.installed", artifact.display(), cli_bin));
                     }
                     return Ok(());
-                } else {
-                    // 对于 verbose 模式，我们需要更智能地判断错误类型
-                    // 由于 streaming 模式下我们无法捕获完整的输出，我们基于退出码和命令可用性来判断
-                    let code = status.code();
-                    let should_try_su = crate::utils::command_exists("su")
-                        && ((code == Some(126) || code == Some(127)) // cannot execute or not found
-                            || !crate::utils::command_exists(&cli_bin)); // CLI binary doesn't exist
+                }
 
-                    if should_try_su {
-                        let cmd_str = std::iter::once(cli_bin.clone())
-                            .chain(cli_args.iter().cloned())
-                            .map(|s| {
-                                if s.contains('\'') {
-                                    format!("'{}'", s.replace("'", "'\"'\"'"))
-                                } else {
-                                    format!("'{}'", s)
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        if !args.quiet {
-                            Utils::info(&trf!("Attempting to execute via 'su -c': {}", cmd_str));
-                        }
-                        let mut su_cmd = Command::new("su");
-                        su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
-                        match Utils::run_and_stream_no_stderr_header(su_cmd) {
-                            Ok(su_status) => {
-                                if su_status.success() {
-                                    if !args.quiet {
-                                        Utils::success(&trf!(
-                                            "Installed {} via {}",
-                                            artifact.display(),
-                                            cli_bin
-                                        ));
-                                    }
-                                    return Ok(());
-                                } else {
-                                    return Err(KamError::CommandFailed(format!(
-                                        "Privilege escalation via 'su' failed with status: {:?}",
-                                        su_status
-                                    )));
-                                }
+                // 对于 verbose 模式，我们需要更智能地判断错误类型
+                // 由于 streaming 模式下我们无法捕获完整的输出，我们基于退出码和命令可用性来判断
+                let code = status.code();
+                let should_try_su = crate::utils::command_exists("su")
+                    && ((code == Some(126) || code == Some(127)) // cannot execute or not found
+                        || !crate::utils::command_exists(&cli_bin)); // CLI binary doesn't exist
+
+                if should_try_su {
+                    let cmd_str = std::iter::once(cli_bin.clone())
+                        .chain(cli_args.iter().cloned())
+                        .map(|s| {
+                            if s.contains('\'') {
+                                format!("'{}'", s.replace("'", "'\"'\"'"))
+                            } else {
+                                format!("'{}'", s)
                             }
-                            Err(e) => return Err(KamError::Io(e)),
-                        }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if !args.quiet {
+                        Utils::info(&trf!("Attempting to execute via 'su -c': {}", cmd_str));
                     }
-                    // 退出代码为1直接报错
-                    if code == Some(1) {
-                        return Err(KamError::CommandFailed(
-                            "安装失败，检查安装脚本或者检查root授权".to_string(),
-                        ));
-                    } else {
-                        // 其他退出代码提供详细信息
-                        let error_msg = format!(
-                            "Install command '{}' exited with status: {}. Check the output above for details.",
-                            cli_bin, status
-                        );
-                        return Err(KamError::CommandFailed(error_msg));
+                    let mut su_cmd = Command::new("su");
+                    su_cmd.arg("-c").arg(cmd_str).stdin(Stdio::inherit());
+                    match Utils::run_and_stream_no_stderr_header(su_cmd) {
+                        Ok(su_status) => {
+                            if su_status.success() {
+                                if !args.quiet {
+                                    Utils::success(&trf!(
+                                        "Installed {} via {}",
+                                        artifact.display(),
+                                        cli_bin
+                                    ));
+                                }
+                                return Ok(());
+                            }
+                            return Err(KamError::CommandFailed(format!(
+                                "Privilege escalation via 'su' failed with status: {:?}",
+                                su_status
+                            )));
+                        }
+                        Err(e) => return Err(KamError::Io(e)),
                     }
                 }
+
+                // 退出代码为1直接报错
+                if code == Some(1) {
+                    return Err(KamError::CommandFailed(
+                        "安装失败，检查安装脚本或者检查root授权".to_string(),
+                    ));
+                }
+
+                // 其他退出代码提供详细信息
+                let error_msg = format!(
+                    "Install command '{}' exited with status: {}. Check the output above for details.",
+                    cli_bin, status
+                );
+                return Err(KamError::CommandFailed(error_msg));
             }
             Err(e) => return Err(KamError::Io(e)),
         }
@@ -785,15 +780,14 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                                         cli_bin
                                     ));
                                 }
-                                Ok(())
-                            } else {
-                                Err(KamError::CommandFailed(format!(
-                                    "Privilege escalation via 'su' failed with status: {:?}",
-                                    status
-                                )))
+                                return Ok(());
                             }
+                            return Err(KamError::CommandFailed(format!(
+                                "Privilege escalation via 'su' failed with status: {:?}",
+                                status
+                            )));
                         }
-                        Err(e) => Err(KamError::Io(e)),
+                        Err(e) => return Err(KamError::Io(e)),
                     }
                 } else if is_command_not_found_error(&combined) {
                     Err(KamError::CommandFailed(trf!(

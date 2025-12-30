@@ -10,6 +10,7 @@ use crate::assets::tmpl::TmplAssets;
 use crate::cmds::tmpl::pull;
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
+use crate::utils::Utils;
 use crate::{template::TemplateCacheManager, template::TemplateManager};
 use colored::Colorize;
 use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
@@ -32,9 +33,9 @@ fn prompt_input(prompt: &str, default: Option<&str>) -> Result<String, KamError>
 
     // Fallback: standard input (non-TTY or dialoguer failure)
     if default_str.is_empty() {
-        print!("{}: ", prompt);
+        print!("{prompt}: ");
     } else {
-        print!("{} [{}]: ", prompt, default_str);
+        print!("{prompt} [{default_str}]: ");
     }
     io::stdout().flush().map_err(KamError::Io)?;
     let mut input = String::new();
@@ -50,30 +51,28 @@ fn prompt_input(prompt: &str, default: Option<&str>) -> Result<String, KamError>
 fn prompt_confirm(prompt: &str, default: bool) -> Result<bool, KamError> {
     // Try the dialoguer Confirm for a nicer TTY experience; if it fails (non-TTY),
     // fall back to a simple text-based confirmation prompt.
-    match Confirm::with_theme(&ColorfulTheme::default())
+    if let Ok(v) = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(prompt)
         .default(default)
         .interact()
     {
-        Ok(v) => Ok(v),
-        Err(_) => {
-            let suffix = if default { "[Y/n]" } else { "[y/N]" };
-            loop {
-                print!("{} {}: ", prompt, suffix);
-                io::stdout().flush().map_err(KamError::Io)?;
-                let mut input = String::new();
-                io::stdin().read_line(&mut input).map_err(KamError::Io)?;
-                let trimmed = input.trim().to_lowercase();
-                if trimmed.is_empty() {
-                    return Ok(default);
-                }
-                match trimmed.as_str() {
-                    "y" | "yes" => return Ok(true),
-                    "n" | "no" => return Ok(false),
-                    _ => {
-                        println!("{}", trf!("init.interactive.enter_yes_no"));
-                        continue;
-                    }
+        Ok(v)
+    } else {
+        let suffix = if default { "[Y/n]" } else { "[y/N]" };
+        loop {
+            print!("{prompt} {suffix}: ");
+            io::stdout().flush().map_err(KamError::Io)?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).map_err(KamError::Io)?;
+            let trimmed = input.trim().to_lowercase();
+            if trimmed.is_empty() {
+                return Ok(default);
+            }
+            match trimmed.as_str() {
+                "y" | "yes" => return Ok(true),
+                "n" | "no" => return Ok(false),
+                _ => {
+                    println!("{}", trf!("init.interactive.enter_yes_no"));
                 }
             }
         }
@@ -82,6 +81,7 @@ fn prompt_confirm(prompt: &str, default: bool) -> Result<bool, KamError> {
 
 // 显示模板列表让用户选一个
 // 如果默认模板存在就默认选中它
+#[allow(clippy::too_many_lines)] // TODO: consider breaking this function into smaller units
 fn choose_template(default_template: &str) -> Result<String, KamError> {
     loop {
         let mut choices = TemplateManager::list_builtin_templates();
@@ -98,134 +98,136 @@ fn choose_template(default_template: &str) -> Result<String, KamError> {
             .unwrap_or(0);
 
         // 先试试交互式选择（用方向键），如果不是TTY就回退到文本输入
-        match Select::with_theme(&ColorfulTheme::default())
+        if let Ok(idx) = Select::with_theme(&ColorfulTheme::default())
             .with_prompt(&trf!("init.interactive.choose_template"))
             .items(&choices[..])
             .default(default_idx)
             .interact()
         {
-            Ok(idx) => {
-                let sel = &choices[idx];
-                if sel == &trf!("init.interactive.choice_pull_default_templates") {
-                    // 从配置的URL拉取默认模板
+            let sel = &choices[idx];
+            if sel == &trf!("init.interactive.choice_pull_default_templates") {
+                // 从配置的URL拉取默认模板
+                pull::run_pull(None, true, false)?;
+                // 刷新列表再显示一次
+                continue;
+            }
+            if sel == &trf!("init.interactive.choice_local_path") {
+                // 让用户输入本地路径
+                let input = Input::<String>::with_theme(&ColorfulTheme::default())
+                    .with_prompt(&trf!("init.interactive.enter_local_template_path"))
+                    .allow_empty(true)
+                    .interact_text()
+                    .map_err(|e| KamError::Io(e.into()))?;
+                let input_trim = input.trim();
+                if input_trim.is_empty() {
+                    // 如果留空，就下载默认模板然后重新显示菜单
                     pull::run_pull(None, true, false)?;
-                    // 刷新列表再显示一次
                     continue;
                 }
-                if sel == &trf!("init.interactive.choice_local_path") {
-                    // 让用户输入本地路径
-                    let input = Input::<String>::with_theme(&ColorfulTheme::default())
-                        .with_prompt(&trf!("init.interactive.enter_local_template_path"))
-                        .allow_empty(true)
-                        .interact_text()
-                        .map_err(|e| KamError::Io(e.into()))?;
-                    let input_trim = input.trim();
-                    if input_trim.is_empty() {
-                        // 如果留空，就下载默认模板然后重新显示菜单
-                        pull::run_pull(None, true, false)?;
-                        continue;
-                    }
 
-                    let p = Path::new(&input);
-                    if !p.exists() {
-                        return Err(KamError::InvalidDirectory(format!(
-                            "Local template path not found: {}",
-                            input
-                        )));
+                let p = Path::new(&input);
+                if !p.exists() {
+                    return Err(KamError::InvalidDirectory(format!(
+                        "Local template path not found: {input}"
+                    )));
+                }
+                if p.is_file() {
+                    if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                        // If template already exists in cache, reuse it instead of reinstalling
+                        if let Ok(Some(_existing)) =
+                            TemplateCacheManager::resolve_template_path(stem)
+                        {
+                            return Ok(stem.to_string());
+                        }
+                        // Otherwise install the local archive into the cache
+                        TemplateCacheManager::install_template(stem, p)?;
+                        return Ok(stem.to_string());
                     }
-                    if p.is_file() {
+                    // return the provided path string if we couldn't derive a stem
+                    return Ok(input.clone());
+                }
+                // Directory path - use it directly
+                return Ok(input.clone());
+            }
+            return Ok(choices[idx].clone());
+        }
+
+        // Fallback to previous text-based interaction
+        crate::utils::Utils::info(&trf!("init.interactive.non_interactive_fallback"));
+        loop {
+            let pick = prompt_input(
+                &trf!("init.interactive.select_by_name_or_number"),
+                Some(default_template),
+            )?;
+            if pick.trim().is_empty() {
+                // Empty text input: download the default templates and refresh choices
+                crate::cmds::tmpl::pull::run_pull(None, true, false)?;
+                break; // Exit the fallback prompt and let the outer loop refresh the choices
+            }
+            if let Ok(num) = pick.parse::<usize>() {
+                if num == 0 {
+                    let p = prompt_input(
+                        &trf!("init.interactive.enter_path_to_local_template"),
+                        None::<&str>,
+                    )?;
+                    if !p.trim().is_empty() {
+                        return Ok(p);
+                    }
+                } else if num > 0 && num <= choices.len() {
+                    return Ok(choices[num - 1].clone());
+                } else {
+                    crate::utils::Utils::warn(&trf!("init.interactive.invalid_selection", num));
+                }
+            } else {
+                let pick_trim = pick.trim();
+                if !pick_trim.is_empty() {
+                    // If it's a path and exists, handle it as local template path
+                    let p = Path::new(pick_trim);
+                    if p.exists() {
+                        // try to install to cache if path exists
                         if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                            // If template already exists in cache, reuse it instead of reinstalling
-                            if let Ok(Some(_existing)) =
-                                TemplateCacheManager::resolve_template_path(stem)
-                            {
-                                return Ok(stem.to_string());
-                            }
-                            // Otherwise install the local archive into the cache
                             TemplateCacheManager::install_template(stem, p)?;
                             return Ok(stem.to_string());
-                        } else {
-                            // return the provided path string if we couldn't derive a stem
-                            return Ok(input.clone());
                         }
+                        return Ok(pick_trim.to_string());
                     }
-                    // Directory path - use it directly
-                    return Ok(input.clone());
-                } else {
-                    return Ok(choices[idx].clone());
-                }
-            }
-            Err(_) => {
-                // Fallback to previous text-based interaction
-                use crate::utils::Utils;
-                Utils::info(&trf!("init.interactive.non_interactive_fallback"));
-                loop {
-                    let pick = prompt_input(
-                        &trf!("init.interactive.select_by_name_or_number"),
-                        Some(default_template),
-                    )?;
-                    if pick.trim().is_empty() {
-                        // Empty text input: download the default templates and refresh choices
-                        crate::cmds::tmpl::pull::run_pull(None, true, false)?;
-                        break; // Exit the fallback prompt and let the outer loop refresh the choices
-                    }
-                    if let Ok(num) = pick.parse::<usize>() {
-                        if num == 0 {
-                            let p = prompt_input(
-                                &trf!("init.interactive.enter_path_to_local_template"),
-                                None::<&str>,
-                            )?;
-                            if !p.trim().is_empty() {
-                                return Ok(p);
-                            }
-                        } else if num > 0 && num <= choices.len() {
-                            return Ok(choices[num - 1].clone());
-                        } else {
-                            use crate::utils::Utils;
-                            Utils::warn(&trf!("init.interactive.invalid_selection", num));
-                            continue;
-                        }
-                    } else {
-                        let pick_trim = pick.trim();
-                        if !pick_trim.is_empty() {
-                            // If it's a path and exists, handle it as local template path
-                            let p = Path::new(pick_trim);
-                            if p.exists() {
-                                // try to install to cache if path exists
-                                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                                    TemplateCacheManager::install_template(stem, p)?;
-                                    return Ok(stem.to_string());
-                                }
-                                return Ok(pick_trim.to_string());
-                            }
-                            // Otherwise, assume it's a template name
-                            return Ok(pick_trim.to_string());
-                        }
-                    }
+                    // Otherwise, assume it's a template name
+                    return Ok(pick_trim.to_string());
                 }
             }
         }
     }
 }
-
 // 解压压缩包到指定目录
 // 支持tar.gz、tgz、zip格式
 fn extract_archive(path: &Path, dst: &Path) -> Result<(), KamError> {
     let file = fs::File::open(path).map_err(KamError::Io)?;
-    let path_str = path.to_string_lossy().to_lowercase();
-    if path_str.ends_with(".tar.gz") || path_str.ends_with(".tgz") {
+    // normalize the file name and prefer extension checks
+    let file_name_lower = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    if file_name_lower.ends_with(".tar.gz")
+        || path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("tgz"))
+    {
         let tar = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(tar);
         archive
             .unpack(dst)
             .map_err(|e| KamError::Io(std::io::Error::other(e)))?;
-    } else if path_str.ends_with(".zip") {
+    } else if path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
+    {
         let mut zip_arch = zip::ZipArchive::new(file).map_err(KamError::Zip)?;
         zip_arch.extract(dst).map_err(KamError::Zip)?;
     } else {
         return Err(KamError::UnsupportedArchive(format!(
-            "Unsupported archive: {}",
-            path.display()
+            "Unsupported archive: {path_display}",
+            path_display = path.display()
         )));
     }
     Ok(())
@@ -240,11 +242,15 @@ fn resolve_template_kam_toml(template_spec: &str) -> Result<(PathBuf, Option<Tem
         let mut v = vec![template_spec.to_string()];
         let is_archive_or_path = template_spec.contains('/')
             || template_spec.contains('\\')
-            || template_spec.ends_with(".tar.gz")
-            || template_spec.ends_with(".tgz")
-            || template_spec.ends_with(".zip");
+            || template_spec.to_ascii_lowercase().ends_with(".tar.gz")
+            || std::path::Path::new(template_spec)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("tgz"))
+            || std::path::Path::new(template_spec)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"));
         if !template_spec.ends_with("_template") && !is_archive_or_path {
-            v.push(format!("{}_template", template_spec));
+            v.push(format!("{template_spec}_template"));
         }
         v
     };
@@ -257,13 +263,12 @@ fn resolve_template_kam_toml(template_spec: &str) -> Result<(PathBuf, Option<Tem
                 let k = spec_path.join("kam.toml");
                 if k.exists() {
                     return Ok((k, None));
-                } else {
-                    // Could be a template root without kam.toml (unlikely) — treat as error
-                    return Err(KamError::InvalidDirectory(format!(
-                        "Template '{}' is a directory but no kam.toml found",
-                        spec_path.display()
-                    )));
                 }
+                // Could be a template root without kam.toml (unlikely) — treat as error
+                return Err(KamError::InvalidDirectory(format!(
+                    "Template '{spec_path}' is a directory but no kam.toml found",
+                    spec_path = spec_path.display()
+                )));
             } else if spec_path.is_file() {
                 let tmp = tempfile::tempdir().map_err(KamError::Io)?;
                 extract_archive(spec_path, tmp.path())?;
@@ -271,22 +276,20 @@ fn resolve_template_kam_toml(template_spec: &str) -> Result<(PathBuf, Option<Tem
                 let kt_path = tmp.path().join("kam.toml");
                 if kt_path.exists() {
                     return Ok((kt_path, Some(tmp)));
-                } else {
-                    // maybe templates are under single nested dir; attempt to descend
-                    // find the first directory that contains kam.toml
-                    for entry in fs::read_dir(tmp.path()).map_err(KamError::Io)? {
-                        let entry = entry.map_err(KamError::Io)?;
-                        let p = entry.path();
-                        let candidate = p.join("kam.toml");
-                        if candidate.exists() {
-                            return Ok((candidate, Some(tmp)));
-                        }
-                    }
-                    return Err(KamError::InvalidDirectory(format!(
-                        "Archive '{}' did not contain kam.toml",
-                        spec
-                    )));
                 }
+                // maybe templates are under single nested dir; attempt to descend
+                // find the first directory that contains kam.toml
+                for entry in fs::read_dir(tmp.path()).map_err(KamError::Io)? {
+                    let entry = entry.map_err(KamError::Io)?;
+                    let p = entry.path();
+                    let candidate = p.join("kam.toml");
+                    if candidate.exists() {
+                        return Ok((candidate, Some(tmp)));
+                    }
+                }
+                return Err(KamError::InvalidDirectory(format!(
+                    "Archive '{spec}' did not contain kam.toml"
+                )));
             }
         }
 
@@ -296,12 +299,10 @@ fn resolve_template_kam_toml(template_spec: &str) -> Result<(PathBuf, Option<Tem
                 let k = cached_path.join("kam.toml");
                 if k.exists() {
                     return Ok((k, None));
-                } else {
-                    return Err(KamError::InvalidDirectory(format!(
-                        "Cached template '{}' has no kam.toml",
-                        spec
-                    )));
                 }
+                return Err(KamError::InvalidDirectory(format!(
+                    "Cached template '{spec}' has no kam.toml"
+                )));
             } else if cached_path.is_file() {
                 let tmp = tempfile::tempdir().map_err(KamError::Io)?;
                 extract_archive(&cached_path, tmp.path())?;
@@ -314,7 +315,7 @@ fn resolve_template_kam_toml(template_spec: &str) -> Result<(PathBuf, Option<Tem
 
         // 3. Check built-in assets (assets are .tar.gz)
         {
-            let asset_name = format!("{}.tar.gz", spec);
+            let asset_name = format!("{spec}.tar.gz");
             if let Some(asset) = TmplAssets::get(&asset_name) {
                 // create temp file and extract
                 let tmp = tempfile::tempdir().map_err(KamError::Io)?;
@@ -325,40 +326,38 @@ fn resolve_template_kam_toml(template_spec: &str) -> Result<(PathBuf, Option<Tem
                 let kt_path = tmp.path().join("kam.toml");
                 if kt_path.exists() {
                     return Ok((kt_path, Some(tmp)));
-                } else {
-                    for entry in fs::read_dir(tmp.path()).map_err(KamError::Io)? {
-                        let entry = entry.map_err(KamError::Io)?;
-                        let p = entry.path();
-                        let candidate = p.join("kam.toml");
-                        if candidate.exists() {
-                            return Ok((candidate, Some(tmp)));
-                        }
-                    }
-                    return Err(KamError::InvalidDirectory(format!(
-                        "Built-in asset '{}' did not contain kam.toml",
-                        spec
-                    )));
                 }
+                for entry in fs::read_dir(tmp.path()).map_err(KamError::Io)? {
+                    let entry = entry.map_err(KamError::Io)?;
+                    let p = entry.path();
+                    let candidate = p.join("kam.toml");
+                    if candidate.exists() {
+                        return Ok((candidate, Some(tmp)));
+                    }
+                }
+                return Err(KamError::InvalidDirectory(format!(
+                    "Built-in asset '{spec}' did not contain kam.toml"
+                )));
             }
         }
     } // end for potentials
 
     Err(KamError::TemplateNotFound(format!(
-        "Template '{}' not found in built-in assets, cache, or local path",
-        template_spec
+        "Template '{template_spec}' not found in built-in assets, cache, or local path."
     )))
 }
 
 // 提示用户输入模板定义的变量（根据kam.toml的定义）
 // 返回变量名到值的HashMap（覆盖默认值）
 // 这个函数会交互式地询问用户，所以如果非TTY可能会出问题
+#[allow(clippy::too_many_lines)] // TODO: consider splitting into smaller helper functions
 fn prompt_template_variables(
     kam_toml_path: &Path,
     existing: &mut HashMap<String, String>,
 ) -> Result<(), KamError> {
     let kt = KamToml::load_from_file(kam_toml_path)?;
     if let Some(tmpl_section) = kt.tmpl {
-        for (var_name, var_def) in tmpl_section.variables.iter() {
+        for (var_name, var_def) in &tmpl_section.variables {
             let default = existing
                 .get(var_name)
                 .cloned()
@@ -366,7 +365,7 @@ fn prompt_template_variables(
                 .unwrap_or_default();
 
             // Show notes/help/example where available
-            use crate::utils::Utils;
+
             println!();
             if let Some(note) = &var_def.note {
                 Utils::info(&trf!("init.interactive.variable_note", var_name, note));
@@ -444,7 +443,6 @@ fn prompt_template_variables(
                                 Some(&default),
                             )?;
                             if response.is_empty() && var_def.required {
-                                use crate::utils::Utils;
                                 Utils::warn(&trf!("init.interactive.value_required", var_name));
                                 continue;
                             }
@@ -453,11 +451,9 @@ fn prompt_template_variables(
                                 if idx > 0 && idx <= choices.len() {
                                     existing.insert(var_name.clone(), choices[idx - 1].clone());
                                     break;
-                                } else {
-                                    use crate::utils::Utils;
-                                    Utils::warn(&trf!("init.interactive.invalid_selection_index"));
-                                    continue;
                                 }
+                                Utils::warn(&trf!("init.interactive.invalid_selection_index"));
+                                continue;
                             }
                             if !choices.contains(&response) {
                                 if prompt_confirm(
@@ -466,13 +462,11 @@ fn prompt_template_variables(
                                 )? {
                                     existing.insert(var_name.clone(), response.clone());
                                     break;
-                                } else {
-                                    continue;
                                 }
-                            } else {
-                                existing.insert(var_name.clone(), response.clone());
-                                break;
+                                continue;
                             }
+                            existing.insert(var_name.clone(), response.clone());
+                            break;
                         }
                     }
                 }
@@ -482,7 +476,7 @@ fn prompt_template_variables(
                     let default_bool =
                         !default.is_empty() && (default == "1" || default.to_lowercase() == "true");
                     match Confirm::with_theme(&ColorfulTheme::default())
-                        .with_prompt(format!("{}?", var_name))
+                        .with_prompt(format!("{var_name}?"))
                         .default(default_bool)
                         .interact()
                     {
@@ -504,7 +498,6 @@ fn prompt_template_variables(
                                     Some(if default_bool { "true" } else { "false" }),
                                 )?;
                                 if resp.is_empty() && var_def.required {
-                                    use crate::utils::Utils;
                                     Utils::warn(&trf!("init.interactive.value_required", var_name));
                                     continue;
                                 }
@@ -515,11 +508,8 @@ fn prompt_template_variables(
                                 } else if v == "false" || v == "0" {
                                     existing.insert(var_name.clone(), "0".to_string());
                                     break;
-                                } else {
-                                    use crate::utils::Utils;
-                                    Utils::warn(&trf!("init.interactive.enter_true_or_false"));
-                                    continue;
                                 }
+                                Utils::warn(&trf!("init.interactive.enter_true_or_false"));
                             }
                         }
                     }
@@ -554,6 +544,7 @@ fn prompt_template_variables(
 
 // 构建会被模板复制的文件列表（用于可视化）
 // 这个功能主要是让用户看看模板会生成哪些文件
+#[allow(clippy::too_many_lines)] // TODO: consider splitting into smaller helper functions
 fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError> {
     // 构建树状列表（带缩进），提供Select UI来滚动和预览文件
     // 用dialoguer::Select支持方向键导航，比较友好
@@ -562,14 +553,13 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
     // 遍历模板目录，收集所有文件
     for entry in WalkDir::new(template_dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
     // 忽略读取失败的条目
     {
         // 使用metadata（如果可能），忽略损坏的条目
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue, // 读取失败就跳过
-        };
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        }; // 读取失败就跳过
         // 只考虑文件和目录
         let path = entry.path();
         // 相对路径用于显示
@@ -588,16 +578,16 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
         let display_name = rel.file_name().and_then(|s| s.to_str()).map_or_else(
             || {
                 if is_file {
-                    format!("{}{}", prefix, rel.display())
+                    format!("{prefix}{rel}", rel = rel.display())
                 } else {
-                    format!("{}{}/", prefix, rel.display())
+                    format!("{prefix}{rel}/", rel = rel.display())
                 }
             },
             |name| {
                 if is_file {
-                    format!("{}{}", prefix, name)
+                    format!("{prefix}{name}")
                 } else {
-                    format!("{}{}/", prefix, name)
+                    format!("{prefix}{name}/")
                 }
             },
         );
@@ -609,7 +599,6 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
 
     // Nothing to show?
     if entries.is_empty() {
-        use crate::utils::Utils;
         Utils::info(&trf!("init.interactive.template_directory_empty"));
         return Ok(());
     }
@@ -620,10 +609,10 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
         .map(|(d, _, is_file)| {
             if *is_file {
                 // file icon, dimmed for less emphasis
-                format!("📄 {}", d).dimmed().to_string()
+                format!("📄 {d}").dimmed().to_string()
             } else {
                 // folder icon, cyan color to stand out
-                format!("📁 {}", d).cyan().to_string()
+                format!("📁 {d}").cyan().to_string()
             }
         })
         .collect();
@@ -634,135 +623,114 @@ fn visualize_template(template_dir: &Path, limit: usize) -> Result<(), KamError>
     // Interactive selection loop
     loop {
         // Interactive select (arrow keys). If it fails (non TTY / CI), fallback to text listing.
-        match Select::with_theme(&ColorfulTheme::default())
+        if let Ok(idx) = Select::with_theme(&ColorfulTheme::default())
             .with_prompt(&trf!("init.interactive.template_preview", entries.len()))
             .items(&display_items)
             .default(0)
             .interact()
         {
-            Ok(idx) => {
-                let choices_len = display_items.len();
-                // If choose continue -> exit preview and return Ok
-                if idx == choices_len - 2 {
-                    break;
-                }
-                // If choose exit -> simply return Ok (cancel preview)
-                if idx == choices_len - 1 {
-                    use crate::utils::Utils;
-                    Utils::info(&trf!("init.interactive.preview_cancelled"));
-                    return Ok(());
-                }
-                // If an actual entry is selected
-                if idx < entries.len() {
-                    let (_label, rel_path, is_file) = &entries[idx];
-                    let full_path = template_dir.join(rel_path);
-                    if !is_file {
-                        // Directory selected: list immediate children as a small preview
-                        println!(
-                            "\n{}",
-                            trf!(
-                                "init.interactive.directory_preview_header",
-                                rel_path.display()
-                            )
-                            .cyan()
-                        );
-                        if let Ok(children) = fs::read_dir(&full_path) {
-                            let mut cvec: Vec<_> = children.filter_map(|e| e.ok()).collect();
-                            cvec.sort_by_key(|d| d.path());
-                            for c in cvec.iter().take(50) {
-                                if let Some(name) = c.path().file_name().and_then(|s| s.to_str()) {
-                                    if c.path().is_dir() {
-                                        // Directory entries show an icon and cyan color
-                                        println!("  - 📁 {}/", name.cyan());
-                                    } else {
-                                        // Files show a file icon and dimmed color
-                                        println!("  - 📄 {}", name.dimmed());
-                                    }
-                                }
-                            }
-                            println!("{}\n", trf!("init.interactive.end_of_directory_preview"));
-                        } else {
-                            println!("{}\n", trf!("init.interactive.preview_failed_read_dir"));
-                        }
-                        // Continue loop for further selection
-                        continue;
-                    } else {
-                        // File selected -> display a small content preview (first N lines)
-                        println!(
-                            "\n{}",
-                            trf!("init.interactive.preview_header", rel_path.display())
-                        );
-                        match fs::read_to_string(&full_path) {
-                            Ok(content) => {
-                                let mut count = 0usize;
-                                for line in content.lines() {
-                                    println!("{}", line);
-                                    count += 1;
-                                    if count >= 50 {
-                                        println!(
-                                            "{}",
-                                            trf!("init.interactive.preview_file_truncated")
-                                        );
-                                        break;
-                                    }
-                                }
-                                if count == 0 {
-                                    println!("{}", trf!("init.interactive.preview_file_empty"));
-                                }
-                            }
-                            Err(_) => {
-                                println!("{}", trf!("init.interactive.preview_failed_read_file"));
-                            }
-                        }
-                        println!(
-                            "{}\n",
-                            trf!("init.interactive.preview_end", rel_path.display())
-                        );
-
-                        // Ask whether to preview another file (interactive)
-                        let cont = match Confirm::with_theme(&ColorfulTheme::default())
-                            .with_prompt(&trf!("init.interactive.preview_another_file"))
-                            .default(true)
-                            .interact()
-                        {
-                            Ok(v) => v,
-                            Err(_) => prompt_confirm(
-                                &trf!("init.interactive.preview_another_file"),
-                                false,
-                            )?,
-                        };
-                        if cont {
-                            continue;
-                        } else {
-                            break;
-                        }
-                    }
-                } else {
-                    // Out-of-range index, just break
-                    break;
-                }
+            let choices_len = display_items.len();
+            // If choose continue -> exit preview and return Ok
+            if idx == choices_len - 2 {
+                break;
             }
-            Err(_) => {
-                // Non-interactive: fallback to simple listing (no arrows)
-                use crate::utils::Utils;
-                println!();
-                Utils::section(&trf!(
-                    "init.interactive.template_contents_showing_up_to_files",
-                    limit
-                ));
-                for (i, (_, rel, is_file)) in entries.iter().enumerate().take(limit) {
-                    let suffix = if *is_file { "" } else { "/" };
-                    println!("  {}) {}{}", i + 1, rel.display(), suffix);
-                }
-                if entries.len() > limit {
-                    println!(
-                        "{}",
-                        trf!("init.interactive.and_more_files", entries.len() - limit)
-                    );
-                }
-                println!();
+            // If choose exit -> simply return Ok (cancel preview)
+            if idx == choices_len - 1 {
+                crate::utils::Utils::info(&trf!("init.interactive.preview_cancelled"));
                 return Ok(());
             }
+            // If an actual entry is selected
+            if idx < entries.len() {
+                let (_label, rel_path, is_file) = &entries[idx];
+                let full_path = template_dir.join(rel_path);
+                if !is_file {
+                    // Directory selected: list immediate children as a small preview
+                    println!(
+                        "\n{}",
+                        trf!(
+                            "init.interactive.directory_preview_header",
+                            rel_path.display()
+                        )
+                        .cyan()
+                    );
+                    if let Ok(children) = fs::read_dir(&full_path) {
+                        let mut cvec: Vec<_> = children.filter_map(Result::ok).collect();
+                        cvec.sort_by_key(std::fs::DirEntry::path);
+                        for c in cvec.iter().take(50) {
+                            if let Some(name) = c.path().file_name().and_then(|s| s.to_str()) {
+                                if c.path().is_dir() {
+                                    // Directory entries show an icon and cyan color
+                                    println!("  - 📁 {}/", name.cyan());
+                                } else {
+                                    // Files show a file icon and dimmed color
+                                    println!("  - 📄 {}", name.dimmed());
+                                }
+                            }
+                        }
+                        println!("{}\n", trf!("init.interactive.end_of_directory_preview"));
+                        // Continue loop for further selection
+                        continue;
+                    }
+                    // If we reach here, reading the directory failed — fall through to file preview
+                    println!("{}\n", trf!("init.interactive.preview_failed_read_dir"));
+                }
+                // Show file preview (first N lines)
+                match fs::read_to_string(&full_path) {
+                    Ok(content) => {
+                        let lines: Vec<&str> = content.lines().take(20).collect();
+                        println!(
+                            "{}",
+                            trf!("init.interactive.preview_file_header", rel_path.display()).bold()
+                        );
+                        for l in lines {
+                            println!("{}", l.dimmed());
+                        }
+                    }
+                    Err(_) => {
+                        println!("{}", trf!("init.interactive.preview_failed_read_file"));
+                    }
+                }
+
+                // After showing preview, display end marker and ask whether to preview another file
+                println!(
+                    "{}\n",
+                    trf!("init.interactive.preview_end", rel_path.display())
+                );
+
+                // Ask whether to preview another file (interactive)
+                let cont = match Confirm::with_theme(&ColorfulTheme::default())
+                    .with_prompt(&trf!("init.interactive.preview_another_file"))
+                    .default(true)
+                    .interact()
+                {
+                    Ok(v) => v,
+                    Err(_) => {
+                        prompt_confirm(&trf!("init.interactive.preview_another_file"), false)?
+                    }
+                };
+                if cont {
+                    continue;
+                }
+                break;
+            }
+        } else {
+            // Non-interactive: fallback to simple listing (no arrows)
+            crate::utils::Utils::section(&trf!(
+                "init.interactive.template_contents_showing_up_to_files",
+                limit
+            ));
+            for (i, (_, rel, is_file)) in entries.iter().enumerate().take(limit) {
+                let suffix = if *is_file { "" } else { "/" };
+                println!("  {}) {}{}", i + 1, rel.display(), suffix);
+            }
+            if entries.len() > limit {
+                println!(
+                    "{}",
+                    trf!("init.interactive.and_more_files", entries.len() - limit)
+                );
+            }
+            println!();
+            return Ok(());
         }
     }
 
@@ -786,7 +754,7 @@ fn save_global_config(
     let mut doc_table: toml::value::Table = if cfg_path.exists() {
         let s = fs::read_to_string(&cfg_path).map_err(KamError::Io)?;
         let val: toml::Value = toml::from_str(&s).map_err(|e| {
-            KamError::CommandFailed(format!("Failed to parse existing config: {}", e))
+            KamError::CommandFailed(format!("Failed to parse existing config: {e}"))
         })?;
         match val {
             toml::Value::Table(t) => t,
@@ -798,35 +766,31 @@ fn save_global_config(
 
     // Ensure we have a [prop] table and update keys using get_mut to avoid Entry type mismatches
     if let Some(val) = doc_table.get_mut("prop") {
-        match val {
-            toml::Value::Table(prop_table) => {
-                if let Some(a) = author {
-                    prop_table.insert("author".to_string(), toml::Value::String(a.to_string()));
-                }
-                if let Some(n) = name {
-                    prop_table.insert("name".to_string(), toml::Value::String(n.to_string()));
-                }
-                if let Some(v) = version {
-                    prop_table.insert("version".to_string(), toml::Value::String(v.to_string()));
-                }
+        if let toml::Value::Table(prop_table) = val {
+            if let Some(a) = author {
+                prop_table.insert("author".to_string(), toml::Value::String(a.to_string()));
             }
-            _ => {
-                // Replace non-table 'prop' value with a proper table containing our values
-                let mut prop_tbl = toml::value::Table::new();
-                if let Some(a) = author {
-                    prop_tbl.insert("author".to_string(), toml::Value::String(a.to_string()));
-                }
-                if let Some(n) = name {
-                    prop_tbl.insert("name".to_string(), toml::Value::String(n.to_string()));
-                }
-                if let Some(v) = version {
-                    prop_tbl.insert("version".to_string(), toml::Value::String(v.to_string()));
-                }
-                *val = toml::Value::Table(prop_tbl);
+            if let Some(n) = name {
+                prop_table.insert("name".to_string(), toml::Value::String(n.to_string()));
             }
+            if let Some(v) = version {
+                prop_table.insert("version".to_string(), toml::Value::String(v.to_string()));
+            }
+        } else {
+            // Replace non-table 'prop' value with a proper table containing our values
+            let mut prop_tbl = toml::value::Table::new();
+            if let Some(a) = author {
+                prop_tbl.insert("author".to_string(), toml::Value::String(a.to_string()));
+            }
+            if let Some(n) = name {
+                prop_tbl.insert("name".to_string(), toml::Value::String(n.to_string()));
+            }
+            if let Some(v) = version {
+                prop_tbl.insert("version".to_string(), toml::Value::String(v.to_string()));
+            }
+            *val = toml::Value::Table(prop_tbl);
         }
     } else {
-        // Insert a new [prop] table with our fields
         let mut prop_tbl = toml::value::Table::new();
         if let Some(a) = author {
             prop_tbl.insert("author".to_string(), toml::Value::String(a.to_string()));
@@ -843,22 +807,27 @@ fn save_global_config(
     // Serialize and write back to file
     let final_value = toml::Value::Table(doc_table);
     let out = toml::to_string_pretty(&final_value)
-        .map_err(|e| KamError::CommandFailed(format!("Failed to serialize config: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to serialize config: {e}")))?;
     fs::write(cfg_path, out).map_err(KamError::Io)?;
     Ok(())
 }
 
-pub fn run(args: InitArgs) -> Result<(), KamError> {
-    use crate::utils::Utils;
+/// Run the interactive init flow.
+///
+/// # Errors
+///
+/// Returns `Err(KamError)` if initialization fails (I/O, rendering, or user input errors).
+#[allow(clippy::too_many_lines)]
+pub fn run(args: &InitArgs) -> Result<(), KamError> {
     Utils::banner(crate::i18n::tr("init.interactive.title"));
     Utils::info(crate::i18n::tr("init.interactive.press_enter"));
     println!();
 
     // Prepare defaults (non-interactive sanity pass)
-    let mut data = match pre_init::prepare_init(&args) {
+    let mut data = match pre_init::prepare_init(args) {
         Ok(d) => d,
         Err(e) => {
-            Utils::error(format!("Failed to prepare initialization defaults: {}", e));
+            Utils::error(format!("Failed to prepare initialization defaults: {e}"));
             return Err(e);
         }
     };
@@ -904,7 +873,6 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
             {
                 data.id = candidate;
             } else {
-                use crate::utils::Utils;
                 Utils::warn(&trf!("init.interactive.inferred_id_invalid", candidate));
 
                 // Suggest a sanitized version (replace spaces with underscore)
@@ -1030,7 +998,6 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .map(|o| o.status.success())
         .unwrap_or(false);
     if !gh_present && prompt_confirm(&trf!("init.interactive.gh_not_found"), true)? {
-        use crate::utils::Utils;
         Utils::info(&trf!("init.interactive.recommend_github_cli"));
         Utils::info(&trf!("init.interactive.helper_script"));
     }
@@ -1042,7 +1009,6 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
         .map(|o| o.status.success())
         .unwrap_or(false);
     if !cz_present && prompt_confirm(&trf!("init.interactive.cz_not_found"), false)? {
-        use crate::utils::Utils;
         Utils::info(&trf!("init.interactive.recommend_cz_install"));
         Utils::info(&trf!("init.interactive.helper_script"));
     }
@@ -1081,14 +1047,14 @@ pub fn run(args: InitArgs) -> Result<(), KamError> {
     let mut merged_var_vec: Vec<String> = data
         .template_vars
         .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
+        .map(|(k, v)| format!("{k}={v}"))
         .collect();
     merged_var_vec.sort();
 
     // Call the same init_template as non-interactive run
     impl_mod::init_template(
         &data.path,
-        impl_mod::InitTemplateParams {
+        &impl_mod::InitTemplateParams {
             id: &data.id,
             name: data.name.clone(),
             version: &data.version,

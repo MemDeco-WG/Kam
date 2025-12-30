@@ -11,7 +11,12 @@ use super::args::CompletionArgs;
 
 // 生成shell补全脚本并可选择将其安装到合适的补全目录
 // 支持bash、zsh、fish、powershell、elvish等
-pub fn run(args: CompletionArgs) -> Result<(), KamError> {
+///
+/// # Errors
+///
+/// Returns `KamError` when writing to the output path or installing the completion
+/// script fails.
+pub fn run(args: &CompletionArgs) -> Result<(), KamError> {
     // 从顶层CLI构建clap命令
     let mut cmd = Cli::command();
     let shell = args.shell.to_shell();
@@ -19,7 +24,6 @@ pub fn run(args: CompletionArgs) -> Result<(), KamError> {
     // 先生成到内存缓冲
     let mut buf = Vec::new();
     match shell {
-        shells::Shell::Bash => generate(shells::Bash, &mut cmd, "kam", &mut buf),
         shells::Shell::Zsh => generate(shells::Zsh, &mut cmd, "kam", &mut buf),
         shells::Shell::Fish => generate(shells::Fish, &mut cmd, "kam", &mut buf),
         shells::Shell::PowerShell => generate(shells::PowerShell, &mut cmd, "kam", &mut buf),
@@ -28,8 +32,8 @@ pub fn run(args: CompletionArgs) -> Result<(), KamError> {
     }
 
     // 如果用户指定了 -o/--out，先写到指定文件
-    if let Some(outpath) = args.out.clone() {
-        let p = Path::new(&outpath);
+    if let Some(outpath) = args.out.as_deref() {
+        let p = Path::new(outpath);
         if let Some(parent) = p.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -65,7 +69,7 @@ fn install_completion(shell: shells::Shell, buf: &[u8]) -> Result<PathBuf, std::
         // 尝试创建父目录（若需要）
         if let Some(parent) = path.parent() {
             match fs::create_dir_all(parent) {
-                Ok(_) => {}
+                Ok(()) => {}
                 Err(e) => {
                     // 无法创建父目录（很可能是权限问题），记录并尝试下一个候选
                     last_err = Some(e);
@@ -76,10 +80,9 @@ fn install_completion(shell: shells::Shell, buf: &[u8]) -> Result<PathBuf, std::
 
         // 尝试写入文件
         match fs::write(&path, buf) {
-            Ok(_) => return Ok(path),
+            Ok(()) => return Ok(path),
             Err(e) => {
                 last_err = Some(e);
-                continue;
             }
         }
     }

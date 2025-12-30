@@ -1,5 +1,6 @@
 use crate::cmds::check::file::FileResult;
 use crate::errors::KamError;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json;
 use std::fs;
@@ -11,6 +12,10 @@ use tree_sitter;
 use tree_sitter::Parser;
 use tree_sitter_bash;
 
+static SETPROP_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\bsetprop\b").unwrap_or_else(|e| panic!("setprop regex failed to compile: {e}"))
+});
+
 fn command_installed(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().is_ok()
 }
@@ -18,6 +23,11 @@ fn command_installed(cmd: &str) -> bool {
 // 检查shell脚本
 // 如果有shellcheck就用它（更准确），否则用自定义的Rust检查（简单但够用）
 // 另外，对所有脚本统一执行基于文件名的特判和基于 AST 的高危命令检测（补充 shellcheck 的检测）
+///
+/// # Errors
+///
+/// Returns `KamError` when file I/O (read/write), invocation of external tools
+/// (e.g., `shellcheck`, `shfmt`), or parser/analysis operations fail.
 pub fn check_sh(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
     // 首先运行已有的检查实现（shellcheck 优先，其次自定义）
     let mut fr = if command_installed("shellcheck") {
@@ -30,7 +40,7 @@ pub fn check_sh(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
                     kind: "sh".to_string(),
                     valid: true,
                     errors: Vec::new(),
-                    warnings: vec![format!("shellcheck execution failed: {}", e)],
+                    warnings: vec![format!("shellcheck execution failed: {e}")],
                     fixed: false,
                 }
             }
@@ -108,15 +118,22 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
                         // helper to extract one issue entry into our FileResult
                         let mut push_issue = |c: &serde_json::Value| {
                             let file = c.get("file").and_then(|x| x.as_str()).unwrap_or("");
-                            let line = c.get("line").and_then(|x| x.as_u64()).unwrap_or(0);
-                            let column = c.get("column").and_then(|x| x.as_u64()).unwrap_or(0);
+                            let line = c
+                                .get("line")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0);
+                            let column = c
+                                .get("column")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0);
                             let level = c.get("level").and_then(|x| x.as_str()).unwrap_or("");
-                            let code = c.get("code").and_then(|x| x.as_u64()).unwrap_or(0);
+                            let code = c
+                                .get("code")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0);
                             let message = c.get("message").and_then(|x| x.as_str()).unwrap_or("");
-                            let msg = format!(
-                                "shellcheck [{}] {}:{}:{} {}",
-                                code, file, line, column, message
-                            );
+                            let msg =
+                                format!("shellcheck [{code}] {file}:{line}:{column} {message}");
                             if level.eq_ignore_ascii_case("error") {
                                 fr.valid = false;
                                 fr.errors.push(msg);
@@ -144,26 +161,26 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
                     }
                     Err(e) => {
                         fr.warnings
-                            .push(format!("Failed to parse shellcheck JSON: {}", e));
+                            .push(format!("Failed to parse shellcheck JSON: {e}"));
                     }
                 }
             } else if !output.stderr.is_empty() {
                 let stde = String::from_utf8_lossy(&output.stderr).trim().to_string();
                 if !stde.is_empty() {
-                    fr.warnings.push(format!("shellcheck stderr: {}", stde));
+                    fr.warnings.push(format!("shellcheck stderr: {stde}"));
                 }
             }
         }
         Err(e) => {
             // shellcheck运行失败，加个警告，包含错误信息以便排查
-            fr.warnings.push(format!("Failed to run shellcheck: {}", e));
+            fr.warnings.push(format!("Failed to run shellcheck: {e}"));
         }
     }
     // 如果要求修复且shfmt可用，就用shfmt格式化
     if do_fix && command_installed("shfmt") {
         let before = s;
-        let status = Command::new("shfmt").arg("-w").arg(path).status();
-        if status.is_ok() && status.unwrap().success() {
+        let status_res = Command::new("shfmt").arg("-w").arg(path).status();
+        if matches!(status_res, Ok(s) if s.success()) {
             // 重新读取文件，比较是否有变化
             let after = fs::read_to_string(path)?;
             if after != before {
@@ -188,8 +205,7 @@ fn apply_sh_filename_checks(path: &Path, content: &str, fr: &mut FileResult) {
                 );
             }
             "post-fs-data.sh" => {
-                let re = Regex::new(r"\bsetprop\b").unwrap();
-                if re.is_match(content) {
+                if SETPROP_RE.is_match(content) {
                     fr.warnings.push(
                         "WARNING: Using setprop will deadlock the boot process! Please use resetprop -n <prop_name> <prop_value> instead."
                             .to_string(),
@@ -244,6 +260,7 @@ fn apply_sh_filename_checks(path: &Path, content: &str, fr: &mut FileResult) {
 /// - reboot/shutdown/poweroff -> warning
 /// - piped download to shell (curl|wget ... | sh) -> warning
 /// - setprop usage (generic warning unless already handled specially)
+#[allow(clippy::too_many_lines)] // TODO: split into smaller helpers to reduce complexity
 fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileResult, path: &Path) {
     // Skip comment nodes (do not analyze commented-out code)
     if node.kind() == "comment" {
@@ -264,15 +281,15 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
                 let node_text_low = node_text_all.to_lowercase();
                 // Simple substring-based detection: look for curl/wget + pipe
                 if (node_text_low.contains("curl") || node_text_low.contains("wget"))
-                    && node_text_low.contains("|")
+                    && node_text_low.contains('|')
                 {
                     // Prefer to show a concise snippet (the line containing the pipeline) instead of dumping the whole node
                     let mut snippet: Option<String> = None;
                     for line in node_text_all.lines() {
                         let ll = line.to_lowercase();
-                        if (ll.contains("curl") || ll.contains("wget") || ll.contains("|"))
+                        if (ll.contains("curl") || ll.contains("wget") || ll.contains('|'))
                             && (ll.contains(" sh")
-                                || ll.contains("| sh")
+                                || ll.contains('|')
                                 || ll.contains(" bash")
                                 || ll.contains("| bash")
                                 || ll.contains("sh ")
@@ -285,24 +302,17 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
                     // Fallback: extract around the pipe character
                     if snippet.is_none() {
                         if let Some(pipe_pos) = node_text_all.find('|') {
-                            let start = node_text_all[..pipe_pos]
-                                .rfind('\n')
-                                .map(|i| i + 1)
-                                .unwrap_or(0);
+                            let start = node_text_all[..pipe_pos].rfind('\n').map_or(0, |i| i + 1);
                             let end = node_text_all[pipe_pos..]
                                 .find('\n')
-                                .map(|i| pipe_pos + i)
-                                .unwrap_or(node_text_all.len());
+                                .map_or(node_text_all.len(), |i| pipe_pos + i);
                             snippet = Some(node_text_all[start..end].trim().to_string());
                         } else {
                             snippet = Some(node_text_all.trim().to_string());
                         }
                     }
                     let snippet = snippet.unwrap_or_else(|| "<snippet unavailable>".to_string());
-                    let msg = format!(
-                        "Piped shell install detected (download | shell): {}",
-                        snippet
-                    );
+                    let msg = format!("Piped shell install detected (download | shell): {snippet}");
                     if !fr
                         .warnings
                         .iter()
@@ -316,12 +326,12 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
             // No filename available; fall back to content-based detection as before
             let node_text_low = node_text_all.to_lowercase();
             if (node_text_low.contains("curl") || node_text_low.contains("wget"))
-                && node_text_low.contains("|")
+                && node_text_low.contains('|')
             {
                 let mut snippet: Option<String> = None;
                 for line in node_text_all.lines() {
                     let ll = line.to_lowercase();
-                    if (ll.contains("curl") || ll.contains("wget") || ll.contains("|"))
+                    if (ll.contains("curl") || ll.contains("wget") || ll.contains('|'))
                         && (ll.contains(" sh")
                             || ll.contains("| sh")
                             || ll.contains(" bash")
@@ -335,24 +345,17 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
                 }
                 if snippet.is_none() {
                     if let Some(pipe_pos) = node_text_all.find('|') {
-                        let start = node_text_all[..pipe_pos]
-                            .rfind('\n')
-                            .map(|i| i + 1)
-                            .unwrap_or(0);
+                        let start = node_text_all[..pipe_pos].rfind('\n').map_or(0, |i| i + 1);
                         let end = node_text_all[pipe_pos..]
                             .find('\n')
-                            .map(|i| pipe_pos + i)
-                            .unwrap_or(node_text_all.len());
+                            .map_or(node_text_all.len(), |i| pipe_pos + i);
                         snippet = Some(node_text_all[start..end].trim().to_string());
                     } else {
                         snippet = Some(node_text_all.trim().to_string());
                     }
                 }
                 let snippet = snippet.unwrap_or_else(|| "<snippet unavailable>".to_string());
-                let msg = format!(
-                    "Piped shell install detected (download | shell): {}",
-                    snippet
-                );
+                let msg = format!("Piped shell install detected (download | shell): {snippet}");
                 if !fr
                     .warnings
                     .iter()
@@ -397,8 +400,7 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
                         if dangerous_abs {
                             fr.valid = false;
                             let msg = format!(
-                                "Dangerous rm -rf usage detected (possible removal of root files): {}",
-                                node_text
+                                "Dangerous rm -rf usage detected (possible removal of root files): {node_text}"
                             );
                             if !fr.errors.contains(&msg) {
                                 fr.errors.push(msg);
@@ -415,18 +417,14 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
                 "dd" => {
                     if node_text_low.contains("/dev/") {
                         fr.valid = false;
-                        fr.errors.push(format!(
-                            "Potential destructive 'dd' on device: {}",
-                            node_text
-                        ));
+                        fr.errors
+                            .push(format!("Potential destructive 'dd' on device: {node_text}"));
                     }
                 }
                 _ if cmd_l.starts_with("mkfs") => {
                     fr.valid = false;
-                    fr.errors.push(format!(
-                        "Filesystem formatting command found: {}",
-                        node_text
-                    ));
+                    fr.errors
+                        .push(format!("Filesystem formatting command found: {node_text}"));
                 }
                 "reboot" | "shutdown" | "poweroff" | "halt" => {
                     fr.warnings
@@ -435,28 +433,34 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
                 "chmod" => {
                     if node_text_low.contains("777") && node_text_low.contains("-r") {
                         fr.warnings
-                            .push(format!("Potentially unsafe 'chmod 777 -R': {}", node_text));
+                            .push(format!("Potentially unsafe 'chmod 777 -R': {node_text}"));
                     }
                 }
                 "chown" => {
                     if node_text_low.contains("/system") || node_text_low.contains("/data") {
-                        fr.warnings
-                            .push(format!("'chown' on system/data detected: {}", node_text));
+                        let msg = format!("'chown' on system/data detected: {node_text}");
+                        if !fr.warnings.contains(&msg) {
+                            fr.warnings.push(msg);
+                        }
                     }
                 }
                 "setprop" => {
                     // If this is not the post-fs-data special-case (already warned), add a general warning
-                    if !path
+                    if path
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .map(|s| s == "post-fs-data.sh")
-                        .unwrap_or(false)
+                        .is_none_or(|s| s != "post-fs-data.sh")
                     {
-                        fr.warnings.push(format!("Usage of 'setprop' detected; prefer 'resetprop -n' where appropriate: {}", node_text));
+                        let msg = format!(
+                            "Usage of 'setprop' detected; prefer 'resetprop -n' where appropriate: {node_text}"
+                        );
+                        if !fr.warnings.contains(&msg) {
+                            fr.warnings.push(msg);
+                        }
                     }
                 }
                 "eval" => {
-                    let msg = format!("Use of 'eval' detected: {}", node_text);
+                    let msg = format!("Use of 'eval' detected: {node_text}");
                     if !fr.warnings.contains(&msg) {
                         fr.warnings.push(msg);
                     }
@@ -470,7 +474,9 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
 
     // Recurse children
     for i in 0..node.child_count() {
-        if let Some(child) = node.child(i as u32) {
+        if let Ok(idx) = u32::try_from(i)
+            && let Some(child) = node.child(idx)
+        {
             detect_dangerous_commands(child, src, fr, path);
         }
     }
@@ -478,6 +484,7 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
 // 自定义的shell脚本检查（没有shellcheck时用）
 // 只做基本的检查：引号匹配、括号匹配、尾随空格、CRLF等
 // 虽然不如shellcheck全面，但至少能发现一些明显的问题
+#[allow(clippy::too_many_lines)] // TODO: split this function into smaller helpers to reduce complexity
 fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
     let s = fs::read_to_string(path)?;
     let mut fr = FileResult {
@@ -508,12 +515,10 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
         // 单引号（只在不在双引号内时处理）
         if ch == '\'' && !double_open {
             single_open = !single_open;
-            continue;
         }
         // 双引号（只在不在单引号内时处理）
         if ch == '"' && !single_open {
             double_open = !double_open;
-            continue;
         }
     }
     // 检查引号是否匹配
@@ -548,7 +553,9 @@ fn check_sh_custom(path: &Path, do_fix: bool) -> Result<FileResult, KamError> {
                     .push(format!("Parse error at {}:{}", pos.row + 1, pos.column + 1));
             }
             for i in 0..node.child_count() {
-                if let Some(child) = node.child(i as u32) {
+                if let Ok(idx) = u32::try_from(i)
+                    && let Some(child) = node.child(idx)
+                {
                     walk_node(child, fr);
                 }
             }
@@ -693,12 +700,11 @@ fn detect_unbalanced_shell_constructs(src: &str) -> Vec<String> {
                 }
                 j += 1;
             }
-            if !found {
-                errors.push("Unbalanced backticks detected".to_string());
-            } else {
+            if found {
                 i = j + 1;
                 continue;
             }
+            errors.push("Unbalanced backticks detected".to_string());
         }
 
         // Detect arithmetic '(( ... ))' (heuristic: previous char should be whitespace or control)
@@ -779,58 +785,63 @@ fn find_matching_paren(src: &str, open_idx: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
     #[test]
-    fn detects_unbalanced_command_substitution() {
-        let mut f = NamedTempFile::new().unwrap();
-        writeln!(f, "echo $(date").unwrap();
-        let fr = check_sh_custom(f.path(), false).unwrap();
+    fn detects_unbalanced_command_substitution() -> Result<(), Box<dyn Error>> {
+        let mut f = NamedTempFile::new()?;
+        writeln!(f, "echo $(date")?;
+        let fr = check_sh_custom(f.path(), false)?;
         assert!(!fr.valid);
         assert!(
             fr.errors
                 .iter()
                 .any(|e| e.contains("Unbalanced command substitution"))
         );
+        Ok(())
     }
 
     #[test]
-    fn does_not_flag_case_pattern() {
-        let mut f = NamedTempFile::new().unwrap();
-        write!(f, "case $x in\n  foo)\n    echo ok\n    ;;\nesac\n").unwrap();
-        let fr = check_sh_custom(f.path(), false).unwrap();
+    fn does_not_flag_case_pattern() -> Result<(), Box<dyn Error>> {
+        let mut f = NamedTempFile::new()?;
+        write!(f, "case $x in\n  foo)\n    echo ok\n    ;;\nesac\n")?;
+        let fr = check_sh_custom(f.path(), false)?;
         assert!(fr.errors.iter().all(|e| !e.contains("Unbalanced")));
+        Ok(())
     }
 
     #[test]
-    fn detects_unbalanced_backtick() {
-        let mut f = NamedTempFile::new().unwrap();
-        writeln!(f, "echo `date").unwrap();
-        let fr = check_sh_custom(f.path(), false).unwrap();
+    fn detects_unbalanced_backtick() -> Result<(), Box<dyn Error>> {
+        let mut f = NamedTempFile::new()?;
+        writeln!(f, "echo `date")?;
+        let fr = check_sh_custom(f.path(), false)?;
         assert!(!fr.valid);
         assert!(fr.errors.iter().any(|e| e.contains("Unbalanced backticks")));
+        Ok(())
     }
 
     #[test]
-    fn detects_unbalanced_arithmetic() {
-        let mut f = NamedTempFile::new().unwrap();
-        writeln!(f, "for (( i=0; i<10; i++ ; do echo $i; done").unwrap();
-        let fr = check_sh_custom(f.path(), false).unwrap();
+    fn detects_unbalanced_arithmetic() -> Result<(), Box<dyn Error>> {
+        let mut f = NamedTempFile::new()?;
+        writeln!(f, "for (( i=0; i<10; i++ ; do echo $i; done")?;
+        let fr = check_sh_custom(f.path(), false)?;
         assert!(!fr.valid);
         assert!(
             fr.errors
                 .iter()
                 .any(|e| e.contains("Unbalanced arithmetic expansion"))
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_nested_command_substitution() {
-        let mut f = NamedTempFile::new().unwrap();
-        writeln!(f, "echo $(echo $(date))").unwrap();
-        let fr = check_sh_custom(f.path(), false).unwrap();
+    fn accepts_nested_command_substitution() -> Result<(), Box<dyn Error>> {
+        let mut f = NamedTempFile::new()?;
+        writeln!(f, "echo $(echo $(date))")?;
+        let fr = check_sh_custom(f.path(), false)?;
         assert!(fr.valid);
-        assert!(fr.errors.iter().all(|e| !e.contains("Unbalanced")));
+        Ok(())
     }
 }

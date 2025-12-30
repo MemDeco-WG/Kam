@@ -63,25 +63,26 @@ pub fn write_sigstore_bundle(
         );
         // Insert into verificationMaterial in the bundle
         if let Some(obj) = bundle.as_object_mut()
-            && let Some(vm) = obj.get_mut("verificationMaterial") {
-                if vm.is_null() {
-                    // replace Null with an object containing timestampVerificationData
-                    let mut new_vm = serde_json::Map::new();
-                    new_vm.insert(
-                        "timestampVerificationData".to_string(),
-                        serde_json::Value::Object(ts_obj),
-                    );
-                    obj.insert(
-                        "verificationMaterial".to_string(),
-                        serde_json::Value::Object(new_vm),
-                    );
-                } else if let Some(vm_obj) = vm.as_object_mut() {
-                    vm_obj.insert(
-                        "timestampVerificationData".to_string(),
-                        serde_json::Value::Object(ts_obj),
-                    );
-                }
+            && let Some(vm) = obj.get_mut("verificationMaterial")
+        {
+            if vm.is_null() {
+                // replace Null with an object containing timestampVerificationData
+                let mut new_vm = serde_json::Map::new();
+                new_vm.insert(
+                    "timestampVerificationData".to_string(),
+                    serde_json::Value::Object(ts_obj),
+                );
+                obj.insert(
+                    "verificationMaterial".to_string(),
+                    serde_json::Value::Object(new_vm),
+                );
+            } else if let Some(vm_obj) = vm.as_object_mut() {
+                vm_obj.insert(
+                    "timestampVerificationData".to_string(),
+                    serde_json::Value::Object(ts_obj),
+                );
             }
+        }
     }
 
     let bundle_path = out_dir.join(format!("{}.sigstore.json", filename));

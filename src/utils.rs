@@ -1,6 +1,6 @@
 use super::errors::KamError;
 use colored::{Color, Colorize};
-use comfy_table::{Attribute, Cell, ContentArrangement, Table, presets::UTF8_FULL};
+
 use indicatif::ProgressBar;
 use regex::Regex;
 use std::fs;
@@ -223,26 +223,31 @@ impl Utils {
         }
     }
 
-    /// Print a bold, centered banner to visually separate a logical operation.
+    /// Print a modern, compact banner (icon + colored title).
     ///
-    /// Uses a flower "✿" as a visual accent (梅花) and draws a simple separator.
-    /// The banner attempt to center the title within an 80-column width; if the
-    /// title is longer than the width it'll simply be printed without additional
-    /// padding.
+    /// Replaces the old boxed banner with a lightweight, Cargo/Starship-like style:
+    /// - Icon accent (✨)
+    /// - Bold cyan title
+    /// - No heavy box drawing characters
     pub fn banner<S: AsRef<str>>(title: S) {
-        // Use a third-party library (comfy_table) to render a compact, handsome banner.
-        // This intentionally does NOT depend on terminal width detection; the table
-        // will size to the content and remains visually consistent across terminals.
-        let title_text = crate::i18n::tr(title.as_ref());
-        let mut table = Table::new();
-        table.load_preset(UTF8_FULL);
-        table.set_content_arrangement(ContentArrangement::Dynamic);
-        table.set_header(vec![
-            Cell::new(title_text)
-                .add_attribute(Attribute::Bold)
-                .fg(comfy_table::Color::Cyan),
-        ]);
-        println!("{}", table);
+        let title_src = title.as_ref();
+        let title_text = crate::i18n::tr(title_src);
+        let title_trim = title_text.trim();
+
+        // Skip empty or obvious placeholder titles.
+        if title_trim.is_empty() || title_trim.eq_ignore_ascii_case("title") {
+            return;
+        }
+
+        // If the caller passed a dotted translation key and the translated text
+        // is identical to the key, the translation is missing — skip the banner.
+        if title_src.contains('.') && title_text == title_src {
+            return;
+        }
+
+        // Modern, lightweight banner: icon + colored bold title (no box)
+        println!();
+        println!("{} {}", "✨".yellow().bold(), title_text.bold().cyan());
         println!();
     }
 
@@ -257,28 +262,33 @@ impl Utils {
         );
     }
 
-    /// Print a compact section header with a horizontal separator below.
+    /// Print a compact section header with a modern style (icon + colored title).
     ///
-    /// This is intended for grouping output; it prints the title in bold cyan
-    /// and a cyan horizontal line across the terminal width for readability.
+    /// Uses a lightweight layout instead of boxed ASCII art:
+    /// - Icon accent (»)
+    /// - Bold cyan title
+    /// - No heavy box drawing characters
     pub fn section<S: AsRef<str>>(title: S) {
         let title_ref = title.as_ref();
         if title_ref.is_empty() {
             return;
         }
-        // Use comfy_table to produce a small boxed header. This avoids terminal-width
-        // centering and provides a consistent, 3rd-party-rendered style.
+
+        // Translate and check for placeholders/missing translations. If the
+        // translation is empty, literally "Title", or (when a dotted key was
+        // passed) equals the key itself, we skip printing the section header.
         let title_text = crate::i18n::tr(title_ref);
-        let mut table = Table::new();
-        table.load_preset(UTF8_FULL);
-        table.set_content_arrangement(ContentArrangement::Dynamic);
-        table.set_header(vec![
-            Cell::new(title_text)
-                .add_attribute(Attribute::Bold)
-                .fg(comfy_table::Color::Cyan),
-        ]);
+        let title_trim = title_text.trim();
+        if title_trim.is_empty() || title_trim.eq_ignore_ascii_case("title") {
+            return;
+        }
+        if title_ref.contains('.') && title_text == title_ref {
+            return;
+        }
+
+        // Modern lightweight section header (icon + bold cyan text)
         println!();
-        println!("{}", table);
+        println!("{} {}", "»".cyan().bold(), title_text.bold().cyan());
         println!();
     }
 
@@ -297,9 +307,12 @@ impl Utils {
     }
 
     /// Print a success line with a prominent green check.
+    ///
+    /// Modern look: green check + neutral (uncolored) message text. Durations or
+    /// secondary details should be printed in gray by callers when needed.
     pub fn success<S: AsRef<str>>(msg: S) {
         let translated = crate::i18n::tr(msg.as_ref());
-        println!("{} {}", "✓".green().bold(), translated.green());
+        println!("{} {}", "✔".green().bold(), translated);
     }
 
     /// Print a warning line with yellow emphasis.
@@ -555,14 +568,12 @@ pub fn kam_home_dir() -> Result<PathBuf, KamError> {
                     }
                     // Fallback for cases like "~username" — treat as a literal path.
                     return Ok(PathBuf::from(s));
-                } else {
-                    return Err(KamError::InvalidDirectory(
-                        "Cannot resolve home directory to expand KAM_HOME".to_string(),
-                    ));
                 }
-            } else {
-                return Ok(PathBuf::from(s));
+                return Err(KamError::InvalidDirectory(
+                    "Cannot resolve home directory to expand KAM_HOME".to_string(),
+                ));
             }
+            return Ok(PathBuf::from(s));
         }
     }
 

@@ -180,7 +180,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                 },
             )
         },
-        |name| name.clone(),
+        std::clone::Clone::clone,
     );
 
     // 智能推断描述：优先从 README.md 提取，其次使用默认值
@@ -227,10 +227,10 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                 ModuleType::Template => "Describe your template here".to_string(),
             })
         },
-        |desc| desc.clone(),
+        std::clone::Clone::clone,
     );
     template_vars.insert("project_name".to_string(), project_name_str.clone());
-    template_vars.insert("description".to_string(), description_str.to_string());
+    template_vars.insert("description".to_string(), description_str.clone());
 
     // 确定ID：优先用 --id，没有就用git repo名（如果检测到仓库且name不是'.'），再没有就用文件夹名
     let id = args.id.as_ref().map_or_else(
@@ -244,12 +244,13 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                     })
                     .unwrap_or_else(|| {
                         std::env::current_dir()
-                            .unwrap()
-                            .file_name()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string()
+                            .ok()
+                            .and_then(|p| {
+                                p.file_name()
+                                    .and_then(|s| s.to_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .unwrap_or_else(|| "Example Module Name".to_string())
                     })
             } else {
                 // Extract basename from path (e.g., "/tmp/test_kam_init" -> "test_kam_init")
@@ -260,7 +261,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                     .to_string()
             }
         },
-        |custom_id| custom_id.clone(),
+        std::clone::Clone::clone,
     );
 
     // 验证ID格式：只能包含字母数字、点、横线、下划线
@@ -313,17 +314,17 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     // 创建初始的KamToml，用默认值
     let mut kam_toml = KamToml::new_with_current_timestamp(
         id.clone(),
-        project_name_str.to_string(),
+        project_name_str.clone(),
         version.to_string(),
         Some(author),
-        description_str.to_string(),
+        description_str.clone(),
         update_json_val,
         None,
     );
 
     // 设置name和description（允许后续覆盖）
-    kam_toml.prop.name = project_name_str.to_string();
-    kam_toml.prop.description = description_str.to_string();
+    kam_toml.prop.name = project_name_str.clone();
+    kam_toml.prop.description = description_str.clone();
 
     let update_json = kam_toml.prop.updateJson.clone();
 
@@ -335,10 +336,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     template_vars
         .entry("zipUrl".to_string())
         .or_insert_with(|| {
-            format!(
-                "https://github.com/user/repo/releases/latest/download/{}.zip",
-                id
-            )
+            format!("https://github.com/user/repo/releases/latest/download/{id}.zip")
         });
     template_vars
         .entry("changelog".to_string())
@@ -353,8 +351,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
             // 如果update_json没设置，就用raw.githubusercontent的默认值（使用实际分支名）
             if kam_toml.prop.updateJson.is_none() {
                 let default_update = format!(
-                    "https://raw.githubusercontent.com/{}/{}/{}/update.json",
-                    owner, repo_name, default_branch
+                    "https://raw.githubusercontent.com/{owner}/{repo_name}/{default_branch}/update.json"
                 );
                 kam_toml.prop.updateJson = Some(default_update.clone());
                 template_vars.insert("update_json".to_string(), default_update);
@@ -365,17 +362,13 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                 .entry("zipUrl".to_string())
                 .or_insert_with(|| {
                     format!(
-                        "https://github.com/{}/{}/releases/latest/download/{}.zip",
-                        owner, repo_name, id
+                        "https://github.com/{owner}/{repo_name}/releases/latest/download/{id}.zip"
                     )
                 });
             template_vars
                 .entry("changelog".to_string())
                 .or_insert_with(|| {
-                    format!(
-                        "https://raw.githubusercontent.com/{}/{}/{}/CHANGELOG.md",
-                        owner, repo_name, default_branch
-                    )
+                    format!("https://raw.githubusercontent.com/{owner}/{repo_name}/{default_branch}/CHANGELOG.md")
                 });
 
             // 设置mmrl的repo section（如果有的话），填充更多字段
@@ -391,27 +384,29 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                     repo.repository = Some(repo_url);
 
                     // 设置 homepage（GitHub 仓库主页）
-                    if repo.homepage.is_none() || repo.homepage.as_ref().unwrap().is_empty() {
-                        repo.homepage = Some(format!("https://github.com/{}/{}", owner, repo_name));
+                    if repo.homepage.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
+                        repo.homepage = Some(format!("https://github.com/{owner}/{repo_name}"));
                     }
 
                     // 设置 readme URL
-                    if repo.readme.is_none() || repo.readme.as_ref().unwrap().is_empty() {
+                    if repo.readme.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
                         repo.readme = Some(format!(
-                            "https://raw.githubusercontent.com/{}/{}/{}/README.md",
-                            owner, repo_name, default_branch
+                            "https://raw.githubusercontent.com/{owner}/{repo_name}/{default_branch}/README.md"
                         ));
                     }
 
                     // 设置 issues URL
-                    if repo.issues.is_none() || repo.issues.as_ref().unwrap().is_empty() {
+                    if repo.issues.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
                         repo.issues =
-                            Some(format!("https://github.com/{}/{}/issues", owner, repo_name));
+                            Some(format!("https://github.com/{owner}/{repo_name}/issues"));
                     }
 
                     // 设置 documentation URL（如果有 docs 目录或 README）
-                    if repo.documentation.is_none()
-                        || repo.documentation.as_ref().unwrap().is_empty()
+                    if repo
+                        .documentation
+                        .as_ref()
+                        .map(|s| s.is_empty())
+                        .unwrap_or(true)
                     {
                         repo.documentation = Some(format!(
                             "https://github.com/{}/{}/blob/{}/README.md",
@@ -420,7 +415,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
                     }
 
                     // 检测并设置许可证信息
-                    if repo.license.is_none() || repo.license.as_ref().unwrap().is_empty() {
+                    if repo.license.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
                         // 尝试从 LICENSE 文件检测许可证类型
                         let license_paths = [
                             current_dir.join("LICENSE"),

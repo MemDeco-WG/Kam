@@ -568,20 +568,19 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             out,
             password,
         } => {
-            let blob = read_secret_blob(&name)?;
-            // Try to decrypt if it looks like an encrypted blob
-            let plaintext = if blob.starts_with(b"KAMKEYv1") {
-                let pw = if let Some(pw) = password {
-                    pw
+            // Use explicit password if provided; otherwise delegate to the centralized loader
+            // which respects env var and the in-file passphrase cache.
+            let plaintext = if let Some(pw) = password {
+                // If user passed a password on the CLI, honor it directly.
+                let blob = read_secret_blob(&name)?;
+                if blob.starts_with(b"KAMKEYv1") {
+                    crate::cmds::secret_crypto::decrypt_with_password(&blob, &pw)?
                 } else {
-                    prompt_password("Password: ").map_err(|e| {
-                        KamError::CommandFailed(format!("Failed to read password: {}", e))
-                    })?
-                };
-                crate::cmds::secret_crypto::decrypt_with_password(&blob, &pw)?
+                    return Err(KamError::CommandFailed("Stored secret is not encrypted; please re-import or add using the new required password flow (kam secret add ...)".to_string()));
+                }
             } else {
-                // We now require secrets to be encrypted. If the secret is plain, instruct the user to re-add.
-                return Err(KamError::CommandFailed("Stored secret is not encrypted; please re-import or add using the new required password flow (kam secret add ...)".to_string()));
+                // Centralized flow: tries env var -> cached passphrase -> interactive prompt (and caches on success).
+                crate::cmds::secret::utils::read_secret_plaintext(&name, true)?
             };
 
             if let Some(path) = out {
@@ -601,7 +600,7 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             } else {
                 // Write to stdout
                 let s = String::from_utf8_lossy(&plaintext);
-                println!("{}", s);
+                println!("{s}");
             }
         }
         SecretCommands::Remove { name } => {
@@ -626,17 +625,13 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             if encrypted {
                 fs::write(&path, &blob).map_err(KamError::Io)?;
             } else {
-                // Decrypt before exporting
-                if blob.starts_with(b"KAMKEYv1") {
-                    let pw = prompt_password("Password: ").map_err(|e| {
-                        KamError::CommandFailed(format!("Failed to read password: {}", e))
-                    })?;
-                    let plaintext = crate::cmds::secret_crypto::decrypt_with_password(&blob, &pw)?;
-                    fs::write(&path, &plaintext).map_err(KamError::Io)?;
+                // Decrypt before exporting via the centralized loader (supports env var and caching).
+                let plaintext = if blob.starts_with(b"KAMKEYv1") {
+                    crate::cmds::secret::utils::read_secret_plaintext(&name, true)?
                 } else {
-                    // Already plaintext
-                    fs::write(&path, &blob).map_err(KamError::Io)?;
-                }
+                    blob
+                };
+                fs::write(&path, &plaintext).map_err(KamError::Io)?;
             }
             use crate::utils::Utils;
             Utils::success(&trf!("secret.exported", redact_name(&name), path.display()));

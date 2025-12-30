@@ -522,8 +522,8 @@ impl TemplateCopier {
                     fs::copy(src_path, &dst_path).map_err(KamError::Io)?;
                 } else {
                     // 文本文件，尝试做模板替换
-                    let content = fs::read_to_string(src_path);
-                    match content {
+                    let file_content = fs::read_to_string(src_path);
+                    match file_content {
                         Ok(text) => {
                             // 尝试渲染，如果失败（比如Tera语法错误但文件本身是合法的）
                             // 就回退到直接复制

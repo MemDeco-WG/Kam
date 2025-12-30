@@ -1,10 +1,20 @@
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+
+static ID_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[a-zA-Z][a-zA-Z0-9._-]+$")
+        .unwrap_or_else(|e| panic!("Hard-coded ID regex failed to compile: {e}"))
+});
+static LINE_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)(?:at\s+)?line\s+(\d+)")
+        .unwrap_or_else(|e| panic!("Line regex failed to compile: {e}"))
+});
 
 #[derive(Serialize, Debug)]
 pub struct FileResult {
@@ -31,7 +41,7 @@ where
     G: Fn(&str) -> Result<String, String>,
 {
     match parse_fn(content) {
-        Ok(_) => {
+        Ok(()) => {
             // 解析成功，如果要求修复就重新格式化
             if do_fix {
                 match format_fn(content) {
@@ -42,23 +52,29 @@ where
                                 .write(true)
                                 .truncate(true)
                                 .open(path)
-                                .map_err(|e| format!("Failed to open file: {}", e))?
+                                .map_err(|e| format!("Failed to open file: {e}"))?
                                 .write_all(pretty.as_bytes())
-                                .map_err(|e| format!("Failed to write file: {}", e))?;
+                                .map_err(|e| format!("Failed to write file: {e}"))?;
                             return Ok((true, true)); // 有效且已修复
                         }
                     }
                     Err(e) => {
-                        return Err(format!("Failed to format {}: {}", format_name, e));
+                        return Err(format!("Failed to format {format_name}: {e}"));
                     }
                 }
             }
             Ok((true, false)) // 有效但未修复
         }
-        Err(e) => Err(format!("{} parse error: {}", format_name, e)),
+        Err(e) => Err(format!("{format_name} parse error: {e}")),
     }
 }
 
+/// Check a file at `path` of type `kind`. May read and optionally rewrite the file.
+///
+/// # Errors
+///
+/// Returns `KamError::Io` on I/O failures and other `KamError` variants for parse/validation errors.
+#[allow(clippy::too_many_lines, clippy::implicit_hasher)]
 pub fn check_file(
     path: &Path,
     kind: &str,
@@ -194,7 +210,7 @@ pub fn check_file(
                     return Ok(p);
                 }
                 Err(e) => {
-                    fr.warnings.push(format!("sh check failed: {}", e));
+                    fr.warnings.push(format!("sh check failed: {e}"));
                 }
             }
         }
@@ -204,7 +220,7 @@ pub fn check_file(
             if do_fix {
                 let mut normalized = s.replace("\r\n", "\n");
                 // Replace remaining CR if any
-                normalized = normalized.replace("\r", "\n");
+                normalized = normalized.replace('\r', "\n");
 
                 // Remove trailing spaces from each line
                 let lines: Vec<&str> = normalized.lines().collect();
@@ -273,7 +289,7 @@ fn check_kam_toml_deep(path: &Path, fr: &mut FileResult) {
             // 如果解析失败，错误已经在基本检查中报告了
             // 这里只添加一个提示
             fr.warnings
-                .push(format!("Cannot perform deep validation: {}", e));
+                .push(format!("Cannot perform deep validation: {e}"));
         }
     }
 }
@@ -286,8 +302,7 @@ fn check_required_fields(kam_toml: &KamToml, fr: &mut FileResult) {
     } else {
         // Enforce stricter id format: must start with a letter and contain only letters, digits, dot, underscore or hyphen.
         // Regex: ^[a-zA-Z][a-zA-Z0-9._-]+$
-        let id_re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9._-]+$").unwrap();
-        if !id_re.is_match(&kam_toml.prop.id) {
+        if !ID_RE.is_match(&kam_toml.prop.id) {
             fr.valid = false;
             fr.errors
                 .push("[prop] id must match regex: ^[a-zA-Z][a-zA-Z0-9._-]+$".to_string());
@@ -320,11 +335,10 @@ fn check_required_fields(kam_toml: &KamToml, fr: &mut FileResult) {
         .prop
         .author
         .as_ref()
-        .map(|a| a.trim().is_empty())
-        .unwrap_or(true)
+        .is_none_or(|a| a.trim().is_empty())
     {
-        fr.warnings
-            .push("[prop] author is empty (recommended to fill)".to_string());
+        fr.valid = false;
+        fr.errors.push("[prop] author is required".to_string());
     }
 }
 
@@ -339,10 +353,7 @@ fn check_version_format(version: &str, fr: &mut FileResult) {
     // 不允许多重前缀 'vv'（例如 vv1.2.3）
     if s.to_lowercase().starts_with("vv") {
         fr.valid = false;
-        fr.errors.push(format!(
-            "[prop] version '{}' is invalid: leading 'vv' is not allowed (expected format: vX.Y.Z)",
-            version
-        ));
+        fr.errors.push(format!("[prop] version '{version}' is invalid: leading 'vv' is not allowed (expected format: vX.Y.Z)"));
         return;
     }
 
@@ -350,8 +361,7 @@ fn check_version_format(version: &str, fr: &mut FileResult) {
     if !(s.starts_with('v') || s.starts_with('V')) {
         fr.valid = false;
         fr.errors.push(format!(
-            "[prop] version '{}' must start with 'v' (expected format: vX.Y.Z)",
-            version
+            "[prop] version '{version}' must start with 'v' (expected format: vX.Y.Z)"
         ));
         return;
     }
@@ -360,10 +370,7 @@ fn check_version_format(version: &str, fr: &mut FileResult) {
     let naked = &s[1..];
     if semver::Version::parse(naked).is_err() {
         fr.valid = false;
-        fr.errors.push(format!(
-            "[prop] version '{}' is not a valid semantic version (expected: vX.Y.Z, optionally with pre-release/build metadata)",
-            version
-        ));
+        fr.errors.push(format!("[prop] version '{version}' is not a valid semantic version (expected: vX.Y.Z, optionally with pre-release/build metadata)"));
     }
 }
 
@@ -375,19 +382,19 @@ fn check_file_references(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileRe
     {
         check_file_exists(
             project_dir,
-            &repo.license_file,
+            repo.license_file.as_ref(),
             "[mmrl.repo] license_file",
             fr,
         );
         check_file_exists(
             project_dir,
-            &repo.readme_file,
+            repo.readme_file.as_ref(),
             "[mmrl.repo] readme_file",
             fr,
         );
         check_file_exists(
             project_dir,
-            &repo.changelog_file,
+            repo.changelog_file.as_ref(),
             "[mmrl.repo] changelog_file",
             fr,
         );
@@ -398,22 +405,22 @@ fn check_file_references(kam_toml: &KamToml, project_dir: &Path, fr: &mut FileRe
             && !project_dir.join(icon).exists()
         {
             fr.warnings
-                .push(format!("[mmrl.repo] icon file '{}' not found", icon));
+                .push(format!("[mmrl.repo] icon file '{icon}' not found"));
         }
     }
 }
 
 /// 检查单个文件是否存在
-fn check_file_exists(base: &Path, file: &Option<String>, name: &str, fr: &mut FileResult) {
+fn check_file_exists(base: &Path, file: Option<&String>, name: &str, fr: &mut FileResult) {
     if let Some(f) = file
         && !f.is_empty()
     {
         let file_path = base.join(f);
         if !file_path.exists() {
             fr.valid = false;
-            fr.errors.push(format!("{} '{}' not found", name, f));
-        } else if file_path.metadata().map(|m| m.len() == 0).unwrap_or(false) {
-            fr.warnings.push(format!("{} '{}' is empty", name, f));
+            fr.errors.push(format!("{name} '{f}' not found"));
+        } else if file_path.metadata().is_ok_and(|m| m.len() == 0) {
+            fr.warnings.push(format!("{name} '{f}' is empty"));
         }
     }
 }
@@ -426,17 +433,16 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
             let src_path = project_dir.join(source_dir);
             if !src_path.exists() {
                 fr.warnings.push(format!(
-                    "[kam.build] source_dir '{}' does not exist",
-                    source_dir
+                    "[kam.build] source_dir '{source_dir}' does not exist"
                 ));
             }
         } else {
             // 使用默认路径
             let default_src = project_dir.join("src").join(&kam_toml.prop.id);
             if !default_src.exists() {
+                let ds = default_src.display();
                 fr.warnings.push(format!(
-                    "[kam.build] default source directory '{}' does not exist",
-                    default_src.display()
+                    "[kam.build] default source directory '{ds}' does not exist"
                 ));
             }
         }
@@ -448,8 +454,7 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
             let hooks_path = project_dir.join(hooks_dir);
             if !hooks_path.exists() {
                 fr.warnings.push(format!(
-                    "[kam.build] hooks_dir '{}' does not exist",
-                    hooks_dir
+                    "[kam.build] hooks_dir '{hooks_dir}' does not exist"
                 ));
             }
         }
@@ -477,15 +482,15 @@ fn check_config_consistency(kam_toml: &KamToml, project_dir: &Path, fr: &mut Fil
 /// 从错误消息中提取行号信息，使错误信息更友好
 fn extract_line_number(err_msg: &str, content: &str) -> String {
     // TOML 错误通常包含 "line X" 或 "at line X"
-    let line_re = Regex::new(r"(?i)(?:at\s+)?line\s+(\d+)").unwrap();
-    if let Some(cap) = line_re.captures(err_msg)
+    if let Some(cap) = LINE_RE.captures(err_msg)
         && let Ok(line_num) = cap[1].parse::<usize>()
     {
         // 尝试获取该行的内容
         if let Some(line_content) = content.lines().nth(line_num.saturating_sub(1)) {
-            return format!("{} (line {}: {})", err_msg, line_num, line_content.trim());
+            let lc = line_content.trim();
+            return format!("{err_msg} (line {line_num}: {lc})");
         }
-        return format!("{} (line {})", err_msg, line_num);
+        return format!("{err_msg} (line {line_num})");
     }
     err_msg.to_string()
 }

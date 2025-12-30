@@ -3,13 +3,19 @@ use crate::template::TemplateCacheManager;
 
 use super::args::{CacheArgs, CacheCommands};
 
-// 处理模板缓存相关的命令
+/// 处理模板缓存相关的命令
+///
+/// # Errors
+///
+/// Returns `KamError` when cache operations or I/O fail (e.g., file system
+/// operations or template install/remove errors).
+#[allow(clippy::too_many_lines)] // TODO: split this function into smaller helpers
 pub fn run(args: CacheArgs) -> Result<(), KamError> {
+    use crate::utils::Utils;
     match args.command {
         CacheCommands::List => {
             // 列出所有缓存的模板
             let templates = TemplateCacheManager::list_local_templates()?;
-            use crate::utils::Utils;
             if templates.is_empty() {
                 Utils::info(crate::i18n::tr("cache.no_templates"));
             } else {
@@ -26,23 +32,19 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                 // 直接删除整个目录然后重建，简单粗暴
                 std::fs::remove_dir_all(&cache_dir).map_err(KamError::Io)?;
                 std::fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
-                use crate::utils::Utils;
                 Utils::success(crate::i18n::tr("cache.cleaned_successfully"));
             } else {
-                use crate::utils::Utils;
                 Utils::info(crate::i18n::tr("cache.directory_empty_or_not_exists"));
             }
         }
         CacheCommands::Add { name, path } => {
             // 添加模板到缓存
             TemplateCacheManager::install_template(&name, &path)?;
-            use crate::utils::Utils;
             Utils::success(&trf!("cache.template_added", name, path.display()));
         }
         CacheCommands::Remove { name } => {
             // 从缓存删除模板
             TemplateCacheManager::remove_template(&name)?;
-            use crate::utils::Utils;
             Utils::success(&trf!("cache.template_removed", name));
         }
         CacheCommands::Path => {
@@ -57,7 +59,6 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
         }
 
         CacheCommands::Modules(subargs) => {
-            use crate::utils::Utils;
             // Module cache root (same logic as repo's cache_root_dir())
             let cache_root = crate::cmds::repo::cache_root_dir()?;
 
@@ -77,7 +78,9 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                             if p.is_file()
                                 && let Some(name) = p.file_name().and_then(|n| n.to_str())
                                 && name.starts_with("index_")
-                                && name.ends_with(".json")
+                                && std::path::Path::new(name)
+                                    .extension()
+                                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
                             {
                                 if !found_index {
                                     Utils::section(crate::i18n::tr("cache.modules.index_files"));
@@ -125,7 +128,9 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                             if p.is_file()
                                 && let Some(name) = p.file_name().and_then(|n| n.to_str())
                                 && name.starts_with("index_")
-                                && name.ends_with(".json")
+                                && std::path::Path::new(name)
+                                    .extension()
+                                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
                             {
                                 let _ = std::fs::remove_file(&p);
                             }
@@ -151,7 +156,7 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                         Utils::success(&trf!("cache.modules.removed", name));
                     } else {
                         // Try modules/<name>.json
-                        let mpath = cache_root.join("modules").join(format!("{}.json", name));
+                        let mpath = cache_root.join("modules").join(format!("{name}.json"));
                         if mpath.exists() {
                             std::fs::remove_file(&mpath).map_err(KamError::Io)?;
                             Utils::success(&trf!("cache.modules.removed_module_cache", name));

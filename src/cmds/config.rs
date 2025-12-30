@@ -48,6 +48,9 @@ pub enum ConfigCommand {
 
 // 获取配置文件路径
 // 支持全局配置（~/.kam/config.toml）和本地配置（项目/.kam/config.toml）
+/// # Errors
+///
+/// Returns `KamError` when the path cannot be resolved (e.g., I/O failures when locating project or HOME).
 pub fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> {
     if global {
         // 强制使用全局配置。支持 `KAM_HOME` 环境变量来控制 kam 的家目录（默认：$HOME/.kam）
@@ -91,6 +94,7 @@ pub fn get_config_paths(global: bool, local: bool) -> Result<PathBuf, KamError> 
 
 // 读取TOML配置文件
 // 文件不存在就返回空表（这样不会报错）
+#[must_use]
 pub fn read_language_from_config() -> Option<String> {
     // Prefer local config's language first, then fallback to global if not set locally.
     // This explicitly checks both local and global config files so a missing language
@@ -137,11 +141,11 @@ pub fn read_language_from_config() -> Option<String> {
 
 fn read_toml(path: &Path) -> Result<toml::Value, KamError> {
     if !path.exists() {
-        return Ok(toml::Value::Table(Default::default()));
+        return Ok(toml::Value::Table(toml::value::Table::default()));
     }
     let s = fs::read_to_string(path).map_err(KamError::Io)?;
     let v: toml::Value = toml::from_str(&s)
-        .map_err(|e| KamError::CommandFailed(format!("Failed to parse config file: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to parse config file: {e}")))?;
     Ok(v)
 }
 
@@ -152,15 +156,19 @@ fn write_toml(path: &Path, v: &toml::Value) -> Result<(), KamError> {
         fs::create_dir_all(parent).map_err(KamError::Io)?;
     }
     let s = toml::to_string_pretty(v)
-        .map_err(|e| KamError::CommandFailed(format!("Failed to serialize config: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to serialize config: {e}")))?;
     fs::write(path, s).map_err(KamError::Io)?;
     Ok(())
 }
 
+#[allow(clippy::unwrap_used)] // TODO: refactor this helper to avoid unwraps and overlapping borrows
 fn set_value_by_path(value: &mut toml::Value, path: &str, new_value: &str) {
+    // Simpler, well-known implementation that uses `unwrap()` in places we control.
+    // This is a temporary measure: a future refactor should remove unwraps and
+    // make traversal safer / more ergonomic.
     let v = value;
     if !v.is_table() {
-        *v = toml::Value::Table(Default::default());
+        *v = toml::Value::Table(toml::value::Table::default());
     }
     let parts: Vec<&str> = path.split('.').collect();
     let mut current = v.as_table_mut().unwrap();
@@ -178,33 +186,31 @@ fn set_value_by_path(value: &mut toml::Value, path: &str, new_value: &str) {
             return;
         }
         if !current.contains_key(part) {
-            current.insert(part.to_string(), toml::Value::Table(Default::default()));
+            current.insert(
+                part.to_string(),
+                toml::Value::Table(toml::value::Table::default()),
+            );
         }
         current = current[part].as_table_mut().unwrap();
     }
 }
 
 fn get_value_by_path(value: &toml::Value, path: &str) -> Option<toml::Value> {
-    let parts: Vec<&str> = path.split('.').collect();
     let mut current = value;
-    for (i, &part) in parts.iter().enumerate() {
-        if let Some(tbl) = current.as_table() {
-            if let Some(next) = tbl.get(part) {
-                current = next;
-                if i == parts.len() - 1 {
-                    return Some(current.clone());
-                }
-                continue;
-            } else {
-                return None;
-            }
-        } else {
-            return None;
+    let mut it = path.split('.').peekable();
+    while let Some(part) = it.next() {
+        // Ensure current is a table and fetch the next part; early-return on None
+        let tbl = current.as_table()?;
+        current = tbl.get(part)?;
+        // If this is the last component, return the found value
+        if it.peek().is_none() {
+            return Some(current.clone());
         }
     }
     None
 }
 
+#[allow(clippy::unwrap_used)] // TODO: refactor this helper to avoid unwraps and return proper Result
 fn unset_value_by_path(value: &mut toml::Value, path: &str) -> bool {
     let parts: Vec<&str> = path.split('.').collect();
     if !value.is_table() {
@@ -283,8 +289,12 @@ fn show_builtin_keys() {
     println!("{}", tr("config.note_custom_keys"));
 }
 
-// 处理config命令（get/set/unset/list/show）
-// 和toml命令类似，但操作的是配置文件而不是kam.toml
+/// 处理 config 命令（get/set/unset/list/show）
+///
+/// # Errors
+///
+/// Returns `KamError` when file I/O or TOML parse/serialize operations fail.
+#[allow(clippy::too_many_lines)] // TODO: split this function into smaller helpers
 pub fn run(args: ConfigArgs) -> Result<(), KamError> {
     // 如果传入了 -i/--interactive，就进入交互式向导
     if args.interactive {
@@ -297,13 +307,10 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
     }
 
     // 非交互模式，必须有一个子命令
-    let cmd = match args.command {
-        Some(c) => c,
-        None => {
-            return Err(KamError::CommandFailed(crate::i18n::tr(
-                "config.interactive.error.no_subcommand",
-            )));
-        }
+    let Some(cmd) = args.command else {
+        return Err(KamError::CommandFailed(crate::i18n::tr(
+            "config.interactive.error.no_subcommand",
+        )));
     };
 
     match cmd {
@@ -324,7 +331,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                     )))
                 },
                 |val| {
-                    println!("{}", val);
+                    println!("{val}");
                     Ok(())
                 },
             )
@@ -357,8 +364,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                 } else {
                     // value 是以 - 开头，但不是我们识别的配置标志：很有可能是误用。
                     return Err(KamError::CommandFailed(format!(
-                        "Invalid usage: unexpected option '{}' used as a value. If you meant to pass a global/local option, use:\n  kam config set --global <key> <value>\nor the shorthand:\n  kam config set <key>=<value> --global",
-                        final_value
+                        "Invalid usage: unexpected option '{final_value}' used as a value. If you meant to pass a global/local option, use:\n  kam config set --global <key> <value>\nor the shorthand:\n  kam config set <key>=<value> --global",
                     )));
                 }
 
@@ -368,8 +374,8 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
                     let parts: Vec<String> =
                         final_key.splitn(2, '=').map(ToString::to_string).collect();
                     if parts.len() >= 2 {
-                        final_key = parts[0].clone();
-                        final_value = parts[1].clone();
+                        final_key.clone_from(&parts[0]);
+                        final_value.clone_from(&parts[1]);
                     } else {
                         return Err(KamError::CommandFailed(
                             "Invalid key=value shorthand".to_string(),
@@ -404,8 +410,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
             let mut toml_v = read_toml(&target_path)?;
             set_value_by_path(&mut toml_v, &final_key, &final_value);
             write_toml(&target_path, &toml_v)?;
-            use crate::utils::Utils;
-            Utils::success(&crate::trf!(
+            crate::utils::Utils::success(&crate::trf!(
                 "config.set_success",
                 final_key,
                 final_value,
@@ -420,8 +425,11 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
             let removed = unset_value_by_path(&mut v, &key);
             if removed {
                 write_toml(&path, &v)?;
-                use crate::utils::Utils;
-                Utils::success(&crate::trf!("config.unset_success", key, path.display()));
+                crate::utils::Utils::success(&crate::trf!(
+                    "config.unset_success",
+                    key,
+                    path.display()
+                ));
                 Ok(())
             } else {
                 Err(KamError::CommandFailed(format!(
@@ -443,6 +451,7 @@ pub fn run(args: ConfigArgs) -> Result<(), KamError> {
 
 /// Prompt helpers & interactive flow
 fn prompt_input<P: AsRef<str>>(prompt: P, default: Option<&str>) -> Result<String, KamError> {
+    use std::io::{self, Write};
     let prompt_ref = prompt.as_ref();
     let default_str = default.unwrap_or("").to_string();
 
@@ -457,10 +466,9 @@ fn prompt_input<P: AsRef<str>>(prompt: P, default: Option<&str>) -> Result<Strin
     }
 
     // Fallback simple prompt (non-TTY)
-    use std::io::{self, Write};
-    print!("{} ", prompt_ref);
+    print!("{prompt_ref} ");
     if !default_str.is_empty() {
-        print!("({}) ", default_str);
+        print!("({default_str}) ");
     }
     io::stdout().flush().map_err(KamError::Io)?;
     let mut s = String::new();
@@ -471,34 +479,34 @@ fn prompt_input<P: AsRef<str>>(prompt: P, default: Option<&str>) -> Result<Strin
 
 fn prompt_confirm<P: AsRef<str>>(prompt: P, default: bool) -> Result<bool, KamError> {
     let prompt_ref = prompt.as_ref();
-    match Confirm::with_theme(&ColorfulTheme::default())
+    if let Ok(v) = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(prompt_ref)
         .default(default)
         .interact()
     {
-        Ok(v) => Ok(v),
-        Err(_) => {
-            // Fallback to text prompt
-            let suffix = if default { "[Y/n]" } else { "[y/N]" };
-            loop {
-                let prompt_str = format!("{} {}", prompt_ref, suffix);
-                let resp = prompt_input(prompt_str, None::<&str>)?;
-                let resp = resp.trim().to_lowercase();
-                if resp.is_empty() {
-                    return Ok(default);
-                } else if resp == "y" || resp == "yes" {
-                    return Ok(true);
-                } else if resp == "n" || resp == "no" {
-                    return Ok(false);
-                } else {
-                    println!("{}", crate::i18n::tr("init.interactive.enter_yes_no"));
-                    continue;
-                }
+        Ok(v)
+    } else {
+        // Fallback to text prompt
+        let suffix = if default { "[Y/n]" } else { "[y/N]" };
+        loop {
+            let prompt_str = format!("{prompt_ref} {suffix}");
+            let resp = prompt_input(prompt_str, None::<&str>)?;
+            let resp = resp.trim().to_lowercase();
+            if resp.is_empty() {
+                return Ok(default);
             }
+            if resp == "y" || resp == "yes" {
+                return Ok(true);
+            }
+            if resp == "n" || resp == "no" {
+                return Ok(false);
+            }
+            println!("{}", crate::i18n::tr("init.interactive.enter_yes_no"));
         }
     }
 }
 
+#[allow(clippy::too_many_lines)] // TODO: split this function into smaller helpers to reduce complexity
 fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
     use crate::i18n::tr;
     use crate::utils::Utils;
@@ -531,21 +539,20 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
         let pick = Select::with_theme(&ColorfulTheme::default())
             .with_prompt(tr("config.interactive.select_target"))
             .items(&choices)
-            .default(if in_project { 0 } else { 1 })
+            .default(usize::from(!in_project))
             .interact_opt();
 
-        let idx = match pick {
-            Ok(Some(i)) => i,
-            _ => {
-                // Fallback to text input
-                let def = if in_project { "1" } else { "2" };
-                let sel_prompt = tr("config.interactive.select_target");
-                let input = prompt_input(sel_prompt, Some(def))?;
-                match input.trim() {
-                    "1" => 0,
-                    "2" => 1,
-                    _ => 2,
-                }
+        let idx = if let Ok(Some(i)) = pick {
+            i
+        } else {
+            // Fallback to text input
+            let def = if in_project { "1" } else { "2" };
+            let sel_prompt = tr("config.interactive.select_target");
+            let input = prompt_input(sel_prompt, Some(def))?;
+            match input.trim() {
+                "1" => 0,
+                "2" => 1,
+                _ => 2,
             }
         };
 
@@ -561,19 +568,19 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
     loop {
         let v = read_toml(&path)?;
         let cur_lang = get_value_by_path(&v, "ui.language")
-            .and_then(|sv| sv.as_str().map(|s| s.to_string()))
+            .and_then(|sv| sv.as_str().map(ToString::to_string))
             .unwrap_or_else(|| "<not set>".to_string());
         let cur_root = get_value_by_path(&v, "root.manager")
-            .and_then(|sv| sv.as_str().map(|s| s.to_string()))
+            .and_then(|sv| sv.as_str().map(ToString::to_string))
             .unwrap_or_else(|| "<not set>".to_string());
 
         let menu = vec![
             crate::trf!("config.interactive.menu.set_ui_language", cur_lang),
             crate::trf!("config.interactive.menu.set_root_manager", cur_root),
-            tr("config.interactive.set_custom_key").to_string(),
-            tr("config.interactive.view_builtins").to_string(),
-            tr("config.interactive.show_current_config").to_string(),
-            tr("config.interactive.exit").to_string(),
+            tr("config.interactive.set_custom_key").clone(),
+            tr("config.interactive.view_builtins").clone(),
+            tr("config.interactive.show_current_config").clone(),
+            tr("config.interactive.exit").clone(),
         ];
 
         let pick = Select::with_theme(&ColorfulTheme::default())
@@ -582,16 +589,15 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
             .default(0)
             .interact_opt();
 
-        let idx = match pick {
-            Ok(Some(i)) => i,
-            _ => {
-                let input = prompt_input(tr("config.interactive.select_option"), Some("1"))?;
-                match input.trim().parse::<usize>() {
-                    Ok(n) if n >= 1 && n <= menu.len() => n - 1,
-                    _ => {
-                        println!("{}", tr("config.interactive.invalid_selection"));
-                        continue;
-                    }
+        let idx = if let Ok(Some(i)) = pick {
+            i
+        } else {
+            let input = prompt_input(tr("config.interactive.select_option"), Some("1"))?;
+            match input.trim().parse::<usize>() {
+                Ok(n) if n >= 1 && n <= menu.len() => n - 1,
+                _ => {
+                    println!("{}", tr("config.interactive.invalid_selection"));
+                    continue;
                 }
             }
         };
@@ -601,7 +607,9 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                 // Set language
                 let lang_prompt = tr("config.interactive.enter_ui_language");
                 let lang = prompt_input(lang_prompt, Some(&cur_lang))?;
-                if !lang.trim().is_empty() {
+                if lang.trim().is_empty() {
+                    println!("{}", tr("config.interactive.no_change"));
+                } else {
                     let mut toml_v = read_toml(&path)?;
                     set_value_by_path(&mut toml_v, "ui.language", &lang);
                     write_toml(&path, &toml_v)?;
@@ -611,8 +619,6 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                         lang,
                         path.display()
                     ));
-                } else {
-                    println!("{}", tr("config.interactive.no_change"));
                 }
             }
             1 => {
@@ -624,22 +630,21 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                     .default(0)
                     .interact_opt();
 
-                let manager = match pick_rm {
-                    Ok(Some(i)) => {
-                        if choices[i] == "Other" {
-                            let custom_root_prompt = tr("config.interactive.choose_root_manager");
-                            prompt_input(custom_root_prompt, Some(&cur_root))?
-                        } else {
-                            choices[i].to_string()
-                        }
+                let manager = if let Ok(Some(i)) = pick_rm {
+                    if choices[i] == "Other" {
+                        let custom_root_prompt = tr("config.interactive.choose_root_manager");
+                        prompt_input(custom_root_prompt, Some(&cur_root))?
+                    } else {
+                        choices[i].to_string()
                     }
-                    _ => {
-                        let root_prompt = tr("config.interactive.choose_root_manager");
-                        prompt_input(root_prompt, Some(&cur_root))?
-                    }
+                } else {
+                    let root_prompt = tr("config.interactive.choose_root_manager");
+                    prompt_input(root_prompt, Some(&cur_root))?
                 };
 
-                if !manager.trim().is_empty() {
+                if manager.trim().is_empty() {
+                    println!("{}", tr("config.interactive.no_change"));
+                } else {
                     let mut toml_v = read_toml(&path)?;
                     set_value_by_path(&mut toml_v, "root.manager", &manager);
                     write_toml(&path, &toml_v)?;
@@ -649,8 +654,6 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
                         manager,
                         path.display()
                     ));
-                } else {
-                    println!("{}", tr("config.interactive.no_change"));
                 }
             }
             2 => {

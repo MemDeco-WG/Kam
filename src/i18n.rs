@@ -78,11 +78,37 @@ fn try_format_with_ftl(locale: &str, ftl: &str, id: &str, args: &[&dyn Display])
 pub fn tr_fmt(key: &str, args: &[&dyn Display]) -> String {
     if key.contains('.') {
         let id = dotted_to_ftl_id(key);
-        if let Some(s) = try_format_with_ftl("en-US", EN_FTL, &id, args) {
-            return s;
-        }
-        if let Some(s) = try_format_with_ftl("zh-CN", ZH_FTL, &id, args) {
-            return s;
+
+        // Determine preferred locale order:
+        // Priority (highest → lowest):
+        // 1) Explicit env var `KAM_UI_LANGUAGE`
+        // 2) Project/local config (ui.language or language) or global config (via config module)
+        // 3) System `LANG`
+        // If any indicates Chinese, prefer zh-CN first.
+        let prefer_zh = if let Ok(v) = std::env::var("KAM_UI_LANGUAGE") {
+            v.to_lowercase().contains("zh")
+        } else if let Some(cfg_lang) = crate::cmds::config::read_language_from_config() {
+            cfg_lang.to_lowercase().contains("zh")
+        } else if let Ok(v) = std::env::var("LANG") {
+            v.to_lowercase().contains("zh")
+        } else {
+            false
+        };
+
+        if prefer_zh {
+            if let Some(s) = try_format_with_ftl("zh-CN", ZH_FTL, &id, args) {
+                return s;
+            }
+            if let Some(s) = try_format_with_ftl("en-US", EN_FTL, &id, args) {
+                return s;
+            }
+        } else {
+            if let Some(s) = try_format_with_ftl("en-US", EN_FTL, &id, args) {
+                return s;
+            }
+            if let Some(s) = try_format_with_ftl("zh-CN", ZH_FTL, &id, args) {
+                return s;
+            }
         }
     }
     // Fallback to naive `{}` replacement if no FTL entry exists or key is non-dotted.
@@ -92,7 +118,9 @@ pub fn tr_fmt(key: &str, args: &[&dyn Display]) -> String {
 /// Simple translation helper (no formatting). For dotted keys this attempts to
 /// return the compiled FTL message; otherwise it returns the provided string.
 pub fn tr(key: &str) -> String {
-    // Delegate to `tr_fmt` using an empty arg slice to avoid duplicating logic.
+    // Delegate to `tr_fmt`. Use an explicit empty slice cast here rather than
+    // relying on a const or array-to-slice coercion because rust-analyzer
+    // sometimes reports a spurious type mismatch for zero-length arrays.
     tr_fmt(key, &[] as &[&dyn Display])
 }
 

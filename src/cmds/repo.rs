@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 /*
 Kam/src/cmds/repo.rs
 
@@ -152,16 +151,12 @@ struct Author {
 #[serde(rename_all = "camelCase")]
 struct Release {
     name: Option<String>,
-    url: Option<String>,
     #[serde(rename = "releaseAssets")]
     release_assets: Option<Vec<Asset>>,
     version: Option<String>,
-    version_code: Option<String>,
     created_at: Option<String>,
     published_at: Option<String>,
     updated_at: Option<String>,
-    tag_name: Option<String>,
-    is_prerelease: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -170,7 +165,6 @@ struct Asset {
     name: String,
     content_type: Option<String>,
     download_url: String,
-    download_count: Option<u64>,
     size: Option<u64>,
 }
 
@@ -219,7 +213,7 @@ pub fn handle_pacman_style(
             .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
 
         for module_id in targets.iter() {
-            let section_title = crate::i18n::tr_fmt("repo.download", &[&module_id]);
+            let section_title = trf!("repo.download", module_id);
             if !quiet {
                 Utils::section(&section_title);
             }
@@ -235,15 +229,9 @@ pub fn handle_pacman_style(
                     if e.contains("404") || e.contains("not found") || e.contains("Not Found") =>
                 {
                     // If the exact module wasn't found, suggest similar modules via interactive search
-                    Utils::warn(crate::i18n::tr_fmt(
-                        "repo.module_not_found_showing_similar",
-                        &[&module_id],
-                    ));
+                    Utils::warn(trf!("repo.module_not_found_showing_similar", module_id));
                     if let Some(selected_module) = search_remote_interactive(module_id, &base)? {
-                        Utils::info(crate::i18n::tr_fmt(
-                            "repo.selected_module",
-                            &[&selected_module],
-                        ));
+                        Utils::info(trf!("repo.selected_module", selected_module));
                         // Now fetch the details for the selected module
                         let md = fetch_module_detail(&client, &selected_module, &base)?;
                         // Continue with the download process using the selected module
@@ -309,10 +297,7 @@ fn process_module_download(
     let (asset, release_label) = if let Some((a, rname)) = chosen_asset {
         (a, rname)
     } else {
-        Utils::warn(crate::i18n::tr_fmt(
-            "repo.no_downloadable_zip_asset",
-            &[&module_id],
-        ));
+        Utils::warn(trf!("repo.no_downloadable_zip_asset", module_id));
         return Ok(());
     };
 
@@ -323,31 +308,61 @@ fn process_module_download(
         .unwrap_or_default();
     println!(
         "{}",
-        crate::i18n::tr_fmt(
+        trf!(
             "repo.module_detail.title",
-            &[&module_id, &md.module_name.as_deref().unwrap_or("")]
+            md.module_id.as_str(),
+            md.module_name.as_deref().unwrap_or("")
         )
     );
+
+    // Additional module metadata (if present)
+    if let Some(u) = md.url.as_deref()
+        && !u.trim().is_empty()
+    {
+        println!("{}", trf!("repo.module_detail.url", u));
+    }
+
+    if let Some(h) = md.homepage_url.as_deref()
+        && !h.trim().is_empty()
+    {
+        println!("{}", trf!("repo.module_detail.homepage", h));
+    }
+
+    if let Some(s) = md.summary.as_deref()
+        && !s.trim().is_empty()
+    {
+        println!("{}", trf!("repo.module_detail.summary", s));
+    }
+
+    if let Some(auths) = md.authors.as_ref() {
+        if !auths.is_empty() {
+            let authors_str = auths
+                .iter()
+                .map(|a| {
+                    if let Some(link) = a.link.as_deref() {
+                        if !link.trim().is_empty() {
+                            return format!("{} ({})", a.name, link);
+                        }
+                    }
+                    a.name.clone()
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!("{}: {}", trf!("repo.authors"), authors_str);
+        }
+    }
+
+    println!("{}", trf!("repo.module_detail.release", release_label));
+    println!("{}", trf!("repo.module_detail.asset", asset.name, size_str));
     println!(
         "{}",
-        crate::i18n::tr_fmt("repo.module_detail.release", &[&release_label])
-    );
-    println!(
-        "{}",
-        crate::i18n::tr_fmt("repo.module_detail.asset", &[&asset.name, &size_str])
-    );
-    println!(
-        "{}",
-        crate::i18n::tr_fmt("repo.module_detail.download_url", &[&asset.download_url])
+        trf!("repo.module_detail.download_url", asset.download_url)
     );
 
     let confirmed = if assume_yes {
         true
     } else {
-        print!(
-            "{}",
-            crate::i18n::tr_fmt("repo.confirm_download", &[&module_id, &asset.name])
-        );
+        print!("{}", trf!("repo.confirm_download", module_id, asset.name));
         stdout().flush().map_err(KamError::Io)?;
         let mut input = String::new();
         stdin().read_line(&mut input).map_err(KamError::Io)?;
@@ -355,7 +370,7 @@ fn process_module_download(
         // Interpret empty input according to the prompt's default (here: (y/N) -> default is false)
         let ok = parse_confirm_input(input_trimmed, false);
         if !ok {
-            Utils::warn(crate::i18n::tr_fmt("repo.skipped_download", &[&module_id]));
+            Utils::warn(trf!("repo.skipped_download", module_id));
         }
         ok
     };
@@ -368,10 +383,7 @@ fn process_module_download(
     match download_asset(client, asset, None, quiet) {
         Ok(path) => {
             if !quiet {
-                Utils::success(crate::i18n::tr_fmt(
-                    "repo.saved",
-                    &[&path.display().to_string()],
-                ));
+                Utils::success(trf!("repo.saved", path.display().to_string()));
             }
         }
         Err(e) => {
@@ -425,16 +437,6 @@ fn module_cache_path(module_id: &str) -> Result<PathBuf, KamError> {
     Ok(p)
 }
 
-fn is_fresh(path: &Path, ttl_secs: u64) -> bool {
-    path.metadata()
-        .and_then(|m| m.modified())
-        .is_ok_and(|modified| {
-            std::time::SystemTime::now()
-                .duration_since(modified)
-                .is_ok_and(|dur| dur.as_secs() < ttl_secs)
-        })
-}
-
 fn write_atomic(path: &Path, contents: &str) -> Result<(), KamError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -485,9 +487,8 @@ fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry
     {
         if let Ok(entries) = serde_json::from_str::<Vec<SearchEntry>>(&buf) {
             return Ok(entries);
-        } else {
-            // corrupted or incompatible cache; we'll try fallback scan or network below
         }
+        // corrupted or incompatible cache; we'll try fallback scan or network below
     }
 
     // 2) Try to find an alternative cached index in the same cache directory (index_*.json)
@@ -638,16 +639,10 @@ pub fn repo_sync_with_jobs(
 
     if !quiet {
         if force {
-            let msg = crate::i18n::tr_fmt(
-                "repo.index_force_synced",
-                &[&url, &path.display().to_string()],
-            );
-            Utils::section(&msg);
+            let msg = trf!("repo.index_force_synced", url, path.display().to_string());
+            Utils::success(&msg);
         } else {
-            Utils::success(crate::i18n::tr_fmt(
-                "repo.index_synced",
-                &[&path.display().to_string()],
-            ));
+            Utils::success(trf!("repo.index_synced", path.display().to_string()));
         }
     }
 
@@ -691,11 +686,6 @@ pub fn repo_sync_with_jobs(
         // Hidden spinner so later `.inc()` calls are safe but nothing is rendered.
         ProgressBar::hidden()
     };
-
-    // Build per-module progress bars and a list of fetch tasks; cached modules are shown immediately,
-    // but limit visible items to MAX_VISIBLE (20). If nothing needs fetching, show 'Everything up to date'.
-    const MAX_VISIBLE: usize = 20;
-
     // Count how many modules actually need fetching (not cached or forced)
     let mut need_fetch_count: usize = 0;
     for e in entries.iter() {
@@ -922,10 +912,7 @@ pub fn repo_sync_with_jobs(
         } else {
             // Always show a concise summary so users see an effect even when progress bars
             // are suppressed (quiet/non-tty).
-            Utils::success(crate::i18n::tr_fmt(
-                "repo.updated_modules",
-                &[&updated_total.to_string()],
-            ));
+            Utils::success(trf!("repo.updated_modules", updated_total.to_string()));
         }
     }
 
@@ -957,7 +944,7 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
         .collect();
 
     if scored.is_empty() {
-        Utils::warn(crate::i18n::tr_fmt("repo.no_results_for", &[&query]));
+        Utils::warn(trf!("repo.no_results_for", query));
         return Ok(());
     }
 
@@ -968,13 +955,13 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
     for (i, (score, e)) in scored.iter().take(50).enumerate() {
         let desc = e.description.as_deref().unwrap_or("");
         let score_suffix = if (*score - 1.0).abs() > f64::EPSILON {
-            crate::i18n::tr_fmt("repo.score_format", &[&format!("{:.2}", score)])
+            trf!("repo.score_format", format!("{:.2}", score))
         } else {
             "".to_string()
         };
         println!(
             "{}",
-            crate::i18n::tr_fmt("repo.result_line_simple", &[&e.name, &desc, &score_suffix])
+            trf!("repo.result_line_simple", e.name, desc, score_suffix)
         );
         if let Some(s) = &e.summary {
             println!("    {}", s);
@@ -1048,7 +1035,7 @@ pub(crate) fn search_remote_interactive(
         .collect();
 
     if scored.is_empty() {
-        Utils::warn(crate::i18n::tr_fmt("repo.no_results_for", &[&query]));
+        Utils::warn(trf!("repo.no_results_for", query));
         return Ok(None);
     }
 
@@ -1058,9 +1045,10 @@ pub(crate) fn search_remote_interactive(
     // Print numbered results
     println!(
         "{}",
-        crate::i18n::tr_fmt(
+        trf!(
             "repo.similar_packages_header",
-            &[&scored.len().to_string(), &query]
+            scored.len().to_string(),
+            query
         )
     );
     println!();
@@ -1068,15 +1056,18 @@ pub(crate) fn search_remote_interactive(
         // Show up to 20 results
         let desc = e.description.as_deref().unwrap_or("");
         let score_suffix = if (*score - 1.0).abs() > f64::EPSILON {
-            crate::i18n::tr_fmt("repo.score_format", &[&format!("{:.2}", score)])
+            trf!("repo.score_format", format!("{:.2}", score))
         } else {
             "".to_string()
         };
         println!(
             "{}",
-            crate::i18n::tr_fmt(
+            trf!(
                 "repo.result_line",
-                &[&(i + 1).to_string(), &e.name, &desc, &score_suffix]
+                (i + 1).to_string(),
+                e.name,
+                desc,
+                score_suffix
             )
         );
         if let Some(s) = &e.summary {
@@ -1144,16 +1135,6 @@ pub(crate) fn search_remote_interactive(
             Ok(None)
         }
     }
-}
-
-/// Simple Levenshtein distance (char-based) - used for a lightweight fuzzy similarity.
-fn levenshtein(a: &str, b: &str) -> usize {
-    repo_search::levenshtein(a, b)
-}
-
-/// Normalized similarity in [0.0, 1.0]
-fn similarity(a: &str, b: &str) -> f64 {
-    repo_search::similarity(a, b)
 }
 
 /// Format bytes into a human readable string
@@ -1224,12 +1205,11 @@ fn fetch_module_detail(
             if f.read_to_string(&mut buf).is_ok() {
                 if let Ok(md) = serde_json::from_str::<ModuleDetail>(&buf) {
                     return Ok(md);
-                } else {
-                    Utils::warn(format!(
-                        "Cached module JSON for '{}' could not be parsed; will attempt to refresh from registry",
-                        module_id
-                    ));
                 }
+                Utils::warn(format!(
+                    "Cached module JSON for '{}' could not be parsed; will attempt to refresh from registry",
+                    module_id
+                ));
             } else {
                 Utils::warn(format!(
                     "Failed to read cached module JSON for '{}'; will attempt to refresh from registry",
@@ -1259,13 +1239,12 @@ fn fetch_module_detail(
             File::open(&path)?.read_to_string(&mut s)?;
             let md: ModuleDetail = serde_json::from_str(&s)?;
             return Ok(md);
-        } else {
-            return Err(KamError::FetchFailed(format!(
-                "{} returned status {}",
-                url,
-                resp.status()
-            )));
         }
+        return Err(KamError::FetchFailed(format!(
+            "{} returned status {}",
+            url,
+            resp.status()
+        )));
     }
 
     let body = resp

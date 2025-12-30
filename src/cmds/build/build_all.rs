@@ -20,10 +20,7 @@ struct BuildResult {
 
 // 展开成员模式（支持 glob 和 [] 包裹）
 // 返回 (是否用 [] 包裹, 展开后的成员列表)
-fn expand_member_pattern(
-    project_path: &Path,
-    member_pattern: &str,
-) -> Result<(bool, Vec<String>), KamError> {
+fn expand_member_pattern(project_path: &Path, member_pattern: &str) -> (bool, Vec<String>) {
     // 检查是否用 [] 包裹
     let (is_bracketed, pattern) =
         if member_pattern.starts_with('[') && member_pattern.ends_with(']') {
@@ -72,7 +69,7 @@ fn expand_member_pattern(
         expanded.push(pattern);
     }
 
-    Ok((is_bracketed, expanded))
+    (is_bracketed, expanded)
 }
 
 // 构建工作区成员
@@ -106,7 +103,7 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
     // 直接使用成员路径进行构建，避免修改进程级别的状态。
     match KamToml::load_from_dir(member_path.as_path()) {
         Ok(kt) => match build_project(member_path.as_path(), args, Some(kt)) {
-            Ok(_) => BuildResult {
+            Ok(()) => BuildResult {
                 member: member.to_string(),
                 success: true,
                 error: None,
@@ -125,12 +122,18 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
             BuildResult {
                 member: member.to_string(),
                 success: false,
-                error: Some(format!("failed to load kam.toml: {}", e)),
+                error: Some(format!("failed to load kam.toml: {e}")),
             }
         }
     }
 }
 
+/// # Errors
+/// Returns a `KamError` if any I/O, configuration validation, or build step fails.
+///
+/// This is a minimal doc block to satisfy lints; please expand it with concrete
+/// error conditions if you want more precise documentation.
+#[allow(clippy::too_many_lines)] // TODO: split into smaller helper functions and add richer docs
 pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamError> {
     let start_time = Instant::now();
     let root_kam_toml = KamToml::load_from_dir(project_path)?;
@@ -149,142 +152,147 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
         let mut i = 0;
         while i < members.len() {
             let member_pattern = &members[i];
-            match expand_member_pattern(project_path, member_pattern) {
-                Ok((is_bracketed, expanded)) => {
-                    if expanded.is_empty() {
+            let (is_bracketed, expanded) = expand_member_pattern(project_path, member_pattern);
+            if expanded.is_empty() {
+                i += 1;
+                continue;
+            }
+
+            if is_bracketed {
+                // 收集所有连续的 [] 包裹的项目，合并成一个并发组
+                let mut all_concurrent_members = expanded;
+                i += 1;
+
+                // 继续收集后续的 [] 包裹的项目
+                while i < members.len() {
+                    let (next_bracketed, next_expanded) =
+                        expand_member_pattern(project_path, &members[i]);
+                    if next_bracketed && !next_expanded.is_empty() {
+                        // 也是 [] 包裹的，合并到当前并发组
+                        all_concurrent_members.extend(next_expanded);
                         i += 1;
-                        continue;
+                    } else {
+                        // 不是 [] 包裹的，停止收集
+                        break;
                     }
+                }
 
-                    if is_bracketed {
-                        // 收集所有连续的 [] 包裹的项目，合并成一个并发组
-                        let mut all_concurrent_members = expanded;
-                        i += 1;
+                // 现在处理合并后的并发组
+                // 用 [] 包裹的项目组，使用线程池并发执行
+                // 注意：只有这里才会使用并发，-j 参数也只在这里生效
+                let member_count = all_concurrent_members.len();
 
-                        // 继续收集后续的 [] 包裹的项目
-                        while i < members.len() {
-                            match expand_member_pattern(project_path, &members[i]) {
-                                Ok((next_bracketed, next_expanded)) => {
-                                    if next_bracketed && !next_expanded.is_empty() {
-                                        // 也是 [] 包裹的，合并到当前并发组
-                                        all_concurrent_members.extend(next_expanded);
-                                        i += 1;
-                                    } else {
-                                        // 不是 [] 包裹的，停止收集
+                // 确定线程池大小（仅在并发组中使用）
+                let num_jobs = args.jobs.unwrap_or_else(|| {
+                    thread::available_parallelism()
+                        .map(std::num::NonZeroUsize::get)
+                        .unwrap_or(1)
+                });
+
+                // 确保至少有一个线程（如果 member_count > 0）
+                let actual_jobs = if member_count > 0 {
+                    num_jobs.min(member_count).max(1)
+                } else {
+                    0
+                };
+
+                if !args.quiet {
+                    Utils::info(&trf!(
+                        "build.concurrent_building_members",
+                        member_count,
+                        actual_jobs
+                    ));
+                }
+
+                // 如果没有任务，跳过
+                if member_count == 0 {
+                    continue;
+                }
+
+                // 使用线程池并发执行
+                let project_path = Arc::new(project_path.to_path_buf());
+                let args = Arc::new(args.clone());
+
+                // 创建任务队列和结果 channel
+                let task_queue = Arc::new(Mutex::new(all_concurrent_members));
+                let (result_tx, result_rx) = mpsc::channel();
+
+                // 创建工作线程
+                let mut handles = Vec::new();
+                for _ in 0..actual_jobs {
+                    let task_queue = Arc::clone(&task_queue);
+                    let result_tx = result_tx.clone();
+                    let project_path = Arc::clone(&project_path);
+                    let args = Arc::clone(&args);
+
+                    let handle = thread::spawn(move || {
+                        loop {
+                            // 从任务队列中取任务
+                            let member = {
+                                match task_queue.lock() {
+                                    Ok(mut guard) => guard.pop(),
+                                    Err(poisoned) => {
+                                        // If the mutex is poisoned, report the problem and stop processing.
+                                        let br = BuildResult {
+                                            member: "<internal>".to_string(),
+                                            success: false,
+                                            error: Some(format!(
+                                                "task queue mutex poisoned: {poisoned:?}"
+                                            )),
+                                        };
+                                        // Best-effort: try to notify the main thread and then exit.
+                                        let _ = result_tx.send(br);
                                         break;
                                     }
                                 }
-                                Err(_) => {
-                                    // 展开失败，停止收集
+                            };
+
+                            if let Some(member) = member {
+                                let result = build_workspace_member(
+                                    project_path.as_path(),
+                                    &member,
+                                    args.as_ref(),
+                                );
+                                if let Err(e) = result_tx.send(result) {
+                                    Utils::error(format!("Failed to send result to channel: {e}"));
+                                    // Receiver dropped or send failed; stop worker.
                                     break;
                                 }
+                            } else {
+                                // 没有更多任务，退出
+                                break;
                             }
                         }
+                    });
+                    handles.push(handle);
+                }
 
-                        // 现在处理合并后的并发组
-                        // 用 [] 包裹的项目组，使用线程池并发执行
-                        // 注意：只有这里才会使用并发，-j 参数也只在这里生效
-                        let member_count = all_concurrent_members.len();
-
-                        // 确定线程池大小（仅在并发组中使用）
-                        let num_jobs = args.jobs.unwrap_or_else(|| {
-                            thread::available_parallelism()
-                                .map(|n| n.get())
-                                .unwrap_or(1)
-                        });
-
-                        // 确保至少有一个线程（如果 member_count > 0）
-                        let actual_jobs = if member_count > 0 {
-                            num_jobs.min(member_count).max(1)
-                        } else {
-                            0
-                        };
-
-                        if !args.quiet {
-                            Utils::info(&trf!(
-                                "build.concurrent_building_members",
-                                member_count,
-                                actual_jobs
-                            ));
-                        }
-
-                        // 如果没有任务，跳过
-                        if member_count == 0 {
-                            continue;
-                        }
-
-                        // 使用线程池并发执行
-                        let project_path = Arc::new(project_path.to_path_buf());
-                        let args = Arc::new(args.clone());
-
-                        // 创建任务队列和结果 channel
-                        let task_queue = Arc::new(Mutex::new(all_concurrent_members));
-                        let (result_tx, result_rx) = mpsc::channel();
-
-                        // 创建工作线程
-                        let mut handles = Vec::new();
-                        for _ in 0..actual_jobs {
-                            let task_queue = Arc::clone(&task_queue);
-                            let result_tx = result_tx.clone();
-                            let project_path = Arc::clone(&project_path);
-                            let args = Arc::clone(&args);
-
-                            let handle = thread::spawn(move || {
-                                loop {
-                                    // 从任务队列中取任务
-                                    let member = {
-                                        let mut queue = task_queue.lock().unwrap();
-                                        queue.pop()
-                                    };
-
-                                    if let Some(member) = member {
-                                        let result = build_workspace_member(
-                                            project_path.as_path(),
-                                            &member,
-                                            args.as_ref(),
-                                        );
-                                        result_tx.send(result).unwrap();
-                                    } else {
-                                        // 没有更多任务，退出
-                                        break;
-                                    }
-                                }
-                            });
-                            handles.push(handle);
-                        }
-
-                        // 等待所有工作线程完成
-                        // 注意：工作线程中的 result_tx clone 会在线程结束时自动销毁
-                        for handle in handles {
-                            handle.join().unwrap();
-                        }
-
-                        // 收集结果
-                        // 所有工作线程已完成，它们的 result_tx clone 已经销毁
-                        // 现在关闭主发送端，使 channel 关闭，然后收集所有结果
-                        drop(result_tx);
-                        // 从 channel 中收集所有结果（iter 会在 channel 关闭时结束）
-                        let mut concurrent_results: Vec<_> = result_rx.iter().collect();
-                        results.append(&mut concurrent_results);
-                    } else {
-                        // 没有用 [] 包裹的项目，必须顺序执行
-                        // 重要：这里不使用并发，即使设置了 -j 参数也不会生效
-                        // 这样可以避免重复构建和竞争条件
-                        for member in expanded {
-                            let result = build_workspace_member(project_path, &member, args);
-                            results.push(result);
-                        }
-                        i += 1;
+                // 等待所有工作线程完成
+                // 注意：工作线程中的 result_tx clone 会在线程结束时自动销毁
+                for handle in handles {
+                    if let Err(e) = handle.join() {
+                        return Err(KamError::CommandFailed(format!(
+                            "Worker thread panicked: {e:?}"
+                        )));
                     }
                 }
-                Err(e) => {
-                    Utils::warn(&trf!(
-                        "Failed to expand member pattern '{}': {}",
-                        member_pattern,
-                        e
-                    ));
-                    i += 1;
+
+                // 收集结果
+                // 所有工作线程已完成，它们的 result_tx clone 已经销毁
+                // 现在关闭主发送端，使 channel 关闭，然后收集所有结果
+                drop(result_tx);
+                // 从 channel 中收集所有结果（iter 会在 channel 关闭时结束）
+                let mut concurrent_results: Vec<_> = result_rx.iter().collect();
+                results.append(&mut concurrent_results);
+            } else {
+                // 没有用 [] 包裹的项目，必须顺序执行
+                // 重要：这里不使用并发，即使设置了 -j 参数也不会生效
+                // 这样可以避免重复构建和竞争条件
+                for member in expanded {
+                    let result = build_workspace_member(project_path, &member, args);
+                    results.push(result);
                 }
+                i += 1;
             }
         }
 
@@ -333,7 +341,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
             }
         }
 
-        println!("{}", summary_table);
+        println!("{summary_table}");
     }
 
     if !args.quiet {
@@ -363,7 +371,7 @@ pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamErr
                     .fg(comfy_table::Color::White),
             ]);
 
-        println!("{}", stats_table);
+        println!("{stats_table}");
     }
 
     // 如果有失败的，就返回错误

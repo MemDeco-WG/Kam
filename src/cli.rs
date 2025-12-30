@@ -11,6 +11,7 @@ use std::ffi::OsString;
     disable_help_subcommand = true,
     help_template = "{bin} — {about}\n\nUsage: {usage}\n\nCommands:\n{subcommands}\n\nOptions:\n{options}\n"
 )]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Cli {
     /// Pacman-style sync (download) flag (equivalent to pacman -S)
     #[arg(short = 'S', action = clap::ArgAction::SetTrue)]
@@ -24,7 +25,7 @@ pub struct Cli {
     #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
     pub targets: Vec<String>,
 
-    /// URL for the modules registry API (default: https://modules.kernelsu.org). Overrides the built-in modules endpoint.
+    /// URL for the modules registry API (default: <https://modules.kernelsu.org>). Overrides the built-in modules endpoint.
     #[arg(long = "modules-url", value_name = "URL", global = true)]
     pub modules_url: Option<String>,
 
@@ -87,7 +88,7 @@ pub enum Commands {
     /// Manage per-project or global kam configuration (similar to git config)
     Config(crate::cmds::config::ConfigArgs),
 
-    /// Act as a compatibility layer for Magisk, KernelSU, and APatchSU to install modules (delegates to configured root manager)
+    /// Act as a compatibility layer for Magisk, `KernelSU`, and `APatchSU` to install modules (delegates to configured root manager)
     Install(crate::cmds::install::InstallArgs),
 
     /// Interact with module repository (search/download)
@@ -113,6 +114,9 @@ impl Cli {
     /// Accepts any iterator over items that can be borrowed as an `OsStr` (so `&str`,
     /// `String`, `OsString`, etc. all work). Returns a `Result<Cli, clap::Error>`
     /// mirroring clap's `try_parse_from` semantics.
+    ///
+    /// # Errors
+    /// Returns a `clap::Error` when parsing fails.
     pub fn try_parse_from_with_pacman<I, T>(args: I) -> Result<Self, clap::Error>
     where
         I: IntoIterator<Item = T>,
@@ -183,13 +187,22 @@ impl Cli {
         Self::from_arg_matches(&matches)
     }
 
-    /// Convenience wrapper that panics on error (like clap's `parse_from`).
+    /// Convenience wrapper that will exit the process on parse error (similar to clap's `parse_from` behavior).
+    ///
+    /// # Errors
+    /// This function terminates the process with exit code 2 if argument parsing fails.
     pub fn parse_from_with_pacman<I, T>(args: I) -> Self
     where
         I: IntoIterator<Item = T>,
         T: AsRef<std::ffi::OsStr>,
     {
-        Self::try_parse_from_with_pacman(args).unwrap()
+        match Self::try_parse_from_with_pacman(args) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Error parsing arguments: {e}");
+                std::process::exit(2)
+            }
+        }
     }
 }
 

@@ -12,6 +12,7 @@ pub enum ShellArg {
 }
 
 impl ShellArg {
+    #[must_use]
     pub const fn to_shell(&self) -> shells::Shell {
         match self {
             Self::Bash => shells::Shell::Bash,

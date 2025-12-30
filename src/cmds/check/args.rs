@@ -2,6 +2,7 @@ use clap::Args;
 
 #[derive(Args, Debug)]
 #[command(trailing_var_arg = true)]
+#[allow(clippy::struct_excessive_bools)] // TODO: refactor into enums/state machine to reduce bool flags
 pub struct CheckArgs {
     /// Path to use as project directory fallback when no PATHS are supplied
     /// (default: current directory). Use positional PATHS for files/globs.

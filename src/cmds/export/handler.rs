@@ -4,11 +4,18 @@ use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 
 use super::args::{ExportArgs, ExportFormat};
-use super::builders::*;
+use super::builders::{
+    build_config_json, build_module_json, build_prop, build_repo_json, build_track_json,
+    build_update_json,
+};
 
 // 导出命令，把kam.toml转成各种格式
 // 支持module.prop、module.json、repo.json等格式
-pub fn run(args: ExportArgs) -> Result<(), KamError> {
+/// # Errors
+///
+/// Returns `KamError` when I/O or export serialization operations fail.
+#[allow(clippy::too_many_lines)] // TODO: split this function into smaller helpers
+pub fn run(args: &ExportArgs) -> Result<(), KamError> {
     let cwd = std::env::current_dir().map_err(KamError::Io)?;
     let kt = KamToml::load_from_dir(&cwd)?;
 
@@ -20,7 +27,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
         let fname = output.file_name().and_then(|s| s.to_str()).unwrap_or("");
         let ext = output.extension().and_then(|s| s.to_str()).unwrap_or("");
         // 如果输出是"-"（stdout），默认用Prop格式
-        if output.to_str().map(|s| s == "-").unwrap_or(false) {
+        if output.to_str().is_some_and(|s| s == "-") {
             ExportFormat::Prop
         } else {
             // 根据文件名或扩展名推断格式
@@ -83,7 +90,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                 crate::utils::Utils::success(&crate::trf!("export.module_prop", path.display()));
             } else {
                 // 输出到stdout
-                println!("{}", content);
+                println!("{content}");
             }
         }
         ExportFormat::Json => {
@@ -97,7 +104,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
                 crate::utils::Utils::success(&crate::trf!("export.module_json", path.display()));
             } else {
-                println!("{}", pretty);
+                println!("{pretty}");
             }
         }
         ExportFormat::Repo => {
@@ -111,7 +118,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
                 crate::utils::Utils::success(&crate::trf!("export.repo_json", path.display()));
             } else {
-                println!("{}", pretty);
+                println!("{pretty}");
             }
         }
         ExportFormat::Track => {
@@ -125,7 +132,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
                 crate::utils::Utils::success(&crate::trf!("export.track_json", path.display()));
             } else {
-                println!("{}", pretty);
+                println!("{pretty}");
             }
         }
         ExportFormat::Config => {
@@ -139,7 +146,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
                 crate::utils::Utils::success(&crate::trf!("export.config_json", path.display()));
             } else {
-                println!("{}", pretty);
+                println!("{pretty}");
             }
         }
         ExportFormat::Update => {
@@ -153,7 +160,7 @@ pub fn run(args: ExportArgs) -> Result<(), KamError> {
                 std::fs::write(path, pretty).map_err(KamError::Io)?;
                 crate::utils::Utils::success(&crate::trf!("export.update_json", path.display()));
             } else {
-                println!("{}", pretty);
+                println!("{pretty}");
             }
         }
     }
