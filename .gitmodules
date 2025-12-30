@@ -20,7 +20,7 @@
 	branch = main
 [submodule "KamWiki"]
 	path = KamWiki
-	url = https://github.com/MemDeco-WG/KamWEBUI.git
+	url = https://github.com/MemDeco-WG/KamWiki.git
         branch = main
 [submodule "Kamcp"]
 	path = Kamcp
