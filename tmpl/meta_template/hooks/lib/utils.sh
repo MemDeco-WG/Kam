@@ -165,11 +165,11 @@ is_termux() {
 
     # Check common environment variables for Termux paths
     case "${PREFIX:-}" in
-        */data/data/com.termux*) return 0 ;;
+    */data/data/com.termux*) return 0 ;;
     esac
 
     case "${HOME:-}" in
-        */data/data/com.termux*) return 0 ;;
+    */data/data/com.termux*) return 0 ;;
     esac
 
     # Check for Termux-specific files/directories
