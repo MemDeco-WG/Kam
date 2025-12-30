@@ -211,10 +211,13 @@ mod tests {
 
         // Preserve original HOME and set a fake HOME for the duration of the test.
         let orig_home = env::var("HOME").ok();
-        unsafe { env::set_var("HOME", home_dir.to_str().unwrap()) };
+        unsafe {
+            env::set_var("HOME", home_dir.to_str().unwrap());
+        }
 
         // Ensure dirs::home_dir reflects our change; else skip to avoid touching real home.
         if dirs::home_dir().as_deref() != Some(home_dir.as_path()) {
+            // restore HOME
             if let Some(o) = orig_home {
                 unsafe { env::set_var("HOME", o) };
             } else {

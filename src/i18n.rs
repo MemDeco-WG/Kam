@@ -197,19 +197,43 @@ pub fn tr_key(key: &str) -> &str {
 
     match current_language() {
         Language::En => {
-            // Prefer keyed translations first (key-based system)
-            keyed_en(key)
-                .unwrap_or_else(|| tr_try_with_colon_variants(key, zh_to_en).map_or(key, |en| en))
+            // Prefer keyed translations first (key-based system).
+            if let Some(v) = keyed_en(key) {
+                return v;
+            }
+            // Next try Fluent messages (FTL) for the current language (no args).
+            if let Some(s) = format_for_lang(Language::En, key, &[] as &[&dyn Display]) {
+                // Leak String to return a &'static str (intentionally persistent).
+                return Box::leak(s.into_boxed_str());
+            }
+            // For dotted keys, enforce presence: fail-fast to force adding i18n when strict mode enabled.
+            if key.contains('.') && i18n_strict_enabled() {
+                panic!(
+                    "Missing i18n key/message for '{}'. Add a keyed translation or an FTL message for the current language (en).",
+                    key
+                );
+            }
+            // Otherwise fall back to literal conversions (e.g., full-width colon variants).
+            tr_try_with_colon_variants(key, zh_to_en).map_or(key, |en| en)
         }
         Language::Zh => {
             // Prefer keyed translations first (key-based system).
-            // If a keyed Chinese translation is not available, fallback to keyed English
-            // translations so the user still sees a human-readable string instead of
-            // the raw key. If neither keyed map contains the entry, fall back to the
-            // literal-based conversion attempt (en->zh) and finally the key itself.
-            keyed_zh(key)
-                .or_else(|| keyed_en(key))
-                .unwrap_or_else(|| tr_try_with_colon_variants(key, en_to_zh).map_or(key, |zh| zh))
+            if let Some(v) = keyed_zh(key) {
+                return v;
+            }
+            // Try Fluent messages (FTL) for the current language.
+            if let Some(s) = format_for_lang(Language::Zh, key, &[] as &[&dyn Display]) {
+                return Box::leak(s.into_boxed_str());
+            }
+            // For dotted keys, enforce presence: fail-fast to force adding i18n when strict mode enabled.
+            if key.contains('.') && i18n_strict_enabled() {
+                panic!(
+                    "缺少 i18n 键/消息 '{}'. 请为当前语言 (zh) 添加一个 keyed 翻译或 FTL 消息。",
+                    key
+                );
+            }
+            // Otherwise fall back to literal-based conversion (en->zh).
+            tr_try_with_colon_variants(key, en_to_zh).map_or(key, |zh| zh)
         }
     }
 }
@@ -225,6 +249,30 @@ pub fn tr_fmt(template_key: &str, args: &[&dyn Display]) -> String {
     // If a Fluent message exists for the key in the current language, prefer it.
     if let Some(s) = format_for_current_lang(template_key, args) {
         return s;
+    }
+
+    // If this looks like a dotted key (i18n key) and no Fluent message was found,
+    // require a keyed translation to exist; otherwise abort to force authors to
+    // add the i18n entry (fail-fast) when strict mode is enabled.
+    if template_key.contains('.') && i18n_strict_enabled() {
+        match current_language() {
+            Language::En => {
+                if keyed_en(template_key).is_none() {
+                    panic!(
+                        "Missing i18n for key '{}' (en): no Fluent message and no keyed translation. Add one to src/locales/en-US/main.ftl or the keyed maps.",
+                        template_key
+                    );
+                }
+            }
+            Language::Zh => {
+                if keyed_zh(template_key).is_none() {
+                    panic!(
+                        "缺少 i18n 键 '{}'（zh）：没有 Fluent 消息或 keyed 翻译，请添加到 src/locales/zh-CN/main.ftl 或 keyed 地图。",
+                        template_key
+                    );
+                }
+            }
+        }
     }
 
     let tmpl = tr_key(template_key);
@@ -251,12 +299,30 @@ pub fn tr_fmt(template_key: &str, args: &[&dyn Display]) -> String {
     out
 }
 
+fn i18n_strict_enabled() -> bool {
+    std::env::var("KAM_I18N_STRICT")
+        .map(|v| {
+            let v = v.trim();
+            v == "1" || v.eq_ignore_ascii_case("true")
+        })
+        .unwrap_or(false)
+}
+
 /// Helper for one-off translation. Fancy macros are provided (trf) but some
 /// code paths may prefer calling this directly.
+fn with_single_display_arg<R, F>(arg: &dyn Display, f: F) -> R
+where
+    F: FnOnce(&[&dyn Display]) -> R,
+{
+    let arr = [arg];
+    f(&arr)
+}
+
 pub fn tr_fmt_single<T: Display>(template_key: &str, arg: T) -> String {
-    // Explicitly coerce the single argument to `&dyn Display` to avoid
-    // a typed `[&T; 1]` array which doesn't coerce implicitly.
-    tr_fmt(template_key, &[&arg as &dyn Display])
+    // Avoid heap allocation by creating a small stack array and invoking tr_fmt
+    // while the array is still in scope.
+    let a: &dyn Display = &arg;
+    with_single_display_arg(a, |s| tr_fmt(template_key, s))
 }
 
 // A map-backed keyed translation system with a minimal fallback to the previous
@@ -1014,12 +1080,15 @@ mod tests {
             "repo.search.empty_query",
         ];
 
-        // Collect keys missing in both maps for clearer debug output.
+        // Collect keys missing in keyed maps and Fluent messages for clearer debug output.
         let mut missing: Vec<&str> = Vec::new();
         for k in &keys {
             let en_has = keyed_en_map().contains_key(*k);
             let zh_has = keyed_zh_map().contains_key(*k);
-            if !en_has && !zh_has {
+            // Also accept presence in Fluent translations (FTL) for either language.
+            let ftl_en = has_message(Language::En, *k);
+            let ftl_zh = has_message(Language::Zh, *k);
+            if !en_has && !zh_has && !ftl_en && !ftl_zh {
                 missing.push(*k);
             }
         }
@@ -1037,13 +1106,35 @@ mod tests {
                 .filter(|k| k.starts_with("repo."))
                 .collect();
 
+            // Also show which of the expected keys are present as Fluent messages.
+            let mut en_ftl_found: Vec<&str> = vec![];
+            let mut zh_ftl_found: Vec<&str> = vec![];
+            for k in &keys {
+                if has_message(Language::En, k) {
+                    en_ftl_found.push(*k);
+                }
+                if has_message(Language::Zh, k) {
+                    zh_ftl_found.push(*k);
+                }
+            }
+
             eprintln!("EN repo keys ({}): {:?}", en_repo_keys.len(), en_repo_keys);
             eprintln!("ZH repo keys ({}): {:?}", zh_repo_keys.len(), zh_repo_keys);
+            eprintln!(
+                "EN FTL repo keys ({}): {:?}",
+                en_ftl_found.len(),
+                en_ftl_found
+            );
+            eprintln!(
+                "ZH FTL repo keys ({}): {:?}",
+                zh_ftl_found.len(),
+                zh_ftl_found
+            );
         }
 
         assert!(
             missing.is_empty(),
-            "Missing i18n keys in en/zh maps: {:?}",
+            "Missing i18n keys in en/zh maps or FTL messages: {:?}",
             missing
         );
     }
@@ -1091,6 +1182,143 @@ mod tests {
         // Using the macro, with English key
         let s = trf!("Building module: {} v{}", "mod", "1.0");
         assert!(s.contains("构建模块") || s.contains("构建模块："));
+    }
+
+    #[test]
+    #[serial]
+    fn test_tr_fmt_single_stack_helper() {
+        // Ensure stack-allocated helper path works and formats a single arg correctly.
+        set_language(Language::Zh);
+        let s = tr_fmt_single("status.failed", "foo");
+        assert_eq!(s, "✗ 失败: foo");
+        set_language(Language::En);
+        let s2 = tr_fmt_single("status.failed", "bar");
+        assert_eq!(s2, "✗ Failed: bar");
+        // Reset language
+        set_language(Language::En);
+    }
+
+    #[test]
+    #[serial]
+    fn test_tr_fmt_panics_on_missing_key() {
+        // tr_fmt should panic for missing dotted keyed messages (both en & zh)
+        let orig = std::env::var("KAM_I18N_STRICT").ok();
+        unsafe {
+            std::env::set_var("KAM_I18N_STRICT", "1");
+        }
+
+        // Generate a runtime-unique key so static analysis (build-time checks) won't
+        // treat the literal test key as a missing i18n and fail early.
+        let uniq = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let key = format!("this.key.does.not.exist.{}", uniq);
+
+        set_language(Language::En);
+        let r = std::panic::catch_unwind(|| {
+            tr_fmt(&key, &[] as &[&dyn std::fmt::Display]);
+        });
+        assert!(
+            r.is_err(),
+            "Expected tr_fmt to panic on missing keyed i18n (en)"
+        );
+
+        set_language(Language::Zh);
+        let r2 = std::panic::catch_unwind(|| {
+            tr_fmt(&key, &[] as &[&dyn std::fmt::Display]);
+        });
+        assert!(
+            r2.is_err(),
+            "Expected tr_fmt to panic on missing keyed i18n (zh)"
+        );
+
+        // Restore env & reset language
+        if let Some(v) = orig {
+            unsafe {
+                std::env::set_var("KAM_I18N_STRICT", v);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("KAM_I18N_STRICT");
+            }
+        }
+        set_language(Language::En);
+    }
+
+    #[test]
+    #[serial]
+    fn test_tr_key_panics_on_missing_key() {
+        // tr_key should panic when dotted keyed messages are missing
+        let orig = std::env::var("KAM_I18N_STRICT").ok();
+        unsafe {
+            std::env::set_var("KAM_I18N_STRICT", "1");
+        }
+
+        // Generate a runtime-unique key to avoid triggering build-time checks that
+        // look for static literal missing keys.
+        let uniq = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let key = format!("this.key.also.missing.{}", uniq);
+
+        set_language(Language::En);
+        let r = std::panic::catch_unwind(|| {
+            let _ = tr_key(&key);
+        });
+        assert!(
+            r.is_err(),
+            "Expected tr_key to panic on missing keyed i18n (en)"
+        );
+
+        set_language(Language::Zh);
+        let r2 = std::panic::catch_unwind(|| {
+            let _ = tr_key(&key);
+        });
+        assert!(
+            r2.is_err(),
+            "Expected tr_key to panic on missing keyed i18n (zh)"
+        );
+
+        // Restore env & language
+        if let Some(v) = orig {
+            unsafe {
+                std::env::set_var("KAM_I18N_STRICT", v);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("KAM_I18N_STRICT");
+            }
+        }
+        set_language(Language::En);
+    }
+
+    #[test]
+    #[serial]
+    fn test_tr_fmt_non_strict_allows_missing() {
+        // Ensure default (non-strict) does not panic for missing dotted keyed messages.
+        let orig = std::env::var("KAM_I18N_STRICT").ok();
+        // Ensure strict mode unset
+        unsafe {
+            std::env::remove_var("KAM_I18N_STRICT");
+        }
+        set_language(Language::En);
+        let r = std::panic::catch_unwind(|| {
+            tr_fmt("this.key.does.not.exist", &[] as &[&dyn std::fmt::Display]);
+        });
+        assert!(r.is_ok(), "Expected tr_fmt not to panic in non-strict mode");
+        // Restore env & language
+        if let Some(v) = orig {
+            unsafe {
+                std::env::set_var("KAM_I18N_STRICT", v);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("KAM_I18N_STRICT");
+            }
+        }
+        set_language(Language::En);
     }
 
     #[test]

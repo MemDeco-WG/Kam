@@ -112,6 +112,9 @@ features = ["serde"]
 [dev-dependencies]
 serial_test = "3.2.0"
 
+[build-dependencies]
+regex = "1"
+
 [features]
 default = []
 sys-locale = ["dep:sys-locale"]
