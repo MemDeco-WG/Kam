@@ -26,7 +26,7 @@ impl HttpUrlsRule {
         lazy_static::lazy_static! {
             static ref RE: Regex = Regex::new(r"\bhttp://\S+").unwrap();
         }
-        &*RE
+        &RE
     }
 }
 
