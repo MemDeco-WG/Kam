@@ -403,6 +403,7 @@ fn main() {
 
                     // Post-process argument help texts with i18n-based replacements.
                     // Build dotted key base from `sub_names` (if present); fallback to top-level "cli".
+                    let sub_names: Vec<String> = Vec::new();
                     let cmd_key_base = if sub_names.is_empty() {
                         "cli".to_string()
                     } else {
@@ -443,6 +444,7 @@ fn main() {
                 let mut cleaned = dedupe_help(&raw);
 
                 // Post-process argument help texts with i18n-based replacements.
+                let sub_names: Vec<String> = Vec::new();
                 let cmd_key_base = if sub_names.is_empty() {
                     "cli".to_string()
                 } else {
@@ -597,6 +599,7 @@ fn main() {
                     let mut cleaned = dedupe_help(&raw);
 
                     // Post-process argument help texts with i18n-based replacements.
+                    let sub_names: Vec<String> = Vec::new();
                     let cmd_key_base = if sub_names.is_empty() {
                         "cli".to_string()
                     } else {
@@ -652,6 +655,7 @@ fn main() {
                     let mut cleaned = dedupe_help(&raw);
 
                     // Post-process argument help texts with i18n-based replacements.
+                    let sub_names = &args.subcommand;
                     let cmd_key_base = if sub_names.is_empty() {
                         "cli".to_string()
                     } else {
@@ -696,6 +700,7 @@ fn main() {
                 let mut cleaned = dedupe_help(&raw);
 
                 // Post-process argument help texts with i18n-based replacements.
+                let sub_names: Vec<String> = vec![];
                 let cmd_key_base = if sub_names.is_empty() {
                     "cli".to_string()
                 } else {
