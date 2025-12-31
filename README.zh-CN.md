@@ -795,6 +795,12 @@ target_dir = "dist"              # 输出目录
 output_file = "{{id}}"           # 输出文件名模板
 hooks_dir = "hooks"              # 钩子目录
 source_dir = "src/{{id}}"        # 源码目录（可选）
+# 常见排除规则（这些默认会写入生成的 `kam.toml`，便于用户查看与修改）
+exclude = [".git/", "target/", "node_modules/", ".DS_Store", "Thumbs.db", "*.tmp", "*.log", "*.bak", ".kam/"]
+# 强制包含规则（默认空数组）。当路径同时匹配 exclude 和 include 时，include 优先。
+include = []
+# 是否尊重顶层 .gitignore 文件（默认为 false）。建议优先使用 kam.toml 的 include/exclude 来控制打包行为。
+respect_gitignore = false
 ```
 
 ### 条件编译

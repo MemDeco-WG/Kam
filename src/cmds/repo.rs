@@ -88,6 +88,10 @@ pub struct SyncArgs {
 /// and forwards to `run_with_modules_url` which accepts an optional
 /// `modules_url` override (useful when callers want to forward the
 /// top-level `--modules-url` value into the repo command).
+///
+/// # Errors
+/// Returns `KamError` when network, I/O, or parsing operations fail
+/// (for example: `FetchFailed`, `Io`, or `PackageNotFound`).
 pub fn run(args: RepoArgs) -> Result<(), KamError> {
     run_with_modules_url(args, None)
 }
@@ -97,11 +101,15 @@ pub fn run(args: RepoArgs) -> Result<(), KamError> {
 /// Callers that wish to forward the top-level `--modules-url` flag into the
 /// repo command should use this variant. The implementation respects the
 /// override for both `repo sync` and pacman-style `-S`/`-s` handling.
-pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<String>) -> Result<(), KamError> {
+///
+/// # Errors
+/// Returns `KamError` on failures performing network requests, parsing remote
+/// payloads, or underlying I/O operations (for example: `FetchFailed`, `Io`).
+pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result<(), KamError> {
     // If a nested repo subcommand is provided, handle it first (e.g., `repo sync`)
     if let Some(RepoCommand::Sync(sync_args)) = args.command {
         // Determine effective base URL (allow a forwarded override)
-        let base = effective_base_url(modules_url.as_deref());
+        let base = effective_base_url(modules_url);
         // Use the CLI-provided jobs value (if any) to control concurrency for this sync.
         // Pass through the quiet flag so the sync implementation can suppress progress output.
         return repo_sync_with_jobs(&base, sync_args.force, sync_args.jobs, sync_args.quiet);
@@ -111,7 +119,7 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<String>) -> Resu
     handle_pacman_style(
         args.sync,
         args.search,
-        args.targets,
+        &args.targets,
         false,
         modules_url,
         args.quiet,
@@ -153,7 +161,7 @@ struct Author {
 struct Release {
     name: Option<String>,
     #[serde(rename = "releaseAssets")]
-    release_assets: Option<Vec<Asset>>,
+    assets: Option<Vec<Asset>>,
     version: Option<String>,
     created_at: Option<String>,
     published_at: Option<String>,
@@ -176,18 +184,22 @@ struct Asset {
 ///   joined `targets` as the search query and perform remote search.
 /// - Else if `sync` is true (user passed `-S`) then treat `targets` as a list
 ///   of module ids to download (latest release ZIP).
+///
+/// # Errors
+/// Returns `KamError` when network, I/O, or parsing operations fail
+/// (for example: `FetchFailed`, `Io`).
 pub fn handle_pacman_style(
     sync: bool,
     search: bool,
-    targets: Vec<String>,
+    targets: &[String],
     yes: bool,
-    modules_url: Option<String>,
+    modules_url: Option<&str>,
     quiet: bool,
 ) -> Result<(), KamError> {
     // Respect explicit --yes/-y flag passed from CLI (as param) or environment arg fallback
     let assume_yes = yes || std::env::args().any(|a| a == "-y" || a == "--yes");
     // Determine effective base URL (override -> env -> config -> default)
-    let base = effective_base_url(modules_url.as_deref());
+    let base = effective_base_url(modules_url);
 
     // Search mode (supports fuzzy search)
     if search {
@@ -211,9 +223,9 @@ pub fn handle_pacman_style(
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
-            .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
+            .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {e}")))?;
 
-        for module_id in targets.iter() {
+        for module_id in targets {
             let section_title = trf!("repo.download", module_id);
             if !quiet {
                 Utils::section(&section_title);
@@ -274,13 +286,12 @@ fn process_module_download(
     // Select an asset (first zip-like asset in releases)
     let mut chosen_asset: Option<(&Asset, &str)> = None; // (asset, release_name)
     if let Some(rels) = md.releases.as_ref() {
-        for r in rels.iter() {
-            if let Some(assets) = r.release_assets.as_ref()
+        for r in rels {
+            if let Some(assets) = r.assets.as_ref()
                 && let Some(a) = assets.iter().find(|x| {
                     x.content_type
                         .as_deref()
-                        .map(|ct| ct.to_lowercase().contains("zip"))
-                        .unwrap_or(false)
+                        .is_some_and(|ct| ct.to_lowercase().contains("zip"))
                         || x.name.to_lowercase().ends_with(".zip")
                 })
             {
@@ -295,9 +306,7 @@ fn process_module_download(
         }
     }
 
-    let (asset, release_label) = if let Some((a, rname)) = chosen_asset {
-        (a, rname)
-    } else {
+    let Some((asset, release_label)) = chosen_asset else {
         Utils::warn(trf!("repo.no_downloadable_zip_asset", module_id));
         return Ok(());
     };
@@ -335,22 +344,22 @@ fn process_module_download(
         println!("{}", trf!("repo.module_detail.summary", s));
     }
 
-    if let Some(auths) = md.authors.as_ref() {
-        if !auths.is_empty() {
-            let authors_str = auths
-                .iter()
-                .map(|a| {
-                    if let Some(link) = a.link.as_deref() {
-                        if !link.trim().is_empty() {
-                            return format!("{} ({})", a.name, link);
-                        }
-                    }
-                    a.name.clone()
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            println!("{}: {}", trf!("repo.authors"), authors_str);
-        }
+    if let Some(auths) = md.authors.as_ref()
+        && !auths.is_empty()
+    {
+        let authors_str = auths
+            .iter()
+            .map(|a| {
+                if let Some(link) = a.link.as_deref()
+                    && !link.trim().is_empty()
+                {
+                    return format!("{} ({})", a.name, link);
+                }
+                a.name.clone()
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("{}: {}", trf!("repo.authors"), authors_str);
     }
 
     println!("{}", trf!("repo.module_detail.release", release_label));
@@ -434,7 +443,7 @@ fn module_cache_path(module_id: &str) -> Result<PathBuf, KamError> {
     let mut p = cache_root_dir()?;
     p.push("modules");
     std::fs::create_dir_all(&p)?;
-    p.push(format!("{}.json", module_id));
+    p.push(format!("{module_id}.json"));
     Ok(p)
 }
 
@@ -457,7 +466,9 @@ fn try_find_index_in_cache_dir(dir: &Path) -> Option<Vec<SearchEntry>> {
             if p.is_file()
                 && let Some(name) = p.file_name().and_then(|n| n.to_str())
                 && name.starts_with("index_")
-                && name.ends_with(".json")
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
                 && let Ok(meta) = p.metadata()
                 && let Ok(m) = meta.modified()
             {
@@ -500,7 +511,7 @@ fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry
     }
 
     // 3) Attempt network fetch; if network fails or non-success status, try fallback cache scan before returning error.
-    let url = format!("{}{}", base_url, SEARCH_INDEX_PATH);
+    let url = format!("{base_url}{SEARCH_INDEX_PATH}");
     match client
         .get(&url)
         .header(USER_AGENT, "kam/repo-search")
@@ -515,16 +526,15 @@ fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry
                     return Ok(entries);
                 }
                 return Err(KamError::FetchFailed(format!(
-                    "{} returned status {}",
-                    url,
+                    "{url} returned status {}",
                     resp.status()
                 )));
             }
-            let body = resp.text().map_err(|e| {
-                KamError::FetchFailed(format!("Failed to read {} body: {}", url, e))
-            })?;
+            let body = resp
+                .text()
+                .map_err(|e| KamError::FetchFailed(format!("Failed to read {url} body: {e}")))?;
             let entries: Vec<SearchEntry> = serde_json::from_str(&body)
-                .map_err(|e| KamError::Json(format!("Failed to parse {} JSON: {}", url, e)))?;
+                .map_err(|e| KamError::Json(format!("Failed to parse {url} JSON: {e}")))?;
             // Write to primary cache path (atomic)
             let _ = write_atomic(&path, &body);
             Ok(entries)
@@ -536,7 +546,7 @@ fn fetch_index_cached(client: &Client, base_url: &str) -> Result<Vec<SearchEntry
             {
                 return Ok(entries);
             }
-            Err(KamError::FetchFailed(format!("GET {} failed: {}", url, e)))
+            Err(KamError::FetchFailed(format!("GET {url} failed: {e}")))
         }
     }
 }
@@ -566,15 +576,15 @@ pub fn repo_sync_with_jobs(
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
-        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
+        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {e}")))?;
 
     let op_start = std::time::Instant::now();
-    let url = format!("{}{}", base_url, SEARCH_INDEX_PATH);
+    let url = format!("{base_url}{SEARCH_INDEX_PATH}");
     let mut resp = client
         .get(&url)
         .header(USER_AGENT, "kam/repo-sync")
         .send()
-        .map_err(|e| KamError::FetchFailed(format!("GET {} failed: {}", url, e)))?;
+        .map_err(|e| KamError::FetchFailed(format!("GET {url} failed: {e}")))?;
 
     if !resp.status().is_success() {
         return Err(KamError::FetchFailed(format!(
@@ -624,7 +634,7 @@ pub fn repo_sync_with_jobs(
     loop {
         let n = resp
             .read(&mut tmp)
-            .map_err(|e| KamError::FetchFailed(format!("Failed to read {} body: {}", url, e)))?;
+            .map_err(|e| KamError::FetchFailed(format!("Failed to read {url} body: {e}")))?;
         if n == 0 {
             break;
         }
@@ -634,7 +644,7 @@ pub fn repo_sync_with_jobs(
     index_pb.finish();
 
     let body = String::from_utf8(buf)
-        .map_err(|e| KamError::Json(format!("Failed to parse {} body as UTF-8: {}", url, e)))?;
+        .map_err(|e| KamError::Json(format!("Failed to parse {url} body as UTF-8: {e}")))?;
 
     let path = index_cache_path(base_url)?;
     write_atomic(&path, &body)?;
@@ -652,10 +662,7 @@ pub fn repo_sync_with_jobs(
     let entries: Vec<SearchEntry> = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => {
-            return Err(KamError::Json(format!(
-                "Failed to parse {} JSON: {}",
-                url, e
-            )));
+            return Err(KamError::Json(format!("Failed to parse {url} JSON: {e}")));
         }
     };
 
@@ -690,7 +697,7 @@ pub fn repo_sync_with_jobs(
     };
     // Count how many modules actually need fetching (not cached or forced)
     let mut need_fetch_count: usize = 0;
-    for e in entries.iter() {
+    for e in &entries {
         let module_cache = module_cache_path(&e.name);
         if let Ok(p) = &module_cache
             && !force
@@ -717,7 +724,7 @@ pub fn repo_sync_with_jobs(
     // Prepare up to MAX_VISIBLE visible bars; subsequent modules are kept hidden (no visual).
     // Determine number of workers (CLI `--jobs` > env `KAM_REPO_CONCURRENCY` > default=core count).
     let default_workers = std::thread::available_parallelism()
-        .map(|n| n.get())
+        .map(std::num::NonZeroUsize::get)
         .unwrap_or(1);
     let mut num_workers = match jobs {
         Some(j) if j > 0 => j,
@@ -736,7 +743,7 @@ pub fn repo_sync_with_jobs(
     let mut visible_cnt: usize = 0;
     let updated_count = Arc::new(AtomicUsize::new(0));
 
-    for e in entries.iter() {
+    for e in &entries {
         let module_id = e.name.clone();
         let module_cache = module_cache_path(&module_id);
 
@@ -753,12 +760,12 @@ pub fn repo_sync_with_jobs(
                     )
                     .unwrap_or_else(|_| ProgressStyle::default_bar()),
                 );
-                p.set_message(format!("{:20}", module_id));
+                p.set_message(format!("{module_id:20}"));
                 p
             } else {
                 // Hidden progress bar so later operations still work but nothing is shown.
                 let p = ProgressBar::hidden();
-                p.set_message(format!("{:20}", module_id));
+                p.set_message(format!("{module_id:20}"));
                 p
             };
 
@@ -766,19 +773,19 @@ pub fn repo_sync_with_jobs(
                 // show cached as full bar immediately
                 pb.set_length(1);
                 pb.set_position(1);
-                pb.finish_with_message(format!("{:20} (cached)", module_id));
+                pb.finish_with_message(format!("{module_id:20} (cached)"));
                 visible_cnt += 1;
                 top_pb.inc(1);
                 continue;
             }
 
             // needs fetch - add as visible task (or hidden placeholder when quiet)
-            let murl = format!("{}{}{}.json", base_url, MODULE_JSON_PREFIX, module_id);
+            let murl = format!("{base_url}{MODULE_JSON_PREFIX}{module_id}.json");
             if let Ok(p) = module_cache {
                 tasks.push((module_id, murl, p, pb));
             } else {
                 // if we couldn't compute cache path, mark as done
-                pb.finish_with_message(format!("{:20}", module_id));
+                pb.finish_with_message(format!("{module_id:20}"));
                 top_pb.inc(1);
             }
             visible_cnt += 1;
@@ -789,7 +796,7 @@ pub fn repo_sync_with_jobs(
             } else {
                 // fetch but hide progress bar
                 let pb = ProgressBar::hidden();
-                let murl = format!("{}{}{}.json", base_url, MODULE_JSON_PREFIX, module_id);
+                let murl = format!("{base_url}{MODULE_JSON_PREFIX}{module_id}.json");
                 if let Ok(p) = module_cache {
                     tasks.push((module_id, murl, p, pb));
                 } else {
@@ -806,7 +813,7 @@ pub fn repo_sync_with_jobs(
 
         // Send all tasks into a channel consumed by workers (dynamic work-stealing via channel clones)
         let (tx, rx) = crossbeam_channel::unbounded::<(String, String, PathBuf, ProgressBar)>();
-        for t in tasks.into_iter() {
+        for t in tasks {
             let _ = tx.send(t);
         }
         // Close the sender to signal workers when done
@@ -823,7 +830,7 @@ pub fn repo_sync_with_jobs(
                 while let Ok((module_id, murl, ppath, pb)) = rx_clone.recv() {
                     // Defensive check: if cache exists and not forcing, treat as cached
                     if ppath.exists() && !force {
-                        pb.finish_with_message(format!("{:20} (cached)", module_id));
+                        pb.finish_with_message(format!("{module_id:20} (cached)"));
                         top.inc(1);
                         continue;
                     }
@@ -854,42 +861,30 @@ pub fn repo_sync_with_jobs(
                                     }
                                     Ok(_) => break,
                                     Err(e) => {
-                                        Utils::warn(format!("Failed to read {} body: {}", murl, e));
-                                        pb.finish_with_message(format!(
-                                            "{:20} (failed)",
-                                            module_id
-                                        ));
+                                        Utils::warn(format!("Failed to read {murl} body: {e}"));
+                                        pb.finish_with_message(format!("{module_id:20} (failed)"));
                                         break;
                                     }
                                 }
                             }
 
                             // Validate and write cache atomically
-                            match String::from_utf8(mbuf) {
-                                Ok(s) => {
-                                    if let Err(e) = write_atomic(&ppath, &s) {
-                                        Utils::warn(format!(
-                                            "Failed to write cache {}: {}",
-                                            module_id, e
-                                        ));
-                                        pb.finish_with_message(format!(
-                                            "{:20} (failed)",
-                                            module_id
-                                        ));
-                                    } else {
-                                        updated.fetch_add(1, Ordering::SeqCst);
-                                        pb.finish_with_message(format!("{:20}", module_id));
-                                    }
+                            if let Ok(s) = String::from_utf8(mbuf) {
+                                if let Err(e) = write_atomic(&ppath, &s) {
+                                    Utils::warn(format!("Failed to write cache {module_id}: {e}"));
+                                    pb.finish_with_message(format!("{module_id:20} (failed)"));
+                                } else {
+                                    updated.fetch_add(1, Ordering::SeqCst);
+                                    pb.finish_with_message(format!("{module_id:20}"));
                                 }
-                                Err(_) => {
-                                    Utils::warn(format!("Failed to parse {} body as UTF-8", murl));
-                                    pb.finish_with_message(format!("{:20} (invalid)", module_id));
-                                }
+                            } else {
+                                Utils::warn(format!("Failed to parse {murl} body as UTF-8"));
+                                pb.finish_with_message(format!("{module_id:20} (invalid)"));
                             }
                         }
                         Err(e) => {
-                            Utils::warn(format!("GET {} failed: {}", murl, e));
-                            pb.finish_with_message(format!("{:20} (failed)", module_id));
+                            Utils::warn(format!("GET {murl} failed: {e}"));
+                            pb.finish_with_message(format!("{module_id:20} (failed)"));
                         }
                     }
 
@@ -928,7 +923,7 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
     let client = Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
-        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
+        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {e}")))?;
 
     // Use cached index if available & fresh; otherwise fetch and cache.
     let entries = fetch_index_cached(&client, base_url)?;
@@ -961,21 +956,21 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
         let score_suffix = if (*score - 1.0).abs() > f64::EPSILON {
             trf!("repo.score_format", format!("{:.2}", score))
         } else {
-            "".to_string()
+            String::new()
         };
         println!(
             "{}",
             trf!("repo.result_line_simple", e.name, desc, score_suffix)
         );
         if let Some(s) = &e.summary {
-            println!("    {}", s);
+            println!("    {s}");
         }
         if let Some(a) = &e.authors {
-            println!("    {}: {}", crate::i18n::tr("repo.authors"), a);
+            println!("    {}: {a}", crate::i18n::tr("repo.authors"));
         }
         if let Some(u) = &e.url {
             let pretty = resolve_entry_url(base_url, u);
-            println!("    {}: {}", crate::i18n::tr("repo.url"), pretty);
+            println!("    {}: {pretty}", crate::i18n::tr("repo.url"));
         }
 
         // Try to fetch module details for the top few results to show version/time info
@@ -984,16 +979,16 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
         {
             // Version
             if let Some(lr) = md.latest_release.as_deref() {
-                println!("    {}: {}", crate::i18n::tr("repo.version"), lr);
+                println!("    {}: {lr}", crate::i18n::tr("repo.version"));
             } else if let Some(rels) = md.releases.as_ref()
                 && let Some(first) = rels.first()
                 && let Some(v) = first.version.as_deref().or(first.name.as_deref())
             {
-                println!("    {}: {}", crate::i18n::tr("repo.version"), v);
+                println!("    {}: {v}", crate::i18n::tr("repo.version"));
             }
             // Time
             if let Some(lt) = md.latest_release_time.as_deref() {
-                println!("    {}: {}", crate::i18n::tr("repo.updated"), lt);
+                println!("    {}: {lt}", crate::i18n::tr("repo.updated"));
             } else if let Some(rels) = md.releases.as_ref()
                 && let Some(first) = rels.first()
                 && let Some(pub_at) = first
@@ -1002,7 +997,7 @@ pub fn search_remote(query: &str, base_url: &str) -> Result<(), KamError> {
                     .or(first.updated_at.as_deref())
                     .or(first.created_at.as_deref())
             {
-                println!("    {}: {}", crate::i18n::tr("repo.updated"), pub_at);
+                println!("    {}: {pub_at}", crate::i18n::tr("repo.updated"));
             }
         }
 
@@ -1020,7 +1015,7 @@ pub(crate) fn search_remote_interactive(
     let client = Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
-        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
+        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {e}")))?;
 
     // Use cached index if available & fresh; otherwise fetch and cache.
     let entries = fetch_index_cached(&client, base_url)?;
@@ -1062,7 +1057,7 @@ pub(crate) fn search_remote_interactive(
         let score_suffix = if (*score - 1.0).abs() > f64::EPSILON {
             trf!("repo.score_format", format!("{:.2}", score))
         } else {
-            "".to_string()
+            String::new()
         };
         println!(
             "{}",
@@ -1075,14 +1070,14 @@ pub(crate) fn search_remote_interactive(
             )
         );
         if let Some(s) = &e.summary {
-            println!("    {}", s);
+            println!("    {s}");
         }
         if let Some(a) = &e.authors {
-            println!("    {}: {}", crate::i18n::tr("repo.authors"), a);
+            println!("    {}: {a}", crate::i18n::tr("repo.authors"));
         }
         if let Some(u) = &e.url {
             let pretty = resolve_entry_url(base_url, u);
-            println!("    {}: {}", crate::i18n::tr("repo.url"), pretty);
+            println!("    {}: {pretty}", crate::i18n::tr("repo.url"));
         }
 
         // Try to fetch module details for the top few results to show version/time info
@@ -1211,25 +1206,22 @@ fn fetch_module_detail(
                     return Ok(md);
                 }
                 Utils::warn(format!(
-                    "Cached module JSON for '{}' could not be parsed; will attempt to refresh from registry",
-                    module_id
+                    "Cached module JSON for {module_id} could not be parsed; will attempt to refresh from registry"
                 ));
             } else {
                 Utils::warn(format!(
-                    "Failed to read cached module JSON for '{}'; will attempt to refresh from registry",
-                    module_id
+                    "Failed to read cached module JSON for {module_id}; will attempt to refresh from registry"
                 ));
             }
         } else {
             // Could not open file; fall through to network fetch.
             Utils::warn(format!(
-                "Failed to open cached module JSON for '{}'; will attempt to refresh from registry",
-                module_id
+                "Failed to open cached module JSON for {module_id}; will attempt to refresh from registry"
             ));
         }
     }
 
-    let url = format!("{}{}{}.json", base_url, MODULE_JSON_PREFIX, module_id);
+    let url = format!("{base_url}{MODULE_JSON_PREFIX}{module_id}.json");
     let resp = client
         .get(&url)
         .header(USER_AGENT, "kam/repo-module")
@@ -1273,7 +1265,7 @@ pub fn download_module_latest(
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
-        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {}", e)))?;
+        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {e}")))?;
 
     let url = format!("{}{}{}.json", BASE_URL, MODULE_JSON_PREFIX, module_id);
     let resp = client
@@ -1296,14 +1288,13 @@ pub fn download_module_latest(
         .map_err(|e| KamError::Json(format!("Failed to parse {} JSON: {}", url, e)))?;
 
     if let Some(rels) = md.releases.as_ref() {
-        for r in rels.iter() {
-            if let Some(assets) = r.release_assets.as_ref() {
+        for r in rels {
+            if let Some(assets) = r.assets.as_ref() {
                 // Prefer zip-like assets
                 if let Some(a) = assets.iter().find(|x| {
                     x.content_type
                         .as_deref()
-                        .map(|ct| ct.to_lowercase().contains("zip"))
-                        .unwrap_or(false)
+                        .is_some_and(|ct| ct.to_lowercase().contains("zip"))
                         || x.name.to_lowercase().ends_with(".zip")
                 }) {
                     return download_asset(&client, a, dest_dir, quiet);
@@ -1341,9 +1332,7 @@ fn download_asset(
     }
 
     let filename = &asset.name;
-    let dest = dest_dir
-        .map(|d| d.join(filename))
-        .unwrap_or_else(|| PathBuf::from(filename));
+    let dest = dest_dir.map_or_else(|| PathBuf::from(filename), |d| d.join(filename));
 
     // Try to determine size for progress
     let size = asset.size.or_else(|| resp.content_length());

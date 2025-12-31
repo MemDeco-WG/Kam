@@ -323,22 +323,33 @@ pub fn init_impl(path: &Path, params: &mut InitImplParams<'_>) -> Result<(), Kam
                         }
 
                         // Write the fixed kam.toml
-                        let fixed_content = toml::to_string_pretty(&rendered_kt)
-                            .unwrap_or_else(|_| rendered.clone());
+                        // Treat serialization failures as explicit errors instead of silently
+                        // falling back to the un-pretty-printed `rendered` content.
+                        let fixed_content = toml::to_string_pretty(&rendered_kt).map_err(|e| {
+                            KamError::Toml(format!("Failed to serialize KamToml: {e}"))
+                        })?;
                         fs::write(&kam_toml_path, fixed_content).map_err(KamError::Io)?;
 
                         // Replace current in-memory kt with the rendered/finalized kam.toml to ensure
                         // subsequent logic (e.g. env file writing) reflects the final state
                         kt = rendered_kt;
                     }
-                    Err(_) => {
-                        // Fallback: just write the rendered content
-                        fs::write(&kam_toml_path, rendered).map_err(KamError::Io)?;
+                    Err(e) => {
+                        // Parsing the rendered kam.toml failed — fail explicitly so the user can
+                        // correct the template or provided variables instead of silently writing
+                        // an invalid kam.toml file.
+                        return Err(KamError::Toml(format!(
+                            "Failed to parse rendered kam.toml: {e}"
+                        )));
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to render kam.toml template: {e}");
+                // Treat template rendering errors as explicit failures to avoid silent
+                // degradation; callers should see and handle this error.
+                return Err(KamError::TemplateRenderError(format!(
+                    "Failed to render kam.toml template: {e}"
+                )));
             }
         }
     }

@@ -6,7 +6,7 @@ description = "A Powerful CLI for scaffolding and packaging Magisk/Kernelsu/APU/
 documentation = "https://github.com/MemDeco-WG/Kam/blob/main/README.md"
 homepage = "https://github.com/MemDeco-WG/Kam"
 repository = "https://github.com/MemDeco-WG/Kam"
-license = "GPL-3.0"
+license = "MIT"
 keywords = ["ap", "cli", "kernelsu", "magisk"]
 # `package.authors` is deprecated; moved to `package.metadata.authors`
 # authors = ["LightJunction"]

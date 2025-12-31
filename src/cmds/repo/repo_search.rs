@@ -43,7 +43,8 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
     for (i, ca) in a_chars.iter().enumerate() {
         cur[0] = i + 1;
         for (j, cb) in b_chars.iter().enumerate() {
-            let cost = if ca == cb { 0 } else { 1 };
+            // Use a concise boolean-to-int idiom instead of an if-expression.
+            let cost = usize::from(ca != cb);
             cur[j + 1] = std::cmp::min(std::cmp::min(cur[j] + 1, prev[j + 1] + 1), prev[j] + cost);
         }
         prev.copy_from_slice(&cur);
@@ -56,6 +57,13 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
 ///
 /// - identical strings => 1.0
 /// - empty vs non-empty => < 1.0 (or 0.0 if one side is non-empty and distance==len)
+/// # Notes
+/// - This function casts `usize` values to `f64` for normalization. While a
+///   cast from `usize` to `f64` can theoretically lose precision on some targets,
+///   for the intended use (comparing relatively short string lengths and producing
+///   a normalized similarity score) the precision loss is acceptable.
+/// - We explicitly allow `clippy::cast_precision_loss` for this function with that justification.
+#[allow(clippy::cast_precision_loss)]
 pub fn similarity(a: &str, b: &str) -> f64 {
     let a_trim = a.trim();
     let b_trim = b.trim();
@@ -78,6 +86,7 @@ pub fn similarity(a: &str, b: &str) -> f64 {
 /// 0.30 for interactive selection).
 ///
 /// This function mirrors the scoring logic used in the original `repo.rs`.
+#[allow(clippy::cast_precision_loss)]
 pub fn score_entry(
     name: &str,
     description: Option<&str>,
@@ -95,7 +104,7 @@ pub fn score_entry(
     let sum = summary.unwrap_or("").to_lowercase();
     let auth = authors.unwrap_or("").to_lowercase();
 
-    let hay = format!("{} {} {} {}", name_l, desc, sum, auth);
+    let hay = format!("{name_l} {desc} {sum} {auth}");
 
     // Exact substring match -> highest relevance
     if hay.contains(&q) {

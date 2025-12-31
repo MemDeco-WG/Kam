@@ -24,6 +24,12 @@ fn should_skip_file(
     exclude_patterns: &[String],
     include_patterns: &[String],
 ) -> bool {
+    // Ensure `.gitignore` files are always included in the package (do not let VCS ignores filter them).
+    // The build tooling should rely on `kam.toml`'s include/exclude rules only.
+    if file_name == Some(".gitignore") {
+        return false;
+    }
+
     // Check if file matches any exclude pattern
     let is_excluded = exclude_patterns
         .iter()
@@ -426,17 +432,12 @@ pub fn create_kam_module_zip(
             .unwrap_or_default();
 
         // First, count files to create a proper progress bar
-        // Respect the kam.toml `kam.build.respect_gitignore` flag (default false).
-        let respect_gitignore = kam_toml
-            .kam
-            .build
-            .as_ref()
-            .and_then(|b| b.respect_gitignore)
-            .unwrap_or(false);
+        // Disable .gitignore-based filtering for build: always use kam.toml include/exclude rules.
+        // Use `kam.toml.kam.build.include` / `kam.toml.kam.build.exclude` to control packaging behavior.
 
         let file_count = {
             let temp_walker = ignore::WalkBuilder::new(&src_dir)
-                .git_ignore(respect_gitignore)
+                .git_ignore(false)
                 .hidden(false)
                 .build();
             temp_walker
@@ -462,7 +463,7 @@ pub fn create_kam_module_zip(
         };
 
         let walker = ignore::WalkBuilder::new(&src_dir)
-            .git_ignore(respect_gitignore)
+            .git_ignore(false)
             .hidden(false)
             .build();
 
@@ -643,24 +644,19 @@ pub fn create_template_archive(
         .and_then(|build| build.include.clone())
         .unwrap_or_default();
 
-    // Use ignore::WalkBuilder to traverse all files, respecting .gitignore
-    // For templates, we generally want to include hidden files (like .gitignore itself if needed, though ignore crate handles it)
-    // But we should probably include everything that is not ignored by git.
+    // Use ignore::WalkBuilder to traverse all files.
+    // For templates we include hidden files (like `.gitignore` itself) and we DO NOT
+    // apply VCS ignore rules during packaging; packaging filtering is governed
+    // solely by `kam.toml`'s `build.include` / `build.exclude`.
     let exclude_dir_names = crate::utils::default_exclude_dir_names();
 
     // Count files first for proper progress bar
-    // Respect the kam.toml `kam.build.respect_gitignore` flag (default false).
-    let respect_gitignore = kam_toml
-        .kam
-        .build
-        .as_ref()
-        .and_then(|b| b.respect_gitignore)
-        .unwrap_or(false);
-
+    // Explicitly disable .gitignore-based filtering for packaging.
+    // Hidden files are included by setting hidden(false).
     let file_count = {
         let exclude_dir_names_clone = exclude_dir_names.clone();
         let temp_walker = ignore::WalkBuilder::new(project_root)
-            .git_ignore(respect_gitignore)
+            .git_ignore(false)
             .hidden(false)
             .filter_entry(move |entry| {
                 let name = entry.file_name().to_string_lossy();
@@ -693,7 +689,7 @@ pub fn create_template_archive(
     };
 
     let walker = ignore::WalkBuilder::new(project_root)
-        .git_ignore(respect_gitignore)
+        .git_ignore(false)
         .hidden(false)
         .filter_entry(move |entry| {
             let name = entry.file_name().to_string_lossy();
@@ -797,4 +793,48 @@ pub fn create_template_archive(
         ));
     }
     Ok(source_output_file)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_skip_file;
+
+    #[test]
+    fn gitignore_not_skipped_even_if_excluded() {
+        let exclude_patterns = vec![".gitignore".to_string()];
+        let include_patterns: Vec<String> = vec![];
+        // Even if excluded by pattern, `.gitignore` must not be skipped.
+        assert!(!should_skip_file(
+            ".gitignore",
+            Some(".gitignore"),
+            &exclude_patterns,
+            &include_patterns
+        ));
+    }
+
+    #[test]
+    fn include_overrides_exclude() {
+        let exclude_patterns = vec!["foo.txt".to_string()];
+        let include_patterns = vec!["foo.txt".to_string()];
+        // When a file matches both exclude and include, include should override.
+        assert!(!should_skip_file(
+            "foo.txt",
+            Some("foo.txt"),
+            &exclude_patterns,
+            &include_patterns
+        ));
+    }
+
+    #[test]
+    fn excluded_file_is_skipped() {
+        let exclude_patterns = vec!["bar.txt".to_string()];
+        let include_patterns: Vec<String> = vec![];
+        // If excluded and not included -> should be skipped.
+        assert!(should_skip_file(
+            "bar.txt",
+            Some("bar.txt"),
+            &exclude_patterns,
+            &include_patterns
+        ));
+    }
 }

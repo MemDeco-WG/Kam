@@ -25,6 +25,7 @@ use std::time::SystemTime;
 use tempfile::TempDir;
 
 /// CLI arguments for `kam install`
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Args, Debug, Clone)]
 pub struct InstallArgs {
     /// Path to module package (.zip) to install. If omitted, attempts to find
@@ -57,6 +58,7 @@ pub struct InstallArgs {
 /// 1) KAM_ROOT_MANAGER environment variable
 /// 2) ~/.kam/config.toml -> root.manager (or root_manager / manager fallback)
 ///    Returns normalized manager name: "Magisk", "KernelSU", "APatchSU", or "Unknown"
+#[must_use]
 pub fn get_root_manager() -> String {
     // 1) env override
     if let Ok(env_val) = std::env::var("KAM_ROOT_MANAGER") {
@@ -163,12 +165,11 @@ fn resolve_artifact_path(explicit: Option<PathBuf>) -> Result<PathBuf, KamError>
             .kam
             .build
             .as_ref()
-            .and_then(|b| b.target_dir.as_ref())
-            .map(|s| s.as_str())
+            .and_then(|b| b.target_dir.as_deref())
             .unwrap_or("dist");
         // Determine basename
         let basename = crate::cmds::build::build_project::determine_basename(&kt)?;
-        let candidate = cwd.join(target_dir).join(format!("{}.zip", basename));
+        let candidate = cwd.join(target_dir).join(format!("{basename}.zip"));
         if candidate.exists() && candidate.is_file() {
             return Ok(candidate.canonicalize().unwrap_or(candidate));
         }
@@ -205,7 +206,7 @@ fn resolve_artifact_path(explicit: Option<PathBuf>) -> Result<PathBuf, KamError>
                 .and_then(|m| m.modified())
                 .unwrap_or(SystemTime::UNIX_EPOCH)
         })
-        .unwrap();
+        .ok_or_else(|| KamError::PackageNotFound(crate::i18n::tr("install.package_not_found")))?;
 
     Ok(latest.canonicalize().unwrap_or(latest))
 }
@@ -231,7 +232,11 @@ fn looks_like_git_spec(s: &str) -> bool {
     {
         return true;
     }
-    if lower.starts_with("git@") || lower.ends_with(".git") {
+    if lower.starts_with("git@")
+        || std::path::Path::new(&lower)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
+    {
         return true;
     }
     if lower.contains("://")
@@ -278,10 +283,15 @@ fn expand_git_shorthand(s: &str) -> String {
         }
     }
 
-    if s_trim.contains("://") || s_trim.contains('@') || s_trim.ends_with(".git") {
+    if s_trim.contains("://")
+        || s_trim.contains('@')
+        || std::path::Path::new(&s_trim)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
+    {
         s_trim
     } else if s_trim.contains('/') {
-        format!("https://github.com/{}.git", s_trim)
+        format!("https://github.com/{s_trim}.git")
     } else {
         s_trim
     }
@@ -328,7 +338,7 @@ fn create_tempdir_with_fallback_override(
     match tempfile::tempdir() {
         Ok(td) => Ok(td),
         Err(e) => {
-            Utils::warn(format!("Default tempdir() failed: {}", e));
+            Utils::warn(format!("Default tempdir() failed: {e}"));
             // 3) Try $HOME/.cache/kam/tmp
             if let Ok(home) = std::env::var("HOME") {
                 let p = PathBuf::from(home).join(".cache").join("kam").join("tmp");
@@ -398,24 +408,23 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
             .trim_start_matches('+')
             .trim_start_matches(':');
         Utils::info(format!(
-            "Cloning '{}' using 'gh' into: {}",
-            gh_spec,
+            "Cloning '{gh_spec}' using 'gh' into: {}",
             dest.display()
         ));
+        let dest_str = dest
+            .to_str()
+            .map_or_else(|| dest.to_string_lossy().into_owned(), ToString::to_string);
         let mut cmd = Command::new("gh");
-        cmd.arg("repo")
-            .arg("clone")
-            .arg(gh_spec)
-            .arg(dest.to_str().unwrap());
+        cmd.arg("repo").arg("clone").arg(gh_spec).arg(&dest_str);
         cmd.stdin(Stdio::inherit());
         match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
             Ok(status) => {
-                Utils::warn(format!("'gh' clone failed with status: {:?}", status));
+                Utils::warn(format!("'gh' clone failed with status: {status:?}"));
                 // fallthrough to git
             }
             Err(e) => {
-                Utils::warn(format!("'gh' clone failed: {}", e));
+                Utils::warn(format!("'gh' clone failed: {e}"));
                 // fallthrough to git
             }
         }
@@ -425,19 +434,20 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
     if crate::utils::command_exists("git") {
         let url = expand_git_shorthand(spec);
         Utils::info(format!(
-            "Cloning '{}' using 'git' into: {}",
-            url,
+            "Cloning '{url}' using 'git' into: {}",
             dest.display()
         ));
+        let dest_str = dest
+            .to_str()
+            .map_or_else(|| dest.to_string_lossy().into_owned(), ToString::to_string);
         let mut cmd = Command::new("git");
-        cmd.arg("clone").arg(&url).arg(dest.to_str().unwrap());
+        cmd.arg("clone").arg(&url).arg(&dest_str);
         cmd.stdin(Stdio::inherit());
         match Utils::run_and_stream_no_stderr_header(cmd) {
             Ok(status) if status.success() => return Ok((tmp, dest)),
             Ok(status) => {
                 return Err(KamError::CommandFailed(format!(
-                    "git clone failed with status: {:?}",
-                    status
+                    "git clone failed with status: {status:?}"
                 )));
             }
             Err(e) => return Err(KamError::Io(e)),
@@ -453,6 +463,7 @@ fn clone_repo_to_tempdir(spec: &str) -> Result<(TempDir, PathBuf), KamError> {
 /// Clone, optionally run the repository's `kam.sh` (after review), build (if needed),
 /// and return the path to the produced artifact in the temporary checkout.
 /// The returned `TempDir` must be kept alive by the caller until install completes.
+#[allow(clippy::too_many_lines)] // TODO: split into smaller helper functions
 fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDir), KamError> {
     // Clone repo
     let (tmpdir, workdir) = clone_repo_to_tempdir(spec)?;
@@ -485,7 +496,7 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                     let interpreter = content
                         .lines()
                         .next()
-                        .and_then(|l| l.strip_prefix("#!").map(|s| s.to_string()))
+                        .and_then(|l| l.strip_prefix("#!").map(ToString::to_string))
                         .unwrap_or_else(|| "sh".to_string());
                     // Use a simple heuristic: if shebang contains 'bash' prefer 'bash', otherwise fall back to 'sh'
                     let exec = if interpreter.contains("bash") {
@@ -493,15 +504,18 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                     } else {
                         "sh"
                     };
-                    Utils::info(format!("Executing '{}' {}", exec, kam_sh.display()));
+                    Utils::info(format!("Executing '{exec}' {}", kam_sh.display()));
+                    let kam_sh_str = kam_sh.to_str().map_or_else(
+                        || kam_sh.to_string_lossy().into_owned(),
+                        ToString::to_string,
+                    );
                     let mut cmd = Command::new(exec);
-                    cmd.arg(kam_sh.to_str().unwrap()).stdin(Stdio::inherit());
+                    cmd.arg(&kam_sh_str).stdin(Stdio::inherit());
                     let status =
                         Utils::run_and_stream_no_stderr_header(cmd).map_err(KamError::Io)?;
                     if !status.success() {
                         return Err(KamError::CommandFailed(format!(
-                            "'kam.sh' execution failed with status: {:?}",
-                            status
+                            "'kam.sh' execution failed with status: {status:?}"
                         )));
                     }
                     // Assume the script produced whatever it needed (dist/artifacts). We'll still check.
@@ -540,11 +554,10 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                 .kam
                 .build
                 .as_ref()
-                .and_then(|b| b.target_dir.as_ref())
-                .map(|s| s.as_str())
+                .and_then(|b| b.target_dir.as_deref())
                 .unwrap_or("dist");
             let basename = crate::cmds::build::build_project::determine_basename(kt_ref)?;
-            let candidate = workdir.join(target_dir).join(format!("{}.zip", basename));
+            let candidate = workdir.join(target_dir).join(format!("{basename}.zip"));
             if candidate.exists() && candidate.is_file() {
                 return Ok(candidate.canonicalize().unwrap_or(candidate));
             }
@@ -577,7 +590,11 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
                         .and_then(|m| m.modified())
                         .unwrap_or(SystemTime::UNIX_EPOCH)
                 })
-                .unwrap();
+                .ok_or_else(|| {
+                    KamError::PackageNotFound(
+                        "No built artifact (.zip) found after building the repository".to_string(),
+                    )
+                })?;
             Ok(latest.canonicalize().unwrap_or(latest))
         };
 
@@ -635,6 +652,7 @@ fn is_command_not_found_error(output: &str) -> bool {
 
 /// Perform the actual install once we have an artifact path. Extracted from the
 /// original `run` implementation so both local and git-based flows can share it.
+#[allow(clippy::too_many_lines)] // TODO: split into smaller helper functions
 fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<(), KamError> {
     if !args.quiet {
         Utils::section(&trf!("install.section", artifact.display()));
@@ -643,14 +661,14 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
     let (cli_bin, cli_args) = get_install_cli_for_manager(artifact, args.manager.as_deref())?;
 
     if args.dry_run {
-        if !args.quiet {
+        if args.quiet {
+            println!("{} {}", cli_bin, cli_args.join(" "));
+        } else {
             Utils::info(&trf!(
                 "Dry run: will execute '{} {}'",
                 cli_bin,
                 cli_args.join(" ")
             ));
-        } else {
-            println!("{} {}", cli_bin, cli_args.join(" "));
         }
         return Ok(());
     }
@@ -686,9 +704,10 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         .chain(cli_args.iter().cloned())
                         .map(|s| {
                             if s.contains('\'') {
-                                format!("'{}'", s.replace("'", "'\"'\"'"))
+                                let escaped = s.replace('\'', "'\"'\"'");
+                                format!("'{escaped}'")
                             } else {
-                                format!("'{}'", s)
+                                format!("'{s}'")
                             }
                         })
                         .collect::<Vec<_>>()
@@ -711,8 +730,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                                 return Ok(());
                             }
                             return Err(KamError::CommandFailed(format!(
-                                "Privilege escalation via 'su' failed with status: {:?}",
-                                su_status
+                                "Privilege escalation via 'su' failed with status: {su_status:?}"
                             )));
                         }
                         Err(e) => return Err(KamError::Io(e)),
@@ -728,8 +746,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
 
                 // 其他退出代码提供详细信息
                 let error_msg = format!(
-                    "Install command '{}' exited with status: {}. Check the output above for details.",
-                    cli_bin, status
+                    "Install command '{cli_bin}' exited with status: {status}. Check the output above for details."
                 );
                 return Err(KamError::CommandFailed(error_msg));
             }
@@ -750,7 +767,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
             } else {
                 let s_out = String::from_utf8_lossy(&out.stdout);
                 let s_err = String::from_utf8_lossy(&out.stderr);
-                let combined = format!("{}{}", s_out, s_err);
+                let combined = format!("{s_out}{s_err}");
 
                 // 只有在真正的权限错误时才尝试使用 su
                 if is_permission_error(&combined) && crate::utils::command_exists("su") {
@@ -758,9 +775,10 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         .chain(cli_args.iter().cloned())
                         .map(|s| {
                             if s.contains('\'') {
-                                format!("'{}'", s.replace("'", "'\"'\"'"))
+                                let escaped = s.replace('\'', "'\"'\"'");
+                                format!("'{escaped}'")
                             } else {
-                                format!("'{}'", s)
+                                format!("'{s}'")
                             }
                         })
                         .collect::<Vec<_>>()
@@ -780,14 +798,14 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                                         cli_bin
                                     ));
                                 }
-                                return Ok(());
+                                Ok(())
+                            } else {
+                                Err(KamError::CommandFailed(format!(
+                                    "Privilege escalation via 'su' failed with status: {status:?}"
+                                )))
                             }
-                            return Err(KamError::CommandFailed(format!(
-                                "Privilege escalation via 'su' failed with status: {:?}",
-                                status
-                            )));
                         }
-                        Err(e) => return Err(KamError::Io(e)),
+                        Err(e) => Err(KamError::Io(e)),
                     }
                 } else if is_command_not_found_error(&combined) {
                     Err(KamError::CommandFailed(trf!(
@@ -804,13 +822,13 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         // 其他退出代码显示详细信息
                         let error_msg = if args.verbose {
                             format!(
-                                "Module installation failed. Exit status: {}. Output:\n{}\nError:\n{}",
-                                out.status, s_out, s_err
+                                "Module installation failed. Exit status: {}. Output:\n{s_out}\nError:\n{s_err}",
+                                out.status
                             )
                         } else {
                             format!(
-                                "Install command '{}' exited with status: {}. Re-run with -v/--verbose to see the command output.",
-                                cli_bin, out.status
+                                "Install command '{cli_bin}' exited with status: {}. Re-run with -v/--verbose to see the command output.",
+                                out.status
                             )
                         };
                         Err(KamError::CommandFailed(error_msg))
@@ -825,9 +843,10 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         .chain(cli_args.iter().cloned())
                         .map(|s| {
                             if s.contains('\'') {
-                                format!("'{}'", s.replace("'", "'\"'\"'"))
+                                let escaped = s.replace('\'', "'\"'\"'");
+                                format!("'{escaped}'")
                             } else {
-                                format!("'{}'", s)
+                                format!("'{s}'")
                             }
                         })
                         .collect::<Vec<_>>()
@@ -877,18 +896,30 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
 ///   optionally execute the repo's `kam.sh` after user review, build the project,
 ///   and install the produced artifact.
 /// - Otherwise fallback to resolving the artifact locally (as before).
-pub fn run(args: InstallArgs) -> Result<(), KamError> {
+///
+/// Run the `install` command.
+///
+/// Resolves the artifact to install (local .zip or a git-based repo), optionally
+/// runs repository-provided `kam.sh` after interactive review, builds the project
+/// if needed, and executes the platform-specific install command.
+///
+/// # Errors
+/// - Returns `KamError::PackageNotFound` when the artifact to install cannot be found.
+/// - Returns `KamError::Io` when underlying I/O operations (file/FS) fail.
+/// - Returns `KamError::CommandFailed` when the underlying install command fails
+///   (for example, `git`/`magisk` exit status or privilege escalation failure).
+pub fn run(args: &InstallArgs) -> Result<(), KamError> {
     // If an explicit path was provided and it looks like a git spec, do git-based install
     if let Some(p) = args.path.clone()
         && let Some(s) = p.to_str()
         && looks_like_git_spec(s)
     {
-        let (artifact, _tmpdir) = handle_git_install(s, &args)?;
+        let (artifact, _tmpdir) = handle_git_install(s, args)?;
         // Keep tmpdir alive for the duration of installation by holding `_tmpdir`
-        return execute_install_from_artifact(&artifact, &args);
+        return execute_install_from_artifact(&artifact, args);
     }
 
     // Default (local) behavior
     let artifact = resolve_artifact_path(args.path.clone())?;
-    execute_install_from_artifact(&artifact, &args)
+    execute_install_from_artifact(&artifact, args)
 }

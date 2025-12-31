@@ -101,11 +101,11 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                 let pub_key_pem = val
                     .get("pub_key_pem")
                     .and_then(|x| x.as_str())
-                    .map(|s| s.to_string());
+                    .map(ToString::to_string);
                 let pub_key_signature = val
                     .get("pub_key_signature")
                     .and_then(|x| x.as_str())
-                    .map(|s| s.to_string());
+                    .map(ToString::to_string);
                 new.entries.insert(
                     k.clone(),
                     SecretMeta {
@@ -169,11 +169,11 @@ pub fn load_index() -> Result<SecretIndex, KamError> {
                 let pub_key_pem = val
                     .get("pub_key_pem")
                     .and_then(|x| x.as_str())
-                    .map(|s| s.to_string());
+                    .map(ToString::to_string);
                 let pub_key_signature = val
                     .get("pub_key_signature")
                     .and_then(|x| x.as_str())
-                    .map(|s| s.to_string());
+                    .map(ToString::to_string);
                 new.entries.insert(
                     k.clone(),
                     SecretMeta {

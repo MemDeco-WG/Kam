@@ -95,7 +95,7 @@ pub fn run_pull(url: Option<String>, _global: bool, quiet: bool) -> Result<(), K
         .timeout(Duration::from_secs(30))
         .redirect(Policy::default())
         .build()
-        .map_err(|e| KamError::CommandFailed(format!("Failed to build HTTP client: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to build HTTP client: {e}")))?;
 
     let mut resp = client
         .get(download_url)

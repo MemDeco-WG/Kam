@@ -80,6 +80,14 @@ source_dir = "src/Kam"
 target_dir = "dist"
 output_file = "{{id}}"
 hooks_dir = "hooks"
+# Common exclude patterns (these defaults will be written to generated `kam.toml`
+# so users can easily see and modify them)
+exclude = [".git/", "target/", "node_modules/", ".DS_Store", "Thumbs.db", "*.tmp", "*.log", "*.bak", ".kam/"]
+# Explicit include patterns (empty by default). Patterns here override excludes.
+include = []
+# Whether to respect a top-level .gitignore (default: false). Prefer explicit
+# include/exclude in `kam.toml` to control packaging behavior.
+respect_gitignore = false
 
 [kam.tmpl.variables.repository]
 var_type = "string"

@@ -846,6 +846,24 @@ target_dir = "dist"              # Output directory
 output_file = "{{id}}"           # Output filename template
 hooks_dir = "hooks"              # Hooks directory
 source_dir = "src/{{id}}"        # Source directory (optional)
+# Common exclude patterns (these are written to generated `kam.toml` so users see and can edit them)
+exclude = [
+    ".git/",
+    "target/",
+    "node_modules/",
+    ".DS_Store",
+    "Thumbs.db",
+    "*.tmp",
+    "*.log",
+    "*.bak",
+    ".kam/",
+]
+# Explicit include patterns (defaults to an empty array). When a path matches both exclude and include,
+# include takes precedence and the file will be packaged.
+include = []
+# Whether to respect a top-level .gitignore file. Default is false; prefer explicit exclude/include rules
+# in `kam.toml` to control packaging behavior.
+respect_gitignore = false
 ```
 
 ### Conditional Compilation
