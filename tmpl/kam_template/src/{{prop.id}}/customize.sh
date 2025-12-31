@@ -1,173 +1,20 @@
 # shellcheck shell=ash
-# {{prop.name}} customize.sh
+# {{prop.name}} customize.sh - 最小 wrapper
 #
-# ---------------------------------------------------------------------------------------
-# CUSTOM INSTALLATION LOGIC
-# ---------------------------------------------------------------------------------------
+# 约束：入口脚本只做最小工作（加载 kamfw + 初始化 HOME/KAM_HOME + 调度 phase）
+
 SKIPUNZIP=1
-unzip -o "$ZIPFILE" "lib/kamfw/*" -d "$MODPATH" >&2 && . "$MODPATH/lib/kamfw/.kamfwrc" || abort "! .kamfwrc missing"
-# export KAM_LOGFILE=${MODDIR}/kam.log
-import __customize__
 
-# i18n
-import i18n
-import lang
+# 1) 解压 kamfw（安装期需要；SKIPUNZIP=1 时需手动）
+unzip -o "$ZIPFILE" "lib/kamfw/*" -d "$MODPATH" >&2 || abort "! Failed to extract lib/kamfw"
 
-# 任务一：模块使用指南
-set_i18n "USAGE_GUIDE" \
-    "zh" "使用教程：
-    ..." \
-    "en" "Usage guide:
-    ..." \
-    "ja" "使用方法：
-    ..." \
-    "ko" "사용 안내:
-    ... "
+# 2) 加载 kamfw 运行时（提供 import/kamfw/run 等能力）
+[ -f "$MODPATH/lib/kamfw/.kamfwrc" ] && . "$MODPATH/lib/kamfw/.kamfwrc" || abort "! .kamfwrc missing"
 
-# print： ui_print plus
-print "$(i18n "USAGE_GUIDE")"
+# 3) 安装期的模块目录
+#    注意：安装期常见变量是 MODPATH；运行期常见变量是 MODDIR。
+export MODDIR="${MODDIR:-$MODPATH}"
 
-# import launcher
-
-# launch url "https://github.com/UserName/repo"
-# launch ...
-
-# import rich --> 这里有更多，比如 ask函数 confirm函数
-
-import arch
-support_arch arm64 # arm x86 x64
-
-is_magisk && {
-    info "Hello Magisk user!"
-} || {
-    info "Not AP user."
-}
-
-is_ksu && {
-    info "Hello Ksu user!"
-} || {
-    info "Not AP user."
-}
-
-is_ap && {
-    info "Hello AP user!"
-} || {
-    info "Not AP user."
-}
-
-##################################
-# 备忘文档 -- 可删除               #
-# You can delete this section    #
-##################################
-#
-# 作者注：kamfw，会自动依据ROOT管理器
-# 进行一些特殊处理
-# 比如，如果是magisk.补全META-INF
-# boot-completed --> service
-# 记得在boot-completed调用：
-# wait_boot_if_magisk
-# 详见 lib/kamfw/magisk.sh
-# lib/kamfw/ksu.sh
-# lib/kamfw/ap.sh
-#
-# This script is sourced by the module installer script after all files are extracted
-# and default permissions/secontext are applied.
-#
-# Useful for:
-# - Checking device compatibility (ARCH, API)
-# - Setting special permissions
-# - Customizing installation based on user environment
-#
-# ---------------------------------------------------------------------------------------
-# AVAILABLE VARIABLES
-# ---------------------------------------------------------------------------------------
-# (KernelSU-only) KSU (bool):           true if running in KernelSU environment
-# (KernelSU-only) KSU_VER (string):     KernelSU version string (e.g. v0.9.5)
-# (KernelSU-only) KSU_VER_CODE (int):   KernelSU version code (userspace)
-# (KernelSU-only) KSU_KERNEL_VER_CODE (int): KernelSU version code (kernel space)
-# NOTE: KernelSU variables are only provided by KernelSU (not guaranteed on stock Magisk).
-# Guard usage example:
-#    if [ "$KSU" = "true" ]; then
-#        # KernelSU-only logic
-#    else
-#        # Fallback for Magisk/APatch or other environments
-#    fi
-#
-# KernelPatch/KernelSU/APatch related variables
-# (KernelPatch-only) KERNELPATCH (bool):   true if running in KernelPatch environment
-# (KernelPatch-only) KERNEL_VERSION (hex): Kernel version inherited from KernelPatch (e.g. 50a01 -> 5.10.1)
-# (KernelPatch-only) KERNELPATCH_VERSION (hex): KernelPatch version identifier (e.g. a05 -> 0.10.5)
-# (KernelPatch-only) SUPERKEY (string):    Value provided by KernelPatch for invoking kpatch/supercall
-# NOTE: The KernelPatch variables above are provided by KernelPatch and may NOT exist on a stock Magisk installation.
-#       If your module must work on both, check for their presence before using them:
-#         if [ -n "$KERNELPATCH" ] && [ "$KERNELPATCH" = "true" ]; then
-#           # KernelPatch-specific handling
-#         fi
-#
-# APatch related variables
-# (APatch-only) APATCH (bool):        true if running in APatch environment
-# (APatch-only) APATCH_VER_CODE (int): APatch current version code (e.g. 10672)
-# (APatch-only) APATCH_VER (string):  APatch version string (e.g. "10672")
-# NOTE: The APatch variables above are specific to APatch (a Magisk fork). They are NOT guaranteed to exist on stock Magisk.
-#       Guard your scripts like:
-#         if [ "$APATCH" = "true" ]; then
-#           # APatch-specific logic
-#         fi
-#
-# Common environment variables (present across environments)
-# BOOTMODE (bool):      always true in KernelSU and APatch (recovery / boot mode)
-# MODPATH (path):       Path where module files are installed (e.g. /data/adb/modules/{{prop.id}})
-# TMPDIR (path):        Path to temporary directory
-# ZIPFILE (path):       Path to the installation ZIP
-# ARCH (string):        Device architecture: arm, arm64, x86, x64
-# IS64BIT (bool):       true if ARCH is arm64 or x64
-# API (int):            Android API level (e.g. 33 for Android 13)
-#
-# WARNING:
-# - In APatch, MAGISK_VER_CODE is typically 27000 and MAGISK_VER is 27.0 (so some Magisk-related checks behave differently).
-# - Many KernelPatch/APatch features are not present on stock Magisk. When writing portable installation code,
-#   explicitly check for variable presence and provide sensible fallbacks:
-#     if [ -n "$APATCH" ] && [ "$APATCH" = "true" ]; then
-#         # APatch-only handling
-#     else
-#         # Stock Magisk fallback handling (or skip)
-#     fi
-#
-# ---------------------------------------------------------------------------------------
-# AVAILABLE FUNCTIONS
-# ---------------------------------------------------------------------------------------
-# ui_print <msg>
-#     Print message to console. Avoid 'echo'.
-#
-# abort <msg>
-#     Print error message and terminate installation.
-#
-# set_perm <target> <owner> <group> <permission> [context]
-#     Set permissions for a file.
-#     Default context: "u:object_r:system_file:s0"
-#
-# set_perm_recursive <dir> <owner> <group> <dirperm> <fileperm> [context]
-#     Recursively set permissions for a directory.
-#     Default context: "u:object_r:system_file:s0"
-#
-# ---------------------------------------------------------------------------------------
-# KERNELSU FEATURES
-# ---------------------------------------------------------------------------------------
-#
-# REMOVE (Whiteout):
-# List directories/files to be "removed" from the system (overlaid with whiteout).
-# KernelSU executes: mknod <TARGET> c 0 0
-#
-# REMOVE="
-# /system/app/BloatwareApp
-# /system/priv-app/AnotherApp
-# "
-#
-# REPLACE (Opaque):
-# List directories to be replaced by an empty directory (or your module's version).
-# KernelSU executes: setfattr -n trusted.overlay.opaque -v y <TARGET>
-#
-# REPLACE="
-# /system/app/YouTube
-# "
-#
+# 4) 生命周期调度（业务逻辑应在 kamfw_phase_install 内实现/覆盖）
+import __runtime__
+kamfw run install -- "$@"
