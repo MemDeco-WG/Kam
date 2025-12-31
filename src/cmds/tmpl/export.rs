@@ -53,7 +53,7 @@ pub fn export_single_template(
 
             let relative_path = path
                 .strip_prefix(&template_path)
-                .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {}", e)))?;
+                .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {e}")))?;
 
             if path.is_file() {
                 let mut file = File::open(path).map_err(KamError::Io)?;
@@ -132,7 +132,7 @@ pub fn export_multiple_templates(
         };
 
         // Create a temporary tar.gz for this template
-        let temp_archive_path = temp_dir.path().join(format!("{}.tar.gz", template_name));
+        let temp_archive_path = temp_dir.path().join(format!("{template_name}.tar.gz"));
         let tar_file = File::create(&temp_archive_path).map_err(KamError::Io)?;
         let encoder = GzEncoder::new(tar_file, Compression::default());
         let mut archive = Builder::new(encoder);
@@ -147,9 +147,9 @@ pub fn export_multiple_templates(
                     continue;
                 }
 
-                let relative_path = path.strip_prefix(&template_path).map_err(|e| {
-                    KamError::InvalidDirectory(format!("strip_prefix failed: {}", e))
-                })?;
+                let relative_path = path
+                    .strip_prefix(&template_path)
+                    .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {e}")))?;
 
                 if path.is_file() {
                     let mut file = File::open(path).map_err(KamError::Io)?;
@@ -169,20 +169,20 @@ pub fn export_multiple_templates(
         }
 
         // Add the tar.gz to the zip
-        let archive_name = format!("{}.tar.gz", template_name);
+        let archive_name = format!("{template_name}.tar.gz");
         zip.start_file(&archive_name, options)
-            .map_err(|e| KamError::CommandFailed(format!("Failed to add file to ZIP: {}", e)))?;
+            .map_err(|e| KamError::CommandFailed(format!("Failed to add file to ZIP: {e}")))?;
 
         let mut temp_file = File::open(&temp_archive_path).map_err(KamError::Io)?;
         std::io::copy(&mut temp_file, &mut zip).map_err(KamError::Io)?;
 
         use crate::utils::Utils;
-        Utils::success(format!("Template '{}' added to archive", template_name));
+        Utils::success(format!("Template '{template_name}' added to archive"));
         exported_count += 1;
     }
 
     zip.finish()
-        .map_err(|e| KamError::CommandFailed(format!("Failed to finalize ZIP: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to finalize ZIP: {e}")))?;
 
     use crate::utils::Utils;
     if exported_count > 0 {

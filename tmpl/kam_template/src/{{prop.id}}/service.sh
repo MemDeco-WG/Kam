@@ -1,7 +1,12 @@
+#!/system/bin/sh
 # shellcheck shell=ash
-# service.sh - 最小 wrapper
-MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
+# service.sh - minimal wrapper (RECTIFY-FINAL)
 
-import __runtime__
-kamfw run service -- "$@"
+MODDIR=${0%/*}
+
+# shellcheck disable=SC1090
+. "$MODDIR/lib/kamfw/.kamfwrc" || exit 1
+
+print "[kamfw] phase=service"
+
+exit 0

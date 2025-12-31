@@ -1,7 +1,12 @@
+#!/system/bin/sh
 # shellcheck shell=ash
-# action.sh - 最小 wrapper（必须支持参数透传）
-MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
+# action.sh - minimal wrapper (RECTIFY-FINAL)
 
-import __runtime__
-kamfw run action -- "$@"
+MODDIR=${0%/*}
+
+# shellcheck disable=SC1090
+. "$MODDIR/lib/kamfw/.kamfwrc" || exit 1
+
+print "[kamfw] phase=action args=$*"
+
+exit 0

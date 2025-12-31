@@ -1,7 +1,12 @@
+#!/system/bin/sh
 # shellcheck shell=ash
-# uninstall.sh - 最小 wrapper
-MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
+# uninstall.sh - minimal wrapper (RECTIFY-FINAL)
 
-import __runtime__
-kamfw run uninstall -- "$@"
+MODDIR=${0%/*}
+
+# shellcheck disable=SC1090
+. "$MODDIR/lib/kamfw/.kamfwrc" || exit 1
+
+print "[kamfw] phase=uninstall"
+
+exit 0

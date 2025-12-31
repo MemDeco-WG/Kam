@@ -47,7 +47,7 @@ fn list_templates() -> Result<(), KamError> {
 fn remove_template(name: &str) -> Result<(), KamError> {
     TemplateCacheManager::remove_template(name)?;
     use crate::utils::Utils;
-    Utils::success(format!("Template '{}' removed successfully", name));
+    Utils::success(format!("Template '{name}' removed successfully"));
     Ok(())
 }
 

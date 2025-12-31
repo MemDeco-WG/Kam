@@ -6,13 +6,13 @@
 
 umask 022
 
-# echo before loading util_functions
-ui_print() { echo "$1"; }
+# NOTE: do not define ui_print here; util_functions.sh will provide it.
 
 require_new_magisk() {
-  ui_print "*******************************"
-  ui_print " Please install Magisk v20.4+! "
-  ui_print "*******************************"
+  # util_functions.sh 未加载前，ui_print 可能不存在。禁止 echo，使用 stderr。
+  printf '%s\n' "*******************************" >&2
+  printf '%s\n' " Please install Magisk v20.4+! " >&2
+  printf '%s\n' "*******************************" >&2
   exit 1
 }
 

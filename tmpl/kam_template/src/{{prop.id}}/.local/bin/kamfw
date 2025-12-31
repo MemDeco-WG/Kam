@@ -1,0 +1,61 @@
+#!/system/bin/sh
+# kamfw shim: select ABI-specific real binary under $MODDIR/bin/<abi>/kamfw
+# 整改版 (RECTIFY-0002): 禁止 echo, 统一使用 print/ui_print
+
+# 1. 确定模块根目录
+# 优先使用 MODDIR 环境变量，否则从脚本自身路径推导
+MODDIR=${MODDIR:-"${0%/*/*/*}"}
+
+# 2. 尝试加载框架的输出函数
+# 如果 .kamfwrc 存在，它会提供 print/ui_print
+if [ -f "$MODDIR/lib/kamfw/shell/.kamfwrc" ]; then
+  # shellcheck disable=SC1090
+  . "$MODDIR/lib/kamfw/shell/.kamfwrc"
+fi
+
+# 3. 定义一个兜底的 print 函数，以防 .kamfwrc 加载失败
+# 并且，即使 .kamfwrc 提供了 ui_print, 我们也优先用 print (因为 .kamfwrc 里 ui_print 是 print 的别名)
+if ! command -v print >/dev/null 2>&1; then
+  if command -v ui_print >/dev/null 2>&1; then
+    print() {
+      ui_print "$@"
+    }
+  else
+    # 最终降级方案：用 printf 输出到 stderr
+    print() {
+      printf 'kamfw(shim): %s\n' "$@" >&2
+    }
+  fi
+fi
+
+# 4. 解析设备 ABI
+ABI="$(getprop ro.product.cpu.abi 2>/dev/null)"
+case "$ABI" in
+  arm64-v8a|armeabi-v7a|x86_64)
+    _abi_dir="$ABI"
+    ;;
+  aarch64*)
+    _abi_dir="arm64-v8a"
+    ;;
+  armv7*|armv8l|armeabi*)
+    _abi_dir="armeabi-v7a"
+    ;;
+  x86_64*)
+    _abi_dir="x86_64"
+    ;;
+  *)
+    _abi_dir="$ABI"
+    ;;
+esac
+
+# 5. 执行真实二进制文件
+REAL_BIN="$MODDIR/bin/$_abi_dir/kamfw"
+if [ -x "$REAL_BIN" ]; then
+  exec "$REAL_BIN" "$@"
+fi
+
+# 6. 错误处理：使用 print 函数输出错误
+print "错误：找不到可执行的 kamfw 二进制文件。"
+print "路径: $REAL_BIN"
+print "ABI: $_abi_dir (原始: $ABI)"
+exit 127

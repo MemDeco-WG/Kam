@@ -7,6 +7,7 @@
 - MODDIR 即 HOMEDIR：`KAM_HOME=$MODDIR` 且同时导出 `HOME=$MODDIR`
 - 目录布局：`$MODDIR/.config`、`$MODDIR/.local/bin`、`$MODDIR/.local/lib`、`$MODDIR/.cache`、`$MODDIR/.state`、`$MODDIR/.log`、`$MODDIR/tmp`
 - Rust CLI MVP：必须提供 `kamfw env`、`kamfw doctor`、`kamfw run <phase>`；支持 `--json`；退出码稳定。
+- Shim 策略：选择方案 1（静态随模板打包）：zip 内直接携带 `.local/bin/kamfw`（shim 脚本）。
 
 ## Inbox (approved artifacts)
 - (empty)
