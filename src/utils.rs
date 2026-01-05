@@ -67,7 +67,7 @@ pub fn default_exclude_dir_names() -> Vec<String> {
 fn matches_directory_prefix(pattern: &str, path: &str) -> bool {
     let prefix = pattern.trim_end_matches('/');
     let path_norm = path.strip_prefix("./").map_or(path, |stripped| stripped);
-    path_norm == prefix || path_norm.starts_with(&format!("{}/", prefix))
+    path_norm == prefix || path_norm.starts_with(&format!("{prefix}/"))
 }
 
 fn matches_suffix_wildcard(pattern: &str, file_name: &str) -> bool {
@@ -84,7 +84,7 @@ fn matches_wildcard(pattern: &str, text: &str) -> bool {
     }
     let mut regex_str = regex::escape(pattern);
     regex_str = regex_str.replace("\\*", ".*").replace("\\?", ".");
-    let final_regex = format!("^{}$", regex_str);
+    let final_regex = format!("^{regex_str}$");
     Regex::new(&final_regex)
         .map(|re| re.is_match(text))
         .unwrap_or(false)
@@ -238,22 +238,22 @@ impl Utils {
         match op {
             PrintOp::Skip => {
                 // Show skipped files in dim gray
-                println!("{}", format!("- {}", rel).dimmed());
+                println!("{}", format!("- {rel}").dimmed());
             }
             PrintOp::Create { is_dir } => {
                 let color = if is_dir { Color::Blue } else { Color::Green };
-                println!("{}", format!("+ {}", rel).color(color));
+                println!("{}", format!("+ {rel}").color(color));
             }
             PrintOp::Update => {
-                println!("{}", format!("~ {}", rel).color(Color::Yellow));
+                println!("{}", format!("~ {rel}").color(Color::Yellow));
             }
             PrintOp::Delete => {
-                println!("{}", format!("- {}", rel).color(Color::Red));
+                println!("{}", format!("- {rel}").color(Color::Red));
             }
             PrintOp::Copy { from, to } => {
                 println!(
                     "{}",
-                    format!("{} -> {} (copy)", from, to).color(Color::Cyan)
+                    format!("{from} -> {to} (copy)").color(Color::Cyan)
                 );
             }
             PrintOp::Symlink { target, link_type } => {
@@ -263,7 +263,7 @@ impl Utils {
                 };
                 println!(
                     "{}",
-                    format!("{} {} {} (symlink)", rel, symbol, target).color(Color::Magenta)
+                    format!("{rel} {symbol} {target} (symlink)").color(Color::Magenta)
                 );
             }
         }
@@ -455,12 +455,12 @@ impl Utils {
     /// or a logging queue while still preserving the same classification and color.
     pub fn format_cmd_line(line: &str) -> String {
         match Self::classify_log_line(line) {
-            LogLevel::Warn(msg) => format!("  {} {}", "!".yellow(), msg.yellow()),
+            LogLevel::Warn(msg) => format!("  {} {msg}", "!".yellow()),
             LogLevel::Error(msg) => {
                 let c = Self::error_color();
-                format!("{} {}", "✗".color(c).bold(), msg.color(c))
+                format!("{} {msg}", "✗".color(c).bold())
             }
-            LogLevel::Info(msg) => format!("  {} {}", "•".cyan(), msg),
+            LogLevel::Info(msg) => format!("  {} {msg}", "•".cyan()),
             LogLevel::Empty => String::new(),
         }
     }

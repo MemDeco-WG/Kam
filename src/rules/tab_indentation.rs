@@ -47,6 +47,7 @@ impl crate::rules::Rule for TabIndentationRule {
 }
 
 /// Factory for the rule loader.
+#[must_use]
 pub fn create() -> Box<dyn crate::rules::Rule> {
     Box::new(TabIndentationRule)
 }

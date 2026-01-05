@@ -56,6 +56,7 @@ impl crate::rules::Rule for Chmod777Rule {
 
 /// Factory used by the rules loader to instantiate this rule.
 /// The `rules` module will call this when building the active ruleset.
+#[must_use]
 pub fn create() -> Box<dyn crate::rules::Rule> {
     Box::new(Chmod777Rule)
 }
