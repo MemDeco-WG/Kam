@@ -32,7 +32,7 @@ fn main() {
     let manifest_dir = PathBuf::from(match env::var("CARGO_MANIFEST_DIR") {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("ERROR: CARGO_MANIFEST_DIR must be set by Cargo: {}", e);
+            eprintln!("ERROR: CARGO_MANIFEST_DIR must be set by Cargo: {e}");
             std::process::exit(1);
         }
     });
@@ -43,28 +43,28 @@ fn main() {
     let re_tr_key = match Regex::new(r#"tr_key\s*\(\s*"([^"]+)""#) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("Failed to compile regex for tr_key: {}", e);
+            eprintln!("Failed to compile regex for tr_key: {e}");
             std::process::exit(1);
         }
     };
     let re_tr_fmt = match Regex::new(r#"tr_fmt\s*\(\s*"([^"]+)""#) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("Failed to compile regex for tr_fmt: {}", e);
+            eprintln!("Failed to compile regex for tr_fmt: {e}");
             std::process::exit(1);
         }
     };
     let re_trf = match Regex::new(r#"trf!\s*\(\s*"([^"]+)""#) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("Failed to compile regex for trf!: {}", e);
+            eprintln!("Failed to compile regex for trf!: {e}");
             std::process::exit(1);
         }
     };
     let re_tr = match Regex::new(r#"\btr\s*\(\s*"([^"]+)""#) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("Failed to compile regex for tr: {}", e);
+            eprintln!("Failed to compile regex for tr: {e}");
             std::process::exit(1);
         }
     };
@@ -140,7 +140,7 @@ fn main() {
         let keyed_re = match Regex::new(&keyed_pattern) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("Failed to compile keyed regex for key '{}': {}", key, e);
+                eprintln!("Failed to compile keyed regex for key '{key}': {e}");
                 std::process::exit(1);
             }
         };
@@ -157,7 +157,7 @@ fn main() {
         let ftl_re = match Regex::new(&ftl_re_pattern) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("Failed to compile ftl regex for id '{}': {}", ftl_id, e);
+                eprintln!("Failed to compile ftl regex for id '{ftl_id}': {e}");
                 std::process::exit(1);
             }
         };

@@ -54,6 +54,7 @@ impl crate::rules::Rule for HttpUrlsRule {
 }
 
 /// Factory for the loader.
+#[must_use]
 pub fn create() -> Box<dyn crate::rules::Rule> {
     Box::new(HttpUrlsRule)
 }

@@ -120,6 +120,7 @@ pub fn tr_fmt(key: &str, args: &[&dyn Display]) -> String {
 
 /// Simple translation helper (no formatting). For dotted keys this attempts to
 /// return the compiled FTL message; otherwise it returns the provided string.
+#[must_use]
 pub fn tr(key: &str) -> String {
     // Delegate to `tr_fmt`. Use an explicit empty slice cast here rather than
     // relying on a const or array-to-slice coercion because rust-analyzer

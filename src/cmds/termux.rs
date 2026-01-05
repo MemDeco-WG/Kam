@@ -94,6 +94,12 @@ pub struct TermuxArgs {
 ///
 /// Note: the daemon uses a pid file under $KAM_HOME/termux/daemon.pid and writes logs
 /// to $KAM_HOME/termux/daemon.log.
+///
+/// # Errors
+/// Returns `KamError` if adb operations fail or required tools are missing.
+///
+/// # Panics
+/// May panic if `mkdir_status.unwrap().code()` is called when `mkdir_status` is `Err`.
 pub fn run(args: TermuxArgs) -> Result<(), KamError> {
     // Helper to build adb base args (device selection)
     let mut adb_base: Vec<String> = Vec::new();
@@ -115,23 +121,18 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
     // daemon/list/kill functionality has been removed in favor of the SSH-based workflow.
     // Use the SSH helpers: --ssh-setup, --ssh-forward, --ssh-push-key, --ssh-connect.
 
-    // At this point: either daemon start, one-shot, or interactive.
-    // Check for adb presence (required for starting daemon, one-shot or remote interactive)
-    match Command::new("adb").arg("version").output() {
-        Ok(v) => {
-            if !v.status.success() {
-                Utils::error(
-                    "adb not available or returned non-zero; please install adb and ensure it's in PATH.",
-                );
-                return Ok(());
-            }
-        }
-        Err(_) => {
+    // At this point: either one-shot, SSH helper, or interactive.
+    // Check for adb presence (required for any Termux interaction over adb).
+    if let Ok(v) = Command::new("adb").arg("version").output() {
+        if !v.status.success() {
             Utils::error(
-                "adb not found; please install platform-tools and ensure `adb` is on PATH.",
+                "adb not available or returned non-zero; please install adb and ensure it's in PATH.",
             );
             return Ok(());
         }
+    } else {
+        Utils::error("adb not found; please install platform-tools and ensure `adb` is on PATH.");
+        return Ok(());
     }
 
     // daemon mode removed: background adb-shell Termux sessions are no longer supported.
@@ -173,7 +174,7 @@ pub fn run(args: TermuxArgs) -> Result<(), KamError> {
             .arg(format!("mkdir -p {}", remote_ssh_dir))
             .status();
 
-        if mkdir_status.is_err() || mkdir_status.unwrap().code().unwrap_or(1) != 0 {
+        if mkdir_status.is_err() || mkdir_status.as_ref().unwrap().code().unwrap_or(1) != 0 {
             Utils::error(&trf!("termux.ssh.remote_mkdir_failed"));
             return Ok(());
         }

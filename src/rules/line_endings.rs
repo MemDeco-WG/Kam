@@ -106,6 +106,7 @@ impl crate::rules::Rule for LineEndingsRule {
 }
 
 /// Factory used by the rules loader.
+#[must_use]
 pub fn create() -> Box<dyn crate::rules::Rule> {
     Box::new(LineEndingsRule)
 }

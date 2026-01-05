@@ -69,6 +69,7 @@ pub mod trailing_whitespace;
 /// Currently this simply returns instances of the statically-included builtin rules.
 /// In the future this can be extended to support dynamic discovery, configuration,
 /// or feature-gated rule sets.
+#[must_use]
 pub fn load_builtin_rules() -> Vec<Box<dyn Rule>> {
     // List builtin rules here. Add new rules as additional calls to `create()`.
     vec![

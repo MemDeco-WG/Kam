@@ -71,6 +71,7 @@ impl Theme {
     /// Load theme values from environment variables (non-cached).
     ///
     /// This function delegates to `load_from_map` to make testing easier.
+    #[must_use]
     pub fn load_from_env() -> Self {
         Self::load_from_map(|k| env::var(k).ok())
     }
