@@ -25,7 +25,7 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
                 if v.starts_with('v') || v.starts_with('V') {
                     v
                 } else {
-                    format!("v{}", v)
+                    format!("v{v}")
                 }
             }
         };
@@ -37,12 +37,12 @@ pub fn run(args: VersionArgs) -> Result<(), KamError> {
                 format!("v{}", kam_toml.prop.version)
             };
 
-        if new_version != old_display {
-            let msg = trf!("Bumped version: {} -> {}", &old_display, &new_version);
-            println!("{}", msg);
-            kam_toml.prop.version = new_version;
-        } else {
+        if new_version == old_display {
             println!("{}", trf!("Version unchanged: {}", &old_display));
+        } else {
+            let msg = trf!("Bumped version: {} -> {}", &old_display, &new_version);
+            println!("{msg}");
+            kam_toml.prop.version = new_version;
         }
 
         // 更新版本时总是更新versionCode（用当前时间戳）
@@ -155,5 +155,5 @@ fn bump_version(current: &str, index: usize) -> Result<String, KamError> {
     ver.pre = semver::Prerelease::EMPTY;
     ver.build = semver::BuildMetadata::EMPTY;
 
-    Ok(format!("v{}", ver))
+    Ok(format!("v{ver}"))
 }

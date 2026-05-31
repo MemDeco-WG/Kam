@@ -95,7 +95,7 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     // 解析模板变量（从 --var 参数）
     let mut template_vars = crate::template::TemplateManager::parse_template_vars(&args.var)?;
 
-    let version = args.version.as_deref().unwrap_or("1.0.0");
+    let version = args.version.as_deref().unwrap_or("v1.0.0");
 
     // 早点发现Git信息，可以用来做默认值（id、author、repo URL等）
     let mut git_author: Option<String> = None;

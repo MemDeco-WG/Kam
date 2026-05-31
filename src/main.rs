@@ -34,14 +34,12 @@ use std::error::Error;
 use kam::cli::{Cli, Commands};
 
 fn debug_i18n_enabled() -> bool {
-    std::env::var("KAM_DEBUG_I18N")
-        .map(|v| v == "1")
-        .unwrap_or(false)
+    std::env::var("KAM_DEBUG_I18N").is_ok_and(|v| v == "1")
 }
 
 fn print_error_chain(e: &KamError) {
     use kam::utils::Utils;
-    Utils::error(format!("{}", e));
+    Utils::error(format!("{e}"));
     let mut source = e.source();
     while let Some(s) = source {
         eprintln!("  {} {}", "→".dimmed(), s.to_string().dimmed());
@@ -87,7 +85,7 @@ fn write_localized_help(command: &mut clap::Command, subcommand_path: &[String])
 
 fn print_localized_help(mut command: clap::Command, subcommand_path: &[String]) {
     if let Some(cleaned) = write_localized_help(&mut command, subcommand_path) {
-        print!("{}", cleaned);
+        print!("{cleaned}");
         if !cleaned.ends_with('\n') {
             println!();
         }
@@ -95,7 +93,7 @@ fn print_localized_help(mut command: clap::Command, subcommand_path: &[String]) 
     }
 
     if let Err(e) = command.print_long_help() {
-        kam::utils::Utils::error(format!("Failed to write help: {}", e));
+        kam::utils::Utils::error(format!("Failed to write help: {e}"));
         std::process::exit(1);
     }
     println!();
@@ -128,82 +126,29 @@ fn dump_command_debug(command: &clap::Command) {
         let id = arg.get_id().as_str();
         let long = arg.get_long().unwrap_or("");
         let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
-        eprintln!("TOP ARG: id='{}' long='{}' short='{}'", id, long, short);
-    }
-
-    fn dump_subcommands(command: &clap::Command, prefix: &str) {
-        for sub in command.get_subcommands() {
-            let name = sub.get_name();
-            eprintln!("SUBCMD: {}{}", prefix, name);
-            for arg in sub.get_arguments() {
-                let id = arg.get_id().as_str();
-                let long = arg.get_long().unwrap_or("");
-                let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
-                eprintln!("  ARG: id='{}' long='{}' short='{}'", id, long, short);
-            }
-            dump_subcommands(sub, &format!("{}{} ", prefix, name));
-        }
+        eprintln!("TOP ARG: id='{id}' long='{long}' short='{short}'");
     }
 
     dump_subcommands(command, "");
 }
 
+fn dump_subcommands(command: &clap::Command, prefix: &str) {
+    for sub in command.get_subcommands() {
+        let name = sub.get_name();
+        eprintln!("SUBCMD: {prefix}{name}");
+        for arg in sub.get_arguments() {
+            let id = arg.get_id().as_str();
+            let long = arg.get_long().unwrap_or("");
+            let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
+            eprintln!("  ARG: id='{id}' long='{long}' short='{short}'");
+        }
+        dump_subcommands(sub, &format!("{prefix}{name} "));
+    }
+}
+
 fn dedupe_help(raw: &str) -> String {
     // Split into lines for simple, robust processing.
     let lines: Vec<&str> = raw.lines().collect();
-
-    // Helper: for a contiguous section (lines slice) split into blocks
-    // separated by blank lines, then keep the last occurrence of each
-    // block keyed by its first (header) line.
-    fn dedupe_section(section_lines: &[&str]) -> Vec<String> {
-        use std::collections::HashMap;
-        let mut blocks: Vec<Vec<String>> = Vec::new();
-        let mut i = 0;
-        while i < section_lines.len() {
-            // skip leading blank lines
-            while i < section_lines.len() && section_lines[i].trim().is_empty() {
-                i += 1;
-            }
-            if i >= section_lines.len() {
-                break;
-            }
-            // collect block until next blank line
-            let mut block: Vec<String> = Vec::new();
-            while i < section_lines.len() && !section_lines[i].trim().is_empty() {
-                block.push(section_lines[i].to_string());
-                i += 1;
-            }
-            blocks.push(block);
-        }
-
-        // Keep the last occurrence of each block header (header = first line).
-        let mut map: HashMap<String, Vec<String>> = HashMap::new();
-        let mut order: Vec<String> = Vec::new();
-        for block in blocks.into_iter().rev() {
-            if block.is_empty() {
-                continue;
-            }
-            let header = block[0].trim_start().to_string();
-            map.entry(header.clone()).or_insert_with(|| {
-                order.push(header.clone());
-                block
-            });
-        }
-        order.reverse();
-
-        // Reconstruct lines for this section.
-        let mut out: Vec<String> = Vec::new();
-        for key in order {
-            if let Some(block) = map.get(&key) {
-                out.extend(block.clone());
-                out.push(String::new()); // blank line between blocks
-            }
-        }
-        if out.last().map(|s| s.is_empty()) == Some(true) {
-            out.pop();
-        }
-        out
-    }
 
     // Walk lines and process `Arguments:` and `Options:` sections.
     let mut out_lines: Vec<String> = Vec::new();
@@ -249,7 +194,7 @@ fn dedupe_help(raw: &str) -> String {
 
     // Normalize the Usage line: collapse consecutive duplicated tokens while preserving order.
     // Example: `Usage: kam install [OPTIONS] [PATH] [PATH]` -> `Usage: kam install [OPTIONS] [PATH]`
-    for ln in out_lines.iter_mut() {
+    for ln in &mut out_lines {
         if ln.trim_start().starts_with("Usage:") {
             let tokens: Vec<&str> = ln.split_whitespace().collect();
             if tokens.len() > 1 {
@@ -274,25 +219,65 @@ fn dedupe_help(raw: &str) -> String {
     res
 }
 
-fn main() {
-    // Load environment variables (e.g., KAM_UI_LANGUAGE overrides)
-    dotenv().ok();
+fn dedupe_section(section_lines: &[&str]) -> Vec<String> {
+    use std::collections::HashMap;
+    let mut blocks: Vec<Vec<String>> = Vec::new();
+    let mut i = 0;
+    while i < section_lines.len() {
+        while i < section_lines.len() && section_lines[i].trim().is_empty() {
+            i += 1;
+        }
+        if i >= section_lines.len() {
+            break;
+        }
 
-    // Initialize i18n early so we can use translations when building the CLI help.
-    kam::i18n::init();
+        let mut block: Vec<String> = Vec::new();
+        while i < section_lines.len() && !section_lines[i].trim().is_empty() {
+            block.push(section_lines[i].to_string());
+            i += 1;
+        }
+        blocks.push(block);
+    }
 
-    // Build the clap `Command` from the derive-generated parser so we can customize it.
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    let mut order: Vec<String> = Vec::new();
+    for block in blocks.into_iter().rev() {
+        if block.is_empty() {
+            continue;
+        }
+        let header = block[0].trim_start().to_string();
+        map.entry(header.clone()).or_insert_with(|| {
+            order.push(header.clone());
+            block
+        });
+    }
+    order.reverse();
+
+    let mut out: Vec<String> = Vec::new();
+    for key in order {
+        if let Some(block) = map.get(&key) {
+            out.extend(block.clone());
+            out.push(String::new());
+        }
+    }
+    if out.last().is_some_and(std::string::String::is_empty) {
+        out.pop();
+    }
+    out
+}
+
+fn build_localized_command() -> clap::Command {
     let mut cmd = Cli::command();
 
     // Localize top-level about / long_about (if translations exist).
     let about_text = kam::i18n::tr("cli.about");
     if about_text != "cli.about" {
         // Use an owned String to avoid lifetime issues with clap's API.
-        cmd = cmd.about(about_text.to_string());
+        cmd = cmd.about(about_text.clone());
     }
     let long_about_text = kam::i18n::tr("cli.long_about");
     if long_about_text != "cli.long_about" {
-        cmd = cmd.long_about(long_about_text.to_string());
+        cmd = cmd.long_about(long_about_text.clone());
     }
 
     // Localize top-level/global arguments (if translations exist).
@@ -305,16 +290,16 @@ fn main() {
         let mut replacements = Vec::new();
         for arg in cmd.get_arguments() {
             let arg_id = arg.get_id().as_str();
-            let key = format!("cli.flags.{}", arg_id);
+            let key = format!("cli.flags.{arg_id}");
             let tr = kam::i18n::tr(&key);
 
             // Debug: print attempted localization for each argument if KAM_DEBUG_I18N=1
             if debug_i18n_enabled() {
-                eprintln!("i18n: arg_id='{}' key='{}' tr='{}'", arg_id, key, tr);
+                eprintln!("i18n: arg_id='{arg_id}' key='{key}' tr='{tr}'");
             }
 
             if tr != key {
-                replacements.push(arg.clone().help(tr.to_string()));
+                replacements.push(arg.clone().help(tr.clone()));
             }
         }
 
@@ -326,14 +311,17 @@ fn main() {
                 // Keep the value (with a leading underscore to avoid unused warnings) so templates
                 // that rely on it remain expressible; we don't need to mutate args via a mutable
                 // iterator because re-adding the Arg will replace the previous definition.
-                let _tr_help = repl.get_help().map(|s| s.to_string()).unwrap_or_default();
+                let _tr_help = repl
+                    .get_help()
+                    .map(std::string::ToString::to_string)
+                    .unwrap_or_default();
 
                 // If an arg with the same id already exists on this command, skip re-adding it
                 // to avoid duplicate-argument panics. We intentionally do not mutate in-place
                 // here because there is no stable public API across clap versions for that.
                 if cmd.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
                     if debug_i18n_enabled() {
-                        eprintln!("Skipping localization for existing arg '{}'", repl_id);
+                        eprintln!("Skipping localization for existing arg '{repl_id}'");
                     }
                 } else {
                     // No existing arg — add the localized argument.
@@ -343,152 +331,120 @@ fn main() {
         }
     }
 
-    // Recursive localization for subcommands and nested subcommands.
-    fn localize_command(cmd: &mut clap::Command, prefix: &str) {
-        for sub in cmd.get_subcommands_mut() {
-            let name = sub.get_name();
-            let sub_prefix = format!("{}.{}", prefix, name);
-
-            // Localize summary/about
-            let summary_key = format!("{}.summary", sub_prefix);
-            let summary = kam::i18n::tr(&summary_key);
-            if summary != summary_key {
-                *sub = sub.clone().about(summary.to_string());
-            }
-
-            // Localize long description (if present)
-            let desc_key = format!("{}.description", sub_prefix);
-            let desc = kam::i18n::tr(&desc_key);
-            if desc != desc_key {
-                *sub = sub.clone().long_about(desc.to_string());
-            }
-
-            // Collect argument replacements (clone Arg objects and localized help)
-            let mut arg_repls: Vec<clap::Arg> = Vec::new();
-            for arg in sub.get_arguments() {
-                let arg_id = arg.get_id().as_str();
-                let arg_key = format!("{}.flags.{}", sub_prefix, arg_id);
-                let arg_tr = kam::i18n::tr(&arg_key);
-                if arg_tr != arg_key {
-                    arg_repls.push(arg.clone().help(arg_tr.to_string()));
-                }
-            }
-
-            // Apply argument replacements (adding an Arg with the same id will
-            // overwrite the previous definition in clap's builder).
-            for repl in arg_repls {
-                let repl_id = repl.get_id().as_str();
-                // If an arg with the same id already exists on this subcommand, skip adding
-                // to avoid duplicate argument names (which can cause a clap panic).
-                if sub.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
-                    if debug_i18n_enabled() {
-                        eprintln!(
-                            "Skipping localization for arg '{}' (already present)",
-                            repl_id
-                        );
-                    }
-                    continue;
-                }
-                *sub = sub.clone().arg(repl);
-            }
-
-            // Recurse into nested subcommands.
-            localize_command(sub, &sub_prefix);
-        }
-    }
-
-    // Kick off recursive localization for subcommands under "cli.commands".
     localize_command(&mut cmd, "cli.commands");
 
     // The `help` subcommand is provided as a real subcommand (see `Commands::Help`)
     // and is localized above via `localize_command`. Disable clap's built-in `help`
     // subcommand so it doesn't collide with the derived `Help` subcommand.
-    cmd = cmd.clone().disable_help_subcommand(true);
+    cmd.clone().disable_help_subcommand(true)
+}
 
-    // Parse using the localized Command so help output is translated.
-    // Use a cloned `cmd` so we can still reference the original for printing help later.
-    //
-    // Heuristic: when `-S`/`-s` is used and the next token looks like a target
-    // (not an option and not a real subcommand) automatically insert `--` so
-    // `kam -S <target>` works without the user having to type `--`.
-    // Intercept help tokens early so we can post-process help output (dedupe
-    // duplicate argument/option blocks introduced by adding translations).
-    //
-    // `dedupe_help` was moved to module scope so it can be used for both explicit
-    // help printing and parse-time error formatting.
-    //
-    // Debugging aid: when KAM_DEBUG_I18N=1, dump argument metadata to stderr
-    // so we can detect conflicting or duplicate long/short option names.
-    if debug_i18n_enabled() {
-        dump_command_debug(&cmd);
+fn localize_command(cmd: &mut clap::Command, prefix: &str) {
+    for sub in cmd.get_subcommands_mut() {
+        let name = sub.get_name();
+        let sub_prefix = format!("{prefix}.{name}");
+
+        localize_subcommand_text(sub, &sub_prefix);
+        localize_subcommand_args(sub, &sub_prefix);
+        localize_command(sub, &sub_prefix);
+    }
+}
+
+fn localize_subcommand_text(sub: &mut clap::Command, sub_prefix: &str) {
+    let summary_key = format!("{sub_prefix}.summary");
+    let summary = kam::i18n::tr(&summary_key);
+    if summary != summary_key {
+        *sub = sub.clone().about(summary.clone());
     }
 
-    let matches = {
-        // Collect argv and allow the CLI helper to insert `--` when appropriate so
-        // combined short flags like `-Syu` are handled consistently with runtime.
-        let args_os: Vec<std::ffi::OsString> = std::env::args_os().collect();
-        let args = kam::cli::inject_double_dash_for_targets(args_os, &mut cmd);
+    let desc_key = format!("{sub_prefix}.description");
+    let desc = kam::i18n::tr(&desc_key);
+    if desc != desc_key {
+        *sub = sub.clone().long_about(desc.clone());
+    }
+}
 
-        // Intercept explicit help tokens (-h / --help) so we can post-process them.
-        let toks: Vec<String> = args
-            .iter()
-            .map(|s| s.to_string_lossy().into_owned())
-            .collect();
-        if let Some(help_pos) = toks.iter().position(|t| t == "--help" || t == "-h") {
-            let subcommand_path = subcommand_path_before_help(&toks, help_pos);
-            if let Some(cur) = find_subcommand(&cmd, &subcommand_path) {
-                print_localized_help(cur, &subcommand_path);
-            } else {
-                print_localized_help(cmd.clone(), &[]);
-            }
-            std::process::exit(0);
+fn localize_subcommand_args(sub: &mut clap::Command, sub_prefix: &str) {
+    let mut arg_repls: Vec<clap::Arg> = Vec::new();
+    for arg in sub.get_arguments() {
+        let arg_id = arg.get_id().as_str();
+        let arg_key = format!("{sub_prefix}.flags.{arg_id}");
+        let arg_tr = kam::i18n::tr(&arg_key);
+        if arg_tr != arg_key {
+            arg_repls.push(arg.clone().help(arg_tr.clone()));
         }
+    }
 
-        // Parse from the (possibly modified) argv list so clap receives the `--`
-        // we've injected when appropriate.
-        match cmd.clone().try_get_matches_from(args) {
-            Ok(m) => m,
-            Err(e) => {
-                // Run the error's textual output through the same dedupe helper we use
-                // for localized help output so duplicate "Arguments/Options" blocks are collapsed
-                // and the Usage line is normalized.
-                let raw = e.to_string();
-                let cleaned = dedupe_help(&raw);
+    for repl in arg_repls {
+        let repl_id = repl.get_id().as_str();
+        if sub.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
+            if debug_i18n_enabled() {
+                eprintln!("Skipping localization for arg '{repl_id}' (already present)");
+            }
+            continue;
+        }
+        *sub = sub.clone().arg(repl);
+    }
+}
 
-                // Clap prints help/version to stdout and errors to stderr by default.
-                match e.kind() {
-                    ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
-                        print!("{}", cleaned);
-                        if !cleaned.ends_with('\n') {
-                            println!();
-                        }
-                        std::process::exit(0);
+fn parse_cli_matches(cmd: &clap::Command) -> clap::ArgMatches {
+    if debug_i18n_enabled() {
+        dump_command_debug(cmd);
+    }
+
+    let args_os: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let mut parse_cmd = cmd.clone();
+    let args = kam::cli::inject_double_dash_for_targets(args_os, &mut parse_cmd);
+    let toks: Vec<String> = args
+        .iter()
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect();
+    if let Some(help_pos) = toks.iter().position(|t| t == "--help" || t == "-h") {
+        let subcommand_path = subcommand_path_before_help(&toks, help_pos);
+        if let Some(cur) = find_subcommand(cmd, &subcommand_path) {
+            print_localized_help(cur, &subcommand_path);
+        } else {
+            print_localized_help(cmd.clone(), &[]);
+        }
+        std::process::exit(0);
+    }
+
+    match cmd.clone().try_get_matches_from(args) {
+        Ok(m) => m,
+        Err(e) => {
+            let cleaned = dedupe_help(&e.to_string());
+            match e.kind() {
+                ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
+                    print!("{cleaned}");
+                    if !cleaned.ends_with('\n') {
+                        println!();
                     }
-                    _ => {
-                        eprintln!("{}", cleaned);
-                        // For parsing errors, use exit code 2 to match clap's default.
-                        std::process::exit(2);
-                    }
+                    std::process::exit(0);
+                }
+                _ => {
+                    eprintln!("{cleaned}");
+                    std::process::exit(2);
                 }
             }
         }
-    };
+    }
+}
 
-    // Convert ArgMatches to typed `Cli` (handling parse errors).
-    let cli = match Cli::from_arg_matches(&matches) {
+fn cli_from_matches(matches: &clap::ArgMatches) -> Cli {
+    match Cli::from_arg_matches(matches) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error parsing arguments: {e}");
             std::process::exit(2);
         }
-    };
+    }
+}
 
-    // If the caller requested an explicit index update and they did not also provide
-    // pacman-style flags, perform the equivalent of `kam repo sync --force` and exit.
+fn handle_top_level_repo_flags(cli: &Cli) -> bool {
     if cli.update_index && !cli.sync_flag && !cli.search_flag {
         let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
         match kam::cmds::repo::repo_sync_with_jobs(&base, true, None::<usize>, cli.quiet) {
-            Ok(()) => return,
+            Ok(()) => return true,
             Err(e) => {
                 print_error_chain(&e);
                 std::process::exit(1);
@@ -496,17 +452,9 @@ fn main() {
         }
     }
 
-    // Handle pacman-style top-level flags (-S / -s) before dispatching to subcommands.
-    // - `-Ss <query>` performs a remote search
-    // - `-S <moduleId>` downloads the latest release ZIP for the given module(s)
     if cli.sync_flag || cli.search_flag {
-        // SPECIAL CASE: When sync/search flags are present but no targets were parsed,
-        // it might be because clap interpreted a search term as a subcommand.
-        // In this case, we check if the command is one that might be used as a search term.
-        // If no targets were collected, just use the parsed targets as-is (empty vector when none were parsed).
         let effective_targets = cli.targets.clone();
 
-        // If `--update`/`-u` is present, perform a forced index sync before continuing.
         if cli.update_index {
             let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
             match kam::cmds::repo::repo_sync_with_jobs(&base, true, None::<usize>, cli.quiet) {
@@ -526,7 +474,7 @@ fn main() {
             cli.modules_url.as_deref(),
             cli.quiet,
         ) {
-            Ok(()) => return,
+            Ok(()) => return true,
             Err(e) => {
                 print_error_chain(&e);
                 std::process::exit(1);
@@ -534,9 +482,11 @@ fn main() {
         }
     }
 
-    // Dispatch to subcommand handlers (command is optional).
-    // If no subcommand is provided (None) we treat it as a no-op returning Ok(()).
-    let res: Result<(), KamError> = match cli.command {
+    false
+}
+
+fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
+    match cli.command {
         Some(Commands::Init(args)) => kam::cmds::init::run(&args),
         Some(Commands::Build(args)) => kam::cmds::build::run(&args),
         Some(Commands::Version(args)) => kam::cmds::version::run(args),
@@ -555,26 +505,41 @@ fn main() {
         Some(Commands::Repo(args)) => {
             kam::cmds::repo::run_with_modules_url(args, cli.modules_url.as_deref())
         }
-        Some(Commands::Help(args)) => match find_subcommand(&cmd, &args.subcommand) {
-            Some(command) => {
-                print_localized_help(command, &args.subcommand);
-                Ok(())
-            }
-            None => {
-                let missing = args.subcommand.join(" ");
-                kam::utils::Utils::error(format!("Unknown subcommand: {}", missing));
-                std::process::exit(2);
-            }
-        },
+        Some(Commands::Help(args)) => {
+            handle_help_command(cmd, &args.subcommand);
+            Ok(())
+        }
         Some(Commands::Env(args)) => kam::cmds::env::run(&args),
         Some(Commands::About(args)) => kam::cmds::about::run(args),
         _ => {
-            // No subcommand provided: show top-level help (deduped) instead of performing background operations.
             print_localized_help(cmd.clone(), &[]);
             Ok(())
         }
-    };
+    }
+}
 
+fn handle_help_command(cmd: &clap::Command, subcommand_path: &[String]) {
+    if let Some(command) = find_subcommand(cmd, subcommand_path) {
+        print_localized_help(command, subcommand_path);
+    } else {
+        let missing = subcommand_path.join(" ");
+        kam::utils::Utils::error(format!("Unknown subcommand: {missing}"));
+        std::process::exit(2);
+    }
+}
+
+fn main() {
+    dotenv().ok();
+    kam::i18n::init();
+
+    let cmd = build_localized_command();
+    let matches = parse_cli_matches(&cmd);
+    let cli = cli_from_matches(&matches);
+    if handle_top_level_repo_flags(&cli) {
+        return;
+    }
+
+    let res = dispatch_command(cli, &cmd);
     if let Err(e) = res {
         print_error_chain(&e);
         std::process::exit(1);

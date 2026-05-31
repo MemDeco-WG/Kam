@@ -14,6 +14,7 @@ This rule flags any line that ends with one or more spaces or tabs.
 
 use regex::Regex;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use crate::cmds::check::file::FileResult;
 
@@ -23,9 +24,10 @@ pub struct TrailingWhitespaceRule;
 impl TrailingWhitespaceRule {
     fn pattern() -> &'static Regex {
         // Matches one or more spaces or tabs at the end of a line.
-        lazy_static::lazy_static! {
-            static ref RE: Regex = Regex::new(r"[ \t]+$").expect("invalid trailing whitespace regex");
-        }
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"[ \t]+$")
+                .unwrap_or_else(|e| panic!("invalid trailing whitespace regex: {e}"))
+        });
         &RE
     }
 }
@@ -77,7 +79,7 @@ impl crate::rules::Rule for TrailingWhitespaceRule {
             fixed.push('\n');
         }
 
-        if fixed != content { Some(fixed) } else { None }
+        if fixed == content { None } else { Some(fixed) }
     }
 }
 

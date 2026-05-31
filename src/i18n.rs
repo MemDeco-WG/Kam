@@ -1,5 +1,5 @@
 //! fluent i18n module
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use unic_langid::LanguageIdentifier;
@@ -30,7 +30,7 @@ fn format_with_braces(format_str: &str, args: &[&dyn Display]) -> String {
     while let Some(pos) = rest.find("{}") {
         out.push_str(&rest[..pos]);
         if let Some(arg) = arg_iter.next() {
-            out.push_str(&format!("{}", arg));
+            let _ = write!(out, "{arg}");
         } else {
             out.push_str("{}");
         }
@@ -40,7 +40,7 @@ fn format_with_braces(format_str: &str, args: &[&dyn Display]) -> String {
     // Append any leftover args separated by space
     for arg in arg_iter {
         out.push(' ');
-        out.push_str(&format!("{}", arg));
+        let _ = write!(out, "{arg}");
     }
     out
 }
@@ -62,7 +62,7 @@ fn try_format_with_ftl(locale: &str, ftl: &str, id: &str, args: &[&dyn Display])
     {
         let mut fargs = FluentArgs::new();
         for (i, arg) in args.iter().enumerate() {
-            let key = format!("arg{}", i);
+            let key = format!("arg{i}");
             fargs.set(key, FluentValue::from(arg.to_string()));
         }
         let mut errors = Vec::new();

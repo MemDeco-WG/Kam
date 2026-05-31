@@ -15,6 +15,7 @@
 
 use regex::Regex;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use crate::cmds::check::file::FileResult;
 
@@ -27,10 +28,11 @@ impl Chmod777Rule {
         //  chmod 777 ...
         //  chmod -R 777 ...
         // Allows arbitrary spacing and optional -R.
-        lazy_static::lazy_static! {
-            static ref RE: Regex = Regex::new(r"\bchmod\s+(?:-R\s+)?7{3}\b").unwrap();
-        }
-        &*RE
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"\bchmod\s+(?:-R\s+)?7{3}\b")
+                .unwrap_or_else(|e| panic!("invalid chmod_777 regex: {e}"))
+        });
+        &RE
     }
 }
 

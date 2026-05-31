@@ -1,17 +1,16 @@
 use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-static ID_RE: Lazy<Regex> = Lazy::new(|| {
+static ID_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     Regex::new(r"^[a-zA-Z][a-zA-Z0-9._-]+$")
         .unwrap_or_else(|e| panic!("Hard-coded ID regex failed to compile: {e}"))
 });
-static LINE_RE: Lazy<Regex> = Lazy::new(|| {
+static LINE_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     Regex::new(r"(?i)(?:at\s+)?line\s+(\d+)")
         .unwrap_or_else(|e| panic!("Line regex failed to compile: {e}"))
 });
@@ -221,35 +220,32 @@ pub fn check_file(
                 }
             }
         }
-        "markdown" => {
+        "markdown" if do_fix => {
             // markdown文件：规范化换行符、去除行尾空格、确保文件末尾有换行
             // 主要是为了统一格式，避免git diff时出现不必要的变更
-            if do_fix {
-                let mut normalized = s.replace("\r\n", "\n");
-                // Replace remaining CR if any
-                normalized = normalized.replace('\r', "\n");
+            let mut normalized = s.replace("\r\n", "\n");
+            // Replace remaining CR if any
+            normalized = normalized.replace('\r', "\n");
 
-                // Remove trailing spaces from each line
-                let lines: Vec<&str> = normalized.lines().collect();
-                let stripped: Vec<String> =
-                    lines.iter().map(|l| l.trim_end().to_string()).collect();
-                normalized = stripped.join("\n");
+            // Remove trailing spaces from each line
+            let lines: Vec<&str> = normalized.lines().collect();
+            let stripped: Vec<String> = lines.iter().map(|l| l.trim_end().to_string()).collect();
+            normalized = stripped.join("\n");
 
-                // Ensure final newline
-                if !normalized.ends_with('\n') {
-                    normalized.push('\n');
-                }
+            // Ensure final newline
+            if !normalized.ends_with('\n') {
+                normalized.push('\n');
+            }
 
-                if normalized != s {
-                    fs::OpenOptions::new()
-                        .write(true)
-                        .truncate(true)
-                        .open(path)?
-                        .write_all(normalized.as_bytes())?;
-                    // Update in-memory content so subsequent rules operate on the fixed content
-                    s = normalized;
-                    fr.fixed = true;
-                }
+            if normalized != s {
+                fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(path)?
+                    .write_all(normalized.as_bytes())?;
+                // Update in-memory content so subsequent rules operate on the fixed content
+                s = normalized;
+                fr.fixed = true;
             }
         }
         _ => {}

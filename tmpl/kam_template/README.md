@@ -87,7 +87,7 @@ Note: Kam also exports additional environment variables derived from the generat
   - `KAM_PROP_AUTHOR`: module author
   - `KAM_PROP_DESCRIPTION`: module description
 
-- `KAM_TMPL_<NAME>`: Variables defined by a template in `[kam.tmpl.variables]` are exported as `KAM_TMPL_<NAME>` (upper-cased). The same variables are also available for template rendering as `{{ <name> }}`.
+- `KAM_TMPL_<NAME>`: Variables defined by a template in `[kam.tmpl.variables]` are exported as `KAM_TMPL_<NAME>` (upper-cased). The same variables are also available for template rendering by variable name.
 
 - `KAM_<PATH>`: All flattened keys from the `kam.toml` are exported as environment variables using the pattern `KAM_<PATH>`, where dot (`.`) and dash (`-`) are replaced with underscores (`_`) and the key is upper-cased. For example:
   - `prop.id` -> `KAM_PROP_ID`

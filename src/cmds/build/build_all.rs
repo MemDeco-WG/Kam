@@ -18,6 +18,12 @@ struct BuildResult {
     error: Option<String>,
 }
 
+struct WorkspaceBuildSummary {
+    total: usize,
+    succeeded: usize,
+    failed: usize,
+}
+
 // 展开成员模式（支持 glob 和 [] 包裹）
 // 返回 (是否用 [] 包裹, 展开后的成员列表)
 fn expand_member_pattern(project_path: &Path, member_pattern: &str) -> (bool, Vec<String>) {
@@ -128,261 +134,241 @@ fn build_workspace_member(project_path: &Path, member: &str, args: &BuildArgs) -
     }
 }
 
-/// # Errors
-/// Returns a `KamError` if any I/O, configuration validation, or build step fails.
+fn build_workspace_members(
+    project_path: &Path,
+    members: &[String],
+    args: &BuildArgs,
+) -> Result<Vec<BuildResult>, KamError> {
+    let mut results = Vec::new();
+
+    // 解析成员列表，识别用 [] 包裹的项目。只有 [] 包裹的项目组并发执行；
+    // 连续的并发组会合并，避免重复构建和不必要的竞争条件。
+    let mut i = 0;
+    while i < members.len() {
+        let member_pattern = &members[i];
+        let (is_bracketed, expanded) = expand_member_pattern(project_path, member_pattern);
+        if expanded.is_empty() {
+            i += 1;
+            continue;
+        }
+
+        if is_bracketed {
+            let mut all_concurrent_members = expanded;
+            i += 1;
+
+            while i < members.len() {
+                let (next_bracketed, next_expanded) =
+                    expand_member_pattern(project_path, &members[i]);
+                if next_bracketed && !next_expanded.is_empty() {
+                    all_concurrent_members.extend(next_expanded);
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let mut concurrent_results =
+                build_concurrent_members(project_path, all_concurrent_members, args)?;
+            results.append(&mut concurrent_results);
+        } else {
+            for member in expanded {
+                results.push(build_workspace_member(project_path, &member, args));
+            }
+            i += 1;
+        }
+    }
+
+    if results.is_empty() {
+        return Err(KamError::InvalidConfig(crate::i18n::tr(
+            "build.no_workspace_members",
+        )));
+    }
+
+    Ok(results)
+}
+
+fn build_concurrent_members(
+    project_path: &Path,
+    members: Vec<String>,
+    args: &BuildArgs,
+) -> Result<Vec<BuildResult>, KamError> {
+    let member_count = members.len();
+    if member_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    let requested_jobs = args
+        .jobs
+        .unwrap_or_else(|| thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get));
+    let actual_jobs = requested_jobs.min(member_count).max(1);
+
+    if !args.quiet {
+        Utils::info(&trf!(
+            "build.concurrent_building_members",
+            member_count,
+            actual_jobs
+        ));
+    }
+
+    let project_path = Arc::new(project_path.to_path_buf());
+    let args = Arc::new(args.clone());
+    let task_queue = Arc::new(Mutex::new(members));
+    let (result_tx, result_rx) = mpsc::channel();
+
+    let mut handles = Vec::new();
+    for _ in 0..actual_jobs {
+        let task_queue = Arc::clone(&task_queue);
+        let result_tx = result_tx.clone();
+        let project_path = Arc::clone(&project_path);
+        let args = Arc::clone(&args);
+
+        handles.push(thread::spawn(move || {
+            build_worker_loop(&task_queue, &result_tx, &project_path, &args);
+        }));
+    }
+
+    for handle in handles {
+        if let Err(e) = handle.join() {
+            return Err(KamError::CommandFailed(format!(
+                "Worker thread panicked: {e:?}"
+            )));
+        }
+    }
+
+    drop(result_tx);
+    Ok(result_rx.iter().collect())
+}
+
+fn build_worker_loop(
+    task_queue: &Arc<Mutex<Vec<String>>>,
+    result_tx: &mpsc::Sender<BuildResult>,
+    project_path: &Arc<std::path::PathBuf>,
+    args: &Arc<BuildArgs>,
+) {
+    loop {
+        let member = match task_queue.lock() {
+            Ok(mut guard) => guard.pop(),
+            Err(poisoned) => {
+                let result = BuildResult {
+                    member: "<internal>".to_string(),
+                    success: false,
+                    error: Some(format!("task queue mutex poisoned: {poisoned:?}")),
+                };
+                let _ = result_tx.send(result);
+                break;
+            }
+        };
+
+        let Some(member) = member else {
+            break;
+        };
+
+        let result = build_workspace_member(project_path.as_path(), &member, args.as_ref());
+        if let Err(e) = result_tx.send(result) {
+            Utils::error(format!("Failed to send result to channel: {e}"));
+            break;
+        }
+    }
+}
+
+fn summarize_results(results: &[BuildResult]) -> WorkspaceBuildSummary {
+    let succeeded = results.iter().filter(|result| result.success).count();
+    WorkspaceBuildSummary {
+        total: results.len(),
+        succeeded,
+        failed: results.len() - succeeded,
+    }
+}
+
+fn print_workspace_summary(results: &[BuildResult]) {
+    println!();
+    Utils::section(crate::i18n::tr("workspace.summary.title"));
+
+    let mut summary_table = Table::new();
+    summary_table.set_header(vec![
+        crate::i18n::tr("table.header.module"),
+        crate::i18n::tr("table.header.status"),
+    ]);
+
+    for result in results {
+        if result.success {
+            summary_table.add_row(vec![
+                Cell::new(&result.member).fg(comfy_table::Color::White),
+                Cell::new(crate::i18n::tr("status.success")).fg(comfy_table::Color::Green),
+            ]);
+        } else {
+            let error_msg = result.error.as_deref().unwrap_or("unknown error");
+            summary_table.add_row(vec![
+                Cell::new(&result.member).fg(comfy_table::Color::White),
+                Cell::new(trf!("status.failed", error_msg)).fg(comfy_table::Color::Red),
+            ]);
+        }
+    }
+
+    println!("{summary_table}");
+}
+
+fn print_workspace_stats(summary: &WorkspaceBuildSummary, elapsed_secs: f64) {
+    println!();
+    let mut stats_table = Table::new();
+    stats_table
+        .set_header(vec![
+            crate::i18n::tr("table.header.stat"),
+            crate::i18n::tr("table.header.value"),
+        ])
+        .add_row(vec![
+            Cell::new(crate::i18n::tr("table.stat.total")).fg(comfy_table::Color::Cyan),
+            Cell::new(summary.total.to_string()).fg(comfy_table::Color::White),
+        ])
+        .add_row(vec![
+            Cell::new(crate::i18n::tr("table.stat.succeeded")).fg(comfy_table::Color::Cyan),
+            Cell::new(summary.succeeded.to_string()).fg(comfy_table::Color::Green),
+        ])
+        .add_row(vec![
+            Cell::new(crate::i18n::tr("table.stat.failed")).fg(comfy_table::Color::Cyan),
+            Cell::new(summary.failed.to_string()).fg(comfy_table::Color::Red),
+        ])
+        .add_row(vec![
+            Cell::new(crate::i18n::tr("table.stat.total_duration")).fg(comfy_table::Color::Cyan),
+            Cell::new(format!("{elapsed_secs:.2}s")).fg(comfy_table::Color::White),
+        ]);
+
+    println!("{stats_table}");
+}
+
+/// Build every configured workspace member, respecting Kam's sequential and
+/// bracketed-concurrent workspace member syntax.
 ///
-/// This is a minimal doc block to satisfy lints; please expand it with concrete
-/// error conditions if you want more precise documentation.
-#[allow(clippy::too_many_lines)] // TODO: split into smaller helper functions and add richer docs
+/// # Errors
+///
+/// Returns `KamError` when workspace metadata is invalid, a worker thread
+/// panics, or any selected member fails to build.
 pub fn run_build_all(project_path: &Path, args: &BuildArgs) -> Result<(), KamError> {
     let start_time = Instant::now();
     let root_kam_toml = KamToml::load_from_dir(project_path)?;
-    let workspace =
-        root_kam_toml.kam.workspace.as_ref().ok_or_else(|| {
-            KamError::InvalidConfig(crate::i18n::tr("build.no_workspace_section"))
-        })?;
-
-    let mut results = Vec::new();
-
-    if let Some(members) = &workspace.members {
-        // 解析成员列表，识别用 [] 包裹的项目
-        // 重要：只有用 [] 包裹的项目组才会并发执行，没有包裹的必须顺序执行
-        // 连续的 [] 包裹的项目会被合并成一个并发组
-        // 这样可以避免重复构建和竞争条件
-        let mut i = 0;
-        while i < members.len() {
-            let member_pattern = &members[i];
-            let (is_bracketed, expanded) = expand_member_pattern(project_path, member_pattern);
-            if expanded.is_empty() {
-                i += 1;
-                continue;
-            }
-
-            if is_bracketed {
-                // 收集所有连续的 [] 包裹的项目，合并成一个并发组
-                let mut all_concurrent_members = expanded;
-                i += 1;
-
-                // 继续收集后续的 [] 包裹的项目
-                while i < members.len() {
-                    let (next_bracketed, next_expanded) =
-                        expand_member_pattern(project_path, &members[i]);
-                    if next_bracketed && !next_expanded.is_empty() {
-                        // 也是 [] 包裹的，合并到当前并发组
-                        all_concurrent_members.extend(next_expanded);
-                        i += 1;
-                    } else {
-                        // 不是 [] 包裹的，停止收集
-                        break;
-                    }
-                }
-
-                // 现在处理合并后的并发组
-                // 用 [] 包裹的项目组，使用线程池并发执行
-                // 注意：只有这里才会使用并发，-j 参数也只在这里生效
-                let member_count = all_concurrent_members.len();
-
-                // 确定线程池大小（仅在并发组中使用）
-                let num_jobs = args.jobs.unwrap_or_else(|| {
-                    thread::available_parallelism()
-                        .map(std::num::NonZeroUsize::get)
-                        .unwrap_or(1)
-                });
-
-                // 确保至少有一个线程（如果 member_count > 0）
-                let actual_jobs = if member_count > 0 {
-                    num_jobs.min(member_count).max(1)
-                } else {
-                    0
-                };
-
-                if !args.quiet {
-                    Utils::info(&trf!(
-                        "build.concurrent_building_members",
-                        member_count,
-                        actual_jobs
-                    ));
-                }
-
-                // 如果没有任务，跳过
-                if member_count == 0 {
-                    continue;
-                }
-
-                // 使用线程池并发执行
-                let project_path = Arc::new(project_path.to_path_buf());
-                let args = Arc::new(args.clone());
-
-                // 创建任务队列和结果 channel
-                let task_queue = Arc::new(Mutex::new(all_concurrent_members));
-                let (result_tx, result_rx) = mpsc::channel();
-
-                // 创建工作线程
-                let mut handles = Vec::new();
-                for _ in 0..actual_jobs {
-                    let task_queue = Arc::clone(&task_queue);
-                    let result_tx = result_tx.clone();
-                    let project_path = Arc::clone(&project_path);
-                    let args = Arc::clone(&args);
-
-                    let handle = thread::spawn(move || {
-                        loop {
-                            // 从任务队列中取任务
-                            let member = {
-                                match task_queue.lock() {
-                                    Ok(mut guard) => guard.pop(),
-                                    Err(poisoned) => {
-                                        // If the mutex is poisoned, report the problem and stop processing.
-                                        let br = BuildResult {
-                                            member: "<internal>".to_string(),
-                                            success: false,
-                                            error: Some(format!(
-                                                "task queue mutex poisoned: {poisoned:?}"
-                                            )),
-                                        };
-                                        // Best-effort: try to notify the main thread and then exit.
-                                        let _ = result_tx.send(br);
-                                        break;
-                                    }
-                                }
-                            };
-
-                            if let Some(member) = member {
-                                let result = build_workspace_member(
-                                    project_path.as_path(),
-                                    &member,
-                                    args.as_ref(),
-                                );
-                                if let Err(e) = result_tx.send(result) {
-                                    Utils::error(format!("Failed to send result to channel: {e}"));
-                                    // Receiver dropped or send failed; stop worker.
-                                    break;
-                                }
-                            } else {
-                                // 没有更多任务，退出
-                                break;
-                            }
-                        }
-                    });
-                    handles.push(handle);
-                }
-
-                // 等待所有工作线程完成
-                // 注意：工作线程中的 result_tx clone 会在线程结束时自动销毁
-                for handle in handles {
-                    if let Err(e) = handle.join() {
-                        return Err(KamError::CommandFailed(format!(
-                            "Worker thread panicked: {e:?}"
-                        )));
-                    }
-                }
-
-                // 收集结果
-                // 所有工作线程已完成，它们的 result_tx clone 已经销毁
-                // 现在关闭主发送端，使 channel 关闭，然后收集所有结果
-                drop(result_tx);
-                // 从 channel 中收集所有结果（iter 会在 channel 关闭时结束）
-                let mut concurrent_results: Vec<_> = result_rx.iter().collect();
-                results.append(&mut concurrent_results);
-            } else {
-                // 没有用 [] 包裹的项目，必须顺序执行
-                // 重要：这里不使用并发，即使设置了 -j 参数也不会生效
-                // 这样可以避免重复构建和竞争条件
-                for member in expanded {
-                    let result = build_workspace_member(project_path, &member, args);
-                    results.push(result);
-                }
-                i += 1;
-            }
-        }
-
-        if results.is_empty() {
-            return Err(KamError::InvalidConfig(crate::i18n::tr(
-                "build.no_workspace_members",
-            )));
-        }
-    } else {
+    let Some(workspace) = root_kam_toml.kam.workspace.as_ref() else {
         build_project(project_path, args, None)?;
         return Ok(());
-    }
+    };
+    let members = workspace
+        .members
+        .as_ref()
+        .ok_or_else(|| KamError::InvalidConfig(crate::i18n::tr("build.no_workspace_section")))?;
 
-    let total_duration = start_time.elapsed();
-
-    // 打印总结，让用户知道哪些成功了哪些失败了
-    if !args.quiet {
-        println!();
-        Utils::section(crate::i18n::tr("workspace.summary.title"));
-    }
-
-    // 统计成功和失败的数量
-    let success_count = results.iter().filter(|r| r.success).count();
-    let failed_count = results.len() - success_count;
+    let results = build_workspace_members(project_path, members, args)?;
+    let summary = summarize_results(&results);
 
     if !args.quiet {
-        let mut summary_table = Table::new();
-        summary_table.set_header(vec![
-            crate::i18n::tr("table.header.module"),
-            crate::i18n::tr("table.header.status"),
-        ]);
-
-        for result in &results {
-            if result.success {
-                summary_table.add_row(vec![
-                    Cell::new(&result.member).fg(comfy_table::Color::White),
-                    Cell::new(crate::i18n::tr("status.success")).fg(comfy_table::Color::Green),
-                ]);
-            } else {
-                let default_error = "unknown error".to_string();
-                let error_msg = result.error.as_ref().unwrap_or(&default_error);
-                summary_table.add_row(vec![
-                    Cell::new(&result.member).fg(comfy_table::Color::White),
-                    Cell::new(trf!("status.failed", error_msg)).fg(comfy_table::Color::Red),
-                ]);
-            }
-        }
-
-        println!("{summary_table}");
+        print_workspace_summary(&results);
+        print_workspace_stats(&summary, start_time.elapsed().as_secs_f64());
     }
 
-    if !args.quiet {
-        println!();
-        let mut stats_table = Table::new();
-        stats_table
-            .set_header(vec![
-                crate::i18n::tr("table.header.stat"),
-                crate::i18n::tr("table.header.value"),
-            ])
-            .add_row(vec![
-                Cell::new(crate::i18n::tr("table.stat.total")).fg(comfy_table::Color::Cyan),
-                Cell::new(results.len().to_string()).fg(comfy_table::Color::White),
-            ])
-            .add_row(vec![
-                Cell::new(crate::i18n::tr("table.stat.succeeded")).fg(comfy_table::Color::Cyan),
-                Cell::new(success_count.to_string()).fg(comfy_table::Color::Green),
-            ])
-            .add_row(vec![
-                Cell::new(crate::i18n::tr("table.stat.failed")).fg(comfy_table::Color::Cyan),
-                Cell::new(failed_count.to_string()).fg(comfy_table::Color::Red),
-            ])
-            .add_row(vec![
-                Cell::new(crate::i18n::tr("table.stat.total_duration"))
-                    .fg(comfy_table::Color::Cyan),
-                Cell::new(format!("{:.2}s", total_duration.as_secs_f64()))
-                    .fg(comfy_table::Color::White),
-            ]);
-
-        println!("{stats_table}");
-    }
-
-    // 如果有失败的，就返回错误
-    // 虽然可以继续构建其他的，但通常用户希望所有都成功
-    if failed_count > 0 {
+    if summary.failed > 0 {
         return Err(KamError::CommandFailed(trf!(
             "build.failed_workspace_members",
-            failed_count
+            summary.failed
         )));
     }
 
     Ok(())
-    // 全部成功！虽然可能花了点时间，但至少都构建完了
 }

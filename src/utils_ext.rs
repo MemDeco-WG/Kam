@@ -1,17 +1,17 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::io::{self, Write};
 
-static URL_RE: Lazy<Regex> = Lazy::new(|| {
+static URL_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     Regex::new(r"https?://(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}(\.[a-z]{2,4})?\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)")
         .unwrap_or_else(|e| panic!("Failed to compile URL regex: {e}"))
 });
 
 /// Prompt the user with `msg` and return `true` for yes, `false` for no.
 /// On I/O failure this function prints an error message and exits with code 1.
+#[must_use]
 pub fn confirm(msg: &str) -> bool {
     loop {
-        print!("{}", msg);
+        print!("{msg}");
         let mut input = String::new();
         if let Err(e) = io::stdout().flush() {
             eprintln!("Failed to flush stdout: {e}");
@@ -31,7 +31,6 @@ pub fn confirm(msg: &str) -> bool {
             }
             _ => {
                 // Invalid input; re-prompt.
-                continue;
             }
         }
     }

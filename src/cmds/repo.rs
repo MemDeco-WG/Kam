@@ -485,7 +485,7 @@ fn try_find_index_in_cache_dir(dir: &Path) -> Option<Vec<SearchEntry>> {
         }
     }
     // Sort by modified desc
-    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.0));
     for (_mtime, p) in candidates {
         if let Ok(buf) = std::fs::read_to_string(&p)
             && let Ok(entries) = serde_json::from_str::<Vec<SearchEntry>>(&buf)
@@ -733,9 +733,8 @@ pub fn repo_sync_with_jobs(
 
     // Prepare up to MAX_VISIBLE visible bars; subsequent modules are kept hidden (no visual).
     // Determine number of workers (CLI `--jobs` > env `KAM_REPO_CONCURRENCY` > default=core count).
-    let default_workers = std::thread::available_parallelism()
-        .map(std::num::NonZeroUsize::get)
-        .unwrap_or(1);
+    let default_workers =
+        std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
     let mut num_workers = match jobs {
         Some(j) if j > 0 => j,
         _ => std::env::var("KAM_REPO_CONCURRENCY")

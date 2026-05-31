@@ -12,6 +12,9 @@
 //! add dynamic discovery, per-project enable/disable config, rule severities,
 //! rule categories, or caching of instantiated rules.
 
+use std::collections::HashMap;
+use std::collections::hash_map::RandomState;
+use std::hash::BuildHasher;
 use std::path::Path;
 
 /// A single lint/check rule.
@@ -84,6 +87,7 @@ pub fn load_builtin_rules() -> Vec<Box<dyn Rule>> {
 /// Convenience wrapper that returns all rules to be applied.
 ///
 /// This is a single place to aggregate builtin + (future) external rules.
+#[must_use]
 pub fn load_all_rules() -> Vec<Box<dyn Rule>> {
     load_builtin_rules()
 }
@@ -93,7 +97,7 @@ pub fn load_all_rules() -> Vec<Box<dyn Rule>> {
 /// This is a backwards-compatible wrapper around `apply_all_rules_with_fix`
 /// that runs rules in analysis-only mode (no in-memory fixes applied).
 pub fn apply_all_rules(path: &Path, content: &str, fr: &mut crate::cmds::check::file::FileResult) {
-    let _ = apply_all_rules_with_fix(path, content, fr, false, None);
+    let _ = apply_all_rules_with_fix::<RandomState>(path, content, fr, false, None);
 }
 
 /// Apply all available rules and optionally allow rules to perform in-memory fixes.
@@ -103,16 +107,16 @@ pub fn apply_all_rules(path: &Path, content: &str, fr: &mut crate::cmds::check::
 /// returned to the caller so it can be written back to disk if desired. If a
 /// modification was applied and `do_fix` is true, this function will set
 /// `fr.fixed = true`.
-pub fn apply_all_rules_with_fix(
+pub fn apply_all_rules_with_fix<S: BuildHasher>(
     path: &Path,
     content: &str,
     fr: &mut crate::cmds::check::file::FileResult,
     do_fix: bool,
-    rules_cfg: Option<&std::collections::HashMap<String, crate::types::kam_toml::RuleConfig>>,
+    rules_cfg: Option<&HashMap<String, crate::types::kam_toml::RuleConfig, S>>,
 ) -> String {
     let mut cur = content.to_string();
 
-    for rule in load_all_rules().into_iter() {
+    for rule in load_all_rules() {
         let id = rule.id();
 
         // Determine per-rule configuration (enabled / allow fix) if provided by project config.

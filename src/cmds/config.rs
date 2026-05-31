@@ -527,9 +527,7 @@ fn interactive_config(args: &ConfigArgs) -> Result<(), KamError> {
         false
     } else {
         // Default: if we are inside a project (kam.toml exists) prefer local
-        let in_project = std::env::current_dir()
-            .map(|cwd| cwd.join("kam.toml").exists())
-            .unwrap_or(false);
+        let in_project = std::env::current_dir().is_ok_and(|cwd| cwd.join("kam.toml").exists());
         let choices = vec![
             if in_project {
                 tr("config.interactive.local_project_detected")

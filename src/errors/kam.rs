@@ -140,36 +140,36 @@ pub enum KamError {
 
 impl From<toml_edit::TomlError> for KamError {
     fn from(e: toml_edit::TomlError) -> Self {
-        Self::Toml(format!("TOML edit error: {}", e))
+        Self::Toml(format!("TOML edit error: {e}"))
     }
 }
 
 impl From<toml_edit::de::Error> for KamError {
     fn from(e: toml_edit::de::Error) -> Self {
-        Self::Toml(format!("TOML schema error: {}", e))
+        Self::Toml(format!("TOML schema error: {e}"))
     }
 }
 
 impl From<toml::de::Error> for KamError {
     fn from(e: toml::de::Error) -> Self {
-        Self::Toml(format!("TOML deserialization error: {}", e))
+        Self::Toml(format!("TOML deserialization error: {e}"))
     }
 }
 
 impl From<toml::ser::Error> for KamError {
     fn from(e: toml::ser::Error) -> Self {
-        Self::Toml(format!("TOML serialization error: {}", e))
+        Self::Toml(format!("TOML serialization error: {e}"))
     }
 }
 
 impl From<serde_json::Error> for KamError {
     fn from(e: serde_json::Error) -> Self {
-        Self::Json(format!("JSON error: {}", e))
+        Self::Json(format!("JSON error: {e}"))
     }
 }
 
 impl From<std::path::StripPrefixError> for KamError {
     fn from(e: std::path::StripPrefixError) -> Self {
-        Self::InvalidDirectory(format!("strip_prefix failed: {}", e))
+        Self::InvalidDirectory(format!("strip_prefix failed: {e}"))
     }
 }

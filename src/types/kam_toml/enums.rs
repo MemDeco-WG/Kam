@@ -41,7 +41,7 @@ impl<'de> Deserialize<'de> for SupportedArch {
     {
         struct ArchVisitor;
 
-        impl<'de> Visitor<'de> for ArchVisitor {
+        impl Visitor<'_> for ArchVisitor {
             type Value = SupportedArch;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -79,9 +79,9 @@ impl fmt::Display for SupportedArch {
             Self::Arm64 => "arm64",
             Self::X86 => "x86",
             Self::X86_64 => "x86_64",
-            Self::Other(s) => return write!(f, "{}", s),
+            Self::Other(s) => return write!(f, "{s}"),
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

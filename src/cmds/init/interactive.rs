@@ -995,8 +995,7 @@ pub fn run(args: &InitArgs) -> Result<(), KamError> {
     let gh_present = std::process::Command::new("gh")
         .arg("--version")
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+        .is_ok_and(|o| o.status.success());
     if !gh_present && prompt_confirm(&trf!("init.interactive.gh_not_found"), true)? {
         Utils::info(&trf!("init.interactive.recommend_github_cli"));
         Utils::info(&trf!("init.interactive.helper_script"));
@@ -1006,8 +1005,7 @@ pub fn run(args: &InitArgs) -> Result<(), KamError> {
     let cz_present = std::process::Command::new("cz")
         .arg("--version")
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+        .is_ok_and(|o| o.status.success());
     if !cz_present && prompt_confirm(&trf!("init.interactive.cz_not_found"), false)? {
         Utils::info(&trf!("init.interactive.recommend_cz_install"));
         Utils::info(&trf!("init.interactive.helper_script"));

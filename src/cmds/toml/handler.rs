@@ -170,19 +170,15 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             // 这样不会把整数字段改成字符串（虽然可能有点严格）
             if let Some(existing) = get_value_by_path(&v, &key) {
                 match existing {
-                    toml::Value::Integer(_) => {
-                        if new_value.parse::<i64>().is_err() {
-                            return Err(KamError::CommandFailed(format!(
-                                "Invalid value: '{new_value}' is not an integer; existing type requires integer for {key}"
-                            )));
-                        }
+                    toml::Value::Integer(_) if new_value.parse::<i64>().is_err() => {
+                        return Err(KamError::CommandFailed(format!(
+                            "Invalid value: '{new_value}' is not an integer; existing type requires integer for {key}"
+                        )));
                     }
-                    toml::Value::Boolean(_) => {
-                        if !(new_value == "true" || new_value == "false") {
-                            return Err(KamError::CommandFailed(format!(
-                                "Invalid value: '{new_value}' is not a boolean; existing type requires boolean for {key}"
-                            )));
-                        }
+                    toml::Value::Boolean(_) if !(new_value == "true" || new_value == "false") => {
+                        return Err(KamError::CommandFailed(format!(
+                            "Invalid value: '{new_value}' is not a boolean; existing type requires boolean for {key}"
+                        )));
                     }
                     _ => {} // 字符串或其他类型，不检查
                 }

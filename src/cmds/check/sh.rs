@@ -1,6 +1,5 @@
 use crate::cmds::check::file::FileResult;
 use crate::errors::KamError;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json;
 use std::fs;
@@ -12,7 +11,7 @@ use tree_sitter;
 use tree_sitter::Parser;
 use tree_sitter_bash;
 
-static SETPROP_RE: Lazy<Regex> = Lazy::new(|| {
+static SETPROP_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     Regex::new(r"\bsetprop\b").unwrap_or_else(|e| panic!("setprop regex failed to compile: {e}"))
 });
 
@@ -204,13 +203,11 @@ fn apply_sh_filename_checks(path: &Path, content: &str, fr: &mut FileResult) {
                         .to_string(),
                 );
             }
-            "post-fs-data.sh" => {
-                if SETPROP_RE.is_match(content) {
-                    fr.warnings.push(
-                        "WARNING: Using setprop will deadlock the boot process! Please use resetprop -n <prop_name> <prop_value> instead."
-                            .to_string(),
-                    );
-                }
+            "post-fs-data.sh" if SETPROP_RE.is_match(content) => {
+                fr.warnings.push(
+                    "WARNING: Using setprop will deadlock the boot process! Please use resetprop -n <prop_name> <prop_value> instead."
+                        .to_string(),
+                );
             }
             "post-mount.sh" => {
                 fr.warnings
@@ -379,47 +376,41 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
             let node_text_low = node_text.to_lowercase();
 
             match cmd_l.as_str() {
-                "rm" => {
-                    if node_text_low.contains("-rf")
-                        || (node_text_low.contains("-r") && node_text_low.contains("-f"))
-                    {
-                        // More precise check: examine positional arguments for absolute literal paths (skip variables)
-                        let args: Vec<&str> = txt.split_whitespace().skip(1).collect();
-                        let mut dangerous_abs = false;
-                        for a in args {
-                            let a_trim = a.trim_matches('"').trim_matches('\'');
-                            // Skip variable references and command substitutions
-                            if a_trim.starts_with('/')
-                                && !a_trim.contains('$')
-                                && !a_trim.contains('`')
-                            {
-                                dangerous_abs = true;
-                                break;
-                            }
+                "rm" if node_text_low.contains("-rf")
+                    || (node_text_low.contains("-r") && node_text_low.contains("-f")) =>
+                {
+                    // More precise check: examine positional arguments for absolute literal paths (skip variables)
+                    let args: Vec<&str> = txt.split_whitespace().skip(1).collect();
+                    let mut dangerous_abs = false;
+                    for a in args {
+                        let a_trim = a.trim_matches('"').trim_matches('\'');
+                        // Skip variable references and command substitutions
+                        if a_trim.starts_with('/') && !a_trim.contains('$') && !a_trim.contains('`')
+                        {
+                            dangerous_abs = true;
+                            break;
                         }
-                        if dangerous_abs {
-                            fr.valid = false;
-                            let msg = format!(
-                                "Dangerous rm -rf usage detected (possible removal of root files): {node_text}"
-                            );
-                            if !fr.errors.contains(&msg) {
-                                fr.errors.push(msg);
-                            }
-                        } else {
-                            let warn_msg =
-                                "rm -rf usage detected; ensure this is intentional".to_string();
-                            if !fr.warnings.contains(&warn_msg) {
-                                fr.warnings.push(warn_msg);
-                            }
+                    }
+                    if dangerous_abs {
+                        fr.valid = false;
+                        let msg = format!(
+                            "Dangerous rm -rf usage detected (possible removal of root files): {node_text}"
+                        );
+                        if !fr.errors.contains(&msg) {
+                            fr.errors.push(msg);
+                        }
+                    } else {
+                        let warn_msg =
+                            "rm -rf usage detected; ensure this is intentional".to_string();
+                        if !fr.warnings.contains(&warn_msg) {
+                            fr.warnings.push(warn_msg);
                         }
                     }
                 }
-                "dd" => {
-                    if node_text_low.contains("/dev/") {
-                        fr.valid = false;
-                        fr.errors
-                            .push(format!("Potential destructive 'dd' on device: {node_text}"));
-                    }
+                "dd" if node_text_low.contains("/dev/") => {
+                    fr.valid = false;
+                    fr.errors
+                        .push(format!("Potential destructive 'dd' on device: {node_text}"));
                 }
                 _ if cmd_l.starts_with("mkfs") => {
                     fr.valid = false;
@@ -430,33 +421,28 @@ fn detect_dangerous_commands(node: tree_sitter::Node, src: &str, fr: &mut FileRe
                     fr.warnings
                         .push("Command will reboot or shutdown the device".to_string());
                 }
-                "chmod" => {
-                    if node_text_low.contains("777") && node_text_low.contains("-r") {
-                        fr.warnings
-                            .push(format!("Potentially unsafe 'chmod 777 -R': {node_text}"));
+                "chmod" if node_text_low.contains("777") && node_text_low.contains("-r") => {
+                    fr.warnings
+                        .push(format!("Potentially unsafe 'chmod 777 -R': {node_text}"));
+                }
+                "chown" if node_text_low.contains("/system") || node_text_low.contains("/data") => {
+                    let msg = format!("'chown' on system/data detected: {node_text}");
+                    if !fr.warnings.contains(&msg) {
+                        fr.warnings.push(msg);
                     }
                 }
-                "chown" => {
-                    if node_text_low.contains("/system") || node_text_low.contains("/data") {
-                        let msg = format!("'chown' on system/data detected: {node_text}");
-                        if !fr.warnings.contains(&msg) {
-                            fr.warnings.push(msg);
-                        }
-                    }
-                }
-                "setprop" => {
-                    // If this is not the post-fs-data special-case (already warned), add a general warning
+                "setprop"
                     if path
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .is_none_or(|s| s != "post-fs-data.sh")
-                    {
-                        let msg = format!(
-                            "Usage of 'setprop' detected; prefer 'resetprop -n' where appropriate: {node_text}"
-                        );
-                        if !fr.warnings.contains(&msg) {
-                            fr.warnings.push(msg);
-                        }
+                        .is_none_or(|s| s != "post-fs-data.sh") =>
+                {
+                    // If this is not the post-fs-data special-case (already warned), add a general warning
+                    let msg = format!(
+                        "Usage of 'setprop' detected; prefer 'resetprop -n' where appropriate: {node_text}"
+                    );
+                    if !fr.warnings.contains(&msg) {
+                        fr.warnings.push(msg);
                     }
                 }
                 "eval" => {

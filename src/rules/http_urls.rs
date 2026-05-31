@@ -12,6 +12,7 @@
 
 use regex::Regex;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use crate::cmds::check::file::FileResult;
 
@@ -23,9 +24,9 @@ impl HttpUrlsRule {
         // Match http:// followed by non-whitespace characters (a rough URL match).
         // Use a word boundary before the scheme to avoid accidental matches in
         // concatenated words while still matching typical usages.
-        lazy_static::lazy_static! {
-            static ref RE: Regex = Regex::new(r"\bhttp://\S+").unwrap();
-        }
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"\bhttp://\S+").unwrap_or_else(|e| panic!("invalid http_urls regex: {e}"))
+        });
         &RE
     }
 }

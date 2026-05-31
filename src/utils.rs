@@ -22,12 +22,25 @@ pub const PROJECT_TEMPLATE_DIRS: &[&str; 2] = &["tmpl", "templates"];
 /// Supported archive file extensions (used when inspecting archive files).
 pub const DEFAULT_ARCHIVE_EXTS: &[&str; 4] = &[".tar.gz", ".tgz", ".zip", ".tar"];
 
+fn path_has_ext(path: &Path, expected: &str) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case(expected))
+}
+
+fn path_has_tar_gz_suffix(path: &Path) -> bool {
+    path.to_string_lossy()
+        .to_ascii_lowercase()
+        .ends_with(".tar.gz")
+}
+
 /// Return the default list of directory names that should be excluded.
 ///
 /// This list is computed from the build section defaults and extended with a
 /// few commonly excluded directories (e.g., `dist`, `templates`, `tmpl`) so
 /// that callers can efficiently check whether a top-level directory should be
 /// ignored when packaging or scanning a project.
+#[must_use]
 pub fn default_exclude_dir_names() -> Vec<String> {
     // 从BuildSection的默认值里拿排除列表
     // 这里主要是为了性能，避免每次都做完整的glob匹配
@@ -36,20 +49,22 @@ pub fn default_exclude_dir_names() -> Vec<String> {
         .unwrap_or_default();
 
     let mut names: Vec<String> = Vec::new();
-    for pattern in exclude_list.into_iter() {
+    for pattern in exclude_list {
         let s_trim = pattern.trim_end_matches('/');
         if s_trim.is_empty() {
             continue;
         }
-        let first = s_trim.split('/').next().unwrap().to_string();
-        if !names.contains(&first) {
-            names.push(first);
+        if let Some(first) = s_trim.split('/').next() {
+            let first = first.to_string();
+            if !names.contains(&first) {
+                names.push(first);
+            }
         }
     }
 
     // 再加几个常见的目录，这些通常也不应该被打包
     // 虽然理论上应该在build section里配置，但很多人会忘记
-    for common in ["dist", "templates", "tmpl"].iter() {
+    for common in &["dist", "templates", "tmpl"] {
         if !names.iter().any(|n| n == common) {
             names.push(common.to_string());
         }
@@ -85,9 +100,7 @@ fn matches_wildcard(pattern: &str, text: &str) -> bool {
     let mut regex_str = regex::escape(pattern);
     regex_str = regex_str.replace("\\*", ".*").replace("\\?", ".");
     let final_regex = format!("^{regex_str}$");
-    Regex::new(&final_regex)
-        .map(|re| re.is_match(text))
-        .unwrap_or(false)
+    Regex::new(&final_regex).is_ok_and(|re| re.is_match(text))
 }
 
 fn matches_exact(pattern: &str, text: &str) -> bool {
@@ -101,6 +114,7 @@ fn matches_exact(pattern: &str, text: &str) -> bool {
 /// - Suffix patterns like `*.ext`
 /// - Glob-like patterns containing `*` or `?`
 /// - Exact matches
+#[must_use]
 pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -> bool {
     let patt = pattern.trim();
     let rel = rel_path.trim();
@@ -149,6 +163,7 @@ pub fn pattern_matches(pattern: &str, rel_path: &str, file_name: Option<&str>) -
 ///
 /// On Unix-like platforms the file's execute permission is checked; on non-Unix
 /// platforms existence is considered sufficient.
+#[must_use]
 pub fn command_exists(cmd: &str) -> bool {
     if cmd.trim().is_empty() {
         return false;
@@ -381,7 +396,7 @@ impl Utils {
 
     /// Classify a log line and return its log level type.
     /// This centralizes the classification logic used across multiple functions.
-    fn classify_log_line<'a>(line: &'a str) -> LogLevel<'a> {
+    fn classify_log_line(line: &str) -> LogLevel<'_> {
         let l = line.trim();
         if l.is_empty() {
             return LogLevel::Empty;
@@ -450,6 +465,7 @@ impl Utils {
     /// returns a colored string rather than printing it directly. It's useful
     /// for streaming log consumers that want to print through a progress bar
     /// or a logging queue while still preserving the same classification and color.
+    #[must_use]
     pub fn format_cmd_line(line: &str) -> String {
         match Self::classify_log_line(line) {
             LogLevel::Warn(msg) => format!("  {} {msg}", "!".yellow()),
@@ -489,6 +505,10 @@ impl Utils {
     /// and stderr to piped and then spawn the process, streaming stdout lines
     /// (via `Utils::print_cmd_line`) and stderr lines (printed in red to the
     /// stderr stream). Returns the child's exit status when it finishes.
+    ///
+    /// # Errors
+    /// Returns any I/O error raised while spawning the process, waiting for it,
+    /// or configuring its stdout/stderr pipes.
     pub fn run_and_stream(mut cmd: std::process::Command) -> io::Result<std::process::ExitStatus> {
         // Ensure we have pipes for reading
         cmd.stdout(std::process::Stdio::piped())
@@ -508,7 +528,7 @@ impl Utils {
                 loop {
                     buf.clear();
                     match reader.read_until(b'\n', &mut buf) {
-                        Ok(0) => break, // EOF
+                        Ok(0) | Err(_) => break, // EOF or read failure
                         Ok(_) => {
                             let s = String::from_utf8_lossy(&buf);
                             // Trim trailing newline for consistent formatting
@@ -517,7 +537,6 @@ impl Utils {
                                 Self::print_cmd_line(s_trim);
                             }
                         }
-                        Err(_) => break,
                     }
                 }
             }
@@ -532,7 +551,7 @@ impl Utils {
                 loop {
                     buf.clear();
                     match reader.read_until(b'\n', &mut buf) {
-                        Ok(0) => break,
+                        Ok(0) | Err(_) => break,
                         Ok(_) => {
                             let s = String::from_utf8_lossy(&buf);
                             let s_trim = s.trim_end_matches('\n');
@@ -540,7 +559,6 @@ impl Utils {
                                 eprintln!("{}", s_trim.color(err_color));
                             }
                         }
-                        Err(_) => break,
                     }
                 }
             }
@@ -561,6 +579,9 @@ impl Utils {
     /// Note: the current `run_and_stream` implementation already streams stderr
     /// lines without printing a `--- stderr ---` separator, so this wrapper simply
     /// delegates to it.
+    ///
+    /// # Errors
+    /// Returns any I/O error raised by `run_and_stream`.
     pub fn run_and_stream_no_stderr_header(
         cmd: std::process::Command,
     ) -> io::Result<std::process::ExitStatus> {
@@ -575,12 +596,14 @@ impl Utils {
 ///   This helper centralizes the normalization logic used across the codebase
 ///   when converting kam.toml keys (e.g. `prop.id`) to environment variable fragments
 ///   (e.g. `PROP_ID`).
+#[must_use]
 pub fn normalize_env_key(key: &str) -> String {
     key.to_ascii_uppercase().replace(['.', '-'], "_")
 }
 
 /// Convert a Kam-style key (e.g. `prop.id`) into a full `KAM_` environment
 /// variable name (e.g. `KAM_PROP_ID`).
+#[must_use]
 pub fn kam_env_var(key: &str) -> String {
     format!("KAM_{}", normalize_env_key(key))
 }
@@ -596,6 +619,10 @@ pub fn kam_env_var(key: &str) -> String {
 ///
 /// Returns `Ok(PathBuf)` on success or `Err(KamError::InvalidDirectory)` when the
 /// user's home directory cannot be determined (and no KAM_HOME is set).
+///
+/// # Errors
+/// Returns `KamError::InvalidDirectory` when no usable home directory can be
+/// resolved.
 pub fn kam_home_dir() -> Result<PathBuf, KamError> {
     // Prefer explicit KAM_HOME if provided
     if let Ok(val) = std::env::var("KAM_HOME") {
@@ -635,6 +662,7 @@ pub fn kam_home_dir() -> Result<PathBuf, KamError> {
 /// Returns one of: "Magisk", "KernelSU", "APatchSU", or "Unknown".
 /// Recognizes common aliases and variants (case-insensitive): magisk, ksu, kernel,
 /// apatch, apd, apu, etc.
+#[must_use]
 pub fn normalize_root_manager(raw: &str) -> String {
     let low = raw.trim().to_lowercase();
     if low.contains("magisk") {
@@ -653,6 +681,9 @@ pub fn normalize_root_manager(raw: &str) -> String {
 ///
 /// If `path` has no parent (for example when it is a root path) this function
 /// is a no-op. Creates missing parent directories using `create_dir_all`.
+///
+/// # Errors
+/// Returns an I/O error when the parent directory cannot be created.
 pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
     if let Some(parent) = path.parent()
         && !parent.exists()
@@ -669,6 +700,10 @@ pub fn ensure_parent_dir(path: &Path) -> io::Result<()> {
 /// atomic write so that an interrupted write does not leave a partially written
 /// destination file. Note: on some filesystems or when renaming across devices,
 /// true atomicity is not guaranteed.
+///
+/// # Errors
+/// Returns an I/O error when the parent directory, temporary file, write,
+/// sync, or rename operation fails.
 pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -695,6 +730,10 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
 /// file permissions and ownership are attempted to be preserved where the OS
 /// APIs support it; callers that require exact metadata preservation should
 /// perform additional copy steps.
+///
+/// # Errors
+/// Returns an I/O error when reading, creating, copying, or linking an entry
+/// fails.
 pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
@@ -749,6 +788,7 @@ pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
 /// The layout is similar to Cargo's index structure and disperses modules
 /// across subdirectories to avoid excessive files in a single directory.
 /// Returns a PathBuf relative to `index_base`.
+#[must_use]
 pub fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
     let name_lower = module_name.to_lowercase();
     let chars: Vec<char> = name_lower.chars().collect();
@@ -775,16 +815,18 @@ pub fn compute_index_path(index_base: &Path, module_name: &str) -> PathBuf {
 /// - `.zip`
 /// - `.tar.gz`, `.tgz`, `.tar`
 ///
-/// Returns a `KamError::UnsupportedFormat` if the archive type is unsupported
-/// or `KamError::ExtractFailed` when the extraction step fails.
+/// # Errors
+/// Returns `KamError::UnsupportedFormat` if the archive type is unsupported,
+/// or a filesystem/archive error when opening or extracting fails.
 pub fn extract_package(source: &Path, dest: &Path) -> Result<(), crate::errors::kam::KamError> {
-    let s = source.to_string_lossy().to_lowercase();
-
-    if s.ends_with(".zip") {
+    if path_has_ext(source, "zip") {
         let file = fs::File::open(source)?;
         let mut archive = zip::ZipArchive::new(file)?;
         archive.extract(dest)?;
-    } else if s.ends_with(".tar.gz") || s.ends_with(".tgz") || s.ends_with(".tar") {
+    } else if path_has_tar_gz_suffix(source)
+        || path_has_ext(source, "tgz")
+        || path_has_ext(source, "tar")
+    {
         let file = fs::File::open(source)?;
         let dec = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(dec);
@@ -807,6 +849,10 @@ pub fn extract_package(source: &Path, dest: &Path) -> Result<(), crate::errors::
 ///
 /// Commonly used to install library files into a cache (e.g. `lib`, `lib64`,
 /// `bin`) while preserving symlinks when possible.
+///
+/// # Errors
+/// Returns an I/O error when directory creation, symlink creation, or fallback
+/// copying fails.
 pub fn symlink_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
