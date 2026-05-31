@@ -251,10 +251,7 @@ impl Utils {
                 println!("{}", format!("- {rel}").color(Color::Red));
             }
             PrintOp::Copy { from, to } => {
-                println!(
-                    "{}",
-                    format!("{from} -> {to} (copy)").color(Color::Cyan)
-                );
+                println!("{}", format!("{from} -> {to} (copy)").color(Color::Cyan));
             }
             PrintOp::Symlink { target, link_type } => {
                 let symbol = match link_type {

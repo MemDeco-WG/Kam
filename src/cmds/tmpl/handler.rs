@@ -2,6 +2,7 @@ use colored::Colorize;
 
 use crate::errors::KamError;
 use crate::template::TemplateCacheManager;
+use crate::utils::Utils;
 
 use super::args::{TmplArgs, TmplCommands};
 use super::{export, import, pull};
@@ -30,7 +31,6 @@ pub fn run(args: TmplArgs) -> Result<(), KamError> {
 fn list_templates() -> Result<(), KamError> {
     let templates = TemplateCacheManager::list_local_templates()?;
 
-    use crate::utils::Utils;
     if templates.is_empty() {
         Utils::warn(crate::i18n::tr("tmpl.no_templates_in_cache"));
         println!();
@@ -48,7 +48,6 @@ fn list_templates() -> Result<(), KamError> {
 }
 
 fn remove_template(name: &str) -> Result<(), KamError> {
-    use crate::utils::Utils;
     TemplateCacheManager::remove_template(name)?;
     Utils::success(format!("Template '{name}' removed successfully"));
     Ok(())

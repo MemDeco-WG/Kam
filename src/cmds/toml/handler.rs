@@ -3,10 +3,12 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::args::TomlArgs;
+use crate::utils::Utils;
+use toml::map::Map;
 
 // 查找kam.toml文件路径
 // 如果指定了文件就用指定的，否则向上查找，找不到就用当前目录的
-fn find_kam_toml_path(file: &Option<String>) -> Result<PathBuf, KamError> {
+fn find_kam_toml_path(file: Option<&String>) -> Result<PathBuf, KamError> {
     if let Some(path) = file {
         return Ok(PathBuf::from(path));
     }
@@ -36,7 +38,7 @@ fn read_toml(path: &PathBuf) -> Result<toml::Value, KamError> {
     }
     let s = fs::read_to_string(path).map_err(KamError::Io)?;
     let v: toml::Value = toml::from_str(&s)
-        .map_err(|e| KamError::CommandFailed(format!("Failed to parse toml: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to parse toml: {e}")))?;
     Ok(v)
 }
 
@@ -45,7 +47,7 @@ fn write_toml(path: &PathBuf, v: &toml::Value) -> Result<(), KamError> {
         fs::create_dir_all(parent).map_err(KamError::Io)?;
     }
     let s = toml::to_string_pretty(v)
-        .map_err(|e| KamError::CommandFailed(format!("Failed to serialize toml: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to serialize toml: {e}")))?;
     fs::write(path, s).map_err(KamError::Io)?;
     Ok(())
 }
@@ -68,7 +70,7 @@ fn get_value_by_path(value: &toml::Value, path: &str) -> Option<toml::Value> {
 fn set_value_by_path(value: &mut toml::Value, path: &str, new_value: &str) {
     let v = value;
     if !v.is_table() {
-        *v = toml::Value::Table(Default::default());
+        *v = toml::Value::Table(Map::default());
     }
     let parts: Vec<&str> = path.split('.').collect();
     let mut current = v.as_table_mut().unwrap();
@@ -98,7 +100,7 @@ fn set_value_by_path(value: &mut toml::Value, path: &str, new_value: &str) {
         }
         // 中间路径，确保表存在
         if !current.contains_key(part) {
-            current.insert(part.to_string(), toml::Value::Table(Default::default()));
+            current.insert(part.to_string(), toml::Value::Table(Map::default()));
         }
         current = current[part].as_table_mut().unwrap();
     }
@@ -132,7 +134,7 @@ fn unset_value_by_path(value: &mut toml::Value, path: &str) -> bool {
 /// # Errors
 /// Returns `KamError` if the TOML file cannot be found, read, parsed, or written (I/O errors, parsing errors, invalid keys/values).
 pub fn run(args: TomlArgs) -> Result<(), KamError> {
-    let path = find_kam_toml_path(&args.file)?;
+    let path = find_kam_toml_path(args.file.as_ref())?;
 
     match args.command {
         crate::cmds::toml::args::TomlCommand::Get { key } => {
@@ -147,7 +149,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                     )))
                 },
                 |val| {
-                    println!("{}", val);
+                    println!("{val}");
                     Ok(())
                 },
             )
@@ -163,7 +165,7 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             } else {
                 return Err(KamError::InvalidFilename("No value provided".to_string()));
             };
-            let mut v = read_toml(&path).unwrap_or_else(|_| toml::Value::Table(Default::default()));
+            let mut v = read_toml(&path).unwrap_or_else(|_| toml::Value::Table(Map::default()));
             // 如果key已存在，确保新值的类型兼容
             // 这样不会把整数字段改成字符串（虽然可能有点严格）
             if let Some(existing) = get_value_by_path(&v, &key) {
@@ -171,16 +173,14 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                     toml::Value::Integer(_) => {
                         if new_value.parse::<i64>().is_err() {
                             return Err(KamError::CommandFailed(format!(
-                                "Invalid value: '{}' is not an integer; existing type requires integer for {}",
-                                new_value, key
+                                "Invalid value: '{new_value}' is not an integer; existing type requires integer for {key}"
                             )));
                         }
                     }
                     toml::Value::Boolean(_) => {
                         if !(new_value == "true" || new_value == "false") {
                             return Err(KamError::CommandFailed(format!(
-                                "Invalid value: '{}' is not a boolean; existing type requires boolean for {}",
-                                new_value, key
+                                "Invalid value: '{new_value}' is not a boolean; existing type requires boolean for {key}"
                             )));
                         }
                     }
@@ -194,14 +194,12 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
                     && new_value.parse::<i64>().is_err()
                 {
                     return Err(KamError::CommandFailed(format!(
-                        "Invalid value: '{}' is not an integer; {} must be an integer",
-                        new_value, key
+                        "Invalid value: '{new_value}' is not an integer; {key} must be an integer"
                     )));
                 }
             }
             set_value_by_path(&mut v, &key, &new_value);
             write_toml(&path, &v)?;
-            use crate::utils::Utils;
             Utils::success(format!("Set {} = {} in {}", key, new_value, path.display()));
             Ok(())
         }
@@ -211,7 +209,6 @@ pub fn run(args: TomlArgs) -> Result<(), KamError> {
             let removed = unset_value_by_path(&mut v, &key);
             if removed {
                 write_toml(&path, &v)?;
-                use crate::utils::Utils;
                 Utils::success(format!("Unset {} in {}", key, path.display()));
                 Ok(())
             } else {

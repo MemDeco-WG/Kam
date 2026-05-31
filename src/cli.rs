@@ -103,9 +103,6 @@ pub enum Commands {
     /// Print environment variables starting with KAM_ (for debugging)
     Env(crate::cmds::env::EnvArgs),
 
-    /// Interact with Termux on a connected device (start a session or run a one-shot command)
-    Termux(crate::cmds::termux::TermuxArgs),
-
     /// Print this message or the help of the given subcommand(s)
     Help(crate::cmds::help::HelpArgs),
 }

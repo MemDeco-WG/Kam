@@ -2,6 +2,7 @@ use crate::cmds::config;
 use crate::cmds::config::{ConfigArgs, ConfigCommand};
 use crate::cmds::tmpl::import;
 use crate::errors::KamError;
+use crate::utils::Utils;
 use chrono::Utc;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -47,7 +48,7 @@ fn read_config_value(global: bool, key: &str) -> Result<Option<String>, KamError
     }
     let s = fs::read_to_string(&path).map_err(KamError::Io)?;
     let v: toml::Value = toml::from_str(&s)
-        .map_err(|e| KamError::CommandFailed(format!("Failed to parse config file: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to parse config file: {e}")))?;
     let parts: Vec<&str> = key.split('.').collect();
     let mut current = &v;
     for (i, p) in parts.iter().enumerate() {
@@ -85,12 +86,14 @@ fn set_config_value(global: bool, key: &str, value: &str) -> Result<(), KamError
 ///
 /// # Errors
 /// Returns `KamError` if HTTP client creation fails, download fails, or template import fails.
+///
+/// # Panics
+/// Panics if the progress bar template is invalid.
 pub fn run_pull(url: Option<&str>, _global: bool, quiet: bool) -> Result<(), KamError> {
     // 如果没指定URL就用默认的GitHub releases地址
     let download_url = url.unwrap_or(DEFAULT_TEMPLATES_URL);
-    use crate::utils::Utils;
     if !quiet {
-        Utils::executing(format!("Downloading templates from: {}", download_url));
+        Utils::executing(format!("Downloading templates from: {download_url}"));
     }
 
     // 创建HTTP客户端，设置30秒超时
@@ -103,7 +106,7 @@ pub fn run_pull(url: Option<&str>, _global: bool, quiet: bool) -> Result<(), Kam
     let mut resp = client
         .get(download_url)
         .send()
-        .map_err(|e| KamError::CommandFailed(format!("Failed to download template: {}", e)))?;
+        .map_err(|e| KamError::CommandFailed(format!("Failed to download template: {e}")))?;
 
     // 检查HTTP状态码
     if !resp.status().is_success() {
@@ -176,8 +179,7 @@ pub fn run_pull(url: Option<&str>, _global: bool, quiet: bool) -> Result<(), Kam
                     );
                 }
                 return Err(KamError::CommandFailed(format!(
-                    "Failed to read response: {}",
-                    e
+                    "Failed to read response: {e}"
                 )));
             }
         }

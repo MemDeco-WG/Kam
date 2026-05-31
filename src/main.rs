@@ -689,7 +689,6 @@ fn main() {
             }
         }
         Some(Commands::Env(args)) => kam::cmds::env::run(&args),
-        Some(Commands::Termux(args)) => kam::cmds::termux::run(args),
         Some(Commands::About(args)) => kam::cmds::about::run(args),
         _ => {
             // No subcommand provided: show top-level help (deduped) instead of performing background operations.

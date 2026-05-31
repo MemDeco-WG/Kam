@@ -39,11 +39,10 @@ pub fn import_single_template(
 
         // 处理.tar.gz的情况，file_stem会返回"template.tar"
         // 需要再去掉.tar后缀
-        let clean_name = if filename.ends_with(".tar") {
-            filename.strip_suffix(".tar").unwrap_or(filename)
-        } else {
-            filename
-        };
+        let clean_name = Path::new(filename)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(filename);
 
         clean_name.to_string()
     };
@@ -54,13 +53,11 @@ pub fn import_single_template(
     // 检查模板是否已存在
     if dest_path.exists() && !force {
         return Err(KamError::CommandFailed(format!(
-            "Template '{}' already exists. Use --force to overwrite.",
-            template_name
+            "Template '{template_name}' already exists. Use --force to overwrite."
         )));
     }
 
     // 直接复制到缓存目录（简单粗暴）
-    use crate::utils::Utils;
     fs::copy(archive_path, &dest_path).map_err(KamError::Io)?;
 
     Utils::success(format!("Template '{template_name}' imported successfully"));
@@ -74,6 +71,7 @@ pub fn import_single_template(
 ///
 /// # Errors
 /// Returns `KamError` if the ZIP file cannot be opened, read, or extracted (I/O errors, ZIP parsing errors).
+#[allow(clippy::too_many_lines)]
 pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), KamError> {
     if !zip_path.exists() {
         return Err(KamError::InvalidDirectory(format!(
@@ -100,7 +98,7 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
             .map_err(|e| KamError::CommandFailed(format!("Failed to read ZIP entry: {e}")))?;
 
         let outpath = match file.enclosed_name() {
-            Some(path) => path.to_owned(),
+            Some(path) => path.clone(),
             None => continue,
         };
 
@@ -116,7 +114,6 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
             let dest_path = cache_dir.join(filename);
 
             // Check if exists
-            use crate::utils::Utils;
             if dest_path.exists() && !force {
                 Utils::warn(format!(
                     "Template '{}' already exists, skipping",
@@ -147,11 +144,10 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
     }
 
     // Process grouped directory entries as templates
-    for (top, indices) in dir_groups.into_iter() {
+    for (top, indices) in dir_groups {
         let dest_dir = cache_dir.join(&top);
 
         // If template exists in cache and force is not set, skip
-        use crate::utils::Utils;
         if dest_dir.exists() && !force {
             Utils::warn(format!("Template '{top}' already exists, skipping"));
             skipped_count += 1;
@@ -166,14 +162,14 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
                 .map_err(|e| KamError::CommandFailed(format!("Failed to read ZIP entry: {e}")))?;
 
             let entry_path = match file.enclosed_name() {
-                Some(p) => p.to_owned(),
+                Some(p) => p.clone(),
                 None => continue,
             };
 
             // Compute relative subpath under the top directory
             let subpath = entry_path
                 .strip_prefix(&top)
-                .map_or_else(|_| entry_path.to_owned(), |p| p.to_owned());
+                .map_or_else(|_| entry_path.clone(), std::borrow::ToOwned::to_owned);
 
             let out_target = temp_dir.path().join(&subpath);
 
@@ -200,15 +196,13 @@ pub fn import_multiple_templates(zip_path: &Path, force: bool) -> Result<(), Kam
     if imported_count > 0 {
         println!();
         Utils::success(format!(
-            "Successfully imported {} template(s)",
-            imported_count
+            "Successfully imported {imported_count} template(s)"
         ));
     }
 
     if skipped_count > 0 {
         Utils::warn(format!(
-            "Skipped {} template(s) (already exist)",
-            skipped_count
+            "Skipped {skipped_count} template(s) (already exist)"
         ));
     }
 
@@ -236,7 +230,6 @@ pub fn import_template(path: &Path, name: Option<String>, force: bool) -> Result
     } else if extension == "zip" {
         // Multiple templates import
         if name.is_some() {
-            use crate::utils::Utils;
             Utils::warn(
                 "Note: --name is ignored when importing from ZIP (contains multiple templates)",
             );
