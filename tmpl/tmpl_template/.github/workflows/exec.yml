@@ -19,8 +19,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      installed-version: ${{ steps.set-build-outputs.outputs.installed_version }}
-      kam-present: ${{ steps.set-build-outputs.outputs.kam_present }}
+      installed-version: ${{ "{{" }} steps.set-build-outputs.outputs.installed_version {{ "}}" }}
+      kam-present: ${{ "{{" }} steps.set-build-outputs.outputs.kam_present {{ "}}" }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,16 +31,16 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.rustup
-          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-rust-cache-${{ "{{" }} hashFiles('**/Cargo.lock') {{ "}}" }}-${{ "{{" }} runner.os {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-rust-cache-
+            ${{ "{{" }} runner.os {{ "}}" }}-rust-cache-
       - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-pip-${{ "{{" }} hashFiles('**/requirements.txt') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ "{{" }} runner.os {{ "}}" }}-pip-
       - name: Cache JavaScript package manager caches (npm / yarn / pnpm / bun)
         uses: actions/cache@v4
         with:
@@ -50,36 +50,36 @@ jobs:
             ~/.yarn/cache
             ~/.pnpm-store
             ~/.bun
-          key: ${{ runner.os }}-js-cache-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/bun.lockb') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-js-cache-${{ "{{" }} hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/bun.lockb') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-js-cache-
+            ${{ "{{" }} runner.os {{ "}}" }}-js-cache-
       - name: Setup kam
         uses: MemDeco-WG/setup-kam@main
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ "{{" }} secrets.GITHUB_TOKEN {{ "}}" }}
           enable-cache: "true"
-          private-key: ${{ secrets.KAM_PRIVATE_KEY }}
+          private-key: ${{ "{{" }} secrets.KAM_PRIVATE_KEY {{ "}}" }}
       - name: Verify kam installation
         run: kam --version
       - name: Run build command
-        if: ${{ github.event.inputs.build-command != '' }}
+        if: ${{ "{{" }} github.event.inputs.build-command != '' {{ "}}" }}
         shell: bash
         run: |
-          echo "Running build command: ${{ github.event.inputs.build-command }}"
-          ${{ github.event.inputs.build-command }}
+          echo "Running build command: ${{ "{{" }} github.event.inputs.build-command {{ "}}" }}"
+          ${{ "{{" }} github.event.inputs.build-command {{ "}}" }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ "{{" }} github.token {{ "}}" }}
       - name: Auto-commit build artifacts
-        if: ${{ github.event.inputs.build-command != '' }}
+        if: ${{ "{{" }} github.event.inputs.build-command != '' {{ "}}" }}
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: |
-            chore: build artifacts - Build: ${{ github.event.inputs.build-command || 'No build' }}
+            chore: build artifacts - Build: ${{ "{{" }} github.event.inputs.build-command || 'No build' {{ "}}" }}
           file_pattern: |
             *
           push_options: --force-with-lease
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ "{{" }} secrets.GITHUB_TOKEN {{ "}}" }}
       - name: Export build outputs
         id: set-build-outputs
         run: |
@@ -108,16 +108,16 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.rustup
-          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-rust-cache-${{ "{{" }} hashFiles('**/Cargo.lock') {{ "}}" }}-${{ "{{" }} runner.os {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-rust-cache-
+            ${{ "{{" }} runner.os {{ "}}" }}-rust-cache-
       - name: Restore pip cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-pip-${{ "{{" }} hashFiles('**/requirements.txt') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ "{{" }} runner.os {{ "}}" }}-pip-
       - name: Restore JS caches
         uses: actions/cache@v4
         with:
@@ -127,9 +127,9 @@ jobs:
             ~/.yarn/cache
             ~/.pnpm-store
             ~/.bun
-          key: ${{ runner.os }}-js-cache-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/bun.lockb') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-js-cache-${{ "{{" }} hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml', '**/bun.lockb') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-js-cache-
+            ${{ "{{" }} runner.os {{ "}}" }}-js-cache-
       - name: Update working tree to include build job commits
         run: |
           set -eu
@@ -137,14 +137,14 @@ jobs:
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
           git reset --hard origin/$BRANCH || true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ "{{" }} secrets.GITHUB_TOKEN {{ "}}" }}
       - name: Setup kam (fallback)
-        if: ${{ needs.build.kam-present != 'true' }}
+        if: ${{ "{{" }} needs.build.kam-present != 'true' {{ "}}" }}
         uses: MemDeco-WG/setup-kam@main
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ "{{" }} secrets.GITHUB_TOKEN {{ "}}" }}
           enable-cache: "true"
-          private-key: ${{ secrets.KAM_PRIVATE_KEY }}
+          private-key: ${{ "{{" }} secrets.KAM_PRIVATE_KEY {{ "}}" }}
       - name: Verify kam installation
         run: kam --version
       - name: Run kam command
@@ -156,17 +156,17 @@ jobs:
           rm -rf dist
           chmod +x hooks/**/* || echo "hooks not found! "
           chmod +x src/**/* || echo "src not found!"
-          echo "Executing: ${{ github.event.inputs.kam-command }}"
-          ${{ github.event.inputs.kam-command }}
+          echo "Executing: ${{ "{{" }} github.event.inputs.kam-command {{ "}}" }}"
+          ${{ "{{" }} github.event.inputs.kam-command {{ "}}" }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ "{{" }} github.token {{ "}}" }}
       - name: Auto-commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: |
-            chore: apply config - Template: ${{ github.event.inputs.template-url || 'No template' }} - Command: ${{ github.event.inputs.init-command || github.event.inputs.kam-command }}
+            chore: apply config - Template: ${{ "{{" }} github.event.inputs.template-url || 'No template' {{ "}}" }} - Command: ${{ "{{" }} github.event.inputs.init-command || github.event.inputs.kam-command {{ "}}" }}
           file_pattern: |
             *
           push_options: --force-with-lease
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ "{{" }} secrets.GITHUB_TOKEN {{ "}}" }}

@@ -33,6 +33,12 @@ use std::error::Error;
 
 use kam::cli::{Cli, Commands};
 
+fn debug_i18n_enabled() -> bool {
+    std::env::var("KAM_DEBUG_I18N")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
+
 fn print_error_chain(e: &KamError) {
     use kam::utils::Utils;
     Utils::error(format!("{}", e));
@@ -41,6 +47,105 @@ fn print_error_chain(e: &KamError) {
         eprintln!("  {} {}", "→".dimmed(), s.to_string().dimmed());
         source = s.source();
     }
+}
+
+fn help_key_base(subcommand_path: &[String]) -> String {
+    if subcommand_path.is_empty() {
+        "cli".to_string()
+    } else {
+        format!("cli.commands.{}", subcommand_path.join("."))
+    }
+}
+
+fn apply_i18n_arg_help(
+    command: &clap::Command,
+    raw_help: &str,
+    subcommand_path: &[String],
+) -> String {
+    let mut cleaned = dedupe_help(raw_help);
+    let cmd_key_base = help_key_base(subcommand_path);
+
+    for arg in command.get_arguments() {
+        if let Some(orig_help) = arg.get_help() {
+            let dotted_key = format!("{}.flags.{}", cmd_key_base, arg.get_id().as_str());
+            let tr_help = kam::i18n::tr(&dotted_key);
+            if tr_help != dotted_key {
+                cleaned = cleaned.replace(&orig_help.to_string(), &tr_help);
+            }
+        }
+    }
+
+    cleaned
+}
+
+fn write_localized_help(command: &mut clap::Command, subcommand_path: &[String]) -> Option<String> {
+    let mut buf: Vec<u8> = Vec::new();
+    command.write_long_help(&mut buf).ok()?;
+    let raw = String::from_utf8_lossy(&buf);
+    Some(apply_i18n_arg_help(command, &raw, subcommand_path))
+}
+
+fn print_localized_help(mut command: clap::Command, subcommand_path: &[String]) {
+    if let Some(cleaned) = write_localized_help(&mut command, subcommand_path) {
+        print!("{}", cleaned);
+        if !cleaned.ends_with('\n') {
+            println!();
+        }
+        return;
+    }
+
+    if let Err(e) = command.print_long_help() {
+        kam::utils::Utils::error(format!("Failed to write help: {}", e));
+        std::process::exit(1);
+    }
+    println!();
+}
+
+fn find_subcommand(root: &clap::Command, subcommand_path: &[String]) -> Option<clap::Command> {
+    let mut current = root.clone();
+    for name in subcommand_path {
+        let next = current
+            .get_subcommands()
+            .find(|sub| sub.get_name() == name.as_str())?
+            .clone();
+        current = next;
+    }
+    Some(current)
+}
+
+fn subcommand_path_before_help(tokens: &[String], help_pos: usize) -> Vec<String> {
+    tokens[1..help_pos]
+        .iter()
+        .filter(|s| !s.starts_with('-') && s.as_str() != "--")
+        .cloned()
+        .collect()
+}
+
+fn dump_command_debug(command: &clap::Command) {
+    eprintln!("KAM_DEBUG_I18N=1: dumping top-level arguments and subcommands...");
+
+    for arg in command.get_arguments() {
+        let id = arg.get_id().as_str();
+        let long = arg.get_long().unwrap_or("");
+        let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
+        eprintln!("TOP ARG: id='{}' long='{}' short='{}'", id, long, short);
+    }
+
+    fn dump_subcommands(command: &clap::Command, prefix: &str) {
+        for sub in command.get_subcommands() {
+            let name = sub.get_name();
+            eprintln!("SUBCMD: {}{}", prefix, name);
+            for arg in sub.get_arguments() {
+                let id = arg.get_id().as_str();
+                let long = arg.get_long().unwrap_or("");
+                let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
+                eprintln!("  ARG: id='{}' long='{}' short='{}'", id, long, short);
+            }
+            dump_subcommands(sub, &format!("{}{} ", prefix, name));
+        }
+    }
+
+    dump_subcommands(command, "");
 }
 
 fn dedupe_help(raw: &str) -> String {
@@ -204,10 +309,7 @@ fn main() {
             let tr = kam::i18n::tr(&key);
 
             // Debug: print attempted localization for each argument if KAM_DEBUG_I18N=1
-            if std::env::var("KAM_DEBUG_I18N")
-                .map(|v| v == "1")
-                .unwrap_or(false)
-            {
+            if debug_i18n_enabled() {
                 eprintln!("i18n: arg_id='{}' key='{}' tr='{}'", arg_id, key, tr);
             }
 
@@ -230,10 +332,7 @@ fn main() {
                 // to avoid duplicate-argument panics. We intentionally do not mutate in-place
                 // here because there is no stable public API across clap versions for that.
                 if cmd.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
-                    if std::env::var("KAM_DEBUG_I18N")
-                        .map(|v| v == "1")
-                        .unwrap_or(false)
-                    {
+                    if debug_i18n_enabled() {
                         eprintln!("Skipping localization for existing arg '{}'", repl_id);
                     }
                 } else {
@@ -282,10 +381,7 @@ fn main() {
                 // If an arg with the same id already exists on this subcommand, skip adding
                 // to avoid duplicate argument names (which can cause a clap panic).
                 if sub.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
-                    if std::env::var("KAM_DEBUG_I18N")
-                        .map(|v| v == "1")
-                        .unwrap_or(false)
-                    {
+                    if debug_i18n_enabled() {
                         eprintln!(
                             "Skipping localization for arg '{}' (already present)",
                             repl_id
@@ -323,36 +419,8 @@ fn main() {
     //
     // Debugging aid: when KAM_DEBUG_I18N=1, dump argument metadata to stderr
     // so we can detect conflicting or duplicate long/short option names.
-    if std::env::var("KAM_DEBUG_I18N")
-        .map(|v| v == "1")
-        .unwrap_or(false)
-    {
-        eprintln!("KAM_DEBUG_I18N=1: dumping top-level arguments and subcommands...");
-
-        // Top-level arguments
-        for arg in cmd.get_arguments() {
-            let id = arg.get_id().as_str();
-            let long = arg.get_long().unwrap_or("");
-            let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
-            eprintln!("TOP ARG: id='{}' long='{}' short='{}'", id, long, short);
-        }
-
-        // Recursively dump subcommands and their arguments
-        fn dump_subs(c: &clap::Command, prefix: &str) {
-            for sub in c.get_subcommands() {
-                let name = sub.get_name();
-                eprintln!("SUBCMD: {}{}", prefix, name);
-                for a in sub.get_arguments() {
-                    let id = a.get_id().as_str();
-                    let long = a.get_long().unwrap_or("");
-                    let short = a.get_short().map(|c| c.to_string()).unwrap_or_default();
-                    eprintln!("  ARG: id='{}' long='{}' short='{}'", id, long, short);
-                }
-                dump_subs(sub, &format!("{}{} ", prefix, name));
-            }
-        }
-
-        dump_subs(&cmd, "");
+    if debug_i18n_enabled() {
+        dump_command_debug(&cmd);
     }
 
     let matches = {
@@ -367,113 +435,12 @@ fn main() {
             .map(|s| s.to_string_lossy().into_owned())
             .collect();
         if let Some(help_pos) = toks.iter().position(|t| t == "--help" || t == "-h") {
-            // Build list of non-option tokens (subcommand path) up to the help token.
-            let sub_names: Vec<String> = toks[1..help_pos]
-                .iter()
-                .filter(|s| !s.starts_with('-') && s.as_str() != "--")
-                .cloned()
-                .collect();
-
-            // Traverse the command tree using cloned Command values (avoid mutable borrows).
-            let mut cur = cmd.clone();
-            let mut found = true;
-            for name in sub_names {
-                // Collect owned clones so we don't hold borrows into `cur` while assigning to it.
-                let sub_clones: Vec<clap::Command> = cur.get_subcommands().cloned().collect();
-                match sub_clones
-                    .into_iter()
-                    .find(|s| s.get_name() == name.as_str())
-                {
-                    Some(s) => cur = s,
-                    _ => {
-                        // token wasn't a subcommand, stop descent
-                        found = false;
-                        break;
-                    }
-                }
-            }
-
-            if !found {
-                // Could not locate a nested subcommand; fall back to top-level help.
-                let mut tmp = cmd.clone();
-                let mut buf: Vec<u8> = Vec::new();
-                if tmp.write_long_help(&mut buf).is_ok() {
-                    let raw = String::from_utf8_lossy(&buf);
-                    let mut cleaned = dedupe_help(&raw);
-
-                    // Post-process argument help texts with i18n-based replacements.
-                    // Build dotted key base from `sub_names` (if present); fallback to top-level "cli".
-                    let sub_names: Vec<String> = Vec::new();
-                    let cmd_key_base = if sub_names.is_empty() {
-                        "cli".to_string()
-                    } else {
-                        format!("cli.commands.{}", sub_names.join("."))
-                    };
-
-                    for a in tmp.get_arguments() {
-                        if let Some(orig_help) = a.get_help() {
-                            let arg_id = a.get_id().as_str();
-                            let dotted_key = format!("{}.flags.{}", cmd_key_base, arg_id);
-                            let tr_help = kam::i18n::tr(&dotted_key);
-                            if tr_help != dotted_key {
-                                let orig = orig_help.to_string();
-                                cleaned = cleaned.replace(&orig, &tr_help);
-                            }
-                        }
-                    }
-
-                    // print deduped, localized help and exit
-                    print!("{}", cleaned);
-                    if !cleaned.ends_with('\n') {
-                        println!();
-                    }
-                } else {
-                    if let Err(e) = tmp.print_long_help() {
-                        kam::utils::Utils::error(format!("Failed to write help: {}", e));
-                        std::process::exit(1);
-                    }
-                    println!();
-                }
-                std::process::exit(0);
-            }
-
-            // Capture long help into a buffer so we can dedupe sections.
-            let mut buf: Vec<u8> = Vec::new();
-            if cur.write_long_help(&mut buf).is_ok() {
-                let raw = String::from_utf8_lossy(&buf);
-                let mut cleaned = dedupe_help(&raw);
-
-                // Post-process argument help texts with i18n-based replacements.
-                let sub_names: Vec<String> = Vec::new();
-                let cmd_key_base = if sub_names.is_empty() {
-                    "cli".to_string()
-                } else {
-                    format!("cli.commands.{}", sub_names.join("."))
-                };
-
-                for a in cur.get_arguments() {
-                    if let Some(orig_help) = a.get_help() {
-                        let arg_id = a.get_id().as_str();
-                        let dotted_key = format!("{}.flags.{}", cmd_key_base, arg_id);
-                        let tr_help = kam::i18n::tr(&dotted_key);
-                        if tr_help != dotted_key {
-                            let orig = orig_help.to_string();
-                            cleaned = cleaned.replace(&orig, &tr_help);
-                        }
-                    }
-                }
-
-                // print deduped, localized help and exit
-                print!("{}", cleaned);
-                if !cleaned.ends_with('\n') {
-                    println!();
-                }
+            let subcommand_path = subcommand_path_before_help(&toks, help_pos);
+            if let Some(cur) = find_subcommand(&cmd, &subcommand_path) {
+                print_localized_help(cur, &subcommand_path);
             } else {
-                // Fallback: print directly
-                let _ = cur.print_long_help();
-                println!();
+                print_localized_help(cmd.clone(), &[]);
             }
-
             std::process::exit(0);
         }
 
@@ -588,147 +555,22 @@ fn main() {
         Some(Commands::Repo(args)) => {
             kam::cmds::repo::run_with_modules_url(args, cli.modules_url.as_deref())
         }
-        Some(Commands::Help(args)) => {
-            // Print top-level or subcommand help using a cloned, mutable Command so
-            // we can traverse nested subcommand definitions and call `print_long_help()`.
-            if args.subcommand.is_empty() {
-                let mut tmp = cmd.clone();
-                let mut buf: Vec<u8> = Vec::new();
-                if tmp.write_long_help(&mut buf).is_ok() {
-                    let raw = String::from_utf8_lossy(&buf);
-                    let mut cleaned = dedupe_help(&raw);
-
-                    // Post-process argument help texts with i18n-based replacements.
-                    let sub_names: Vec<String> = Vec::new();
-                    let cmd_key_base = if sub_names.is_empty() {
-                        "cli".to_string()
-                    } else {
-                        format!("cli.commands.{}", sub_names.join("."))
-                    };
-
-                    for a in tmp.get_arguments() {
-                        if let Some(orig_help) = a.get_help() {
-                            let arg_id = a.get_id().as_str();
-                            let dotted_key = format!("{}.flags.{}", cmd_key_base, arg_id);
-                            let tr_help = kam::i18n::tr(&dotted_key);
-                            if tr_help != dotted_key {
-                                let orig = orig_help.to_string();
-                                cleaned = cleaned.replace(&orig, &tr_help);
-                            }
-                        }
-                    }
-
-                    print!("{}", cleaned);
-                    if !cleaned.ends_with('\n') {
-                        println!();
-                    }
-                } else {
-                    if let Err(e) = tmp.print_long_help() {
-                        kam::utils::Utils::error(format!("Failed to write help: {}", e));
-                        std::process::exit(1);
-                    }
-                    println!();
-                }
-                Ok(())
-            } else {
-                // Traverse subcommands using owned clones (avoids mutable borrow conflicts).
-                // Traverse subcommands using owned clones (avoids mutable borrow conflicts).
-                let mut cur = cmd.clone();
-                for name in &args.subcommand {
-                    // Collect owned clones before searching so we don't hold borrows
-                    // into `cur` while assigning to it.
-                    let sub_clones: Vec<clap::Command> = cur.get_subcommands().cloned().collect();
-                    match sub_clones
-                        .into_iter()
-                        .find(|s| s.get_name() == name.as_str())
-                    {
-                        Some(s) => cur = s,
-                        _ => {
-                            kam::utils::Utils::error(format!("Unknown subcommand: {}", name));
-                            std::process::exit(2);
-                        }
-                    }
-                }
-                let mut buf: Vec<u8> = Vec::new();
-                if cur.write_long_help(&mut buf).is_ok() {
-                    let raw = String::from_utf8_lossy(&buf);
-                    let mut cleaned = dedupe_help(&raw);
-
-                    // Post-process argument help texts with i18n-based replacements.
-                    let sub_names = &args.subcommand;
-                    let cmd_key_base = if sub_names.is_empty() {
-                        "cli".to_string()
-                    } else {
-                        format!("cli.commands.{}", sub_names.join("."))
-                    };
-
-                    for a in cur.get_arguments() {
-                        if let Some(orig_help) = a.get_help() {
-                            let arg_id = a.get_id().as_str();
-                            let dotted_key = format!("{}.flags.{}", cmd_key_base, arg_id);
-                            let tr_help = kam::i18n::tr(&dotted_key);
-                            if tr_help != dotted_key {
-                                let orig = orig_help.to_string();
-                                cleaned = cleaned.replace(&orig, &tr_help);
-                            }
-                        }
-                    }
-
-                    print!("{}", cleaned);
-                    if !cleaned.ends_with('\n') {
-                        println!();
-                    }
-                } else {
-                    if let Err(e) = cur.print_long_help() {
-                        kam::utils::Utils::error(format!("Failed to write help: {}", e));
-                        std::process::exit(1);
-                    }
-                    println!();
-                }
+        Some(Commands::Help(args)) => match find_subcommand(&cmd, &args.subcommand) {
+            Some(command) => {
+                print_localized_help(command, &args.subcommand);
                 Ok(())
             }
-        }
+            None => {
+                let missing = args.subcommand.join(" ");
+                kam::utils::Utils::error(format!("Unknown subcommand: {}", missing));
+                std::process::exit(2);
+            }
+        },
         Some(Commands::Env(args)) => kam::cmds::env::run(&args),
         Some(Commands::About(args)) => kam::cmds::about::run(args),
         _ => {
             // No subcommand provided: show top-level help (deduped) instead of performing background operations.
-            let mut tmp = cmd.clone();
-            let mut buf: Vec<u8> = Vec::new();
-            if tmp.write_long_help(&mut buf).is_ok() {
-                let raw = String::from_utf8_lossy(&buf);
-                let mut cleaned = dedupe_help(&raw);
-
-                // Post-process argument help texts with i18n-based replacements.
-                let sub_names: Vec<String> = vec![];
-                let cmd_key_base = if sub_names.is_empty() {
-                    "cli".to_string()
-                } else {
-                    format!("cli.commands.{}", sub_names.join("."))
-                };
-
-                for a in tmp.get_arguments() {
-                    if let Some(orig_help) = a.get_help() {
-                        let arg_id = a.get_id().as_str();
-                        let dotted_key = format!("{}.flags.{}", cmd_key_base, arg_id);
-                        let tr_help = kam::i18n::tr(&dotted_key);
-                        if tr_help != dotted_key {
-                            let orig = orig_help.to_string();
-                            cleaned = cleaned.replace(&orig, &tr_help);
-                        }
-                    }
-                }
-
-                print!("{}", cleaned);
-                if !cleaned.ends_with('\n') {
-                    println!();
-                }
-            } else {
-                if let Err(e) = tmp.print_long_help() {
-                    kam::utils::Utils::error(format!("Failed to write help: {}", e));
-                    std::process::exit(1);
-                }
-                println!();
-            }
+            print_localized_help(cmd.clone(), &[]);
             Ok(())
         }
     };

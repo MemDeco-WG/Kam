@@ -61,7 +61,7 @@ Workflow: init.yml（初始化项目 / 导入模板）
 setup-kam Action inputs（说明）
 ---
 这两个工作流中均调用 `MemDeco-WG/setup-kam` Action，常用 `with` 参数如下：
-- `github-token`：默认 `${{ github.token }}`。用于访问私有 release/资产或进行需要鉴权的下载/操作。
+- `github-token`：默认 `${{ "{{" }} github.token {{ "}}" }}`。用于访问私有 release/资产或进行需要鉴权的下载/操作。
 - `enable-cache`：字符串 `"true"`/`"false"`，默认 `"true"`。启用后会对 `kam` 与 `cargo` 的安装进行版本感知缓存以加速后续流水线。
 - `template-url`：用于初始化流程，指向模板压缩包或本地目录（参见上文）。
 

@@ -90,15 +90,6 @@ Kam 将模块的执行过程划分为不同的 **phase** (阶段)，例如 `post
 
 更多命令和详细用法，请使用 `kam --help` 查看。
 
-## ✅ 质量门槛
-
-在提交 PR / 合并任何变更前，请至少跑完以下命令并确保通过（将 warning 视为 error）：
-
-```bash
-cargo fmt --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-```
-
 ## 🤝 贡献指南
 
 我们欢迎社区的任何贡献！无论是代码、文档还是问题反馈，都对项目至关重要。
@@ -106,9 +97,6 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 开始贡献前请先阅读：
 
 - [贡献指南（CONTRIBUTING.md）](CONTRIBUTING.md)
-- [DEC：编码哲学与强制工程规范](.collab/decisions/DEC__coding-philosophy__20251231-1400.md)
-
-这两份文档会说明我们的提交流程、质量门槛，以及必须遵守的工程规范（例如：禁止静默失败、Shell 输出统一、Rust 错误处理与 clone 约束等）。
 
 ## 📄 许可证
 

@@ -59,7 +59,7 @@ How to set `template-url` and `init-command`:
 setup-kam Action inputs (summary)
 ---
 Common `with` inputs (used in both workflows):
-- `github-token`: default `${{ github.token }}`. Used to access private releases/assets or perform authenticated operations.
+- `github-token`: default `${{ "{{" }} github.token {{ "}}" }}`. Used to access private releases/assets or perform authenticated operations.
 - `enable-cache`: string `"true"`/`"false"`, default `"true"`. When enabled, this caches `kam` and `cargo` installations with version awareness to speed up subsequent runs.
 - `template-url`: used by the init workflow to point to a template archive or local directory (see details above).
 

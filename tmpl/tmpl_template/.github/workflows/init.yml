@@ -32,35 +32,35 @@ jobs:
         with:
           path: |
             ~/.bun
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-bun-${{ "{{" }} hashFiles('**/bun.lockb') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ "{{" }} runner.os {{ "}}" }}-bun-
       - name: Cache npm
         uses: actions/cache@v4
         with:
           path: |
             ~/.npm
             ~/.cache/npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-npm-${{ "{{" }} hashFiles('**/package-lock.json') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-npm-
+            ${{ "{{" }} runner.os {{ "}}" }}-npm-
       - name: Cache Yarn
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/yarn
             ~/.yarn
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-yarn-${{ "{{" }} hashFiles('**/yarn.lock') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-yarn-
+            ${{ "{{" }} runner.os {{ "}}" }}-yarn-
       - name: Cache pnpm
         uses: actions/cache@v4
         with:
           path: |
             ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-pnpm-${{ "{{" }} hashFiles('**/pnpm-lock.yaml') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-pnpm-
+            ${{ "{{" }} runner.os {{ "}}" }}-pnpm-
       - name: Cache Cargo & Rustup
         uses: actions/cache@v4
         with:
@@ -68,22 +68,22 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.rustup
-          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-rust-cache-${{ "{{" }} hashFiles('**/Cargo.lock') {{ "}}" }}-${{ "{{" }} runner.os {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-rust-cache-
+            ${{ "{{" }} runner.os {{ "}}" }}-rust-cache-
       - name: Cache pip
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-pip-${{ "{{" }} hashFiles('**/requirements.txt') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ "{{" }} runner.os {{ "}}" }}-pip-
       - name: Setup kam (prepare and populate cache)
         uses: MemDeco-WG/setup-kam@main
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          enable-cache: ${{ github.event.inputs.enable-cache }}
+          github-token: ${{ "{{" }} secrets.GITHUB_TOKEN {{ "}}" }}
+          enable-cache: ${{ "{{" }} github.event.inputs.enable-cache {{ "}}" }}
       - name: Verify kam installation
         run: kam --version
 
@@ -99,35 +99,35 @@ jobs:
         with:
           path: |
             ~/.bun
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-bun-${{ "{{" }} hashFiles('**/bun.lockb') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ "{{" }} runner.os {{ "}}" }}-bun-
       - name: Restore npm cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.npm
             ~/.cache/npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-npm-${{ "{{" }} hashFiles('**/package-lock.json') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-npm-
+            ${{ "{{" }} runner.os {{ "}}" }}-npm-
       - name: Restore Yarn cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/yarn
             ~/.yarn
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-yarn-${{ "{{" }} hashFiles('**/yarn.lock') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-yarn-
+            ${{ "{{" }} runner.os {{ "}}" }}-yarn-
       - name: Restore pnpm cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-pnpm-${{ "{{" }} hashFiles('**/pnpm-lock.yaml') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-pnpm-
+            ${{ "{{" }} runner.os {{ "}}" }}-pnpm-
       - name: Restore Cargo & Rustup cache
         uses: actions/cache@v4
         with:
@@ -135,41 +135,41 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.rustup
-          key: ${{ runner.os }}-rust-cache-${{ hashFiles('**/Cargo.lock') }}-${{ runner.os }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-rust-cache-${{ "{{" }} hashFiles('**/Cargo.lock') {{ "}}" }}-${{ "{{" }} runner.os {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-rust-cache-
+            ${{ "{{" }} runner.os {{ "}}" }}-rust-cache-
       - name: Restore pip cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || github.sha }}-v1
+          key: ${{ "{{" }} runner.os {{ "}}" }}-pip-${{ "{{" }} hashFiles('**/requirements.txt') || github.sha {{ "}}" }}-v1
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ "{{" }} runner.os {{ "}}" }}-pip-
       - name: Setup kam (import template in this workspace)
         uses: MemDeco-WG/setup-kam@main
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          template-url: ${{ github.event.inputs.template-url }}
-          enable-cache: ${{ github.event.inputs.enable-cache }}
+          github-token: ${{ "{{" }} secrets.GITHUB_TOKEN {{ "}}" }}
+          template-url: ${{ "{{" }} github.event.inputs.template-url {{ "}}" }}
+          enable-cache: ${{ "{{" }} github.event.inputs.enable-cache {{ "}}" }}
       - name: Verify kam installation
         run: kam --version
       - name: Run initialization command
         shell: bash
         run: |
           kam init --help
-          echo "Running initialization command: ${{ github.event.inputs.init-command }}"
-          ${{ github.event.inputs.init-command }}
+          echo "Running initialization command: ${{ "{{" }} github.event.inputs.init-command {{ "}}" }}"
+          ${{ "{{" }} github.event.inputs.init-command {{ "}}" }}
           echo "Initialization completed successfully"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ "{{" }} github.token {{ "}}" }}
       - name: Auto-commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: |
-            chore: apply config - Template: ${{ github.event.inputs.template-url || 'No template' }} - Command: ${{ github.event.inputs.init-command || github.event.inputs.kam-command }}
+            chore: apply config - Template: ${{ "{{" }} github.event.inputs.template-url || 'No template' {{ "}}" }} - Command: ${{ "{{" }} github.event.inputs.init-command || github.event.inputs.kam-command {{ "}}" }}
           file_pattern: |
             *
           push_options: --force-with-lease
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ "{{" }} secrets.GITHUB_TOKEN {{ "}}" }}
