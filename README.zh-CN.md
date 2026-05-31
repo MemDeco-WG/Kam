@@ -25,7 +25,28 @@ Kam 的核心由三大组件构成，旨在提供一个连贯而高效的开发�
 
 ### 1. 安装 kam CLI
 
-Kam 使用 Rust 构建，推荐通过 Cargo 进行安装：
+推荐使用仓库自带安装脚本，支持 macOS、Android Termux、Windows Git Bash/MSYS：
+
+```bash
+git clone https://github.com/MemDeco-WG/Kam.git
+cd Kam
+./install.sh
+```
+
+安装脚本会自动识别平台、检查必要工具、在缺少 `cargo` 时通过 `rustup`
+安装最小 Rust 工具链、为当前 shell 配置 `~/.cargo/bin`，然后从当前源码树安装
+Kam，并用 `kam --version` 验证安装结果。
+
+平台说明：
+
+- **macOS**：需要 `curl` 和 C 编译器。若缺少 Xcode Command Line Tools，脚本会启动
+  `xcode-select --install`，完成后重新运行安装脚本。
+- **Android / Termux**：会通过 `pkg install -y curl git clang make pkg-config openssl perl`
+  安装构建依赖。
+- **Windows**：请在 Git Bash 或 MSYS2 中运行。脚本可通过 rustup 安装 Rust；若编译
+  失败，请安装 MSYS2 mingw-w64 工具链或 Visual Studio Build Tools。
+
+也可以手动通过 Cargo 安装：
 
 ```bash
 cargo install kam

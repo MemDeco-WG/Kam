@@ -42,11 +42,36 @@ Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Andr
 
 ### Installation
 
+Recommended installer for macOS, Termux on Android, and Windows Git Bash/MSYS:
+
+```bash
+git clone https://github.com/MemDeco-WG/Kam.git
+cd Kam
+./install.sh
+```
+
+The installer detects the current platform, checks required tools, installs a
+minimal Rust toolchain with `rustup` when `cargo` is missing, makes sure
+`~/.cargo/bin` is available for the current shell, installs Kam from this
+working tree, and verifies `kam --version`.
+
+Platform notes:
+
+- **macOS**: requires `curl` and a C compiler. If Xcode Command Line Tools are
+  missing, the installer starts `xcode-select --install` and asks you to rerun.
+- **Android / Termux**: installs required packages with `pkg install -y curl git
+  clang make pkg-config openssl perl`.
+- **Windows**: run from Git Bash or MSYS2. The installer can install Rust with
+  rustup; if native compilation fails, install the MSYS2 mingw-w64 toolchain or
+  Visual Studio Build Tools.
+
+Manual Cargo install is still supported:
+
 ```bash
 cargo install kam
 ```
 
-Or build from source:
+Or build from source without installing:
 
 ```bash
 git clone https://github.com/MemDeco-WG/Kam.git
