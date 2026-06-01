@@ -91,19 +91,35 @@ kam tmpl list
 
 kam tmpl pull # download online
 
-kam init my_awesome_module -t kam_template
+kam init my_awesome_module -t kam
 ```
 
 Using Meta template (meta-module):
 
 ```bash
-kam init my_meta_module -t meta_template
+kam init my_meta_module -t meta
 ```
 
 Using AnyKernel3 template (kernel module):
 
 ```bash
-kam init my_kernel_module -t ak3_template
+kam init my_kernel_module -t ak3
+```
+
+Using a template by its full ID, local directory, or archive:
+
+```bash
+# Full built-in template ID
+kam init my_module -t kam_template
+
+# Local template directory
+kam init my_module -t ./tmpl/my_template
+
+# Local template archive
+kam init my_module -t ./templates/my_template.tar.gz
+
+# Pass template variables
+kam init my_module -t kam --var repository=https://github.com/you/my_module
 ```
 
 KernelSU Modules Repo supports two repository layouts.
@@ -229,6 +245,31 @@ Kam provides several built-in templates:
 | `-t ak3_template` (`-t ak3`) | AnyKernel3 template | Kernel modules |
 | `--tmpl` | Template development template (maps to `tmpl_template`) | Creating new templates |
 
+Create from a template with `-t/--template`:
+
+```bash
+# Short built-in aliases
+kam init my_module -t kam
+kam init my_meta_module -t meta
+kam init my_kernel_module -t ak3
+
+# Full built-in template IDs
+kam init my_module -t kam_template
+kam init my_meta_module -t meta_template
+kam init my_kernel_module -t ak3_template
+
+# Project-local template directory or archive
+kam init my_module -t ./tmpl/my_template
+kam init my_module -t ./templates/my_template.tar.gz
+
+# Template variables use key=value and can be repeated
+kam init my_module -t kam --var repository=https://github.com/you/my_module --var flavor=release
+```
+
+Template resolution order is: direct local path, built-in template asset,
+project-local `tmpl/` or `templates/`, then the global template cache. If a
+simple name does not end with `_template`, Kam also tries `<name>_template`.
+
 ### Template Management
 
 #### Import Templates
@@ -323,13 +364,18 @@ kam init [OPTIONS] [PATH]
 - `-f, --force` - Force overwrite existing files
 - `-i, --interactive` - Run the init interactively; ask for required values
 - `--var <VAR>` - Template variables in key=value format
-- `-t, --template <TEMPLATE>` - Template to use (built-in ID or local path)
+- `-t, --template <TEMPLATE>` - Template to use. Accepts short built-in aliases (`kam`, `meta`, `ak3`), full template IDs, local directories, or local archives.
+- `--repo-mode <full|reference>` - KernelSU Modules Repo layout. `full` creates a complete Kam project; `reference` creates a metadata-only repository with `README.md` and `module.json`.
+- `--source-url <SOURCE_URL>` - Source code repository URL written to KernelSU `module.json.sourceUrl`.
+- `--metamodule` - Mark generated metadata as a KernelSU metamodule.
 - `--tmpl` - Create a template project (Template id: "tmpl_template")
 
 **Examples:**
 ```bash
-kam init my_module -t kam_template
-kam init my_module -t meta_template --interactive
+kam init my_module -t kam
+kam init my_module -t meta --interactive
+kam init my_module -t ./tmpl/my_template --var repository=https://github.com/you/my_module
+kam init my_module --repo-mode reference --source-url https://github.com/you/my_module-source
 kam init my_module --tmpl
 ```
 
