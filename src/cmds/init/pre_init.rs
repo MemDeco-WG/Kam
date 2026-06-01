@@ -115,16 +115,16 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
 
         // 获取 remote URL
         if let Ok(remote) = repo.find_remote("origin")
-            && let Some(url) = remote.url()
+            && let Ok(url) = remote.url()
         {
             git_repo_url = Some(url.to_string());
         }
         // 如果没找到origin，就用第一个可用的remote
         if git_repo_url.is_none()
             && let Ok(remotes) = repo.remotes()
-            && let Some(name) = remotes.get(0)
+            && let Ok(Some(name)) = remotes.get(0)
             && let Ok(remote) = repo.find_remote(name)
-            && let Some(url) = remote.url()
+            && let Ok(url) = remote.url()
         {
             git_repo_url = Some(url.to_string());
         }
@@ -139,12 +139,12 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
 
         // 获取当前分支名
         if let Ok(head) = repo.head()
-            && let Some(name) = head.name()
+            && let Ok(name) = head.name()
         {
             // 尝试从 refs/heads/xxx 提取分支名
             if let Some(stripped) = name.strip_prefix("refs/heads/") {
                 git_branch = Some(stripped.to_string());
-            } else if let Some(branch_name) = head.shorthand() {
+            } else if let Ok(branch_name) = head.shorthand() {
                 // 如果已经是简短名称，直接使用
                 git_branch = Some(branch_name.to_string());
             }

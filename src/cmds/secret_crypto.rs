@@ -1,5 +1,5 @@
 use crate::errors::KamError;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use openssl::{
     hash::MessageDigest,
     pkcs5::pbkdf2_hmac,
