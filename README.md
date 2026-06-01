@@ -339,6 +339,22 @@ For the current configuration and template rules, see:
 - [Template development specification](docs/template-development.md)
 - [Template documentation index](docs/templates.md)
 
+#### Agent Skill for Template Development
+
+Kam includes a repo-local agent skill for module/template development. Install it
+in another agent workspace before asking the agent to create or debug Kam
+templates:
+
+```bash
+npx skills add https://github.com/MemDeco-WG/Kam --path .agents/skills/kam-template-development
+```
+
+If your skills installer expects a skill name, use:
+
+```bash
+npx skills add https://github.com/MemDeco-WG/Kam --skill kam-template-development
+```
+
 ## 📖 Commands Reference
 
 
