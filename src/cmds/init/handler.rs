@@ -1,7 +1,7 @@
 use crate::errors::KamError;
 
-use super::args::InitArgs;
-use super::{impl_mod, interactive, post_init, pre_init};
+use super::args::{InitArgs, KernelSuRepoMode};
+use super::{impl_mod, interactive, post_init, pre_init, reference_repo};
 
 /// 初始化命令的主入口
 ///
@@ -18,6 +18,10 @@ pub fn run(args: &InitArgs) -> Result<(), KamError> {
     // 准备初始化数据
     // TODO: 这里可能可以优化一下，但先这样吧
     let data = pre_init::prepare_init(args)?;
+
+    if args.repo_mode == KernelSuRepoMode::Reference {
+        return reference_repo::init_reference_repo(&data, args.force);
+    }
 
     // 合并模板变量，把HashMap转成key=value的字符串数组
     // 因为init_template函数需要这种格式（历史遗留，懒得改了）
@@ -43,6 +47,8 @@ pub fn run(args: &InitArgs) -> Result<(), KamError> {
             force: args.force,
             module_type: data.module_type,
             update_json: data.update_json.clone(),
+            source_url: data.source_url.clone(),
+            metamodule: data.kam_toml.prop.metamodule,
         },
     )?;
 

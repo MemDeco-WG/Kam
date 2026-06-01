@@ -1,5 +1,6 @@
 use super::{Cli, Commands, inject_double_dash_for_targets};
 use crate::cmds::cache::{CacheCommands, TemplateCacheCommands};
+use crate::cmds::init::KernelSuRepoMode;
 use crate::cmds::repo::RepoCommand;
 use crate::cmds::secret::SecretCommands;
 use clap::CommandFactory;
@@ -224,6 +225,9 @@ fn parses_every_top_level_subcommand_variant() {
         (&["kam", "publish", "--dry-run"], |cmd| {
             matches!(cmd, Commands::Publish(_))
         }),
+        (&["kam", "workflow", "install", "owner/repo"], |cmd| {
+            matches!(cmd, Commands::Workflow(_))
+        }),
         (&["kam", "repo", "sync"], |cmd| {
             matches!(cmd, Commands::Repo(_))
         }),
@@ -295,17 +299,44 @@ fn parses_kernel_su_secret_subcommands() {
 
 #[test]
 fn parses_readable_command_aliases() {
-    let template_alias = parse(&["kam", "template", "list"]);
-    assert!(matches!(template_alias.command, Some(Commands::Tmpl(_))));
+    let singular_tmpl_alias = parse(&["kam", "template", "list"]);
+    assert!(matches!(
+        singular_tmpl_alias.command,
+        Some(Commands::Tmpl(_))
+    ));
 
-    let templates_alias = parse(&["kam", "templates", "list"]);
-    assert!(matches!(templates_alias.command, Some(Commands::Tmpl(_))));
+    let plural_tmpl_alias = parse(&["kam", "templates", "list"]);
+    assert!(matches!(plural_tmpl_alias.command, Some(Commands::Tmpl(_))));
 
     let completion_alias = parse(&["kam", "completion", "bash"]);
     assert!(matches!(
         completion_alias.command,
         Some(Commands::Completions(_))
     ));
+}
+
+#[test]
+fn parses_kernelsu_reference_init_options() {
+    let cli = parse(&[
+        "kam",
+        "init",
+        "org.example.module",
+        "--repo-mode",
+        "reference",
+        "--source-url",
+        "https://github.com/example/source",
+        "--metamodule",
+    ]);
+    let Some(Commands::Init(args)) = cli.command else {
+        panic!("expected init command");
+    };
+
+    assert_eq!(args.repo_mode, KernelSuRepoMode::Reference);
+    assert_eq!(
+        args.source_url.as_deref(),
+        Some("https://github.com/example/source")
+    );
+    assert!(args.metamodule);
 }
 
 #[test]

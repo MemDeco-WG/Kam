@@ -69,6 +69,32 @@ cd hello-world
 
 这会生成! [WARNING ⚠]一个包含基本结构和配置的项目目录。
 
+KernelSU Modules Repo 支持两种仓库形态，`kam init` 都可以快速生成。
+
+完整项目仓库：模块仓库中保存源码、Kam 配置和构建 hooks：
+
+```bash
+kam init hello-world \
+  --repo-mode full \
+  --source-url https://github.com/you/hello-world \
+  -t kam_template
+```
+
+仅引用/元数据仓库：对应 `KernelSU-Modules-Repo/org.kernelsu.example` 这类仓库，只生成
+`README.md` 和 `module.json`，源码在 `sourceUrl` 指向的仓库中：
+
+```bash
+kam init hello-world \
+  --repo-mode reference \
+  --source-url https://github.com/you/hello-world-source \
+  --project-name "Hello World" \
+  --description "模块摘要"
+```
+
+为了符合 KernelSU Modules Repo 规范，仓库名必须和 `module.prop` 的 `id` 一致；
+Release 应为 immutable、非 draft 的 GitHub Release；发布 ZIP 根目录必须包含
+带有 `id`、`version`、`versionCode` 的 `module.prop`。
+
 
 ## 🧩 核心概念
 

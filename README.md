@@ -106,6 +106,33 @@ Using AnyKernel3 template (kernel module):
 kam init my_kernel_module -t ak3_template
 ```
 
+KernelSU Modules Repo supports two repository layouts.
+
+Create a complete module repository with source code and Kam build files:
+
+```bash
+kam init my_module \
+  --repo-mode full \
+  --source-url https://github.com/you/my_module \
+  -t kam_template
+```
+
+Create a metadata-only module repository like `KernelSU-Modules-Repo/org.kernelsu.example`.
+This writes only `README.md` and `module.json`; releases are mirrored or published from the source repository:
+
+```bash
+kam init my_module \
+  --repo-mode reference \
+  --source-url https://github.com/you/my_module-source \
+  --project-name "My Module" \
+  --description "Short module summary"
+```
+
+For KernelSU Modules Repo compatibility, the repository name must match
+`module.prop` `id`, releases must be immutable non-draft GitHub Releases, and
+release ZIP assets must contain a root-level `module.prop` with `id`,
+`version`, and `versionCode`.
+
 Pacman-style top-level flags
 - `-Ss` — search the remote modules registry (example: `kam -Ss <term>`).
 - `-S`  — download a module by ID (example: `kam -S <moduleId>`).

@@ -99,6 +99,9 @@ pub enum Commands {
     /// Publish build artifacts to a GitHub Release
     Publish(crate::cmds::publish::PublishArgs),
 
+    /// Install GitHub Actions workflows for build/release automation
+    Workflow(crate::cmds::workflow::WorkflowArgs),
+
     /// Interact with module repository (search/download)
     Repo(crate::cmds::repo::RepoArgs),
 

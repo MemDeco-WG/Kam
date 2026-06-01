@@ -1063,6 +1063,8 @@ pub fn run(args: &InitArgs) -> Result<(), KamError> {
             force: args.force,
             module_type: data.module_type,
             update_json: data.update_json.clone(),
+            source_url: data.source_url.clone(),
+            metamodule: data.kam_toml.prop.metamodule,
         },
     )?;
 

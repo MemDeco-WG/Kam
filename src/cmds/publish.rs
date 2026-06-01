@@ -8,6 +8,7 @@ use std::process::Command;
 
 /// Publish build artifacts to a GitHub Release.
 #[derive(Args, Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct PublishArgs {
     /// Target GitHub repository in owner/repo format. Defaults to GITHUB_REPOSITORY, KAM_RELEASE_REPO, or git origin.
     #[arg(short = 'R', long = "repo")]

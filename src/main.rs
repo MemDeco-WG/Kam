@@ -503,6 +503,7 @@ fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
         Some(Commands::Toml(args)) => kam::cmds::toml::run(args),
         Some(Commands::Install(args)) => kam::cmds::install::run(&args),
         Some(Commands::Publish(args)) => kam::cmds::publish::run(&args),
+        Some(Commands::Workflow(args)) => kam::cmds::workflow::run(&args),
         Some(Commands::Repo(args)) => {
             kam::cmds::repo::run_with_modules_url(args, cli.modules_url.as_deref())
         }
