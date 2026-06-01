@@ -1,7 +1,74 @@
 use crate::errors::KamError;
 use crate::template::TemplateCacheManager;
 
-use super::args::{CacheArgs, CacheCommands};
+use super::args::{CacheArgs, CacheCommands, TemplateCacheCommands};
+
+fn list_template_cache() -> Result<(), KamError> {
+    use crate::utils::Utils;
+
+    let templates = TemplateCacheManager::list_local_templates()?;
+    if templates.is_empty() {
+        Utils::info(crate::i18n::tr("cache.no_templates"));
+    } else {
+        Utils::section(crate::i18n::tr("cache.local_cached_templates"));
+        for tmpl in templates {
+            Utils::info(&tmpl);
+        }
+    }
+
+    Ok(())
+}
+
+fn clean_template_cache() -> Result<(), KamError> {
+    use crate::utils::Utils;
+
+    let cache_dir = TemplateCacheManager::get_cache_dir()?;
+    if cache_dir.exists() {
+        std::fs::remove_dir_all(&cache_dir).map_err(KamError::Io)?;
+        std::fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
+        Utils::success(crate::i18n::tr("cache.cleaned_successfully"));
+    } else {
+        Utils::info(crate::i18n::tr("cache.directory_empty_or_not_exists"));
+    }
+
+    Ok(())
+}
+
+fn add_template_cache(name: &str, path: &std::path::Path) -> Result<(), KamError> {
+    use crate::utils::Utils;
+
+    TemplateCacheManager::install_template(name, path)?;
+    Utils::success(&trf!("cache.template_added", name, path.display()));
+    Ok(())
+}
+
+fn remove_template_cache(name: &str) -> Result<(), KamError> {
+    use crate::utils::Utils;
+
+    TemplateCacheManager::remove_template(name)?;
+    Utils::success(&trf!("cache.template_removed", name));
+    Ok(())
+}
+
+fn show_template_cache_root() -> Result<(), KamError> {
+    let cache_dir = TemplateCacheManager::get_cache_dir()?;
+    if let Some(root) = cache_dir.parent() {
+        println!("{}", root.display());
+    } else {
+        println!("{}", cache_dir.display());
+    }
+    Ok(())
+}
+
+fn handle_template_cache_command(command: TemplateCacheCommands) -> Result<(), KamError> {
+    match command {
+        TemplateCacheCommands::List => list_template_cache(),
+        TemplateCacheCommands::Clean => clean_template_cache(),
+        TemplateCacheCommands::Add { name, path } => add_template_cache(&name, &path),
+        TemplateCacheCommands::Remove { name } => remove_template_cache(&name),
+        TemplateCacheCommands::Path => show_template_cache_root(),
+    }
+}
 
 /// 处理模板缓存相关的命令
 ///
@@ -13,50 +80,12 @@ use super::args::{CacheArgs, CacheCommands};
 pub fn run(args: CacheArgs) -> Result<(), KamError> {
     use crate::utils::Utils;
     match args.command {
-        CacheCommands::List => {
-            // 列出所有缓存的模板
-            let templates = TemplateCacheManager::list_local_templates()?;
-            if templates.is_empty() {
-                Utils::info(crate::i18n::tr("cache.no_templates"));
-            } else {
-                Utils::section(crate::i18n::tr("cache.local_cached_templates"));
-                for tmpl in templates {
-                    Utils::info(&tmpl);
-                }
-            }
-        }
-        CacheCommands::Clean => {
-            // 清理缓存（删除所有模板）
-            let cache_dir = TemplateCacheManager::get_cache_dir()?;
-            if cache_dir.exists() {
-                // 直接删除整个目录然后重建，简单粗暴
-                std::fs::remove_dir_all(&cache_dir).map_err(KamError::Io)?;
-                std::fs::create_dir_all(&cache_dir).map_err(KamError::Io)?;
-                Utils::success(crate::i18n::tr("cache.cleaned_successfully"));
-            } else {
-                Utils::info(crate::i18n::tr("cache.directory_empty_or_not_exists"));
-            }
-        }
-        CacheCommands::Add { name, path } => {
-            // 添加模板到缓存
-            TemplateCacheManager::install_template(&name, &path)?;
-            Utils::success(&trf!("cache.template_added", name, path.display()));
-        }
-        CacheCommands::Remove { name } => {
-            // 从缓存删除模板
-            TemplateCacheManager::remove_template(&name)?;
-            Utils::success(&trf!("cache.template_removed", name));
-        }
-        CacheCommands::Path => {
-            // 显示缓存目录路径
-            let cache_dir = TemplateCacheManager::get_cache_dir()?;
-            // 显示父目录（.kam），这样用户知道配置在哪
-            if let Some(root) = cache_dir.parent() {
-                println!("{}", root.display());
-            } else {
-                println!("{}", cache_dir.display());
-            }
-        }
+        CacheCommands::List => list_template_cache()?,
+        CacheCommands::Clean => clean_template_cache()?,
+        CacheCommands::Add { name, path } => add_template_cache(&name, &path)?,
+        CacheCommands::Remove { name } => remove_template_cache(&name)?,
+        CacheCommands::Path => show_template_cache_root()?,
+        CacheCommands::Templates(subargs) => handle_template_cache_command(subargs.command)?,
 
         CacheCommands::Modules(subargs) => {
             // Module cache root (same logic as repo's cache_root_dir())

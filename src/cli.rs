@@ -59,16 +59,18 @@ pub enum Commands {
     /// Manage module versions and bump policies
     Version(crate::cmds::version::VersionArgs),
 
-    /// Manage module versions and bump policies
+    /// Manage local caches for templates and module repository metadata
     Cache(crate::cmds::cache::CacheArgs),
 
     /// Manage templates: import, export, package, and list
+    #[command(visible_alias = "template", visible_alias = "templates")]
     Tmpl(crate::cmds::tmpl::TmplArgs),
 
     /// Validate `kam.toml` configuration and templates
     Validate(crate::cmds::validate::ValidateArgs),
 
     /// Generate shell completion scripts for common shells
+    #[command(visible_alias = "completion")]
     Completions(crate::cmds::completion::CompletionArgs),
 
     /// Secret keyring management (used by sign/verify tasks)
@@ -93,6 +95,9 @@ pub enum Commands {
 
     /// Act as a compatibility layer for Magisk, `KernelSU`, and `APatchSU` to install modules (delegates to configured root manager)
     Install(crate::cmds::install::InstallArgs),
+
+    /// Publish build artifacts to a GitHub Release
+    Publish(crate::cmds::publish::PublishArgs),
 
     /// Interact with module repository (search/download)
     Repo(crate::cmds::repo::RepoArgs),
