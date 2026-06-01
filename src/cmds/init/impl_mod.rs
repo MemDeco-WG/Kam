@@ -49,10 +49,21 @@ fn merge_template_defaults(
         return Ok(());
     }
     let kt = KamToml::load_from_file(kt_path)?;
-    if let Some(tmpl) = kt.tmpl {
-        for (k, v) in tmpl.variables {
-            if let Some(default_val) = v.default {
-                template_vars.entry(k).or_insert(default_val);
+    if let Some(tmpl) = kt.tmpl.as_ref() {
+        for (k, v) in &tmpl.variables {
+            if let Some(default_val) = &v.default {
+                template_vars
+                    .entry(k.clone())
+                    .or_insert_with(|| default_val.clone());
+            }
+        }
+    }
+    if let Some(tmpl) = kt.kam.tmpl.as_ref() {
+        for (k, v) in &tmpl.variables {
+            if let Some(default_val) = &v.default {
+                template_vars
+                    .entry(k.clone())
+                    .or_insert_with(|| default_val.clone());
             }
         }
     }
@@ -538,4 +549,81 @@ pub fn init_template(path: &Path, params: &InitTemplateParams<'_>) -> Result<(),
     Err(KamError::TemplateNotFound(format!(
         "Template '{template_spec}' not found in built-in assets, local path, cache, or project directories."
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_template_defaults;
+    use std::collections::HashMap;
+
+    #[test]
+    fn merge_template_defaults_reads_kam_tmpl_variables() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let kam_toml_path = temp_dir.path().join("kam.toml");
+        std::fs::write(
+            &kam_toml_path,
+            r#"
+[prop]
+id = "example_template"
+name = "Example Template"
+version = "v1.0.0"
+versionCode = 1
+description = "Example"
+
+[kam]
+module_type = "template"
+
+[kam.tmpl.variables.repository]
+var_type = "string"
+required = false
+default = "https://github.com/example/repo"
+"#,
+        )
+        .expect("write kam.toml");
+
+        let mut vars = HashMap::new();
+        merge_template_defaults(&kam_toml_path, &mut vars).expect("merge defaults");
+
+        assert_eq!(
+            vars.get("repository").map(String::as_str),
+            Some("https://github.com/example/repo")
+        );
+    }
+
+    #[test]
+    fn merge_template_defaults_does_not_override_user_vars() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let kam_toml_path = temp_dir.path().join("kam.toml");
+        std::fs::write(
+            &kam_toml_path,
+            r#"
+[prop]
+id = "example_template"
+name = "Example Template"
+version = "v1.0.0"
+versionCode = 1
+description = "Example"
+
+[kam]
+module_type = "template"
+
+[kam.tmpl.variables.repository]
+var_type = "string"
+required = false
+default = "https://github.com/example/repo"
+"#,
+        )
+        .expect("write kam.toml");
+
+        let mut vars = HashMap::from([(
+            "repository".to_string(),
+            "https://github.com/user/repo".to_string(),
+        )]);
+        merge_template_defaults(&kam_toml_path, &mut vars).expect("merge defaults");
+
+        assert_eq!(
+            vars.get("repository").map(String::as_str),
+            Some("https://github.com/user/repo")
+        );
+    }
 }

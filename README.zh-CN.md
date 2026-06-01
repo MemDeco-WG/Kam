@@ -89,6 +89,11 @@ hello-world/
 └── ...
 ```
 
+配置与模板开发规范：
+
+- [Kam TOML 规范](docs/kam-toml.md)：字段、类型、默认值、渲染变量和 hook 环境变量。
+- [模板开发规范](docs/template-development.md)：模板目录、raw-copy 规则、打包导入和验证流程。
+
 ### kamfw: 纯 Shell 框架
 
 `kamfw` 是 Kam 模块的心脏。它被设计成一个扁平化的纯 Shell 脚本集合，提供了模块运行所需的基础环境和核心功能库。这种设计确保了最大的兼容性和最小的依赖。

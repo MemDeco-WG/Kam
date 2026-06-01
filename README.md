@@ -242,7 +242,6 @@ kam tmpl pull https://example.com/templates.zip
 ```bash
 kam tmpl update
 ```
-```
 
 #### Additional Template Commands
 
@@ -254,7 +253,11 @@ kam tmpl remove template_name
 kam tmpl path
 ```
 
-For more details on templates, see [templates/README.md](docs/templates.md).
+For the current configuration and template rules, see:
+
+- [Kam TOML specification](docs/kam-toml.md)
+- [Template development specification](docs/template-development.md)
+- [Template documentation index](docs/templates.md)
 
 ## 📖 Commands Reference
 

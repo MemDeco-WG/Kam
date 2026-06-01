@@ -31,6 +31,9 @@
 ## 3. 文档贡献（README / KamWiki）
 
 - README 应聚焦“新手可跑通”的主路径，把过长的细节放到独立文档/网站。
+- `kam.toml` 字段、模板渲染边界和模板验证流程应优先更新：
+  - [Kam TOML 规范](docs/kam-toml.md)
+  - [模板开发规范](docs/template-development.md)
 - 文档必须与当前实现一致：
   - 命令示例应尽量来自真实 `--help` 输出或可复现的工作流
   - 重要术语（kam、kamfw、KamModuleLab、phase）要保持一致

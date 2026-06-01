@@ -680,6 +680,7 @@ fn should_render_file(rel_path: &Path) -> bool {
                     | "prop"
                     | "rule"
                     | "sh"
+                    | "tmpl"
                     | "ps1"
                     | "env"
                     | "example"
