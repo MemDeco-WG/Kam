@@ -1,0 +1,159 @@
+name: Release Android Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish. Leave empty to use the current ref name."
+        required: false
+        type: string
+        default: ""
+      publish:
+        description: "Create a GitHub Release and upload Android binaries."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  ANDROID_API_LEVEL: "23"
+  ANDROID_NDK_VERSION: "27.2.12479018"
+
+jobs:
+  build-android:
+    name: Build Android ${{ matrix.abi }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            rust-target: aarch64-linux-android
+            asset-name: kam-android-arm64-v8a
+          - abi: armeabi-v7a
+            rust-target: armv7-linux-androideabi
+            asset-name: kam-android-armeabi-v7a
+          - abi: x86_64
+            rust-target: x86_64-linux-android
+            asset-name: kam-android-x86_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: android-${{ matrix.rust-target }}
+
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager --install "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build kam
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo ndk \
+            --target "${{ matrix.abi }}" \
+            --platform "${ANDROID_API_LEVEL}" \
+            build --release --locked
+          mkdir -p dist/android
+          cp "target/${{ matrix.rust-target }}/release/kam" "dist/android/${{ matrix.asset-name }}"
+          chmod 0755 "dist/android/${{ matrix.asset-name }}"
+
+      - name: Generate checksum
+        shell: bash
+        working-directory: dist/android
+        run: sha256sum "${{ matrix.asset-name }}" > "${{ matrix.asset-name }}.sha256"
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset-name }}
+          path: |
+            dist/android/${{ matrix.asset-name }}
+            dist/android/${{ matrix.asset-name }}.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build-android
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || inputs.publish }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          TAG="${REQUESTED_TAG}"
+          if [ -z "${TAG}" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [ -z "${TAG}" ]; then
+            echo "Release tag is required." >&2
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "Release tag ${TAG} does not exist. Push the tag first or run this workflow from a tag ref." >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/android
+          merge-multiple: true
+
+      - name: Generate checksum manifest
+        shell: bash
+        working-directory: dist/android
+        run: |
+          set -euo pipefail
+          cat ./*.sha256 > SHA256SUMS
+
+      - name: Create release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; immutable releases cannot be modified." >&2
+            exit 1
+          fi
+          gh release create "${TAG}" dist/android/* \
+            --title "${TAG}" \
+            --generate-notes \
+            --verify-tag

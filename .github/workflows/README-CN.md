@@ -6,7 +6,7 @@
 
 简介
 ---
-`setup-kam` 是一个 GitHub Action，用于在 CI 环境中安装 `kam`（Rust CLI 工具），并支持可选模板导入与缓存加速。仓库自带两个工作流示例：`exec.yml`（运行任意 `kam` 命令）与 `init.yml`（用于初始化项目并可导入模板）。下面说明如何填写参数与触发这些工作流。
+`setup-kam` 是一个 GitHub Action，用于在 CI 环境中安装 `kam`（Rust CLI 工具），并支持可选模板导入与缓存加速。仓库自带两个工作流示例：`exec.yml`（运行任意 `kam` 命令）与 `init.yml`（用于初始化项目并可导入模板），另外提供 `release-android.yml` 用于发布 `kam` CLI 自身的 Android 版本可执行文件。下面说明如何填写参数与触发这些工作流。
 
 kam 简要说明
 ---
@@ -57,6 +57,24 @@ Workflow: init.yml（初始化项目 / 导入模板）
   - 输入完整的命令行字符串，Action 会在 shell 中执行。例如默认 `kam init . -t kam_template -f`。
   - 注意：`-t`（或 `--template`）支持短 id（例如 `-t kam`、`-t meta`、`-t ak3`），会自动解析为 `<id>_template`（例如 `-t kam` -> `kam_template`）。如果传入的是完整模板 id（例如 `kam_template`）或路径/归档（例如 `./template-folder` 或 `https://.../template.zip`），将按原样使用。
   - 使用 `--tmpl`（无短名）可创建模板项目（`tmpl_template`）。你仍然可以使用 `kam init .` 或添加其他参数。
+
+Workflow: release-android.yml（发布 Android CLI 二进制）
+---
+`release-android.yml` 会交叉编译 `kam` Rust CLI，并把 Android 可执行文件上传到 GitHub Release。
+
+构建目标：
+- `arm64-v8a` -> `kam-android-arm64-v8a`
+- `armeabi-v7a` -> `kam-android-armeabi-v7a`
+- `x86_64` -> `kam-android-x86_64`
+
+触发方式：
+- 推送版本标签，例如 `v0.6.2`，自动构建并发布 release。
+- 手动运行 `workflow_dispatch`。设置 `publish=true` 才会创建 release；保持 false 时只构建 artifacts。
+
+发布行为：
+- 工作流使用 `gh release create`，创建 release 与上传 assets 在同一次发布动作内完成。
+- 如果目标 release 已存在，工作流会失败，不会追加或修改资产，适配开启 immutable releases 的仓库。
+- 每个二进制文件都有对应 `.sha256`，release 里也会包含 `SHA256SUMS` 汇总文件。
 
 setup-kam Action inputs（说明）
 ---

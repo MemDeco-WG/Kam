@@ -6,7 +6,7 @@ English README — For the Chinese version, see: [README-CN.md](./README-CN.md)
 
 Introduction
 ---
-`setup-kam` is a GitHub Action to install `kam` (a Rust-based CLI tool) in CI environments. It supports optional template import and cache acceleration. This repository includes two workflow examples: `exec.yml` (run arbitrary `kam` commands) and `init.yml` (initialize a project and optionally import templates). The sections below describe the inputs and how to trigger these workflows.
+`setup-kam` is a GitHub Action to install `kam` (a Rust-based CLI tool) in CI environments. It supports optional template import and cache acceleration. This repository includes two workflow examples: `exec.yml` (run arbitrary `kam` commands) and `init.yml` (initialize a project and optionally import templates). It also includes `release-android.yml` for publishing Android builds of the `kam` CLI itself. The sections below describe the inputs and how to trigger these workflows.
 
 kam overview
 ---
@@ -54,6 +54,24 @@ How to set `template-url` and `init-command`:
   - If providing a URL, please keep the filename and extension (e.g. `.zip` / `.tgz`). `kam tmpl import` may reject files without recognizable extensions.
 - `init-command`:
   - Provide the full command string to be executed by the Action. The default is `kam init . -t kam_template -f`.
+
+Workflow: release-android.yml (Publish Android CLI binaries)
+---
+`release-android.yml` cross-compiles the `kam` Rust CLI for Android and uploads executable binaries to a GitHub Release.
+
+Build targets:
+- `arm64-v8a` -> `kam-android-arm64-v8a`
+- `armeabi-v7a` -> `kam-android-armeabi-v7a`
+- `x86_64` -> `kam-android-x86_64`
+
+Triggers:
+- Push a version tag such as `v0.6.2` to build and publish a release automatically.
+- Run manually with `workflow_dispatch`. Set `publish=true` to create the release; leave it false to only build artifacts.
+
+Release behavior:
+- The workflow uses `gh release create`, so it creates the release and uploads assets in one operation.
+- If the release tag already exists, the workflow fails instead of modifying it. This keeps behavior compatible with repositories that enable immutable releases.
+- Each binary has a matching `.sha256` file, and the release also includes a `SHA256SUMS` manifest.
 
 
 setup-kam Action inputs (summary)
