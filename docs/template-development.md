@@ -19,11 +19,37 @@ my_template/
     └── {{prop.id}}/
         ├── customize.sh
         ├── service.sh
+        ├── action.sh
+        ├── post-mount.sh
+        ├── boot-completed.sh
         ├── module.prop
         └── README.md
 ```
 
 模板根目录必须能独立表达自身元数据。建议所有模板都包含 `kam.toml`、`README.md`、`LICENSE` 和 `CHANGELOG.md`。
+
+## 模块目录兼容性
+
+模板应按目标管理器选择模块根目录内容，不要为了旧环境盲目塞入所有脚本。
+
+- `action.sh` 的按钮入口仅在 ShiroSU 默认支持、Magisk 27008+、KernelSU 1.0.2+、APatch 11039+ 可用。低版本没有按钮能力，模板应明确最低版本要求；不要为不支持按钮的低版本做降级按钮逻辑。建议用户升级到受支持版本，非 GKI 原版 KernelSU 用户应转向兼容分支。
+- `post-mount.sh`、`boot-completed.sh` 仅由 ShiroSU、KernelSU、APatch 原生支持。需要兼容 Magisk 时，可在 `service.sh` 中主动调用 `boot-completed.sh`。
+- 仅支持 ShiroSU、KernelSU、APatch 的模板无需包含 `META-INF/`。
+- `zygisk/`、`bin/` 通常由 `c++_native/` 或 `go_native/` 下的 native 项目自动生成；模板确有静态文件需求时也可以自行提供。
+- `changelog.md`、`update.json` 等发布文件可按项目需要自定义名称和路径，但路径应同步写入 `kam.toml` / README。
+
+## Native 项目约定
+
+C++ 项目：
+
+- 项目目录名必须与 `Android.mk` 中的 `LOCAL_MODULE` 相同，也就是最终构建出的文件名。
+- 使用 `BUILD_EXECUTABLE` 时，构建产物会自动移动到模块目录的 `bin/<项目名称>/<架构>.bin`。
+- 使用 `BUILD_SHARED_LIBRARY` 时，构建产物会自动移动到模块目录的 `zygisk/<架构>.so`。
+
+Go 项目：
+
+- 项目目录名必须与 `go.mod` 中 `module` 值的最后一段相同，也就是最终构建出的文件名。
+- `arch` 文件按行列出要构建的架构，架构名称应使用 Go 支持的值，例如 `amd64`，不要写 `x86_64`。
 
 ## 模板 `kam.toml`
 

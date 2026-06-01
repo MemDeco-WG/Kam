@@ -71,6 +71,13 @@ Kam 自身的项目配置。
 
 `exclude`/`include` 应写项目相对路径或文件名模式。`.gitignore` 文件本身不会因为排除规则被跳过。
 
+模块目录兼容性建议：
+
+- `action.sh` 需要 ShiroSU、Magisk 27008+、KernelSU 1.0.2+ 或 APatch 11039+；低版本不支持按钮入口，应通过文档和 `mmrl.repo.manager.*.require` 表达最低版本，而不是伪装兼容。
+- `post-mount.sh`、`boot-completed.sh` 面向 ShiroSU、KernelSU、APatch；Magisk 兼容项目可在 `service.sh` 里主动执行 `boot-completed.sh`。
+- 仅支持 ShiroSU、KernelSU、APatch 的模块通常不需要 `META-INF/`。
+- `zygisk/`、`bin/` 可以手写，但更推荐由 `c++_native/`、`go_native/` 项目按规范生成。
+
 ## `[kam.tmpl]`
 
 模板来源与模板变量定义。

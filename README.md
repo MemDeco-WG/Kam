@@ -154,6 +154,18 @@ kam config list
 
 This avoids frequent manual edits of `kam.toml` for values that should be global or common across projects.
 
+### KernelSU Developer Keys
+
+Kam can prepare the KernelSU developer key lifecycle used by <https://developers.kernelsu.org/>.
+
+```bash
+kam secret ksu-generate --name kernelsu-developer
+kam secret ksu-submit --username <github-user> --public-key kernelsu-developer.public.pem --open
+kam secret ksu-revoke --username <github-user> --serial-number <serial> --reason lost --open
+```
+
+`ksu-generate` creates a P-256 key pair. When `gpg` is available in an interactive terminal, Kam stores the private key as `*.private.pem.gpg`; pass `--no-gpg` to force a 0600 PEM file.
+
 ### Add Module Files
 
 Add your module files to the `src/<module_id>/` directory:

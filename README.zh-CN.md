@@ -113,6 +113,9 @@ Kam 将模块的执行过程划分为不同的 **phase** (阶段)，例如 `post
 - `kam build`: 构建并打包模块为可部署的 ZIP 文件。
 - `kam sim`: 在本地仿真环境中运行模块。
 - `kam version`: 管理模块版本号。
+- `kam secret ksu-generate`: 生成 KernelSU developer P-256 密钥；如可交互且系统存在 `gpg`，默认用 `gpg` 加密私钥。
+- `kam secret ksu-submit`: 根据公钥生成 KernelSU developer keyring 申请 issue 表单 URL。
+- `kam secret ksu-revoke`: 根据序列号或证书生成 KernelSU developer 证书吊销 issue 表单 URL。
 
 更多命令和详细用法，请使用 `kam --help` 查看。
 
