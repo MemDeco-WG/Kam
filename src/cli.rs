@@ -122,12 +122,14 @@ impl Cli {
         I: IntoIterator<Item = T>,
         T: AsRef<std::ffi::OsStr>,
     {
-        // Collect into OsString for manipulation
-        let mut args_os: Vec<OsString> = args
+        let args_os: Vec<OsString> = args
             .into_iter()
             .map(|t| t.as_ref().to_os_string())
             .collect();
+        Self::try_parse_os_args_with_pacman(args_os)
+    }
 
+    fn try_parse_os_args_with_pacman(mut args_os: Vec<OsString>) -> Result<Self, clap::Error> {
         // If the user already supplied `--` we don't touch the args.
         if args_os.iter().any(|a| a == &OsString::from("--")) {
             let matches = Self::command().try_get_matches_from(args_os)?;
@@ -196,7 +198,15 @@ impl Cli {
         I: IntoIterator<Item = T>,
         T: AsRef<std::ffi::OsStr>,
     {
-        match Self::try_parse_from_with_pacman(args) {
+        let args_os: Vec<OsString> = args
+            .into_iter()
+            .map(|t| t.as_ref().to_os_string())
+            .collect();
+        Self::parse_os_args_with_pacman(args_os)
+    }
+
+    fn parse_os_args_with_pacman(args_os: Vec<OsString>) -> Self {
+        match Self::try_parse_os_args_with_pacman(args_os) {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("Error parsing arguments: {e}");
@@ -273,216 +283,5 @@ pub fn inject_double_dash_for_targets(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{Cli, Commands, inject_double_dash_for_targets};
-    use crate::cmds::secret::SecretCommands;
-    use clap::CommandFactory;
-    use std::ffi::OsString;
-
-    fn os_args(args: &[&str]) -> Vec<OsString> {
-        args.iter().map(OsString::from).collect()
-    }
-
-    fn parse(args: &[&str]) -> Cli {
-        Cli::try_parse_from_with_pacman(args).expect("CLI args should parse")
-    }
-
-    #[test]
-    fn inject_preserves_args_when_double_dash_already_exists() {
-        let mut cmd = Cli::command();
-        let args = os_args(&["kam", "-S", "--", "target"]);
-
-        assert_eq!(inject_double_dash_for_targets(args.clone(), &mut cmd), args);
-    }
-
-    #[test]
-    fn injects_after_explicit_sync_before_target() {
-        let mut cmd = Cli::command();
-        let args = inject_double_dash_for_targets(os_args(&["kam", "-S", "module"]), &mut cmd);
-
-        assert_eq!(args, os_args(&["kam", "-S", "--", "module"]));
-    }
-
-    #[test]
-    fn injects_after_long_search_before_target() {
-        let mut cmd = Cli::command();
-        let args =
-            inject_double_dash_for_targets(os_args(&["kam", "--search", "module"]), &mut cmd);
-
-        assert_eq!(args, os_args(&["kam", "--search", "--", "module"]));
-    }
-
-    #[test]
-    fn injects_after_combined_pacman_flags_before_target() {
-        let mut cmd = Cli::command();
-        let args = inject_double_dash_for_targets(os_args(&["kam", "-yuS", "module"]), &mut cmd);
-
-        assert_eq!(args, os_args(&["kam", "-yuS", "--", "module"]));
-    }
-
-    #[test]
-    fn does_not_inject_for_unknown_short_flag() {
-        let mut cmd = Cli::command();
-        let args = os_args(&["kam", "-Sz", "module"]);
-
-        assert_eq!(inject_double_dash_for_targets(args.clone(), &mut cmd), args);
-    }
-
-    #[test]
-    fn does_not_inject_before_subcommand_name() {
-        let mut cmd = Cli::command();
-        let args = os_args(&["kam", "-S", "build"]);
-
-        assert_eq!(inject_double_dash_for_targets(args.clone(), &mut cmd), args);
-    }
-
-    #[test]
-    fn try_parse_respects_existing_double_dash() {
-        let cli = parse(&["kam", "-S", "--", "module"]);
-
-        assert!(cli.sync_flag);
-        assert_eq!(cli.targets, vec!["module"]);
-    }
-
-    #[test]
-    fn try_parse_accepts_combined_sync_update_yes_flags() {
-        let cli = parse(&["kam", "-Syu", "module"]);
-
-        assert!(cli.sync_flag);
-        assert!(cli.update_index);
-        assert!(cli.assume_yes);
-        assert_eq!(cli.targets, vec!["module"]);
-    }
-
-    #[test]
-    fn try_parse_accepts_explicit_search_combo() {
-        let cli = parse(&["kam", "-Ss", "term"]);
-
-        assert!(cli.sync_flag);
-        assert!(cli.search_flag);
-        assert_eq!(cli.targets, vec!["term"]);
-    }
-
-    #[test]
-    fn parse_from_with_pacman_returns_cli_on_success() {
-        let cli = Cli::parse_from_with_pacman(["kam", "--quiet", "build"]);
-
-        assert!(cli.quiet);
-        assert!(matches!(cli.command, Some(Commands::Build(_))));
-    }
-
-    #[test]
-    fn parses_every_top_level_subcommand_variant() {
-        type CommandCase<'a> = (&'a [&'a str], fn(&Commands) -> bool);
-
-        let cases: &[CommandCase<'_>] = &[
-            (&["kam", "init", "demo"], |cmd| {
-                matches!(cmd, Commands::Init(_))
-            }),
-            (&["kam", "build"], |cmd| matches!(cmd, Commands::Build(_))),
-            (&["kam", "version"], |cmd| {
-                matches!(cmd, Commands::Version(_))
-            }),
-            (&["kam", "cache", "list"], |cmd| {
-                matches!(cmd, Commands::Cache(_))
-            }),
-            (&["kam", "tmpl", "list"], |cmd| {
-                matches!(cmd, Commands::Tmpl(_))
-            }),
-            (&["kam", "validate"], |cmd| {
-                matches!(cmd, Commands::Validate(_))
-            }),
-            (&["kam", "completions", "bash"], |cmd| {
-                matches!(cmd, Commands::Completions(_))
-            }),
-            (&["kam", "secret", "list"], |cmd| {
-                matches!(cmd, Commands::Secret(_))
-            }),
-            (&["kam", "sign", "module.zip"], |cmd| {
-                matches!(cmd, Commands::Sign(_))
-            }),
-            (&["kam", "verify", "module.zip"], |cmd| {
-                matches!(cmd, Commands::Verify(_))
-            }),
-            (&["kam", "check"], |cmd| matches!(cmd, Commands::Check(_))),
-            (&["kam", "export", "prop"], |cmd| {
-                matches!(cmd, Commands::Export(_))
-            }),
-            (&["kam", "toml", "list"], |cmd| {
-                matches!(cmd, Commands::Toml(_))
-            }),
-            (&["kam", "config", "list"], |cmd| {
-                matches!(cmd, Commands::Config(_))
-            }),
-            (&["kam", "install", "module.zip"], |cmd| {
-                matches!(cmd, Commands::Install(_))
-            }),
-            (&["kam", "repo", "sync"], |cmd| {
-                matches!(cmd, Commands::Repo(_))
-            }),
-            (&["kam", "about"], |cmd| matches!(cmd, Commands::About(_))),
-            (&["kam", "env"], |cmd| matches!(cmd, Commands::Env(_))),
-            (&["kam", "help"], |cmd| matches!(cmd, Commands::Help(_))),
-        ];
-
-        for (args, is_expected_variant) in cases {
-            let cli = parse(args);
-            let command = cli.command.expect("subcommand should be present");
-            assert!(
-                is_expected_variant(&command),
-                "unexpected command variant for args: {args:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn parses_kernel_su_secret_subcommands() {
-        let generated = parse(&["kam", "secret", "ksu-generate", "--no-gpg"]);
-        let Some(Commands::Secret(secret)) = generated.command else {
-            panic!("expected secret command");
-        };
-        assert!(matches!(
-            secret.command,
-            Some(SecretCommands::KsuGenerate { no_gpg: true, .. })
-        ));
-
-        let submit = parse(&[
-            "kam",
-            "secret",
-            "ksu-submit",
-            "--username",
-            "octo",
-            "--public-key",
-            "key.pem",
-        ]);
-        let Some(Commands::Secret(secret)) = submit.command else {
-            panic!("expected secret command");
-        };
-        assert!(matches!(
-            secret.command,
-            Some(SecretCommands::KsuSubmit { username, .. }) if username == "octo"
-        ));
-
-        let revoke = parse(&[
-            "kam",
-            "secret",
-            "ksu-revoke",
-            "--username",
-            "octo",
-            "--serial-number",
-            "01ab",
-            "--reason",
-            "lost",
-        ]);
-        let Some(Commands::Secret(secret)) = revoke.command else {
-            panic!("expected secret command");
-        };
-        assert!(matches!(
-            secret.command,
-            Some(SecretCommands::KsuRevoke {
-                serial_number: Some(serial),
-                ..
-            }) if serial == "01ab"
-        ));
-    }
-}
+#[path = "cli_tests.rs"]
+mod tests;
