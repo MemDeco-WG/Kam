@@ -2,11 +2,12 @@ use clap::{Args, Subcommand};
 use glob::Pattern;
 use ignore::WalkBuilder;
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::cmds::build::args::BuildArgs;
 use crate::cmds::build::build_project::determine_output_dir;
@@ -89,6 +90,7 @@ struct DevContext {
     webui_port: Option<u16>,
     webui_local_port: Option<u16>,
     restart_command: Option<String>,
+    session_log: PathBuf,
     output_dir: PathBuf,
     build_args: BuildArgs,
     mcp: McpRuntime,
@@ -164,6 +166,10 @@ fn load_context(args: &DevArgs) -> Result<DevContext, KamError> {
     let webui_port = dev.webui_port;
     let webui_local_port = dev.webui_local_port.or(webui_port);
     let restart_command = dev.restart_command.clone();
+    let session_log = project_root
+        .join(".kam")
+        .join("dev")
+        .join("last-session.log");
     let build_args = BuildArgs {
         path: ".".to_string(),
         all: false,
@@ -199,6 +205,7 @@ fn load_context(args: &DevArgs) -> Result<DevContext, KamError> {
         webui_port,
         webui_local_port,
         restart_command,
+        session_log,
         output_dir,
         build_args,
         mcp,
@@ -211,15 +218,22 @@ fn run_once(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
         return Ok(());
     }
 
+    reset_session_log(ctx)?;
+    log_session(ctx, format!("module={}", ctx.module_id))?;
+    log_session(ctx, format!("module_path={}", ctx.module_path))?;
+    log_session(ctx, format!("mode={}", dev_mode_label(args)))?;
     detect_device(ctx)?;
     if args.install {
+        log_session(ctx, "stage=dev-build")?;
         run_dev_build_hooks(
             &ctx.project_root,
             &ctx.kam_toml,
             &ctx.output_dir,
             &ctx.build_args,
         )?;
+        log_session(ctx, "command=kam build")?;
         crate::cmds::build::run(&ctx.build_args)?;
+        log_session(ctx, "command=kam install --adb --manager Auto --yes")?;
         crate::cmds::install::run(&InstallArgs {
             path: None,
             manager: Some("Auto".to_string()),
@@ -229,6 +243,7 @@ fn run_once(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
             quiet: false,
             assume_yes: true,
         })?;
+        log_session(ctx, "stage=dev-install")?;
         run_dev_install_hooks(
             &ctx.project_root,
             &ctx.kam_toml,
@@ -239,7 +254,9 @@ fn run_once(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
         if args.webui {
             if args.sync_only {
                 Utils::info("Sync-only mode: skipping dev-webui hooks.");
+                log_session(ctx, "skip=dev-webui sync-only")?;
             } else {
+                log_session(ctx, "stage=dev-webui")?;
                 run_dev_webui_hooks(
                     &ctx.project_root,
                     &ctx.kam_toml,
@@ -249,6 +266,7 @@ fn run_once(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
             }
             sync_matching_hot_files(ctx, &["webroot/**"])?;
         } else if !args.sync_only && !args.hot {
+            log_session(ctx, "stage=dev-build")?;
             run_dev_build_hooks(
                 &ctx.project_root,
                 &ctx.kam_toml,
@@ -259,6 +277,7 @@ fn run_once(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
         } else {
             sync_hot_files(ctx)?;
         }
+        log_session(ctx, "stage=dev-sync")?;
         run_dev_sync_hooks(
             &ctx.project_root,
             &ctx.kam_toml,
@@ -267,6 +286,7 @@ fn run_once(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
         )?;
     }
 
+    log_session(ctx, "stage=dev-start")?;
     run_dev_start_hooks(
         &ctx.project_root,
         &ctx.kam_toml,
@@ -328,6 +348,52 @@ fn planned_hot_files(ctx: &DevContext, args: &DevArgs) -> Result<Vec<PathBuf>, K
     }
 }
 
+fn dev_mode_label(args: &DevArgs) -> &'static str {
+    if args.install {
+        "install"
+    } else if args.webui {
+        "webui"
+    } else if args.hot {
+        "hot"
+    } else if args.sync_only {
+        "sync-only"
+    } else {
+        "dev-build-hot-sync"
+    }
+}
+
+fn reset_session_log(ctx: &DevContext) -> Result<(), KamError> {
+    if let Some(parent) = ctx.session_log.parent() {
+        fs::create_dir_all(parent).map_err(KamError::Io)?;
+    }
+    fs::write(
+        &ctx.session_log,
+        format!(
+            "# kam dev session\nstarted_at_unix={}\n",
+            now_unix_seconds()
+        ),
+    )
+    .map_err(KamError::Io)
+}
+
+fn log_session(ctx: &DevContext, line: impl AsRef<str>) -> Result<(), KamError> {
+    if let Some(parent) = ctx.session_log.parent() {
+        fs::create_dir_all(parent).map_err(KamError::Io)?;
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&ctx.session_log)
+        .map_err(KamError::Io)?;
+    writeln!(file, "{}", line.as_ref()).map_err(KamError::Io)
+}
+
+fn now_unix_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs())
+}
+
 fn sync_hot_files(ctx: &DevContext) -> Result<(), KamError> {
     sync_selected_hot_files(ctx, &collect_hot_files(ctx)?)?;
     run_restart_command(ctx)?;
@@ -336,10 +402,9 @@ fn sync_hot_files(ctx: &DevContext) -> Result<(), KamError> {
 
 fn sync_selected_hot_files(ctx: &DevContext, files: &[PathBuf]) -> Result<(), KamError> {
     for file in files {
-        Utils::info(format!(
-            "Writing device file: {}",
-            remote_path(ctx, file)?.display()
-        ));
+        let remote = remote_path(ctx, file)?;
+        Utils::info(format!("Writing device file: {}", remote.display()));
+        log_session(ctx, format!("write_device_file={}", remote.display()))?;
         push_file_with_backup(ctx, file)?;
     }
     Ok(())
@@ -400,6 +465,7 @@ fn sync_incremental_hot_files(ctx: &DevContext, files: &[PathBuf]) -> Result<(),
 fn run_restart_command(ctx: &DevContext) -> Result<(), KamError> {
     if let Some(command) = &ctx.restart_command {
         Utils::info(format!("Running restart command: {command}"));
+        log_session(ctx, format!("restart_command={command}"))?;
         adb_root(ctx, command)?;
     }
     Ok(())
@@ -522,6 +588,10 @@ fn forward_webui(ctx: &DevContext, dry_run: bool) -> Result<(), KamError> {
         Utils::info(format!("WebUI URL: http://127.0.0.1:{local_port}/"));
         return Ok(());
     }
+    log_session(
+        ctx,
+        format!("adb_forward_webui=tcp:{local_port}->tcp:{device_port}"),
+    )?;
     adb_status(ctx, &["forward", &local, &remote])?;
     Utils::success(format!("Forwarded WebUI: http://127.0.0.1:{local_port}/"));
     Ok(())
@@ -538,6 +608,10 @@ fn _run_dev_stop_hooks(ctx: &DevContext) -> Result<(), KamError> {
 }
 
 fn enable_mcp(ctx: &DevContext, dry_run: bool) -> Result<(), KamError> {
+    if !dry_run {
+        log_session(ctx, format!("mcp_endpoint={}", ctx.mcp.url()))?;
+        log_session(ctx, format!("mcp_cli={}", ctx.mcp.cli_path))?;
+    }
     mcp::run_command(&ctx.mcp, &McpCommand::Forward, dry_run)?;
     mcp::run_command(&ctx.mcp, &McpCommand::Enable, dry_run)?;
     mcp::run_command(&ctx.mcp, &McpCommand::Status { json: true }, dry_run)?;
@@ -546,7 +620,15 @@ fn enable_mcp(ctx: &DevContext, dry_run: bool) -> Result<(), KamError> {
 }
 
 fn show_logs(ctx: &DevContext, dry_run: bool) -> Result<(), KamError> {
+    let install_logs = install_log_paths(ctx);
     if dry_run {
+        Utils::info(format!(
+            "Would show dev session log: {}",
+            ctx.session_log.display()
+        ));
+        for log in &install_logs {
+            Utils::info(format!("Would show install log if present: {log}"));
+        }
         for log in &ctx.logs {
             Utils::info(format!("Would tail device log: {log}"));
         }
@@ -556,11 +638,55 @@ fn show_logs(ctx: &DevContext, dry_run: bool) -> Result<(), KamError> {
         ));
         return Ok(());
     }
+    show_local_session_log(ctx)?;
+    for log in &install_logs {
+        let command = format!(
+            "[ ! -f {log} ] || tail -n 120 {log}",
+            log = shell_quote(log)
+        );
+        adb_root(ctx, &command)?;
+    }
     for log in &ctx.logs {
         let command = format!("for f in {log}; do [ ! -f \"$f\" ] || tail -n 80 \"$f\"; done");
         adb_root(ctx, &command)?;
     }
-    adb_status(ctx, &["logcat", "-d", "-t", "200"])?;
+    adb_shell(
+        ctx,
+        &format!(
+            "logcat -d -t 300 2>/dev/null | grep -i {} || true",
+            shell_quote(&ctx.module_id)
+        ),
+    )?;
+    Ok(())
+}
+
+fn install_log_paths(ctx: &DevContext) -> Vec<String> {
+    vec![
+        format!("{}/install.log", ctx.module_path),
+        format!("{}/.log/install.log", ctx.module_path),
+        "/cache/magisk.log".to_string(),
+        "/data/adb/ksu/logs/module_install.log".to_string(),
+        "/data/adb/ap/logs/module_install.log".to_string(),
+    ]
+}
+
+fn show_local_session_log(ctx: &DevContext) -> Result<(), KamError> {
+    Utils::section("Last kam dev session");
+    if ctx.session_log.exists() {
+        let content = fs::read_to_string(&ctx.session_log).map_err(KamError::Io)?;
+        for line in content
+            .lines()
+            .rev()
+            .take(80)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+        {
+            Utils::info(line);
+        }
+    } else {
+        Utils::info(format!("No session log yet: {}", ctx.session_log.display()));
+    }
     Ok(())
 }
 
@@ -858,6 +984,22 @@ fn adb_root(ctx: &DevContext, command: &str) -> Result<(), KamError> {
     }
 }
 
+fn adb_shell(ctx: &DevContext, command: &str) -> Result<(), KamError> {
+    let mut cmd = Command::new("adb");
+    if let Some(device) = &ctx.device {
+        cmd.arg("-s").arg(device);
+    }
+    cmd.arg("shell").arg(command).stdin(Stdio::inherit());
+    let status = Utils::run_and_stream_no_stderr_header(cmd).map_err(KamError::Io)?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(KamError::CommandFailed(format!(
+            "adb shell command failed with status {status}: {command}"
+        )))
+    }
+}
+
 fn hooks_dir(ctx: &DevContext) -> PathBuf {
     ctx.project_root.join(
         ctx.kam_toml
@@ -953,6 +1095,7 @@ mod tests {
             webui_port: None,
             webui_local_port: None,
             restart_command: None,
+            session_log: PathBuf::from("/tmp/kam-dev-test/.kam/dev/last-session.log"),
             output_dir: PathBuf::from("/tmp/kam-dev-test/dist"),
             build_args,
             mcp,

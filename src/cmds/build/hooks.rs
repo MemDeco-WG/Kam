@@ -352,6 +352,17 @@ fn run_hooks(
     add_env("KAM_MODULE_ROOT", module_root.to_string_lossy().to_string());
     add_env("KAM_WEB_ROOT", web_root.to_string_lossy().to_string());
     add_env("KAM_DIST_DIR", output_dir.to_string_lossy().to_string());
+    if stage.starts_with("dev-") {
+        add_env(
+            "KAM_DEV_SESSION_LOG",
+            project_root
+                .join(".kam")
+                .join("dev")
+                .join("last-session.log")
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
     add_env("KAM_MODULE_ID", kam_toml.prop.id.clone());
     add_env("KAM_MODULE_VERSION", kam_toml.prop.version.clone());
     add_env(

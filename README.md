@@ -642,7 +642,7 @@ synchronizes allowlisted hot files to `/data/adb/modules/<id>`, runs
 - `--webui` - Run WebUI dev hooks, sync `webroot/**`, and forward the configured WebUI port.
 - `--sync-only` - Skip dev-build hooks and only sync allowlisted files.
 - `--install` - Run dev build hooks, build a ZIP, install it over adb, then run `hooks/dev-install/`.
-- `--logs` - Print declared module logs and recent logcat output.
+- `--logs` - Print the last Kam dev session log, install logs, declared module logs, and filtered logcat output.
 - `--mcp` - Forward, enable, and check the standard module MCP runtime.
 - `--forward <mcp:webui>` - Forward named endpoints.
 - `--dry-run` - Print planned local/device writes and commands.
@@ -707,6 +707,12 @@ Hot sync uses an allowlist and skips `.config/**` by default so runtime/user
 configuration such as subscriptions is not overwritten accidentally. Every dev
 action prints device paths before writing, and file pushes back up existing
 device files to `<path>.bak` before replacing them.
+
+Kam records the latest dev session plan and stage summary at
+`.kam/dev/last-session.log`. `kam dev --logs` prints that local session log,
+common manager install logs, configured device log globs, and recent `logcat`
+lines filtered by module id. Dev hooks receive `KAM_DEV_SESSION_LOG` and can
+append detailed hook output to the same file.
 
 ### `kam mcp` - Standard Module MCP Runtime
 
@@ -1094,7 +1100,8 @@ The following environment variables are available in hook scripts:
 | `KAM_MODULE_AUTHOR` | The module author |
 | `KAM_MODULE_DESCRIPTION` | The module description |
 | `KAM_MODULE_UPDATE_JSON` | The module updateJson URL |
-| `KAM_STAGE` | Current build stage: `pre-build` or `post-build` |
+| `KAM_STAGE` | Current hook stage, such as `pre-build`, `post-build`, `dev-build`, `dev-webui`, or `dev-binary` |
+| `KAM_DEV_SESSION_LOG` | Latest dev-session log path for `dev-*` hooks; append hook details here for `kam dev --logs` |
 | `KAM_DEBUG` | Set to `1` to enable debug output |
 | `KAM_HOME` | Override Kam's home directory (defaults to `~/.kam/`). This controls where global configuration, caches, and secrets are stored. |
 

@@ -119,6 +119,13 @@ For Android inner-loop development, keep release-only checks in
 should be able to rebuild only WebUI assets or only module binaries without
 rerunning the full release build path.
 
+For `kam dev --logs`, expect Kam to print `.kam/dev/last-session.log`, common
+manager install logs, configured device module logs, and recent `logcat` lines
+filtered by module id. Prefer adding project-specific log paths under
+`[dev].logs` instead of hard-coding module names in Kam. Dev hooks receive
+`KAM_DEV_SESSION_LOG`; use it when a hook needs to persist detailed output for
+the next `kam dev --logs` run.
+
 ## Build And Validate
 
 Minimum validation for module work:
