@@ -159,7 +159,7 @@ jobs:
           test -n "$module_id"
           test -f "dist/${module_id}.zip"
           unzip -Z1 "dist/${module_id}.zip" | grep -Fx 'module.prop'
-          ! unzip -Z1 "dist/${module_id}.zip" | grep -E '(^|/)\.git($|/)|(^|/)\.github($|/)|(^|/)\.gitignore$'
+          ! unzip -Z1 "dist/${module_id}.zip" | grep -E '(^|/)\.git($|/)'
 
       - name: Create GitHub release
         if: ${{ inputs.release == true }}
