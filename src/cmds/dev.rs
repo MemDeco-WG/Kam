@@ -11,8 +11,8 @@ use std::time::{Duration, SystemTime};
 use crate::cmds::build::args::BuildArgs;
 use crate::cmds::build::build_project::determine_output_dir;
 use crate::cmds::build::hooks::{
-    run_dev_build_hooks, run_dev_install_hooks, run_dev_start_hooks, run_dev_stop_hooks,
-    run_dev_sync_hooks,
+    run_dev_binary_hooks, run_dev_build_hooks, run_dev_install_hooks, run_dev_start_hooks,
+    run_dev_stop_hooks, run_dev_sync_hooks, run_dev_webui_hooks,
 };
 use crate::cmds::install::InstallArgs;
 use crate::cmds::mcp::{self, McpCommand, McpRuntime};
@@ -28,7 +28,7 @@ pub struct DevArgs {
     pub command: Option<DevCommand>,
 
     /// adb device serial. Use auto to require exactly one connected device.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub device: Option<String>,
 
     /// Watch source files and repeat dev build/sync when they change.
@@ -64,7 +64,7 @@ pub struct DevArgs {
     pub forward: Vec<String>,
 
     /// Print planned local and device writes without executing them.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub dry_run: bool,
 }
 
@@ -92,6 +92,15 @@ struct DevContext {
     output_dir: PathBuf,
     build_args: BuildArgs,
     mcp: McpRuntime,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct WatchPlan {
+    changed: Vec<PathBuf>,
+    webui: bool,
+    binary: bool,
+    hot_files: Vec<PathBuf>,
+    structure: bool,
 }
 
 /// Run the dev command.
@@ -227,15 +236,29 @@ fn run_once(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
             &ctx.build_args,
         )?;
     } else {
-        if !args.sync_only && !args.hot {
+        if args.webui {
+            if args.sync_only {
+                Utils::info("Sync-only mode: skipping dev-webui hooks.");
+            } else {
+                run_dev_webui_hooks(
+                    &ctx.project_root,
+                    &ctx.kam_toml,
+                    &ctx.output_dir,
+                    &ctx.build_args,
+                )?;
+            }
+            sync_matching_hot_files(ctx, &["webroot/**"])?;
+        } else if !args.sync_only && !args.hot {
             run_dev_build_hooks(
                 &ctx.project_root,
                 &ctx.kam_toml,
                 &ctx.output_dir,
                 &ctx.build_args,
             )?;
+            sync_hot_files(ctx)?;
+        } else {
+            sync_hot_files(ctx)?;
         }
-        sync_hot_files(ctx)?;
         run_dev_sync_hooks(
             &ctx.project_root,
             &ctx.kam_toml,
@@ -278,7 +301,7 @@ fn print_plan(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
     } else {
         Utils::info("Mode: dev build + hot sync");
     }
-    for file in collect_hot_files(ctx)? {
+    for file in planned_hot_files(ctx, args)? {
         Utils::info(format!(
             "Will write device file: {}",
             remote_path(ctx, &file)?.display()
@@ -297,15 +320,109 @@ fn print_plan(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
     Ok(())
 }
 
-fn sync_hot_files(ctx: &DevContext) -> Result<(), KamError> {
-    for file in collect_hot_files(ctx)? {
-        push_file_with_backup(ctx, &file)?;
+fn planned_hot_files(ctx: &DevContext, args: &DevArgs) -> Result<Vec<PathBuf>, KamError> {
+    if args.webui {
+        collect_matching_hot_files(ctx, &["webroot/**"])
+    } else {
+        collect_hot_files(ctx)
     }
+}
+
+fn sync_hot_files(ctx: &DevContext) -> Result<(), KamError> {
+    sync_selected_hot_files(ctx, &collect_hot_files(ctx)?)?;
+    run_restart_command(ctx)?;
+    Ok(())
+}
+
+fn sync_selected_hot_files(ctx: &DevContext, files: &[PathBuf]) -> Result<(), KamError> {
+    for file in files {
+        Utils::info(format!(
+            "Writing device file: {}",
+            remote_path(ctx, file)?.display()
+        ));
+        push_file_with_backup(ctx, file)?;
+    }
+    Ok(())
+}
+
+fn sync_matching_hot_files(ctx: &DevContext, patterns: &[&str]) -> Result<(), KamError> {
+    let files = collect_matching_hot_files(ctx, patterns)?;
+    sync_selected_hot_files(ctx, &files)?;
+    Ok(())
+}
+
+fn collect_matching_hot_files(
+    ctx: &DevContext,
+    patterns: &[&str],
+) -> Result<Vec<PathBuf>, KamError> {
+    let all = collect_hot_files(ctx)?;
+    let patterns = compile_patterns(
+        &patterns
+            .iter()
+            .map(|pattern| (*pattern).to_string())
+            .collect::<Vec<_>>(),
+    )?;
+    let mut files = Vec::new();
+    for file in all {
+        let rel = file.strip_prefix(&ctx.module_root).map_err(|_| {
+            KamError::InvalidDirectory(format!(
+                "{} is outside {}",
+                file.display(),
+                ctx.module_root.display()
+            ))
+        })?;
+        let rel_str = rel.to_string_lossy().replace('\\', "/");
+        if patterns.iter().any(|pattern| pattern.matches(&rel_str)) {
+            files.push(file);
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+fn sync_incremental_hot_files(ctx: &DevContext, files: &[PathBuf]) -> Result<(), KamError> {
+    let mut selected = Vec::new();
+    for file in files {
+        if file.exists() && is_allowed_hot_file(ctx, file)? {
+            selected.push(file.clone());
+        }
+    }
+    selected.sort();
+    selected.dedup();
+    if selected.is_empty() {
+        Utils::info("No changed files matched the hot sync allowlist.");
+    } else {
+        sync_selected_hot_files(ctx, &selected)?;
+    }
+    Ok(())
+}
+
+fn run_restart_command(ctx: &DevContext) -> Result<(), KamError> {
     if let Some(command) = &ctx.restart_command {
         Utils::info(format!("Running restart command: {command}"));
         adb_root(ctx, command)?;
     }
     Ok(())
+}
+
+fn is_allowed_hot_file(ctx: &DevContext, file: &Path) -> Result<bool, KamError> {
+    if !file.is_file() {
+        return Ok(false);
+    }
+    matches_hot_path(ctx, file)
+}
+
+fn matches_hot_path(ctx: &DevContext, file: &Path) -> Result<bool, KamError> {
+    let Ok(rel) = file.strip_prefix(&ctx.module_root) else {
+        return Ok(false);
+    };
+    let rel_str = rel.to_string_lossy().replace('\\', "/");
+    if rel_str.starts_with(".config/") {
+        return Ok(false);
+    }
+    Ok(compile_patterns(&ctx.hot_patterns)?
+        .iter()
+        .any(|pattern| pattern.matches(&rel_str)))
 }
 
 fn collect_hot_files(ctx: &DevContext) -> Result<Vec<PathBuf>, KamError> {
@@ -463,6 +580,8 @@ fn doctor(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
     }
     for stage in [
         "dev-build",
+        "dev-webui",
+        "dev-binary",
         "dev-sync",
         "dev-install",
         "dev-start",
@@ -488,73 +607,148 @@ fn watch(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
         thread::sleep(Duration::from_secs(2));
         let current = snapshot(ctx)?;
         if current != previous {
-            report_watch_changes(ctx, &previous, &current);
-            run_once(
-                ctx,
-                &DevArgs {
-                    watch: false,
-                    ..args.clone()
-                },
-            )?;
+            let plan = plan_watch_changes(ctx, &previous, &current)?;
+            report_watch_plan(ctx, &plan);
+            run_incremental(ctx, args, &plan)?;
             previous = current;
         }
     }
 }
 
-fn report_watch_changes(
+fn plan_watch_changes(
     ctx: &DevContext,
     previous: &BTreeMap<PathBuf, SystemTime>,
     current: &BTreeMap<PathBuf, SystemTime>,
-) {
+) -> Result<WatchPlan, KamError> {
     let changed = changed_files(previous, current);
     if changed.is_empty() {
-        Utils::info("Detected file changes; running dev build/sync.");
-        return;
+        return Ok(WatchPlan::default());
     }
-    let mut webui = false;
-    let mut binary = false;
-    let mut script_or_config = false;
-    let mut structure = false;
-    for file in &changed {
-        let rel = file
-            .strip_prefix(&ctx.project_root)
-            .unwrap_or(file)
-            .to_string_lossy()
-            .replace('\\', "/");
-        if rel.starts_with("webui/") || rel.contains("/webroot/") {
-            webui = true;
-        } else if rel.starts_with("crates/") || rel.contains("/.local/bin/") {
-            binary = true;
-        } else if has_ext(&rel, "sh")
-            || has_ext(&rel, "prop")
-            || has_ext(&rel, "rule")
-            || rel.contains("templates/")
-        {
-            script_or_config = true;
+
+    let mut plan = WatchPlan {
+        changed,
+        ..WatchPlan::default()
+    };
+
+    for file in &plan.changed {
+        let rel_project = rel_to_project(ctx, file);
+        if rel_project.starts_with("webui/") {
+            plan.webui = true;
+        } else if rel_project.starts_with("crates/") {
+            plan.binary = true;
+        } else if is_module_rel(ctx, file, "webroot/") {
+            plan.webui = true;
+        } else if is_module_rel(ctx, file, ".local/bin/") {
+            plan.binary = true;
+        } else if matches_hot_path(ctx, file)? {
+            plan.hot_files.push(file.clone());
         } else {
-            structure = true;
+            plan.structure = true;
         }
     }
-    if webui {
+
+    plan.hot_files.sort();
+    plan.hot_files.dedup();
+    Ok(plan)
+}
+
+fn report_watch_plan(ctx: &DevContext, plan: &WatchPlan) {
+    if plan.changed.is_empty() {
+        Utils::info("Detected file changes; no actionable path changes found.");
+        return;
+    }
+    for file in &plan.changed {
+        Utils::info(format!("Changed: {}", rel_to_project(ctx, file)));
+    }
+    if plan.webui {
+        Utils::info("Detected WebUI changes; running dev-webui hooks, then hot syncing webroot.");
+    }
+    if plan.binary {
         Utils::info(
-            "Detected WebUI changes; dev-build hooks may rebuild WebUI, then hot sync webroot.",
+            "Detected CLI/binary changes; running dev-binary hooks, then hot syncing .local/bin.",
         );
     }
-    if binary {
-        Utils::info(
-            "Detected CLI/binary changes; dev-build hooks may rebuild .local/bin, then hot sync binaries.",
-        );
+    if !plan.hot_files.is_empty() {
+        Utils::info("Detected hot-file changes; pushing matching allowlisted files.");
     }
-    if script_or_config {
-        Utils::info(
-            "Detected script/config changes; hot sync will push matching allowlisted files.",
-        );
-    }
-    if structure {
+    if plan.structure {
         Utils::warn(
             "Detected module structure changes; a full `kam dev --install` may be required.",
         );
     }
+}
+
+fn run_incremental(ctx: &DevContext, args: &DevArgs, plan: &WatchPlan) -> Result<(), KamError> {
+    if plan.changed.is_empty() {
+        return Ok(());
+    }
+
+    detect_device(ctx)?;
+    if plan.webui {
+        if args.sync_only {
+            Utils::info("Sync-only mode: skipping dev-webui hooks.");
+        } else {
+            run_dev_webui_hooks(
+                &ctx.project_root,
+                &ctx.kam_toml,
+                &ctx.output_dir,
+                &ctx.build_args,
+            )?;
+        }
+        sync_matching_hot_files(ctx, &["webroot/**"])?;
+    }
+    if plan.binary {
+        if args.sync_only {
+            Utils::info("Sync-only mode: skipping dev-binary hooks.");
+        } else {
+            run_dev_binary_hooks(
+                &ctx.project_root,
+                &ctx.kam_toml,
+                &ctx.output_dir,
+                &ctx.build_args,
+            )?;
+        }
+        sync_matching_hot_files(ctx, &[".local/bin/**"])?;
+    }
+    if !plan.hot_files.is_empty() {
+        sync_incremental_hot_files(ctx, &plan.hot_files)?;
+    }
+    if plan.webui || plan.binary || !plan.hot_files.is_empty() {
+        run_dev_sync_hooks(
+            &ctx.project_root,
+            &ctx.kam_toml,
+            &ctx.output_dir,
+            &ctx.build_args,
+        )?;
+        run_restart_command(ctx)?;
+    }
+    if plan.structure {
+        Utils::warn(
+            "Skipped non-hot structural changes. Run `kam dev --install` for a full install.",
+        );
+    }
+    run_forwards(ctx, args, false)?;
+    if args.mcp {
+        enable_mcp(ctx, false)?;
+    }
+    if args.logs {
+        show_logs(ctx, false)?;
+    }
+    Ok(())
+}
+
+fn rel_to_project(ctx: &DevContext, file: &Path) -> String {
+    file.strip_prefix(&ctx.project_root)
+        .unwrap_or(file)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn is_module_rel(ctx: &DevContext, file: &Path, prefix: &str) -> bool {
+    file.strip_prefix(&ctx.module_root)
+        .ok()
+        .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+        .is_some_and(|rel| rel.starts_with(prefix))
 }
 
 fn changed_files(
@@ -568,12 +762,6 @@ fn changed_files(
         .into_iter()
         .filter(|file| previous.get(file) != current.get(file))
         .collect()
-}
-
-fn has_ext(path: &str, ext: &str) -> bool {
-    Path::new(path)
-        .extension()
-        .is_some_and(|value| value.eq_ignore_ascii_case(ext))
 }
 
 fn snapshot(ctx: &DevContext) -> Result<BTreeMap<PathBuf, SystemTime>, KamError> {
@@ -716,5 +904,114 @@ fn check(label: &str, ok: bool) {
         Utils::success(format!("{label}: ok"));
     } else {
         Utils::warn(format!("{label}: check failed"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_context() -> DevContext {
+        let project_root = PathBuf::from("/tmp/kam-dev-test");
+        let module_id = "MagicNet".to_string();
+        let module_root = project_root.join("src").join(&module_id);
+        let kam_toml = KamToml::default();
+        let build_args = BuildArgs {
+            path: ".".to_string(),
+            all: false,
+            output: None,
+            bump: false,
+            release: false,
+            sign: false,
+            interactive: false,
+            pre_release: false,
+            quiet: false,
+            jobs: None,
+        };
+        let mcp = McpRuntime {
+            project_root: project_root.clone(),
+            module_id: module_id.clone(),
+            module_path: format!("/data/adb/modules/{module_id}"),
+            cli_path: format!("/data/adb/modules/{module_id}/cli"),
+            device: None,
+            device_port: 8765,
+            local_port: 8765,
+            endpoint: "/mcp".to_string(),
+            transport: "streamable-http".to_string(),
+        };
+        DevContext {
+            project_root,
+            kam_toml,
+            module_id,
+            module_root,
+            module_path: "/data/adb/modules/MagicNet".to_string(),
+            device: None,
+            hot_patterns: default_hot_patterns(),
+            watch_paths: Vec::new(),
+            logs: Vec::new(),
+            forwards: Vec::new(),
+            webui_port: None,
+            webui_local_port: None,
+            restart_command: None,
+            output_dir: PathBuf::from("/tmp/kam-dev-test/dist"),
+            build_args,
+            mcp,
+        }
+    }
+
+    fn snapshot_from(files: &[PathBuf]) -> BTreeMap<PathBuf, SystemTime> {
+        files
+            .iter()
+            .cloned()
+            .map(|file| (file, SystemTime::UNIX_EPOCH))
+            .collect()
+    }
+
+    fn changed_plan(file: PathBuf) -> WatchPlan {
+        let ctx = test_context();
+        let previous = BTreeMap::new();
+        let current = snapshot_from(&[file]);
+        plan_watch_changes(&ctx, &previous, &current).expect("watch plan")
+    }
+
+    #[test]
+    fn watch_plan_routes_webui_source_to_webui_stage() {
+        let ctx = test_context();
+        let plan = changed_plan(ctx.project_root.join("webui/src/App.tsx"));
+        assert!(plan.webui);
+        assert!(!plan.binary);
+        assert!(!plan.structure);
+        assert!(plan.hot_files.is_empty());
+    }
+
+    #[test]
+    fn watch_plan_routes_crate_source_to_binary_stage() {
+        let ctx = test_context();
+        let plan = changed_plan(ctx.project_root.join("crates/cli/src/main.rs"));
+        assert!(plan.binary);
+        assert!(!plan.webui);
+        assert!(!plan.structure);
+        assert!(plan.hot_files.is_empty());
+    }
+
+    #[test]
+    fn watch_plan_routes_allowlisted_script_to_hot_sync() {
+        let ctx = test_context();
+        let script = ctx.module_root.join("service.sh");
+        let plan = changed_plan(script.clone());
+        assert!(!plan.webui);
+        assert!(!plan.binary);
+        assert!(!plan.structure);
+        assert_eq!(plan.hot_files, vec![script]);
+    }
+
+    #[test]
+    fn watch_plan_treats_runtime_config_as_structure_not_hot() {
+        let ctx = test_context();
+        let plan = changed_plan(ctx.module_root.join(".config/subscription.json"));
+        assert!(!plan.webui);
+        assert!(!plan.binary);
+        assert!(plan.structure);
+        assert!(plan.hot_files.is_empty());
     }
 }

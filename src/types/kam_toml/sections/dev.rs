@@ -69,6 +69,8 @@ impl Default for DevSection {
                 "crates".to_string(),
                 "src/{{id}}".to_string(),
                 "hooks/dev-build".to_string(),
+                "hooks/dev-webui".to_string(),
+                "hooks/dev-binary".to_string(),
                 "hooks/dev-sync".to_string(),
             ]),
             logs: None,

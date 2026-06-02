@@ -288,11 +288,12 @@ fn parses_dev_command_variants() {
     assert_eq!(dev.device.as_deref(), Some("auto"));
     assert_eq!(dev.forward, vec!["mcp".to_string(), "webui".to_string()]);
 
-    let doctor = parse(&["kam", "dev", "doctor"]);
+    let doctor = parse(&["kam", "dev", "doctor", "--dry-run"]);
     let Some(Commands::Dev(dev)) = doctor.command else {
         panic!("expected dev command");
     };
     assert!(matches!(dev.command, Some(DevCommand::Doctor)));
+    assert!(dev.dry_run);
 }
 
 #[test]

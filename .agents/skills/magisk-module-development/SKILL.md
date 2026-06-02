@@ -95,6 +95,13 @@ Use hooks for build-time generation, not runtime side effects.
 
 - `hooks/pre-build/`: generate files, sync metadata, build web assets, prepare payloads.
 - `hooks/post-build/`: inspect or sign artifacts, copy release files, emit summaries.
+- `hooks/dev-build/`: local development build work for `kam dev`.
+- `hooks/dev-webui/`: incremental WebUI rebuilds used by `kam dev --watch`
+  before syncing `webroot/**`.
+- `hooks/dev-binary/`: incremental CLI/binary rebuilds used by
+  `kam dev --watch` before syncing `.local/bin/**`.
+- `hooks/dev-sync/`: post-sync actions after hot files are pushed to a device.
+- `hooks/dev-install/`: post-install actions for `kam dev --install`.
 - Hook order is controlled by numeric prefixes.
 - Template-provided hooks use uppercase marker names such as `0.EXAMPLE.sh`.
 
@@ -106,6 +113,11 @@ set -euo pipefail
 ```
 
 Use Kam-provided environment variables where available, such as module root, project root, build output paths, and template variables. Inspect existing hooks before inventing new variable names.
+
+For Android inner-loop development, keep release-only checks in
+`hooks/pre-build/` and put fast iteration work in dev hooks. `kam dev --watch`
+should be able to rebuild only WebUI assets or only module binaries without
+rerunning the full release build path.
 
 ## Build And Validate
 

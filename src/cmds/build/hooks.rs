@@ -55,6 +55,32 @@ pub fn run_dev_build_hooks(
     run_hooks(project_root, kam_toml, output_dir, "dev-build", args)
 }
 
+/// Run dev-webui hooks used by incremental `kam dev --watch`.
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
+pub fn run_dev_webui_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    args: &BuildArgs,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "dev-webui", args)
+}
+
+/// Run dev-binary hooks used by incremental `kam dev --watch`.
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
+pub fn run_dev_binary_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    args: &BuildArgs,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "dev-binary", args)
+}
+
 /// Run dev-sync hooks used by `kam dev`.
 ///
 /// # Errors
