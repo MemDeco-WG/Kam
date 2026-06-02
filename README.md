@@ -621,6 +621,107 @@ kam install --manager KernelSU my_module.zip
 kam install --dry-run my_module.zip
 ```
 
+### `kam dev` - Android Module Development Session
+
+Start a fast development loop for a connected Android root device. `kam build`
+remains the release-oriented command; `kam dev` is for iteration, hot sync,
+port forwarding, MCP, and logs.
+
+```bash
+kam dev [OPTIONS] [COMMAND]
+```
+
+Default `kam dev` detects the project and adb device, runs `hooks/dev-build/`,
+synchronizes allowlisted hot files to `/data/adb/modules/<id>`, runs
+`hooks/dev-sync/` and `hooks/dev-start/`, then prints device entry points.
+
+**Options:**
+- `--device <serial|auto>` - Select an adb device. `auto` is the default.
+- `--watch` - Poll hot files and repeat dev build/sync on changes.
+- `--sync-only` - Skip dev-build hooks and only sync allowlisted files.
+- `--install` - Run dev build hooks, build a ZIP, install it over adb, then run `hooks/dev-install/`.
+- `--logs` - Print declared module logs and recent logcat output.
+- `--mcp` - Forward, enable, and check the standard module MCP runtime.
+- `--forward <mcp:webui>` - Forward named endpoints.
+- `--dry-run` - Print planned local/device writes and commands.
+
+**Examples:**
+```bash
+kam dev --watch --device auto
+kam dev --sync-only --logs
+kam dev --install
+kam dev --mcp
+kam dev doctor
+```
+
+Dev hooks are separate from release hooks:
+
+```text
+hooks/dev-build/
+hooks/dev-sync/
+hooks/dev-install/
+hooks/dev-start/
+hooks/dev-stop/
+```
+
+Configure hot sync and logs in `kam.toml`:
+
+```toml
+[dev]
+device = "auto"
+module_path = "/data/adb/modules/MagicNet"
+hot = ["webroot/**", "service.sh", "action.sh", ".local/bin/**", "templates/**"]
+logs = ["/data/adb/modules/MagicNet/logs/*.log"]
+forward = ["mcp"]
+```
+
+Hot sync uses an allowlist and skips `.config/**` by default so runtime/user
+configuration such as subscriptions is not overwritten accidentally. Every dev
+action prints device paths before writing, and file pushes back up existing
+device files to `<path>.bak` before replacing them.
+
+### `kam mcp` - Standard Module MCP Runtime
+
+Manage the Kam Dev Runtime Contract v1 for module MCP servers. Any module can
+opt in by exposing a standard CLI at `/data/adb/modules/<id>/cli`.
+
+```bash
+kam mcp <enable|disable|status|forward>
+```
+
+Contract:
+- Module root: `/data/adb/modules/<module_id>`
+- Standard CLI: `/data/adb/modules/<module_id>/cli`
+- MCP commands: `cli mcp enable`, `cli mcp disable`, `cli mcp status`, `cli mcp status --json`
+- Transport: Streamable HTTP
+- Default endpoint: `http://127.0.0.1:8765/mcp`
+
+`cli mcp status --json` should return:
+
+```json
+{
+  "enabled": true,
+  "running": true,
+  "pid": 1234,
+  "host": "127.0.0.1",
+  "port": 8765,
+  "endpoint": "/mcp",
+  "transport": "streamable-http"
+}
+```
+
+`kam dev --mcp` is equivalent to `kam mcp forward`, `kam mcp enable`, and
+`kam mcp status --json`.
+
+```toml
+[dev.mcp]
+enabled = true
+port = 8765
+local_port = 8765
+endpoint = "/mcp"
+transport = "streamable-http"
+```
+
 ### `kam export` - Export Configuration
 
 Export `kam.toml` to `module.prop`, `module.json`, `repo.json`, `track.json`, `config.json`, `update.json`.

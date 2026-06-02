@@ -1,7 +1,9 @@
 use super::{Cli, Commands, inject_double_dash_for_targets};
 use crate::cmds::add::{AddCommands, HookPhase, ScriptPhase, WebuiTemplate};
 use crate::cmds::cache::{CacheCommands, TemplateCacheCommands};
+use crate::cmds::dev::DevCommand;
 use crate::cmds::init::KernelSuRepoMode;
+use crate::cmds::mcp::McpCommand;
 use crate::cmds::repo::RepoCommand;
 use crate::cmds::secret::SecretCommands;
 use crate::cmds::sync::SyncCommand;
@@ -189,6 +191,9 @@ fn parses_every_top_level_subcommand_variant() {
         (&["kam", "add", "script", "service"], |cmd| {
             matches!(cmd, Commands::Add(_))
         }),
+        (&["kam", "dev", "--sync-only"], |cmd| {
+            matches!(cmd, Commands::Dev(_))
+        }),
         (&["kam", "build"], |cmd| matches!(cmd, Commands::Build(_))),
         (&["kam", "version"], |cmd| {
             matches!(cmd, Commands::Version(_))
@@ -228,6 +233,9 @@ fn parses_every_top_level_subcommand_variant() {
         (&["kam", "install", "module.zip"], |cmd| {
             matches!(cmd, Commands::Install(_))
         }),
+        (&["kam", "mcp", "status"], |cmd| {
+            matches!(cmd, Commands::Mcp(_))
+        }),
         (&["kam", "publish", "--dry-run"], |cmd| {
             matches!(cmd, Commands::Publish(_))
         }),
@@ -250,6 +258,54 @@ fn parses_every_top_level_subcommand_variant() {
             "unexpected command variant for args: {args:?}"
         );
     }
+}
+
+#[test]
+fn parses_dev_command_variants() {
+    let dev = parse(&[
+        "kam",
+        "dev",
+        "--watch",
+        "--device",
+        "auto",
+        "--sync-only",
+        "--mcp",
+        "--logs",
+        "--forward",
+        "mcp:webui",
+    ]);
+    let Some(Commands::Dev(dev)) = dev.command else {
+        panic!("expected dev command");
+    };
+    assert!(dev.watch);
+    assert!(dev.sync_only);
+    assert!(dev.mcp);
+    assert!(dev.logs);
+    assert_eq!(dev.device.as_deref(), Some("auto"));
+    assert_eq!(dev.forward, vec!["mcp".to_string(), "webui".to_string()]);
+
+    let doctor = parse(&["kam", "dev", "doctor"]);
+    let Some(Commands::Dev(dev)) = doctor.command else {
+        panic!("expected dev command");
+    };
+    assert!(matches!(dev.command, Some(DevCommand::Doctor)));
+}
+
+#[test]
+fn parses_mcp_command_variants() {
+    let status = parse(&["kam", "mcp", "--device", "abc", "status", "--json"]);
+    let Some(Commands::Mcp(mcp)) = status.command else {
+        panic!("expected mcp command");
+    };
+    assert_eq!(mcp.device.as_deref(), Some("abc"));
+    assert!(matches!(mcp.command, McpCommand::Status { json: true }));
+
+    let forward = parse(&["kam", "mcp", "--local-port", "9876", "forward"]);
+    let Some(Commands::Mcp(mcp)) = forward.command else {
+        panic!("expected mcp command");
+    };
+    assert_eq!(mcp.local_port, Some(9876));
+    assert!(matches!(mcp.command, McpCommand::Forward));
 }
 
 #[test]

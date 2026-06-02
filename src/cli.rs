@@ -56,6 +56,9 @@ pub enum Commands {
     /// Add scripts, hooks, WebUI assets, or kamfw imports to an existing project
     Add(crate::cmds::add::AddArgs),
 
+    /// Start a fast Android module development session
+    Dev(crate::cmds::dev::DevArgs),
+
     /// Build and package a module into a deployable ZIP artifact
     Build(crate::cmds::build::BuildArgs),
 
@@ -102,6 +105,9 @@ pub enum Commands {
 
     /// Act as a compatibility layer for Magisk, `KernelSU`, and `APatchSU` to install modules (delegates to configured root manager)
     Install(crate::cmds::install::InstallArgs),
+
+    /// Manage standard module MCP runtime commands and port forwarding
+    Mcp(crate::cmds::mcp::McpArgs),
 
     /// Publish build artifacts to a GitHub Release
     Publish(crate::cmds::publish::PublishArgs),

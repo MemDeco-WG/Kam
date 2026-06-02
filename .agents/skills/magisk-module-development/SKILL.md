@@ -166,6 +166,54 @@ For Magisk/KernelSU/APatch module scripts:
 - Do not assume writable system partitions; use overlay/module paths.
 - Gate destructive actions behind clear file/path checks.
 
+## Kam Dev Runtime MCP Contract
+
+When a Kam module exposes MCP for `kam dev --mcp` or `kam mcp`, implement the
+standard module CLI contract instead of hard-coding project-specific paths in
+Kam:
+
+- Module root: `/data/adb/modules/<module_id>`.
+- Standard CLI: `/data/adb/modules/<module_id>/cli`.
+- Recommended implementation: `cli -> .local/bin/<module_id>-cli` or another
+  project binary kept under `.local/bin/`.
+- MCP transport: Streamable HTTP.
+- MCP endpoint: `http://127.0.0.1:<port>/mcp`, with `8765` as the default port.
+- Required CLI commands:
+  - `cli mcp enable`
+  - `cli mcp disable`
+  - `cli mcp status`
+  - `cli mcp status --json`
+
+`cli mcp status --json` should return stable machine-readable fields:
+
+```json
+{
+  "enabled": true,
+  "running": true,
+  "pid": 1234,
+  "host": "127.0.0.1",
+  "port": 8765,
+  "endpoint": "/mcp",
+  "transport": "streamable-http"
+}
+```
+
+Project defaults belong in `kam.toml`:
+
+```toml
+[dev.mcp]
+enabled = true
+port = 8765
+local_port = 8765
+endpoint = "/mcp"
+transport = "streamable-http"
+```
+
+`kam mcp forward` should map `tcp:<local_port>` to `tcp:<port>`.
+`kam dev --mcp` should behave like `kam mcp forward`, `kam mcp enable`, then
+`kam mcp status --json`. Keep module-specific server startup and status logic
+inside the module CLI.
+
 ## Common Fix Patterns
 
 - Build fails because generated metadata is stale: edit `kam.toml`, run `kam export`, then `kam check`.

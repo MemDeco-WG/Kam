@@ -42,6 +42,71 @@ pub fn run_post_build_hooks(
     run_hooks(project_root, kam_toml, output_dir, "post-build", args)
 }
 
+/// Run dev-build hooks used by `kam dev`.
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
+pub fn run_dev_build_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    args: &BuildArgs,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "dev-build", args)
+}
+
+/// Run dev-sync hooks used by `kam dev`.
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
+pub fn run_dev_sync_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    args: &BuildArgs,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "dev-sync", args)
+}
+
+/// Run dev-install hooks used by `kam dev --install`.
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
+pub fn run_dev_install_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    args: &BuildArgs,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "dev-install", args)
+}
+
+/// Run dev-start hooks used when a `kam dev` session starts.
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
+pub fn run_dev_start_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    args: &BuildArgs,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "dev-start", args)
+}
+
+/// Run dev-stop hooks used when a `kam dev` session stops.
+///
+/// # Errors
+/// Returns `KamError` if hook discovery or execution fails.
+pub fn run_dev_stop_hooks(
+    project_root: &Path,
+    kam_toml: &KamToml,
+    output_dir: &Path,
+    args: &BuildArgs,
+) -> Result<(), KamError> {
+    run_hooks(project_root, kam_toml, output_dir, "dev-stop", args)
+}
+
 // 运行hooks的核心函数
 // 这个函数有点长，但逻辑还算清晰
 /// Execute hooks for the given stage (pre-build or post-build).

@@ -489,6 +489,7 @@ fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
     match cli.command {
         Some(Commands::Init(args)) => kam::cmds::init::run(&args),
         Some(Commands::Add(args)) => kam::cmds::add::run(&args),
+        Some(Commands::Dev(args)) => kam::cmds::dev::run(&args),
         Some(Commands::Build(args)) => kam::cmds::build::run(&args),
         Some(Commands::Version(args)) => kam::cmds::version::run(args),
         Some(Commands::Cache(args)) => kam::cmds::cache::run(args),
@@ -504,6 +505,7 @@ fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
         Some(Commands::Config(args)) => kam::cmds::config::run(args),
         Some(Commands::Toml(args)) => kam::cmds::toml::run(args),
         Some(Commands::Install(args)) => kam::cmds::install::run(&args),
+        Some(Commands::Mcp(args)) => kam::cmds::mcp::run(&args),
         Some(Commands::Publish(args)) => kam::cmds::publish::run(&args),
         Some(Commands::Workflow(args)) => kam::cmds::workflow::run(&args),
         Some(Commands::Repo(args)) => {
