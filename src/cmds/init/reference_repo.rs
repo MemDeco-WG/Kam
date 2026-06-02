@@ -71,6 +71,25 @@ fn additional_authors(data: &PreInitData) -> Vec<Value> {
     authors
 }
 
+fn clean_summary(summary: &str, fallback_name: &str) -> String {
+    let trimmed = summary.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let invalid = trimmed.is_empty()
+        || lower.starts_with("<div")
+        || lower.starts_with("</div")
+        || lower.starts_with("<p")
+        || lower.starts_with("<img")
+        || lower.starts_with("<a ")
+        || lower.contains("img.shields.io")
+        || lower.contains("badge");
+
+    if invalid {
+        format!("{fallback_name} KernelSU module")
+    } else {
+        trimmed.to_string()
+    }
+}
+
 fn build_module_json(data: &PreInitData) -> Value {
     let mut root = Map::new();
     root.insert(
@@ -79,7 +98,7 @@ fn build_module_json(data: &PreInitData) -> Value {
     );
     root.insert(
         "summary".to_string(),
-        Value::String(data.description.clone()),
+        Value::String(clean_summary(&data.description, &data.name)),
     );
     root.insert(
         "sourceUrl".to_string(),
@@ -150,4 +169,25 @@ pub fn init_reference_repo(data: &PreInitData, force: bool) -> Result<(), KamErr
         data.path.display()
     ));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean_summary;
+
+    #[test]
+    fn summary_rejects_html_container_lines() {
+        assert_eq!(
+            clean_summary(r#"<div align="center">"#, "MagicNet"),
+            "MagicNet KernelSU module"
+        );
+    }
+
+    #[test]
+    fn summary_keeps_plain_text() {
+        assert_eq!(
+            clean_summary("A network module for Android.", "MagicNet"),
+            "A network module for Android."
+        );
+    }
 }
