@@ -166,23 +166,32 @@ For Magisk/KernelSU/APatch module scripts:
 - Do not assume writable system partitions; use overlay/module paths.
 - Gate destructive actions behind clear file/path checks.
 
-## Kam Dev Runtime MCP Contract
+## Kam Dev Runtime MCP Best Practice
 
-When a Kam module exposes MCP for `kam dev --mcp` or `kam mcp`, implement the
-standard module CLI contract instead of hard-coding project-specific paths in
-Kam:
+When a Kam module exposes MCP for `kam dev --mcp`, `kam mcp`, or agent-driven
+module development, treat `cli mcp ...` as the standard integration surface.
+Do not make Kam know project-specific binary names, process managers, or server
+paths.
 
 - Module root: `/data/adb/modules/<module_id>`.
 - Standard CLI: `/data/adb/modules/<module_id>/cli`.
 - Recommended implementation: `cli -> .local/bin/<module_id>-cli` or another
   project binary kept under `.local/bin/`.
-- MCP transport: Streamable HTTP.
-- MCP endpoint: `http://127.0.0.1:<port>/mcp`, with `8765` as the default port.
+- MCP transport: HTTP Streamable MCP, reported as `streamable-http`.
+- MCP endpoint: `http://127.0.0.1:<port>/mcp`, with `8765` as the default
+  device and local port unless the project declares otherwise.
+- Device binding: prefer `127.0.0.1:<port>` on Android and expose it to the
+  workstation through `adb forward`, not through a public device interface.
 - Required CLI commands:
   - `cli mcp enable`
   - `cli mcp disable`
   - `cli mcp status`
   - `cli mcp status --json`
+- Command behavior:
+  - `enable` starts or enables the module MCP server and is idempotent.
+  - `disable` stops or disables the server and is idempotent.
+  - `status` prints a human-readable summary.
+  - `status --json` prints only JSON to stdout so Kam and agents can parse it.
 
 `cli mcp status --json` should return stable machine-readable fields:
 
@@ -198,6 +207,9 @@ Kam:
 }
 ```
 
+Keep these fields stable even if the module has richer internal state. Add
+extra fields only when they are backward-compatible.
+
 Project defaults belong in `kam.toml`:
 
 ```toml
@@ -209,10 +221,17 @@ endpoint = "/mcp"
 transport = "streamable-http"
 ```
 
-`kam mcp forward` should map `tcp:<local_port>` to `tcp:<port>`.
-`kam dev --mcp` should behave like `kam mcp forward`, `kam mcp enable`, then
-`kam mcp status --json`. Keep module-specific server startup and status logic
-inside the module CLI.
+Kam-side behavior:
+
+- `kam mcp forward` maps `tcp:<local_port>` to `tcp:<port>` with adb.
+- `kam mcp enable` calls `/data/adb/modules/<module_id>/cli mcp enable`.
+- `kam mcp status --json` calls the module CLI and expects JSON only.
+- `kam dev --mcp` behaves like `kam mcp forward`, `kam mcp enable`, then
+  `kam mcp status --json`.
+
+Do not implement MCP as stdio or SSE for Android module dev unless the user
+explicitly asks for a non-standard transport. The Kam module convention is HTTP
+Streamable MCP behind adb port forwarding.
 
 ## Common Fix Patterns
 

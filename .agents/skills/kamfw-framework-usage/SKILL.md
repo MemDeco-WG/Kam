@@ -146,6 +146,67 @@ watchdog stop network-check
 Start long-running watchdogs only from runtime phases such as `service`, not
 from install/customize paths.
 
+## Module CLI MCP Runtime
+
+When a kamfw-backed module exposes MCP, implement it behind the standard module
+CLI path:
+
+```text
+/data/adb/modules/<module_id>/cli
+```
+
+Best practice is to make `cli` a symlink or wrapper that dispatches to the real
+binary under `.local/bin/`, for example:
+
+```text
+cli -> .local/bin/<module_id>-cli
+```
+
+The CLI must support:
+
+```sh
+cli mcp enable
+cli mcp disable
+cli mcp status
+cli mcp status --json
+```
+
+Use HTTP Streamable MCP, reported as `streamable-http`, on the device loopback
+address. The default endpoint is:
+
+```text
+http://127.0.0.1:8765/mcp
+```
+
+Declare the defaults in `kam.toml` when the module supports `kam dev --mcp`:
+
+```toml
+[dev.mcp]
+enabled = true
+port = 8765
+local_port = 8765
+endpoint = "/mcp"
+transport = "streamable-http"
+```
+
+`cli mcp status --json` should print only JSON to stdout:
+
+```json
+{
+  "enabled": true,
+  "running": true,
+  "pid": 1234,
+  "host": "127.0.0.1",
+  "port": 8765,
+  "endpoint": "/mcp",
+  "transport": "streamable-http"
+}
+```
+
+Keep startup, pid files, sockets, and health checks inside the module CLI or
+module runtime scripts. Kam should only call the standard CLI and set adb port
+forwarding.
+
 ## Validation
 
 After kamfw changes, run the smallest checks that cover the touched helper:
