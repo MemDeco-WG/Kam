@@ -20,7 +20,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 use std::time::SystemTime;
 use tempfile::TempDir;
 
@@ -32,13 +32,18 @@ pub struct InstallArgs {
     /// the artifact in the project (dist) output directory.
     pub path: Option<PathBuf>,
 
-    /// Preferred root manager (overrides config). Valid values: Magisk, KernelSU, APatchSU
+    /// Preferred root manager (overrides config). Valid values: Auto, Magisk, KernelSU, APatchSU
     #[arg(long)]
     pub manager: Option<String>,
 
     /// Print the derived install command without executing it
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Install through adb: push the module ZIP to /data/local/tmp, then run the
+    /// selected root manager on the connected device via `adb shell su -c`.
+    #[arg(long)]
+    pub adb: bool,
 
     /// Verbose output showing install command output (stdout/stderr)
     #[arg(short = 'v', long, conflicts_with = "quiet")]
@@ -57,12 +62,12 @@ pub struct InstallArgs {
 /// Priority:
 /// 1) KAM_ROOT_MANAGER environment variable
 /// 2) ~/.kam/config.toml -> root.manager (or root_manager / manager fallback)
-///    Returns normalized manager name: "Magisk", "KernelSU", "APatchSU", or "Unknown"
+///    Returns normalized manager name: "Auto", "Magisk", "KernelSU", "APatchSU", or "Unknown"
 #[must_use]
 pub fn get_root_manager() -> String {
     // 1) env override
     if let Ok(env_val) = std::env::var("KAM_ROOT_MANAGER") {
-        let n = crate::utils::normalize_root_manager(&env_val);
+        let n = normalize_root_manager_or_auto(&env_val);
         if n != "Unknown" {
             return n;
         }
@@ -80,20 +85,20 @@ pub fn get_root_manager() -> String {
             if let Some(root_tbl) = v.get("root")
                 && let Some(m) = root_tbl.get("manager").and_then(|x| x.as_str())
             {
-                let n = crate::utils::normalize_root_manager(m);
+                let n = normalize_root_manager_or_auto(m);
                 if n != "Unknown" {
                     return n;
                 }
             }
             // Try fallback keys: root_manager or manager (looser)
             if let Some(m) = v.get("root_manager").and_then(|x| x.as_str()) {
-                let n = crate::utils::normalize_root_manager(m);
+                let n = normalize_root_manager_or_auto(m);
                 if n != "Unknown" {
                     return n;
                 }
             }
             if let Some(m) = v.get("manager").and_then(|x| x.as_str()) {
-                let n = crate::utils::normalize_root_manager(m);
+                let n = normalize_root_manager_or_auto(m);
                 if n != "Unknown" {
                     return n;
                 }
@@ -101,11 +106,53 @@ pub fn get_root_manager() -> String {
         }
     }
 
-    "Unknown".to_string()
+    "Auto".to_string()
 }
 
 // Normalization moved to the public utility `crate::utils::normalize_root_manager`.
 // This keeps the canonicalization logic in a shared, testable place.
+
+fn normalize_root_manager_or_auto(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.eq_ignore_ascii_case("auto") {
+        "Auto".to_string()
+    } else {
+        crate::utils::normalize_root_manager(trimmed)
+    }
+}
+
+fn detect_local_root_manager() -> String {
+    for (manager, cli_bin) in [
+        ("KernelSU", "ksud"),
+        ("Magisk", "magisk"),
+        ("APatchSU", "apd"),
+    ] {
+        if crate::utils::command_exists(cli_bin) {
+            return manager.to_string();
+        }
+    }
+    "Unknown".to_string()
+}
+
+fn resolve_root_manager(manager_override: Option<&str>) -> Result<String, KamError> {
+    let requested = manager_override.map_or_else(get_root_manager, normalize_root_manager_or_auto);
+    match requested.as_str() {
+        "Auto" => {
+            let detected = detect_local_root_manager();
+            if detected == "Unknown" {
+                Err(KamError::CommandFailed(
+                    "Unable to auto-detect root manager CLI. Install magisk/ksud/apd, set root.manager, or pass --manager.".to_string(),
+                ))
+            } else {
+                Ok(detected)
+            }
+        }
+        "Unknown" => Err(KamError::CommandFailed(crate::i18n::tr(
+            "install.unable_to_determine",
+        ))),
+        manager => Ok(manager.to_string()),
+    }
+}
 
 /// Resolve the install CLI and its arguments for a chosen manager.
 /// If `manager_override` is Some it will be normalized and used; otherwise the
@@ -114,29 +161,15 @@ fn get_install_cli_for_manager(
     path: &Path,
     manager_override: Option<&str>,
 ) -> Result<(String, Vec<String>), KamError> {
-    let manager = manager_override.map_or_else(get_root_manager, |m| {
-        crate::utils::normalize_root_manager(m)
-    });
+    get_install_cli_for_manager_path(&path.to_string_lossy(), manager_override)
+}
 
-    let p = path.to_string_lossy().to_string();
-
-    match manager.as_str() {
-        "Magisk" => Ok((
-            "magisk".to_string(),
-            vec!["--install-module".to_string(), p],
-        )),
-        "KernelSU" => Ok((
-            "ksud".to_string(),
-            vec!["module".to_string(), "install".to_string(), p],
-        )),
-        "APatchSU" => Ok((
-            "apd".to_string(),
-            vec!["module".to_string(), "install".to_string(), p],
-        )),
-        _ => Err(KamError::CommandFailed(crate::i18n::tr(
-            "install.unable_to_determine",
-        ))),
-    }
+fn get_install_cli_for_manager_path(
+    package_path: &str,
+    manager_override: Option<&str>,
+) -> Result<(String, Vec<String>), KamError> {
+    let manager = resolve_root_manager(manager_override)?;
+    install_cli_for_manager_name(&manager, package_path)
 }
 
 /// Resolve an artifact path to install.
@@ -650,12 +683,217 @@ fn is_command_not_found_error(output: &str) -> bool {
         || output_lower.contains("no such file or directory")
 }
 
+fn quote_shell_arg(arg: &str) -> String {
+    if arg.contains('\'') {
+        let escaped = arg.replace('\'', "'\"'\"'");
+        format!("'{escaped}'")
+    } else {
+        format!("'{arg}'")
+    }
+}
+
+fn shell_command(cli_bin: &str, cli_args: &[String]) -> String {
+    std::iter::once(cli_bin.to_string())
+        .chain(cli_args.iter().cloned())
+        .map(|s| quote_shell_arg(&s))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn adb_remote_path(artifact: &Path) -> Result<String, KamError> {
+    let file_name = artifact
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            KamError::PackageNotFound(format!(
+                "Unable to derive remote package name from {}",
+                artifact.display()
+            ))
+        })?;
+    Ok(format!("/data/local/tmp/{file_name}"))
+}
+
+fn run_status(mut cmd: Command, verbose: bool) -> Result<std::process::ExitStatus, KamError> {
+    if verbose {
+        cmd.stdin(Stdio::inherit());
+        Utils::run_and_stream_no_stderr_header(cmd).map_err(KamError::Io)
+    } else {
+        cmd.status().map_err(KamError::Io)
+    }
+}
+
+fn run_output(mut cmd: Command) -> Result<Output, KamError> {
+    cmd.output().map_err(KamError::Io)
+}
+
+fn adb_shell_su_output(shell_cmd: &str) -> Result<Output, KamError> {
+    let mut cmd = Command::new("adb");
+    cmd.arg("shell").arg("su").arg("-c").arg(shell_cmd);
+    run_output(cmd)
+}
+
+fn detect_adb_root_manager() -> Result<String, KamError> {
+    for (manager, cli_bin) in [
+        ("KernelSU", "ksud"),
+        ("Magisk", "magisk"),
+        ("APatchSU", "apd"),
+    ] {
+        let probe = format!("command -v {cli_bin} >/dev/null 2>&1");
+        let out = adb_shell_su_output(&probe)?;
+        if out.status.success() {
+            return Ok(manager.to_string());
+        }
+    }
+    Err(KamError::CommandFailed(
+        "Unable to auto-detect root manager on device via adb. Pass --manager Magisk, KernelSU, or APatchSU.".to_string(),
+    ))
+}
+
+fn resolve_adb_root_manager(manager_override: Option<&str>) -> Result<String, KamError> {
+    let requested = manager_override.map_or_else(get_root_manager, normalize_root_manager_or_auto);
+    match requested.as_str() {
+        "Auto" => detect_adb_root_manager(),
+        "Unknown" => Err(KamError::CommandFailed(crate::i18n::tr(
+            "install.unable_to_determine",
+        ))),
+        manager => Ok(manager.to_string()),
+    }
+}
+
+fn install_cli_for_manager_name(
+    manager: &str,
+    package_path: &str,
+) -> Result<(String, Vec<String>), KamError> {
+    match manager {
+        "Magisk" => Ok((
+            "magisk".to_string(),
+            vec!["--install-module".to_string(), package_path.to_string()],
+        )),
+        "KernelSU" => Ok((
+            "ksud".to_string(),
+            vec![
+                "module".to_string(),
+                "install".to_string(),
+                package_path.to_string(),
+            ],
+        )),
+        "APatchSU" => Ok((
+            "apd".to_string(),
+            vec![
+                "module".to_string(),
+                "install".to_string(),
+                package_path.to_string(),
+            ],
+        )),
+        _ => Err(KamError::CommandFailed(crate::i18n::tr(
+            "install.unable_to_determine",
+        ))),
+    }
+}
+
+fn execute_adb_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<(), KamError> {
+    if !crate::utils::command_exists("adb") {
+        return Err(KamError::CommandFailed(
+            "adb not found on PATH. Install Android platform-tools or disable --adb.".to_string(),
+        ));
+    }
+
+    let remote_path = adb_remote_path(artifact)?;
+
+    if args.dry_run {
+        let manager = args
+            .manager
+            .as_deref()
+            .map_or_else(get_root_manager, normalize_root_manager_or_auto);
+        let remote_install_cmd = if manager == "Auto" {
+            "<auto-detected root manager install command>".to_string()
+        } else {
+            let (cli_bin, cli_args) = install_cli_for_manager_name(&manager, &remote_path)?;
+            shell_command(&cli_bin, &cli_args)
+        };
+        if args.quiet {
+            println!("adb push {} {}", artifact.display(), remote_path);
+            println!("adb shell su -c {}", quote_shell_arg(&remote_install_cmd));
+        } else {
+            Utils::info(format!(
+                "Dry run: will execute 'adb push {} {}'",
+                artifact.display(),
+                remote_path
+            ));
+            Utils::info(format!(
+                "Dry run: will execute 'adb shell su -c {}'",
+                quote_shell_arg(&remote_install_cmd)
+            ));
+        }
+        return Ok(());
+    }
+
+    let manager = resolve_adb_root_manager(args.manager.as_deref())?;
+    let (cli_bin, cli_args) = install_cli_for_manager_name(&manager, &remote_path)?;
+    let remote_install_cmd = shell_command(&cli_bin, &cli_args);
+
+    if !args.quiet {
+        Utils::info(format!(
+            "Pushing module to device: {} -> {remote_path}",
+            artifact.display()
+        ));
+    }
+    let push_status = run_status(
+        {
+            let mut cmd = Command::new("adb");
+            cmd.arg("push").arg(artifact).arg(&remote_path);
+            cmd
+        },
+        args.verbose,
+    )?;
+    if !push_status.success() {
+        return Err(KamError::CommandFailed(format!(
+            "adb push failed with status: {push_status}"
+        )));
+    }
+
+    if !args.quiet {
+        Utils::info(format!(
+            "Installing on device via adb shell su -c {}",
+            quote_shell_arg(&remote_install_cmd)
+        ));
+    }
+    let install_status = run_status(
+        {
+            let mut cmd = Command::new("adb");
+            cmd.arg("shell")
+                .arg("su")
+                .arg("-c")
+                .arg(&remote_install_cmd);
+            cmd
+        },
+        true,
+    )?;
+    if install_status.success() {
+        if !args.quiet {
+            Utils::success(format!(
+                "Installed {} on connected device via adb",
+                artifact.display()
+            ));
+        }
+        Ok(())
+    } else {
+        Err(KamError::CommandFailed(format!(
+            "adb shell install failed with status: {install_status}. If multiple devices are connected, set ANDROID_SERIAL or use adb -s outside Kam."
+        )))
+    }
+}
+
 /// Perform the actual install once we have an artifact path. Extracted from the
 /// original `run` implementation so both local and git-based flows can share it.
 #[allow(clippy::too_many_lines)] // TODO: split into smaller helper functions
 fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<(), KamError> {
     if !args.quiet {
         Utils::section(&trf!("install.section", artifact.display()));
+    }
+
+    if args.adb {
+        return execute_adb_install_from_artifact(artifact, args);
     }
 
     let (cli_bin, cli_args) = get_install_cli_for_manager(artifact, args.manager.as_deref())?;
@@ -700,18 +938,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
                         || !crate::utils::command_exists(&cli_bin)); // CLI binary doesn't exist
 
                 if should_try_su {
-                    let cmd_str = std::iter::once(cli_bin.clone())
-                        .chain(cli_args.iter().cloned())
-                        .map(|s| {
-                            if s.contains('\'') {
-                                let escaped = s.replace('\'', "'\"'\"'");
-                                format!("'{escaped}'")
-                            } else {
-                                format!("'{s}'")
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" ");
+                    let cmd_str = shell_command(&cli_bin, &cli_args);
                     if !args.quiet {
                         Utils::info(&trf!("Attempting to execute via 'su -c': {}", cmd_str));
                     }
@@ -771,18 +998,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
 
                 // 只有在真正的权限错误时才尝试使用 su
                 if is_permission_error(&combined) && crate::utils::command_exists("su") {
-                    let cmd_str = std::iter::once(cli_bin.clone())
-                        .chain(cli_args.iter().cloned())
-                        .map(|s| {
-                            if s.contains('\'') {
-                                let escaped = s.replace('\'', "'\"'\"'");
-                                format!("'{escaped}'")
-                            } else {
-                                format!("'{s}'")
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" ");
+                    let cmd_str = shell_command(&cli_bin, &cli_args);
                     if !args.quiet {
                         Utils::info(&trf!("Attempting to execute via 'su -c': {}", cmd_str));
                     }
@@ -839,18 +1055,7 @@ fn execute_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<
         Err(e) => {
             if e.kind() == io::ErrorKind::NotFound {
                 if crate::utils::command_exists("su") {
-                    let cmd_str = std::iter::once(cli_bin.clone())
-                        .chain(cli_args.iter().cloned())
-                        .map(|s| {
-                            if s.contains('\'') {
-                                let escaped = s.replace('\'', "'\"'\"'");
-                                format!("'{escaped}'")
-                            } else {
-                                format!("'{s}'")
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" ");
+                    let cmd_str = shell_command(&cli_bin, &cli_args);
                     if !args.quiet {
                         Utils::info(&trf!("install.trying_su", cmd_str));
                     }
