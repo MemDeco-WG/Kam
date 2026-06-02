@@ -62,7 +62,7 @@ profile_file() {
 
 persist_path_hint() {
   profile="$(profile_file)"
-  marker='export PATH="$HOME/.cargo/bin:$PATH"'
+  marker="export PATH=\"\$HOME/.cargo/bin:\$PATH\""
   if [ -f "$profile" ] && grep -F "$marker" "$profile" >/dev/null 2>&1; then
     return 0
   fi

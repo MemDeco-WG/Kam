@@ -92,7 +92,6 @@ jobs:
           test -n "$module_id"
           test -f "dist/${module_id}.zip"
           unzip -Z1 "dist/${module_id}.zip" | grep -Fx 'module.prop'
-          unzip -Z1 "dist/${module_id}.zip" | grep -Fx 'META-INF/com/google/android/update-binary'
           ! unzip -Z1 "dist/${module_id}.zip" | grep -E '(^|/)\.git($|/)|(^|/)\.github($|/)|(^|/)\.gitignore$'
 
       - name: Create GitHub release

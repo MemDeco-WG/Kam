@@ -13,5 +13,5 @@ else
     log_info "ANDROID_NDK_HOME is set to $ANDROID_NDK_HOME"
 fi
 
-ndk_version=$(cat "$ANDROID_NDK_HOME/source.properties" | grep Pkg.Revision | cut -d '=' -f 2)
+ndk_version=$(grep Pkg.Revision "$ANDROID_NDK_HOME/source.properties" | cut -d '=' -f 2)
 log_info "NDK version: $ndk_version"
