@@ -134,36 +134,40 @@ pub fn export_multiple_templates(
 
         // Create a temporary tar.gz for this template
         let temp_archive_path = temp_dir.path().join(format!("{template_name}.tar.gz"));
-        let tar_file = File::create(&temp_archive_path).map_err(KamError::Io)?;
-        let encoder = GzEncoder::new(tar_file, Compression::default());
-        let mut archive = Builder::new(encoder);
 
         if template_path.is_dir() {
-            // Archive directory
-            for entry in WalkDir::new(&template_path) {
-                let entry = entry.map_err(|e| KamError::Io(e.into()))?;
-                let path = entry.path();
+            {
+                let tar_file = File::create(&temp_archive_path).map_err(KamError::Io)?;
+                let encoder = GzEncoder::new(tar_file, Compression::default());
+                let mut archive = Builder::new(encoder);
 
-                if path == template_path {
-                    continue;
+                // Archive directory
+                for entry in WalkDir::new(&template_path) {
+                    let entry = entry.map_err(|e| KamError::Io(e.into()))?;
+                    let path = entry.path();
+
+                    if path == template_path {
+                        continue;
+                    }
+
+                    let relative_path = path.strip_prefix(&template_path).map_err(|e| {
+                        KamError::InvalidDirectory(format!("strip_prefix failed: {e}"))
+                    })?;
+
+                    if path.is_file() {
+                        let mut file = File::open(path).map_err(KamError::Io)?;
+                        archive
+                            .append_file(relative_path, &mut file)
+                            .map_err(KamError::Io)?;
+                    } else if path.is_dir() {
+                        archive
+                            .append_dir(relative_path, path)
+                            .map_err(KamError::Io)?;
+                    }
                 }
 
-                let relative_path = path
-                    .strip_prefix(&template_path)
-                    .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {e}")))?;
-
-                if path.is_file() {
-                    let mut file = File::open(path).map_err(KamError::Io)?;
-                    archive
-                        .append_file(relative_path, &mut file)
-                        .map_err(KamError::Io)?;
-                } else if path.is_dir() {
-                    archive
-                        .append_dir(relative_path, path)
-                        .map_err(KamError::Io)?;
-                }
+                archive.finish().map_err(KamError::Io)?;
             }
-            archive.finish().map_err(KamError::Io)?;
         } else if template_path.is_file() {
             // If it's already an archive, use it directly
             fs::copy(&template_path, &temp_archive_path).map_err(KamError::Io)?;

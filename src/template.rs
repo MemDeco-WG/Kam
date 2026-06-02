@@ -187,6 +187,10 @@ impl TemplateCacheManager {
     /// # Errors
     /// Returns `KamError` if the cache directory cannot be accessed.
     pub fn resolve_template_path(template: &str) -> Result<Option<PathBuf>, KamError> {
+        if let Some(local_path) = Self::resolve_project_template_path(template) {
+            return Ok(Some(local_path));
+        }
+
         let cache_dir = Self::get_cache_dir()?;
 
         // Check for directory
@@ -205,6 +209,29 @@ impl TemplateCacheManager {
         }
 
         Ok(None)
+    }
+
+    fn resolve_project_template_path(template: &str) -> Option<PathBuf> {
+        for dir in crate::utils::PROJECT_TEMPLATE_DIRS {
+            let base = Path::new(dir);
+            if !base.is_dir() {
+                continue;
+            }
+
+            let dir_path = base.join(template);
+            if dir_path.is_dir() {
+                return Some(dir_path);
+            }
+
+            for ext in [".tar.gz", ".tgz", ".zip"] {
+                let archive_path = base.join(format!("{template}{ext}"));
+                if archive_path.is_file() {
+                    return Some(archive_path);
+                }
+            }
+        }
+
+        None
     }
 
     /// List local cached templates
