@@ -155,12 +155,35 @@ Kam 将模块的执行过程划分为不同的 **phase** (阶段)，例如 `post
 以下是 `kam` CLI 的一些主要命令。
 
 - `kam init`: 从模板创建一个新的模块项目。
+- `kam add`: 在现有 Kam 项目中新增运行脚本、构建 Hook、WebUI 骨架或 kamfw helper 导入。
 - `kam build`: 构建并打包模块为可部署的 ZIP 文件。
 - `kam sim`: 在本地仿真环境中运行模块。
 - `kam version`: 管理模块版本号。
+- `kam sync`: 根据当前项目配置同步生成的元数据、GitHub Actions 工作流和可选远程模板缓存。
 - `kam secret ksu-generate`: 生成 KernelSU developer P-256 密钥；如可交互且系统存在 `gpg`，默认用 `gpg` 加密私钥。
 - `kam secret ksu-submit`: 根据公钥生成 KernelSU developer keyring 申请 issue 表单 URL。
 - `kam secret ksu-revoke`: 根据序列号或证书生成 KernelSU developer 证书吊销 issue 表单 URL。
+
+常用新增文件命令：
+
+```bash
+kam add script service
+kam add hook pre-build sync-version --order 20
+kam add kamfw watchdog --phase service
+kam add webui
+```
+
+常用同步命令：
+
+```bash
+kam sync
+kam sync --check
+kam sync workflow --source-repo LIghtJUNction/MagicNet
+kam sync --remote templates
+kam sync --remote all
+```
+
+`kam sync workflow --source-repo <repo>` 适合 KernelSU Modules Repo 两种仓库形态：源码仓库与当前仓库一致时安装标准校验/构建工作流；不一致时安装上游 Release 镜像同步工作流。
 
 更多命令和详细用法，请使用 `kam --help` 查看。
 

@@ -222,6 +222,15 @@ kam secret ksu-revoke --username <github-user> --serial-number <serial> --reason
 
 ### Add Module Files
 
+For existing Kam projects, use `kam add` to create common files without re-running `kam init`:
+
+```bash
+kam add script service
+kam add hook pre-build sync-version --order 20
+kam add kamfw watchdog --phase service
+kam add webui
+```
+
 Add your module files to the `src/<module_id>/` directory:
 
 ```
@@ -405,6 +414,35 @@ kam init my_module -t ./tmpl/my_template --var repository=https://github.com/you
 kam init my_module --repo-mode reference --source-url https://github.com/you/my_module-source
 kam init my_module --tmpl
 ```
+
+### `kam add` - Add Common Project Parts
+
+Add scripts, build hooks, WebUI assets, or kamfw imports to an existing Kam project. Run it inside a directory that contains `kam.toml` or one of its subdirectories.
+
+```bash
+kam add <COMMAND>
+```
+
+**Subcommands:**
+- `script <phase>` - Add a runtime script under `src/<module_id>/`.
+- `hook <pre-build|post-build> <name>` - Add an ordered build hook under `hooks/`.
+- `kamfw <module>` - Import an existing kamfw helper into a runtime script.
+- `webui` - Add a static WebUI skeleton under `src/<module_id>/webroot/`.
+
+**Common options:**
+- `--dry-run` - Print planned changes without writing files.
+- `-f, --force` - Overwrite existing generated files where supported.
+
+**Examples:**
+```bash
+kam add script service
+kam add script action --force
+kam add hook pre-build sync-version --order 20
+kam add kamfw watchdog --phase service
+kam add webui
+```
+
+`kam add kamfw <module>` expects the helper to already exist in `src/<module_id>/lib/kamfw/<module>.sh`. It only inserts the `import <module>` line or creates the target runtime script; it does not modify kamfw framework internals.
 
 ### `kam build` - Build and Package Module
 
@@ -712,6 +750,39 @@ kam sign --all
 kam sign --dist dist --cert cert.pem
 ```
 
+### `kam sync` - Synchronize Generated Project Files
+
+Synchronize generated metadata, GitHub Actions workflows, and optionally remote template caches from the current project state.
+
+```bash
+kam sync [OPTIONS] [COMMAND]
+```
+
+Running `kam sync` with no subcommand is equivalent to `kam sync metadata`.
+
+**Subcommands:**
+- `metadata` - Re-export `module.prop`, `update.json`, `module.json`, `repo.json`, `track.json`, and `config.json` from `kam.toml`.
+- `workflow` - Reinstall GitHub Actions workflows using the same rules as `kam workflow install`.
+- `templates` - Update the official template cache. Requires `--remote`.
+- `all` - Run metadata and workflow sync; also sync templates when `--remote` is passed.
+
+**Options:**
+- `--dry-run` - Print planned changes without writing files.
+- `--check` - Check what would be synchronized without writing files.
+- `--remote` - Allow network-backed sync targets such as template downloads.
+- `-f, --force` - Force overwrite where supported.
+
+**Examples:**
+```bash
+kam sync
+kam sync --check
+kam sync workflow --source-repo LIghtJUNction/MagicNet
+kam sync --remote templates
+kam sync --remote all
+```
+
+Use `kam sync workflow --source-repo <repo>` for KernelSU Modules Repo layouts. When the source repo matches the current GitHub repository, Kam installs standard validation/build workflows. When it points to a different upstream repository, Kam installs a release-mirror workflow instead.
+
 ### `kam verify` - Verify Signatures
 
 Verify an artifact signature (.sig) or a sigstore bundle (DSSE).
@@ -908,6 +979,14 @@ Kam automatically syncs `kam.toml` configuration to module files:
 - **update.json** → `$KAM_PROJECT_ROOT/update.json`
   - Contains update information (version, versionCode, zipUrl, changelog)
   - URLs are automatically inferred from `[mmrl.repo]` section
+
+Use `kam sync` when you want to run this synchronization manually after editing metadata, workflows, or template baselines:
+
+```bash
+kam sync
+kam sync workflow --source-repo owner/repo
+kam sync --remote all
+```
 
 ### WebUI Integration
 

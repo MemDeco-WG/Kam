@@ -53,6 +53,9 @@ pub enum Commands {
     /// Initialize a new Kam project from templates (supports meta and kernel templates)
     Init(crate::cmds::init::InitArgs),
 
+    /// Add scripts, hooks, WebUI assets, or kamfw imports to an existing project
+    Add(crate::cmds::add::AddArgs),
+
     /// Build and package a module into a deployable ZIP artifact
     Build(crate::cmds::build::BuildArgs),
 
@@ -78,6 +81,10 @@ pub enum Commands {
 
     /// Sign an artifact using a key from the keyring or a PEM file
     Sign(crate::cmds::sign::SignArgs),
+
+    /// Synchronize generated metadata, workflows, and template caches
+    Sync(crate::cmds::sync::SyncArgs),
+
     /// Verify an artifact signature (.sig) or a sigstore bundle (DSSE)
     Verify(crate::cmds::verify::VerifyArgs),
 

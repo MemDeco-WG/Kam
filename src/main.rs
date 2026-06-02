@@ -488,6 +488,7 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
 fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
     match cli.command {
         Some(Commands::Init(args)) => kam::cmds::init::run(&args),
+        Some(Commands::Add(args)) => kam::cmds::add::run(&args),
         Some(Commands::Build(args)) => kam::cmds::build::run(&args),
         Some(Commands::Version(args)) => kam::cmds::version::run(args),
         Some(Commands::Cache(args)) => kam::cmds::cache::run(args),
@@ -496,6 +497,7 @@ fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
         Some(Commands::Completions(args)) => kam::cmds::completion::run(&args),
         Some(Commands::Secret(args)) => kam::cmds::secret::run(args),
         Some(Commands::Sign(args)) => kam::cmds::sign::run(&args),
+        Some(Commands::Sync(args)) => kam::cmds::sync::run(&args),
         Some(Commands::Verify(args)) => kam::cmds::verify::run(&args),
         Some(Commands::Check(args)) => kam::cmds::check::run(&args),
         Some(Commands::Export(args)) => kam::cmds::export::run(&args),

@@ -1,8 +1,10 @@
 use super::{Cli, Commands, inject_double_dash_for_targets};
+use crate::cmds::add::{AddCommands, HookPhase, ScriptPhase, WebuiTemplate};
 use crate::cmds::cache::{CacheCommands, TemplateCacheCommands};
 use crate::cmds::init::KernelSuRepoMode;
 use crate::cmds::repo::RepoCommand;
 use crate::cmds::secret::SecretCommands;
+use crate::cmds::sync::SyncCommand;
 use clap::CommandFactory;
 use std::ffi::OsString;
 #[cfg(unix)]
@@ -184,6 +186,9 @@ fn parses_every_top_level_subcommand_variant() {
         (&["kam", "init", "demo"], |cmd| {
             matches!(cmd, Commands::Init(_))
         }),
+        (&["kam", "add", "script", "service"], |cmd| {
+            matches!(cmd, Commands::Add(_))
+        }),
         (&["kam", "build"], |cmd| matches!(cmd, Commands::Build(_))),
         (&["kam", "version"], |cmd| {
             matches!(cmd, Commands::Version(_))
@@ -206,6 +211,7 @@ fn parses_every_top_level_subcommand_variant() {
         (&["kam", "sign", "module.zip"], |cmd| {
             matches!(cmd, Commands::Sign(_))
         }),
+        (&["kam", "sync"], |cmd| matches!(cmd, Commands::Sync(_))),
         (&["kam", "verify", "module.zip"], |cmd| {
             matches!(cmd, Commands::Verify(_))
         }),
@@ -244,6 +250,104 @@ fn parses_every_top_level_subcommand_variant() {
             "unexpected command variant for args: {args:?}"
         );
     }
+}
+
+#[test]
+fn parses_add_command_variants() {
+    let script = parse(&["kam", "add", "script", "service", "--dry-run"]);
+    let Some(Commands::Add(add)) = script.command else {
+        panic!("expected add command");
+    };
+    assert!(matches!(
+        add.command,
+        AddCommands::Script {
+            phase: ScriptPhase::Service,
+            dry_run: true,
+            ..
+        }
+    ));
+
+    let hook = parse(&[
+        "kam",
+        "add",
+        "hook",
+        "pre-build",
+        "sync-version",
+        "--order",
+        "20",
+    ]);
+    let Some(Commands::Add(add)) = hook.command else {
+        panic!("expected add command");
+    };
+    assert!(matches!(
+        add.command,
+        AddCommands::Hook {
+            phase: HookPhase::PreBuild,
+            order: 20,
+            ..
+        }
+    ));
+
+    let kamfw = parse(&["kam", "add", "kamfw", "watchdog", "--phase", "service"]);
+    let Some(Commands::Add(add)) = kamfw.command else {
+        panic!("expected add command");
+    };
+    assert!(matches!(
+        add.command,
+        AddCommands::Kamfw {
+            ref module,
+            phase: ScriptPhase::Service,
+            ..
+        } if module == "watchdog"
+    ));
+
+    let webui = parse(&["kam", "add", "webui", "--template", "static"]);
+    let Some(Commands::Add(add)) = webui.command else {
+        panic!("expected add command");
+    };
+    assert!(matches!(
+        add.command,
+        AddCommands::Webui {
+            template: WebuiTemplate::Static,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn parses_sync_command_variants() {
+    let default_sync = parse(&["kam", "sync", "--dry-run"]);
+    let Some(Commands::Sync(sync)) = default_sync.command else {
+        panic!("expected sync command");
+    };
+    assert!(sync.dry_run);
+    assert!(sync.command.is_none());
+
+    let workflow = parse(&[
+        "kam",
+        "sync",
+        "workflow",
+        "--source-repo",
+        "owner/repo",
+        "--check",
+    ]);
+    let Some(Commands::Sync(sync)) = workflow.command else {
+        panic!("expected sync command");
+    };
+    assert!(sync.check);
+    assert!(matches!(
+        sync.command,
+        Some(SyncCommand::Workflow {
+            source_repo: Some(ref source_repo)
+        }) if source_repo == "owner/repo"
+    ));
+
+    let all = parse(&["kam", "sync", "--remote", "all"]);
+    let Some(Commands::Sync(sync)) = all.command else {
+        panic!("expected sync command");
+    };
+    assert!(sync.remote);
+    assert!(matches!(sync.command, Some(SyncCommand::All { .. })));
 }
 
 #[test]
