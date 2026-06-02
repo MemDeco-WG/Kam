@@ -1,4 +1,4 @@
-# Kam - A CLI toolkit for scaffolding, building, and distributing ksu/APU/Magisk/AnyTemplate modules
+# Kam - A CLI toolkit for KernelSU, APatch, Magisk, and AnyKernel3 modules
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -23,7 +23,18 @@ Workflow goals:
 
 Contributions to extend translations and improve coverage are welcome. Use the skeleton script to discover gaps, add keys to `src/i18n/en.toml` (and provide translations in `src/i18n/zh.toml`), then run the exporter and commit results.
 
-Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android module packages and templates (ksu/APU/Magisk/AnyTemplate). It focuses on rapid project initialization, reproducible builds, template management, and convenient repository/metadata export for module maintainers and distribution channels.
+Kam is a CLI toolkit for scaffolding, building, packaging, and distributing Android module packages and templates for KernelSU, APatch, Magisk, and AnyKernel3 workflows. It focuses on rapid project initialization, reproducible builds, template management, and convenient repository/metadata export for module maintainers and distribution channels.
+
+### Supported Module Targets
+
+Kam supports the common Android root/module packaging targets used by module maintainers:
+
+- **KernelSU** modules, including KernelSU Modules Repo full-source and reference-only repository layouts.
+- **APatch** modules, including APatch-compatible install/runtime scripts and metadata.
+- **Magisk** modules using the standard root-level `module.prop`, installer, and runtime script layout.
+- **AnyKernel3** kernel modules through the built-in `ak3_template` / `-t ak3` template.
+
+The standard `kam_template` / `-t kam` template produces a Magisk-style module ZIP that is intended to work across Magisk-compatible managers, including KernelSU and APatch, when the module scripts themselves are compatible with the target manager. Use the AnyKernel3 template for kernel ZIP projects instead of regular user-space module payloads.
 
 ### ✨ Key Features
 
@@ -240,9 +251,9 @@ Kam provides several built-in templates:
 
 | Template | Description | Use Case |
 |----------|-------------|----------|
-| `-t kam_template` (`-t kam`) | Standard Kam module | General module development |
-| `-t meta_template` (`-t meta`) | Meta-module template | Meta modules (modules of modules) |
-| `-t ak3_template` (`-t ak3`) | AnyKernel3 template | Kernel modules |
+| `-t kam_template` (`-t kam`) | Standard Magisk-style module template | General KernelSU/APatch/Magisk-compatible module development |
+| `-t meta_template` (`-t meta`) | Meta-module template | KernelSU metadata/metamodule workflows |
+| `-t ak3_template` (`-t ak3`) | AnyKernel3 template | Kernel ZIP / AnyKernel3 module projects |
 | `--tmpl` | Template development template (maps to `tmpl_template`) | Creating new templates |
 
 Create from a template with `-t/--template`:

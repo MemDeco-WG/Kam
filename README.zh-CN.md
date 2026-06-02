@@ -1,4 +1,4 @@
-# Kam - 模块化构建与测试工具链
+# Kam - KernelSU / APatch / Magisk / AnyKernel3 模块构建工具链
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -10,7 +10,18 @@
 
 ## 📖 简介
 
-Kam 是一个为 Android 模块开发者设计的端到端工具链，它统一了从项目创建、本地开发、仿真测试到真机联调的完整工作流。
+Kam 是一个为 Android 模块开发者设计的端到端工具链，支持 KernelSU、APatch、Magisk 和 AnyKernel3 模块工作流。它统一了从项目创建、本地开发、仿真测试到真机联调的完整流程。
+
+### 支持的模块目标
+
+Kam 支持常见 Android root/module 打包目标：
+
+- **KernelSU** 模块，包括 KernelSU Modules Repo 的完整源码仓库和仅引用/元数据仓库。
+- **APatch** 模块，包括 APatch 兼容的安装脚本、运行脚本和元数据。
+- **Magisk** 模块，使用标准根目录 `module.prop`、安装脚本和运行脚本布局。
+- **AnyKernel3** 内核模块，通过内置 `ak3_template` / `-t ak3` 模板创建。
+
+标准 `kam_template` / `-t kam` 会生成 Magisk 风格模块 ZIP；只要模块脚本本身兼容目标管理器，它也适用于 KernelSU 和 APatch。内核 ZIP 项目应使用 AnyKernel3 模板，而不是普通用户态模块模板。
 
 ###  Kam 生态系统
 
@@ -68,6 +79,14 @@ cd hello-world
 ```
 
 这会生成! [WARNING ⚠]一个包含基本结构和配置的项目目录。
+
+常用模板：
+
+| 模板 | 说明 | 适用场景 |
+|------|------|----------|
+| `-t kam_template` (`-t kam`) | 标准 Magisk 风格模块模板 | KernelSU / APatch / Magisk 兼容模块开发 |
+| `-t meta_template` (`-t meta`) | 元模块模板 | KernelSU 元数据 / metamodule 工作流 |
+| `-t ak3_template` (`-t ak3`) | AnyKernel3 模板 | 内核 ZIP / AnyKernel3 模块项目 |
 
 KernelSU Modules Repo 支持两种仓库形态，`kam init` 都可以快速生成。
 
