@@ -35,6 +35,14 @@ pub struct DevArgs {
     #[arg(long)]
     pub watch: bool,
 
+    /// Hot-update allowlisted files without a full module install.
+    #[arg(long)]
+    pub hot: bool,
+
+    /// Build/sync WebUI assets and forward the declared WebUI port when configured.
+    #[arg(long)]
+    pub webui: bool,
+
     /// Skip dev-build hooks and only synchronize allowed files to the device.
     #[arg(long)]
     pub sync_only: bool,
@@ -75,7 +83,12 @@ struct DevContext {
     module_path: String,
     device: Option<String>,
     hot_patterns: Vec<String>,
+    watch_paths: Vec<PathBuf>,
     logs: Vec<String>,
+    forwards: Vec<String>,
+    webui_port: Option<u16>,
+    webui_local_port: Option<u16>,
+    restart_command: Option<String>,
     output_dir: PathBuf,
     build_args: BuildArgs,
     mcp: McpRuntime,
@@ -93,7 +106,7 @@ pub fn run(args: &DevArgs) -> Result<(), KamError> {
     }
 
     run_once(&ctx, args)?;
-    if args.watch {
+    if args.watch && !args.dry_run {
         watch(&ctx, args)?;
     }
     Ok(())
@@ -125,12 +138,23 @@ fn load_context(args: &DevArgs) -> Result<DevContext, KamError> {
         .or(dev.device.clone())
         .filter(|value| !value.eq_ignore_ascii_case("auto"));
     let hot_patterns = dev.hot.clone().unwrap_or_else(default_hot_patterns);
+    let watch_paths = dev
+        .watch
+        .clone()
+        .unwrap_or_else(default_watch_paths)
+        .into_iter()
+        .map(|path| project_root.join(path.replace("{{id}}", &module_id)))
+        .collect();
     let logs = dev.logs.clone().unwrap_or_else(|| {
         vec![
             format!("{module_path}/logs/*.log"),
             format!("{module_path}/.log/*.log"),
         ]
     });
+    let forwards = dev.forward.clone().unwrap_or_default();
+    let webui_port = dev.webui_port;
+    let webui_local_port = dev.webui_local_port.or(webui_port);
+    let restart_command = dev.restart_command.clone();
     let build_args = BuildArgs {
         path: ".".to_string(),
         all: false,
@@ -160,7 +184,12 @@ fn load_context(args: &DevArgs) -> Result<DevContext, KamError> {
         module_path,
         device,
         hot_patterns,
+        watch_paths,
         logs,
+        forwards,
+        webui_port,
+        webui_local_port,
+        restart_command,
         output_dir,
         build_args,
         mcp,
@@ -198,7 +227,7 @@ fn run_once(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
             &ctx.build_args,
         )?;
     } else {
-        if !args.sync_only {
+        if !args.sync_only && !args.hot {
             run_dev_build_hooks(
                 &ctx.project_root,
                 &ctx.kam_toml,
@@ -242,6 +271,8 @@ fn print_plan(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
     ));
     if args.install {
         Utils::info("Mode: full dev install");
+    } else if args.hot {
+        Utils::info("Mode: hot update only");
     } else if args.sync_only {
         Utils::info("Mode: sync only");
     } else {
@@ -253,14 +284,15 @@ fn print_plan(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
             remote_path(ctx, &file)?.display()
         ));
     }
-    if !args.mcp {
-        run_forwards(ctx, args, true)?;
-    }
+    run_forwards(ctx, args, true)?;
     if args.mcp {
         enable_mcp(ctx, true)?;
     }
     if args.logs {
         show_logs(ctx, true)?;
+    }
+    if let Some(command) = &ctx.restart_command {
+        Utils::info(format!("Would run restart command: {command}"));
     }
     Ok(())
 }
@@ -268,6 +300,10 @@ fn print_plan(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
 fn sync_hot_files(ctx: &DevContext) -> Result<(), KamError> {
     for file in collect_hot_files(ctx)? {
         push_file_with_backup(ctx, &file)?;
+    }
+    if let Some(command) = &ctx.restart_command {
+        Utils::info(format!("Running restart command: {command}"));
+        adb_root(ctx, command)?;
     }
     Ok(())
 }
@@ -315,7 +351,7 @@ fn push_file_with_backup(ctx: &DevContext, local: &Path) -> Result<(), KamError>
     adb_root(
         ctx,
         &format!(
-            "[ ! -e {remote} ] || cp -a {remote} {remote}.bak; mv {tmp} {remote}; chmod 0644 {remote}; case {remote} in *.sh) chmod 0755 {remote};; esac",
+            "set -e; had_old=0; [ ! -e {remote} ] || {{ cp -a {remote} {remote}.bak; had_old=1; }}; rollback() {{ if [ \"$had_old\" = 1 ] && [ -e {remote}.bak ]; then cp -a {remote}.bak {remote}; fi; rm -f {tmp}; }}; trap rollback EXIT HUP INT TERM; mv {tmp} {remote}; chmod 0644 {remote}; case {remote} in *.sh) chmod 0755 {remote};; esac; trap - EXIT HUP INT TERM",
             remote = shell_quote(&remote_str),
             tmp = shell_quote(&tmp_remote),
         ),
@@ -335,19 +371,42 @@ fn remote_path(ctx: &DevContext, local: &Path) -> Result<PathBuf, KamError> {
 
 fn run_forwards(ctx: &DevContext, args: &DevArgs, dry_run: bool) -> Result<(), KamError> {
     let mut forwards = BTreeSet::new();
+    forwards.extend(ctx.forwards.iter().map(String::as_str));
     forwards.extend(args.forward.iter().map(String::as_str));
     if args.mcp {
-        forwards.insert("mcp");
+        forwards.remove("mcp");
+    }
+    if args.webui {
+        forwards.insert("webui");
     }
     for forward in forwards {
         match forward {
             "mcp" => mcp::run_command(&ctx.mcp, &McpCommand::Forward, dry_run)?,
-            "webui" => {
-                Utils::info("WebUI forward is declared but no standard port is defined yet.");
-            }
+            "webui" => forward_webui(ctx, dry_run)?,
             other => Utils::warn(format!("Unknown forward target: {other}")),
         }
     }
+    Ok(())
+}
+
+fn forward_webui(ctx: &DevContext, dry_run: bool) -> Result<(), KamError> {
+    let Some(device_port) = ctx.webui_port else {
+        Utils::info("WebUI forward requested but [dev].webui_port is not configured.");
+        return Ok(());
+    };
+    let local_port = ctx.webui_local_port.unwrap_or(device_port);
+    let local = format!("tcp:{local_port}");
+    let remote = format!("tcp:{device_port}");
+    if dry_run {
+        Utils::info(format!(
+            "Would run: {}",
+            adb_command(ctx, &["forward", &local, &remote])
+        ));
+        Utils::info(format!("WebUI URL: http://127.0.0.1:{local_port}/"));
+        return Ok(());
+    }
+    adb_status(ctx, &["forward", &local, &remote])?;
+    Utils::success(format!("Forwarded WebUI: http://127.0.0.1:{local_port}/"));
     Ok(())
 }
 
@@ -429,7 +488,7 @@ fn watch(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
         thread::sleep(Duration::from_secs(2));
         let current = snapshot(ctx)?;
         if current != previous {
-            Utils::info("Detected file changes; running dev build/sync.");
+            report_watch_changes(ctx, &previous, &current);
             run_once(
                 ctx,
                 &DevArgs {
@@ -442,6 +501,81 @@ fn watch(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
     }
 }
 
+fn report_watch_changes(
+    ctx: &DevContext,
+    previous: &BTreeMap<PathBuf, SystemTime>,
+    current: &BTreeMap<PathBuf, SystemTime>,
+) {
+    let changed = changed_files(previous, current);
+    if changed.is_empty() {
+        Utils::info("Detected file changes; running dev build/sync.");
+        return;
+    }
+    let mut webui = false;
+    let mut binary = false;
+    let mut script_or_config = false;
+    let mut structure = false;
+    for file in &changed {
+        let rel = file
+            .strip_prefix(&ctx.project_root)
+            .unwrap_or(file)
+            .to_string_lossy()
+            .replace('\\', "/");
+        if rel.starts_with("webui/") || rel.contains("/webroot/") {
+            webui = true;
+        } else if rel.starts_with("crates/") || rel.contains("/.local/bin/") {
+            binary = true;
+        } else if has_ext(&rel, "sh")
+            || has_ext(&rel, "prop")
+            || has_ext(&rel, "rule")
+            || rel.contains("templates/")
+        {
+            script_or_config = true;
+        } else {
+            structure = true;
+        }
+    }
+    if webui {
+        Utils::info(
+            "Detected WebUI changes; dev-build hooks may rebuild WebUI, then hot sync webroot.",
+        );
+    }
+    if binary {
+        Utils::info(
+            "Detected CLI/binary changes; dev-build hooks may rebuild .local/bin, then hot sync binaries.",
+        );
+    }
+    if script_or_config {
+        Utils::info(
+            "Detected script/config changes; hot sync will push matching allowlisted files.",
+        );
+    }
+    if structure {
+        Utils::warn(
+            "Detected module structure changes; a full `kam dev --install` may be required.",
+        );
+    }
+}
+
+fn changed_files(
+    previous: &BTreeMap<PathBuf, SystemTime>,
+    current: &BTreeMap<PathBuf, SystemTime>,
+) -> Vec<PathBuf> {
+    let mut files = BTreeSet::new();
+    files.extend(previous.keys().cloned());
+    files.extend(current.keys().cloned());
+    files
+        .into_iter()
+        .filter(|file| previous.get(file) != current.get(file))
+        .collect()
+}
+
+fn has_ext(path: &str, ext: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .is_some_and(|value| value.eq_ignore_ascii_case(ext))
+}
+
 fn snapshot(ctx: &DevContext) -> Result<BTreeMap<PathBuf, SystemTime>, KamError> {
     let mut out = BTreeMap::new();
     for file in collect_hot_files(ctx)? {
@@ -449,6 +583,22 @@ fn snapshot(ctx: &DevContext) -> Result<BTreeMap<PathBuf, SystemTime>, KamError>
             .and_then(|meta| meta.modified())
             .unwrap_or(SystemTime::UNIX_EPOCH);
         out.insert(file, modified);
+    }
+    for root in &ctx.watch_paths {
+        if !root.exists() {
+            continue;
+        }
+        for entry in WalkBuilder::new(root).git_ignore(false).build() {
+            let entry =
+                entry.map_err(|err| KamError::CommandFailed(format!("Walk error: {err}")))?;
+            let path = entry.path();
+            if path.is_file() {
+                let modified = fs::metadata(path)
+                    .and_then(|meta| meta.modified())
+                    .unwrap_or(SystemTime::UNIX_EPOCH);
+                out.insert(path.to_path_buf(), modified);
+            }
+        }
     }
     Ok(out)
 }
@@ -488,6 +638,16 @@ fn adb_status(ctx: &DevContext, args: &[&str]) -> Result<(), KamError> {
             "adb command failed with status {status}"
         )))
     }
+}
+
+fn adb_command(ctx: &DevContext, args: &[&str]) -> String {
+    let mut parts = vec!["adb".to_string()];
+    if let Some(device) = &ctx.device {
+        parts.push("-s".to_string());
+        parts.push(shell_quote(device));
+    }
+    parts.extend(args.iter().map(|arg| shell_quote(arg)));
+    parts.join(" ")
 }
 
 fn adb_root(ctx: &DevContext, command: &str) -> Result<(), KamError> {
@@ -534,6 +694,10 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<Pattern>, KamError> {
 
 fn default_hot_patterns() -> Vec<String> {
     DevSection::default().hot.unwrap_or_default()
+}
+
+fn default_watch_paths() -> Vec<String> {
+    DevSection::default().watch.unwrap_or_default()
 }
 
 fn shell_quote(value: &str) -> String {

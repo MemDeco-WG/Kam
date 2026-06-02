@@ -191,6 +191,8 @@ kam sync --remote all
 
 ```bash
 kam dev --watch --device auto
+kam dev --watch --hot --mcp --logs
+kam dev --webui --forward webui
 kam dev --sync-only --logs
 kam dev --install
 kam dev --mcp

@@ -638,6 +638,8 @@ synchronizes allowlisted hot files to `/data/adb/modules/<id>`, runs
 **Options:**
 - `--device <serial|auto>` - Select an adb device. `auto` is the default.
 - `--watch` - Poll hot files and repeat dev build/sync on changes.
+- `--hot` - Only hot-update allowlisted files; skip full install and release packaging.
+- `--webui` - Build/sync WebUI assets and forward the configured WebUI port.
 - `--sync-only` - Skip dev-build hooks and only sync allowlisted files.
 - `--install` - Run dev build hooks, build a ZIP, install it over adb, then run `hooks/dev-install/`.
 - `--logs` - Print declared module logs and recent logcat output.
@@ -648,6 +650,8 @@ synchronizes allowlisted hot files to `/data/adb/modules/<id>`, runs
 **Examples:**
 ```bash
 kam dev --watch --device auto
+kam dev --watch --hot --mcp --logs
+kam dev --webui --forward webui
 kam dev --sync-only --logs
 kam dev --install
 kam dev --mcp
@@ -671,8 +675,11 @@ Configure hot sync and logs in `kam.toml`:
 device = "auto"
 module_path = "/data/adb/modules/MagicNet"
 hot = ["webroot/**", "service.sh", "action.sh", ".local/bin/**", "templates/**"]
+watch = ["webui", "crates", "src/MagicNet", "hooks/dev-build", "hooks/dev-sync"]
 logs = ["/data/adb/modules/MagicNet/logs/*.log"]
 forward = ["mcp"]
+webui_port = 8080
+webui_local_port = 8080
 ```
 
 Hot sync uses an allowlist and skips `.config/**` by default so runtime/user

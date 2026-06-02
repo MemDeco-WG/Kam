@@ -10,10 +10,16 @@ pub struct DevSection {
     pub module_path: Option<String>,
     /// Glob allowlist for hot-push paths relative to the module source directory.
     pub hot: Option<Vec<String>>,
+    /// Local paths watched by `kam dev --watch`.
+    pub watch: Option<Vec<String>>,
     /// Device log files or glob patterns collected by `kam dev --logs`.
     pub logs: Option<Vec<String>>,
     /// Forward declarations such as `mcp` or `webui`.
     pub forward: Option<Vec<String>>,
+    /// Device-side WebUI port used by `kam dev --webui`.
+    pub webui_port: Option<u16>,
+    /// Host-side forwarded WebUI port.
+    pub webui_local_port: Option<u16>,
     /// Optional root shell command to run after a successful hot update.
     pub restart_command: Option<String>,
     /// Standard MCP runtime contract.
@@ -58,8 +64,17 @@ impl Default for DevSection {
                 "system.prop".to_string(),
                 "sepolicy.rule".to_string(),
             ]),
+            watch: Some(vec![
+                "webui".to_string(),
+                "crates".to_string(),
+                "src/{{id}}".to_string(),
+                "hooks/dev-build".to_string(),
+                "hooks/dev-sync".to_string(),
+            ]),
             logs: None,
-            forward: Some(vec!["mcp".to_string()]),
+            forward: Some(Vec::new()),
+            webui_port: None,
+            webui_local_port: None,
             restart_command: None,
             mcp: Some(McpSection::default()),
         }

@@ -266,6 +266,8 @@ fn parses_dev_command_variants() {
         "kam",
         "dev",
         "--watch",
+        "--hot",
+        "--webui",
         "--device",
         "auto",
         "--sync-only",
@@ -278,6 +280,8 @@ fn parses_dev_command_variants() {
         panic!("expected dev command");
     };
     assert!(dev.watch);
+    assert!(dev.hot);
+    assert!(dev.webui);
     assert!(dev.sync_only);
     assert!(dev.mcp);
     assert!(dev.logs);
