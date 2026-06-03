@@ -412,11 +412,15 @@ kam -Q
 kam -Qs magic
 kam -Qi module_id
 kam -Qu
+kam -Qm
+kam -Qn
 kam -Q --device 5596d9
 kam installed list
 kam installed search magic
 kam installed info module_id
 kam installed upgrades
+kam installed foreign
+kam installed native
 kam query info module_id
 ```
 
@@ -430,6 +434,10 @@ Pacman-style behavior:
 - `kam -Qu` lists installed modules whose cached repository metadata reports a
   different latest release version. It does not refresh the remote index; run
   `kam -Sy` first when you need fresh repository metadata.
+- `kam -Qm` lists installed modules not present in the local cached module
+  index. This is useful for modules installed from local ZIPs, development
+  builds, private repositories, or manager-only sources.
+- `kam -Qn` lists installed modules present in the local cached module index.
 - `--device <serial>` selects an adb device. `--device auto` keeps adb's normal
   single-device behavior.
 

@@ -164,6 +164,22 @@ fn try_parse_accepts_installed_query_upgrade_combo() {
 }
 
 #[test]
+fn try_parse_accepts_installed_query_foreign_combo() {
+    let cli = parse(&["kam", "-Qm"]);
+
+    assert!(cli.query_flag);
+    assert!(cli.foreign_flag);
+}
+
+#[test]
+fn try_parse_accepts_installed_query_native_combo() {
+    let cli = parse(&["kam", "-Qn"]);
+
+    assert!(cli.query_flag);
+    assert!(cli.native_flag);
+}
+
+#[test]
 fn try_parse_accepts_local_install_flag() {
     let cli = parse(&["kam", "-U", "module.zip"]);
 

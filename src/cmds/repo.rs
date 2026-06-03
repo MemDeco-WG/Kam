@@ -237,6 +237,11 @@ pub(crate) fn cached_entry_exists(base_url: &str, module_id: &str) -> Result<(),
     cache::find_entry_by_name(base_url, module_id).map(|_| ())
 }
 
+pub(crate) fn read_cached_index(modules_url: Option<&str>) -> Result<Vec<SearchEntry>, KamError> {
+    let base = effective_base_url(modules_url);
+    cache::read_local_index(&base)
+}
+
 pub(crate) fn cached_module_update_metadata(
     module_id: &str,
 ) -> Result<Option<(String, String)>, KamError> {
@@ -343,12 +348,12 @@ fn handle_missing_module(
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct SearchEntry {
-    pub(super) name: String,
-    pub(super) description: Option<String>,
-    pub(super) summary: Option<String>,
-    pub(super) authors: Option<String>,
-    pub(super) url: Option<String>,
+pub(crate) struct SearchEntry {
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
+    pub(crate) summary: Option<String>,
+    pub(crate) authors: Option<String>,
+    pub(crate) url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

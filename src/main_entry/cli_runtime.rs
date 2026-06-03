@@ -185,11 +185,15 @@ fn handle_top_level_installed_flags(cli: &Cli) -> bool {
     let query_info = cli.info_flag || pacman_query_info_requested();
     let query_search = cli.search_flag || pacman_query_search_requested();
     let query_upgrades = pacman_query_upgrades_requested();
+    let query_foreign = cli.foreign_flag || pacman_query_foreign_requested();
+    let query_native = cli.native_flag || pacman_query_native_requested();
     let device = global_device(cli).or_else(|| target_option_value(&cli.targets, "--device"));
     match kam::cmds::installed::handle_pacman_style(
         query_search,
         query_info,
         query_upgrades,
+        query_foreign,
+        query_native,
         &effective_targets,
         device.filter(|value| !value.eq_ignore_ascii_case("auto")),
         cli.modules_url.as_deref(),
@@ -286,6 +290,14 @@ fn pacman_query_search_requested() -> bool {
 
 fn pacman_query_upgrades_requested() -> bool {
     has_query_short('u')
+}
+
+fn pacman_query_foreign_requested() -> bool {
+    has_query_short('m')
+}
+
+fn pacman_query_native_requested() -> bool {
+    has_query_short('n')
 }
 
 fn repo_quiet_requested() -> bool {

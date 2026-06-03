@@ -4,11 +4,13 @@ use crate::errors::KamError;
 use crate::utils::Utils;
 
 mod metadata;
+mod origin;
 mod remove;
 mod upgrades;
 
 use metadata::query_installed_modules;
 pub use metadata::{InstalledModule, ModuleState, parse_installed_modules};
+pub use origin::{OriginFilter, handle_origin_filter};
 pub use remove::{RemoveRequest, handle_remove};
 pub use upgrades::handle_upgrades;
 
@@ -35,6 +37,10 @@ pub enum InstalledCommand {
     Upgrades(InstalledUpgradesArgs),
     /// Mark installed modules for removal.
     Remove(InstalledRemoveArgs),
+    /// List installed modules not present in the cached repository index.
+    Foreign(InstalledOriginArgs),
+    /// List installed modules present in the cached repository index.
+    Native(InstalledOriginArgs),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -104,6 +110,17 @@ pub struct InstalledRemoveArgs {
     pub quiet: bool,
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct InstalledOriginArgs {
+    /// adb device serial. Use auto to require exactly one connected device.
+    #[arg(long)]
+    pub device: Option<String>,
+
+    /// Suppress details and print only module ids.
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
+}
+
 pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
     match &args.command {
         Some(InstalledCommand::List(list)) => {
@@ -132,6 +149,14 @@ pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
                 quiet: remove.quiet,
             })
         }
+        Some(InstalledCommand::Foreign(origin)) => {
+            let device = origin.device.as_ref().or(args.device.as_ref());
+            handle_origin_filter(OriginFilter::Foreign, device.cloned(), None, origin.quiet)
+        }
+        Some(InstalledCommand::Native(origin)) => {
+            let device = origin.device.as_ref().or(args.device.as_ref());
+            handle_origin_filter(OriginFilter::Native, device.cloned(), None, origin.quiet)
+        }
         None => handle_list("", args.device.clone(), false),
     }
 }
@@ -140,6 +165,8 @@ pub fn handle_pacman_style(
     search: bool,
     info: bool,
     upgrades: bool,
+    foreign: bool,
+    native: bool,
     targets: &[String],
     device: Option<String>,
     modules_url: Option<&str>,
@@ -147,6 +174,12 @@ pub fn handle_pacman_style(
 ) -> Result<(), KamError> {
     if upgrades {
         return handle_upgrades(device, modules_url, quiet);
+    }
+    if foreign {
+        return handle_origin_filter(OriginFilter::Foreign, device, modules_url, quiet);
+    }
+    if native {
+        return handle_origin_filter(OriginFilter::Native, device, modules_url, quiet);
     }
     if info {
         return handle_info(targets, device);

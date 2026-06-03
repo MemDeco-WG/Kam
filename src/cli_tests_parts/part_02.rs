@@ -179,6 +179,24 @@ fn parses_explicit_installed_query_subcommands() {
         Some(InstalledCommand::Remove(remove_args))
             if remove_args.dry_run && remove_args.modules == ["MagicNet"]
     ));
+
+    let foreign = parse(&["kam", "installed", "foreign", "--quiet"]);
+    let Some(Commands::Installed(installed)) = foreign.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::Foreign(origin_args)) if origin_args.quiet
+    ));
+
+    let native = parse(&["kam", "installed", "native"]);
+    let Some(Commands::Installed(installed)) = native.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::Native(_))
+    ));
 }
 
 #[test]
