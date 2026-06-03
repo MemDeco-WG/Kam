@@ -358,6 +358,7 @@ kam -Ss magic
 kam -Si module_id
 kam -Sl
 kam -Sp module_id
+kam -Sw module_id
 kam -S module_id
 kam -Syu module_id
 kam -Sc
@@ -367,6 +368,7 @@ kam repo search magic
 kam repo info module_id
 kam repo list
 kam repo url module_id
+kam repo fetch --yes module_id
 kam repo download --yes module_id
 ```
 
@@ -381,6 +383,8 @@ Pacman-style behavior:
 - `kam -Sl [query]` lists packages from the local synced index.
 - `kam -Sp <module_id>` prints the cached selected release ZIP URL without
   downloading it, equivalent to `kam repo url <module_id>`.
+- `kam -Sw <module_id>` downloads the selected release ZIP into Kam's local
+  package cache, equivalent to `kam repo fetch <module_id>`.
 - `kam -S <module_id>` resolves module metadata from the local cache, then
   downloads the selected release asset.
 - `kam -Syu <module_id>` refreshes the local index first, then downloads the

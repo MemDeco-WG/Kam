@@ -216,6 +216,15 @@ fn try_parse_accepts_sync_package_url_combo() {
 }
 
 #[test]
+fn try_parse_accepts_sync_download_only_combo() {
+    let cli = parse(&["kam", "-Sw", "MagicNet"]);
+
+    assert!(cli.sync_flag);
+    assert!(cli.download_only_flag);
+    assert_eq!(cli.targets, ["MagicNet"]);
+}
+
+#[test]
 fn try_parse_keeps_package_modifier_inactive_without_mode() {
     let cli = parse(&["kam", "-p", "--", "MagicNet"]);
 

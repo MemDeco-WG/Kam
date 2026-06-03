@@ -66,6 +66,10 @@ pub struct Cli {
     #[arg(short = 'p', action = clap::ArgAction::SetTrue, hide = true)]
     pub package_flag: bool,
 
+    /// Pacman-style download-only modifier (use with -S as '-Sw')
+    #[arg(short = 'w', action = clap::ArgAction::SetTrue, hide = true)]
+    pub download_only_flag: bool,
+
     /// Positional targets: module IDs or search terms (used with -S / -s)
     #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
     pub targets: Vec<String>,
@@ -257,7 +261,7 @@ impl Cli {
                         match ch {
                             'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
                             'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' | 'o'
-                            | 'p' => {}
+                            | 'p' | 'w' => {}
                             _ => {
                                 all_known = false;
                                 break;
@@ -356,13 +360,14 @@ pub fn inject_double_dash_for_targets(
             } else if tok.starts_with('-') && !tok.starts_with("--") {
                 // Potential combined short flags like `-Syu`, `-yuS`, `-Ss`.
                 // Only treat as combined short flags if every character after '-'
-                // is one of the known short options we support here (S, Q, U, R, s, y, u, q, i, l, v, c, m, n, k, o, p).
+                // is one of the known short options we support here.
                 let mut all_known = true;
                 let mut contains_sync_or_search = false;
                 for ch in tok.chars().skip(1) {
                     match ch {
                         'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
-                        'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' | 'o' | 'p' => {}
+                        'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' | 'o' | 'p'
+                        | 'w' => {}
                         _ => {
                             all_known = false;
                             break;

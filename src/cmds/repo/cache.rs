@@ -29,6 +29,13 @@ pub(crate) fn module_cache_path(module_id: &str) -> Result<PathBuf, KamError> {
     Ok(p)
 }
 
+pub(crate) fn package_cache_dir() -> Result<PathBuf, KamError> {
+    let mut p = cache_root_dir()?;
+    p.push("packages");
+    std::fs::create_dir_all(&p)?;
+    Ok(p)
+}
+
 pub(super) fn write_atomic(path: &Path, contents: &str) -> Result<(), KamError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;

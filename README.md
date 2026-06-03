@@ -169,6 +169,7 @@ kam -Ss magic     # search the local synced module index
 kam -Si module_id # show local package metadata
 kam -Sl           # list packages in the local synced index
 kam -Sp module_id # print the selected release ZIP URL without downloading
+kam -Sw module_id # download the selected release ZIP into Kam's package cache
 kam -S module_id  # download a module by id from local package metadata
 kam -Syu module_id # refresh index, then download
 kam -Sc           # clean the local module package index cache

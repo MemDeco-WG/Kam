@@ -1,11 +1,10 @@
 use crate::errors::KamError;
 use clap::{Args, Subcommand};
-use reqwest::blocking::Client;
 use serde::Deserialize;
-use std::time::Duration;
 
 mod cache;
 mod download;
+mod package_ops;
 mod repo_search;
 mod search;
 mod status;
@@ -13,6 +12,7 @@ mod sync;
 
 pub(crate) use cache::cache_root_dir;
 pub use download::download_module_latest;
+pub(crate) use package_ops::{download_targets, handle_repo_urls};
 pub use search::search_local;
 pub(crate) use status::handle_repo_status;
 pub use sync::repo_sync_with_jobs;
@@ -60,6 +60,8 @@ pub enum RepoCommand {
     List(ListArgs),
     /// Print cached package download URLs without downloading
     Url(UrlArgs),
+    /// Download one or more modules into Kam's package cache
+    Fetch(FetchArgs),
     /// Download one or more modules from the repository
     Download(DownloadArgs),
 }
@@ -124,6 +126,22 @@ pub struct UrlArgs {
     pub quiet: bool,
 }
 
+/// Arguments for `kam repo fetch`.
+#[derive(Args, Debug, Clone)]
+pub struct FetchArgs {
+    /// Module IDs to download into the local package cache
+    #[arg(value_name = "MODULE", required = true, num_args = 1..)]
+    pub modules: Vec<String>,
+
+    /// Assume "yes" to all confirmation prompts
+    #[arg(short = 'y', long = "yes")]
+    pub assume_yes: bool,
+
+    /// Suppress progress output (quiet mode)
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
+}
+
 /// Arguments for `kam repo download`.
 #[derive(Args, Debug, Clone)]
 pub struct DownloadArgs {
@@ -165,6 +183,7 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
                 false,
                 false,
                 false,
+                false,
                 &search_args.query,
                 false,
                 modules_url,
@@ -179,8 +198,21 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
             RepoCommand::Url(url_args) => {
                 handle_repo_urls(&url_args.modules, modules_url, args.quiet || url_args.quiet)
             }
+            RepoCommand::Fetch(fetch_args) => handle_pacman_style(
+                true,
+                false,
+                false,
+                false,
+                false,
+                true,
+                &fetch_args.modules,
+                fetch_args.assume_yes,
+                modules_url,
+                fetch_args.quiet,
+            ),
             RepoCommand::Download(download_args) => handle_pacman_style(
                 true,
+                false,
                 false,
                 false,
                 false,
@@ -196,6 +228,7 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
     handle_pacman_style(
         args.sync,
         args.search,
+        false,
         false,
         false,
         false,
@@ -215,6 +248,7 @@ pub fn handle_pacman_style(
     info: bool,
     list: bool,
     print_url: bool,
+    fetch_only: bool,
     targets: &[String],
     yes: bool,
     modules_url: Option<&str>,
@@ -246,7 +280,7 @@ pub fn handle_pacman_style(
     }
 
     if sync {
-        return download_targets(targets, &base, assume_yes, quiet);
+        return download_targets(targets, &base, assume_yes, quiet, fetch_only);
     }
     Ok(())
 }
@@ -330,87 +364,6 @@ pub(crate) fn handle_repo_list(
                 .unwrap_or("");
             println!("{name} — {desc}", name = entry.name);
         }
-    }
-    Ok(())
-}
-
-pub(crate) fn handle_repo_urls(
-    modules: &[String],
-    modules_url: Option<&str>,
-    quiet: bool,
-) -> Result<(), KamError> {
-    if modules.is_empty() {
-        return Err(KamError::CommandFailed(
-            "Package URL print requires a module id, e.g. `-Sp <moduleId>`".into(),
-        ));
-    }
-    let base = effective_base_url(modules_url);
-    for module_id in modules {
-        cache::find_entry_by_name(&base, module_id)?;
-        let md = download::read_module_detail_from_cache(module_id)?;
-        let Some(url) = download::selected_zip_asset_url(&md) else {
-            return Err(KamError::PackageNotFound(format!(
-                "No downloadable zip asset found for module {module_id}"
-            )));
-        };
-        if quiet || modules.len() == 1 {
-            println!("{url}");
-        } else {
-            println!("{module_id} {url}");
-        }
-    }
-    Ok(())
-}
-
-fn download_targets(
-    targets: &[String],
-    base_url: &str,
-    assume_yes: bool,
-    quiet: bool,
-) -> Result<(), KamError> {
-    if targets.is_empty() {
-        return Err(KamError::CommandFailed(
-            "Download requires a module id(s), e.g. `-S <moduleId>`".into(),
-        ));
-    }
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| KamError::FetchFailed(format!("Failed to build HTTP client: {e}")))?;
-
-    for module_id in targets {
-        if !quiet {
-            crate::utils::Utils::section(&trf!("repo.download", module_id));
-        }
-        match cache::find_entry_by_name(base_url, module_id)
-            .and_then(|_| download::read_module_detail_from_cache(module_id))
-        {
-            Ok(md) => {
-                download::process_module_download(&md, module_id, &client, assume_yes, quiet)?;
-            }
-            Err(KamError::PackageNotFound(_)) => {
-                handle_missing_module(module_id, base_url, &client, assume_yes, quiet)?;
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(())
-}
-
-fn handle_missing_module(
-    module_id: &str,
-    base_url: &str,
-    client: &Client,
-    assume_yes: bool,
-    quiet: bool,
-) -> Result<(), KamError> {
-    crate::utils::Utils::warn(trf!("repo.module_not_found_showing_similar", module_id));
-    if let Some(selected_module) = search::search_local_interactive(module_id, base_url)? {
-        crate::utils::Utils::info(trf!("repo.selected_module", selected_module));
-        let md = download::read_module_detail_from_cache(&selected_module)?;
-        download::process_module_download(&md, &selected_module, client, assume_yes, quiet)?;
-    } else {
-        crate::utils::Utils::info(crate::i18n::tr("repo.skipped_selection"));
     }
     Ok(())
 }

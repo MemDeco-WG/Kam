@@ -18,30 +18,42 @@ pub(super) fn process_module_download(
     assume_yes: bool,
     quiet: bool,
 ) -> Result<(), KamError> {
+    process_module_download_to_dir(md, module_id, client, assume_yes, quiet, None).map(|_| ())
+}
+
+pub(super) fn process_module_download_to_dir(
+    md: &ModuleDetail,
+    module_id: &str,
+    client: &Client,
+    assume_yes: bool,
+    quiet: bool,
+    dest_dir: Option<&Path>,
+) -> Result<Option<PathBuf>, KamError> {
     let Some((asset, release_label)) = select_zip_asset(md) else {
         Utils::warn(trf!("repo.no_downloadable_zip_asset", module_id));
-        return Ok(());
+        return Ok(None);
     };
 
     print_module_download_detail(md, asset, release_label);
     let confirmed = prompt_confirm_download(module_id, &asset.name, assume_yes)?;
     if !confirmed {
-        return Ok(());
+        return Ok(None);
     }
 
-    match download_asset(client, asset, None, quiet) {
+    match download_asset(client, asset, dest_dir, quiet) {
         Ok(path) => {
             if !quiet {
                 Utils::success(trf!("repo.saved", path.display().to_string()));
             }
+            Ok(Some(path))
         }
         Err(e) => {
             let err_str = e.to_string();
             let args: Vec<&dyn std::fmt::Display> = vec![&module_id, &err_str];
             Utils::error(crate::i18n::tr_fmt("repo.failed_to_download", &args));
+            Ok(None)
         }
     }
-    Ok(())
 }
 
 pub(super) fn read_module_detail_from_cache(module_id: &str) -> Result<ModuleDetail, KamError> {
@@ -310,6 +322,11 @@ fn download_asset(
     }
 
     let dest = dest_dir.map_or_else(|| PathBuf::from(&asset.name), |d| d.join(&asset.name));
+    if let Some(parent) = dest.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).map_err(KamError::Io)?;
+    }
     let size = asset.size.or_else(|| resp.content_length());
     let pb = download_progress(size, quiet);
     let mut out = File::create(&dest).map_err(KamError::Io)?;
