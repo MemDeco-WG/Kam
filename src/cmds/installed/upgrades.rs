@@ -72,18 +72,18 @@ pub fn find_upgrade_candidates(
 }
 
 fn is_available_newer(installed: &str, available: &str) -> bool {
-    let installed_parts = version_numbers(installed);
-    let available_parts = version_numbers(available);
-    if installed_parts.is_empty() || available_parts.is_empty() {
+    let installed_segments = version_numbers(installed);
+    let available_segments = version_numbers(available);
+    if installed_segments.is_empty() || available_segments.is_empty() {
         return false;
     }
-    for idx in 0..installed_parts.len().max(available_parts.len()) {
-        let installed_part = installed_parts.get(idx).copied().unwrap_or(0);
-        let available_part = available_parts.get(idx).copied().unwrap_or(0);
-        if available_part > installed_part {
+    for idx in 0..installed_segments.len().max(available_segments.len()) {
+        let installed_segment = installed_segments.get(idx).copied().unwrap_or(0);
+        let available_segment = available_segments.get(idx).copied().unwrap_or(0);
+        if available_segment > installed_segment {
             return true;
         }
-        if available_part < installed_part {
+        if available_segment < installed_segment {
             return false;
         }
     }

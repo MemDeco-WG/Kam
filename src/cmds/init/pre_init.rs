@@ -1,3 +1,3 @@
-include!("pre_init_parts/part_01.rs");
-include!("pre_init_parts/part_02.rs");
-include!("pre_init_parts/part_03.rs");
+include!("init_discovery/readme_metadata.rs");
+include!("init_discovery/argument_resolver.rs");
+include!("init_discovery/git_metadata.rs");

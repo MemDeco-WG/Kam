@@ -1,2 +1,2 @@
-include!("config_parts/part_01.rs");
-include!("config_parts/part_02.rs");
+include!("config_impl/storage.rs");
+include!("config_impl/command_runner.rs");

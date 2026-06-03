@@ -1,7 +1,7 @@
 use crate::errors::KamError;
 
 use super::args::{InitArgs, KernelSuRepoMode};
-use super::{impl_mod, interactive, post_init, pre_init, reference_repo};
+use super::{interactive, post_init, pre_init, reference_repo, template_init};
 
 /// 初始化命令的主入口
 ///
@@ -34,9 +34,9 @@ pub fn run(args: &InitArgs) -> Result<(), KamError> {
     merged_var_vec.sort();
 
     // 用模板初始化项目，传clone避免move（Rust的ownership真是...）
-    impl_mod::init_template(
+    template_init::init_template(
         &data.path,
-        &impl_mod::InitTemplateParams {
+        &template_init::InitTemplateParams {
             id: &data.id,
             name: data.name.clone(),
             version: &data.version,

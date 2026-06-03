@@ -16,7 +16,7 @@ use colored::Colorize;
 use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
 
 use super::args::InitArgs;
-use super::{impl_mod, post_init, pre_init};
+use super::{template_init, post_init, pre_init};
 
 fn prompt_input(prompt: &str, default: Option<&str>) -> Result<String, KamError> {
     let default_str = default.unwrap_or("").to_string();

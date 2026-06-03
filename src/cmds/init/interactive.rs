@@ -1,3 +1,3 @@
-include!("interactive_parts/part_01.rs");
-include!("interactive_parts/part_02.rs");
-include!("interactive_parts/part_03.rs");
+include!("interactive_flow/prompts.rs");
+include!("interactive_flow/template_variables.rs");
+include!("interactive_flow/command_runner.rs");

@@ -45,11 +45,11 @@ pub fn prepare_init(args: &super::InitArgs) -> Result<PreInitData, KamError> {
     //  3) 本地路径或压缩包（如 /path/to/template.tar.gz 或 https://.../template.tar.gz）
     //
     // 注意：这里不再强制添加 "_template" 后缀，直接传原始输入
-    // 让下一阶段的 impl_mod/template manager 来做智能发现
+    // 让下一阶段的 template_init/template manager 来做智能发现
     let (module_type, impl_template) = if args.tmpl {
         (ModuleType::Template, "tmpl_template".to_string())
     } else if let Some(t) = &args.template {
-        // Pass raw string. Discovery logic in `impl_mod.rs` will handle suffixing if needed.
+        // Pass raw string. Discovery logic in `template_init.rs` will handle suffixing if needed.
         (ModuleType::Kam, t.clone())
     } else {
         // 默认是kam模块

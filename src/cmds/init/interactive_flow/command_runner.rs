@@ -311,9 +311,9 @@ pub fn run(args: &InitArgs) -> Result<(), KamError> {
     merged_var_vec.sort();
 
     // Call the same init_template as non-interactive run
-    impl_mod::init_template(
+    template_init::init_template(
         &data.path,
-        &impl_mod::InitTemplateParams {
+        &template_init::InitTemplateParams {
             id: &data.id,
             name: data.name.clone(),
             version: &data.version,

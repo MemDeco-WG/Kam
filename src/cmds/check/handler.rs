@@ -1,2 +1,2 @@
-include!("handler_parts/part_01.rs");
-include!("handler_parts/part_02.rs");
+include!("project_checks/file_collection.rs");
+include!("project_checks/command_runner.rs");

@@ -1,3 +1,3 @@
-include!("utils_parts/part_01.rs");
-include!("utils_parts/part_02.rs");
-include!("utils_parts/part_03.rs");
+include!("utils_support/path_and_logging.rs");
+include!("utils_support/terminal_and_env.rs");
+include!("utils_support/file_operations.rs");

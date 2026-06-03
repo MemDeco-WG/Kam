@@ -1,2 +1,2 @@
-include!("builders_parts/part_01.rs");
-include!("builders_parts/part_02.rs");
+include!("json_builders/module_metadata.rs");
+include!("json_builders/runtime_config.rs");

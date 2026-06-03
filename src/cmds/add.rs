@@ -1,2 +1,2 @@
-include!("add_parts/part_01.rs");
-include!("add_parts/part_02.rs");
+include!("add_impl/command_handlers.rs");
+include!("add_impl/file_templates.rs");
