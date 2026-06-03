@@ -102,7 +102,7 @@ example = "example_value"
 members = ["."]
 
 [dev.sync]
-stage_dir = "/data/local/tmp/kam-dev/{{id}}"
+stage_dir = "/sdcard/Download/kam-dev/{{id}}"
 mirror = ["webroot/**"]
 preserve = [".config/**", "config.yaml", "config.yml", "subscriptions/**", "*.user.yaml", "*.user.yml"]
 ignore = ["logs/**", ".log/**", "cache/**", "*.bak", "*.kam-tmp"]

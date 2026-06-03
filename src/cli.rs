@@ -59,6 +59,9 @@ pub enum Commands {
     /// Start a fast Android module development session
     Dev(crate::cmds::dev::DevArgs),
 
+    /// Diff the installed device module against the current source tree
+    Diff(crate::cmds::diff::DiffArgs),
+
     /// Build and package a module into a deployable ZIP artifact
     Build(crate::cmds::build::BuildArgs),
 

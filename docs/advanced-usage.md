@@ -98,7 +98,7 @@ webui_port = 8080
 webui_local_port = 8080
 
 [dev.sync]
-stage_dir = "/data/local/tmp/kam-dev/{{id}}"
+stage_dir = "/sdcard/Download/kam-dev/{{id}}"
 mirror = ["webroot/**"]
 preserve = [".config/**", "config.yaml", "config.yml", "subscriptions/**", "*.user.yaml", "*.user.yml"]
 ignore = ["logs/**", ".log/**", "cache/**", "*.bak", "*.kam-tmp"]
@@ -120,8 +120,10 @@ Hot sync has three default behaviors:
 - `preserve` / `ignore`: runtime config, subscriptions, logs, cache files, and
   temporary files are not overwritten accidentally.
 
-Kam stages mirrored directories under `[dev.sync].stage_dir`, applies them from
-a root shell, and backs up replaced device paths to `<path>.bak`.
+Kam stages files under `[dev.sync].stage_dir`, applies them from a root shell,
+and backs up replaced device paths to `<path>.bak`. The default stage directory
+is under `/sdcard/Download` because some Android ROMs block adb shell and even
+restricted root domains from using `/data/local/tmp`.
 
 The latest dev plan and stage summary are recorded at
 `.kam/dev/last-session.log`. `kam dev --logs` prints this log, common manager
@@ -230,7 +232,9 @@ Use them in template files:
 Most Kam commands work offline. Network-backed features are opt-in or explicit:
 
 - `kam tmpl pull` and `kam tmpl update` download remote template archives.
-- `kam repo sync`, `kam -Ss`, and `kam -S` use the configured module registry.
+- `kam repo sync` and `kam -Sy` refresh the local module package index from
+  the configured module registry. `kam -Ss` and `kam -S` read that local index;
+  downloads still fetch selected release assets.
 - `kam sign` does not request RFC 3161 timestamps by default; timestamping or
   Sigstore integrations may contact external services when enabled.
 - Workflow commands may call GitHub or rely on GitHub Actions after files are

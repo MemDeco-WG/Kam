@@ -103,7 +103,10 @@ fn find_option_value(args: &[String], name: &str) -> Option<String> {
 }
 
 fn handle_top_level_repo_flags(cli: &Cli) -> bool {
-    if cli.update_index && !cli.sync_flag && !cli.search_flag {
+    let repo_refresh = cli.update_index || pacman_sync_refresh_requested();
+    let repo_assume_yes = repo_assume_yes(cli.assume_yes);
+
+    if repo_refresh && !cli.sync_flag && !cli.search_flag {
         let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
         match kam::cmds::repo::repo_sync_with_jobs(&base, true, None::<usize>, cli.quiet) {
             Ok(()) => return true,
@@ -115,16 +118,20 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
     }
 
     if cli.sync_flag || cli.search_flag {
-        let effective_targets = cli.targets.clone();
+        let effective_targets = repo_targets(&cli.targets);
+        let effective_quiet = cli.quiet || repo_quiet_requested();
 
-        if cli.update_index {
+        if repo_refresh {
             let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
-            match kam::cmds::repo::repo_sync_with_jobs(&base, true, None::<usize>, cli.quiet) {
+            match kam::cmds::repo::repo_sync_with_jobs(&base, true, None::<usize>, effective_quiet) {
                 Ok(()) => {}
                 Err(e) => {
                     print_error_chain(&e);
                     std::process::exit(1);
                 }
+            }
+            if cli.sync_flag && !cli.search_flag && effective_targets.is_empty() {
+                return true;
             }
         }
 
@@ -132,9 +139,9 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
             cli.sync_flag,
             cli.search_flag,
             &effective_targets,
-            cli.assume_yes,
+            repo_assume_yes,
             cli.modules_url.as_deref(),
-            cli.quiet,
+            effective_quiet,
         ) {
             Ok(()) => return true,
             Err(e) => {
@@ -147,11 +154,57 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
     false
 }
 
+fn pacman_sync_refresh_requested() -> bool {
+    has_sync_short('y')
+}
+
+fn repo_quiet_requested() -> bool {
+    has_sync_short('q') || std::env::args().any(|arg| arg == "-q" || arg == "--quiet")
+}
+
+fn repo_assume_yes(parsed_assume_yes: bool) -> bool {
+    parsed_assume_yes
+        && std::env::args().any(|arg| {
+            arg == "--yes"
+                || arg == "-y"
+                || (arg.starts_with('-') && !arg.starts_with("--") && !arg.contains('S') && arg.contains('y'))
+        })
+}
+
+fn has_sync_short(flag: char) -> bool {
+    std::env::args().skip(1).any(|arg| {
+        if arg.starts_with("--") || !arg.starts_with('-') {
+            return false;
+        }
+        let chars: Vec<char> = arg.chars().skip(1).collect();
+        chars.contains(&'S') && chars.contains(&flag)
+    })
+}
+
+fn repo_targets(raw_targets: &[String]) -> Vec<String> {
+    let mut targets = Vec::new();
+    let mut skip_next = false;
+    for target in raw_targets {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        match target.as_str() {
+            "-y" | "--yes" | "-q" | "--quiet" | "-u" | "--update" => {}
+            "--modules-url" => skip_next = true,
+            _ if target.starts_with("--modules-url=") => {}
+            _ => targets.push(target.clone()),
+        }
+    }
+    targets
+}
+
 fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
     match cli.command {
         Some(Commands::Init(args)) => kam::cmds::init::run(&args),
         Some(Commands::Add(args)) => kam::cmds::add::run(&args),
         Some(Commands::Dev(args)) => kam::cmds::dev::run(&args),
+        Some(Commands::Diff(args)) => kam::cmds::diff::run(&args),
         Some(Commands::Build(args)) => kam::cmds::build::run(&args),
         Some(Commands::Version(args)) => kam::cmds::version::run(args),
         Some(Commands::Cache(args)) => kam::cmds::cache::run(args),

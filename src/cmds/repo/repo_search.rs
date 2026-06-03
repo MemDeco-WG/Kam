@@ -82,7 +82,7 @@ pub fn similarity(a: &str, b: &str) -> f64 {
 /// Score a candidate entry (name/description/summary/authors) against the provided query.
 ///
 /// Returns a floating point score in [0.0, 1.0]. The caller is expected to
-/// decide the acceptance threshold (for example: 0.60 for `search_remote`,
+/// decide the acceptance threshold (for example: 0.60 for `search_local`,
 /// 0.30 for interactive selection).
 ///
 /// This function mirrors the scoring logic used in the original `repo.rs`.

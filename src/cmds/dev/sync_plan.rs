@@ -26,7 +26,7 @@ impl SyncPolicy {
             stage_dir: section
                 .stage_dir
                 .clone()
-                .unwrap_or_else(|| "/data/local/tmp/kam-dev/{{id}}".to_string()),
+                .unwrap_or_else(|| "/sdcard/Download/kam-dev/{{id}}".to_string()),
             mirror: section.mirror.clone().unwrap_or_default(),
             preserve: section.preserve.clone().unwrap_or_default(),
             ignore: section.ignore.clone().unwrap_or_default(),

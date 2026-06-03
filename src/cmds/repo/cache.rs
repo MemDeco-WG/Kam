@@ -1,7 +1,5 @@
-use super::{MODULE_JSON_PREFIX, SEARCH_INDEX_PATH, SearchEntry};
+use super::{MODULE_JSON_PREFIX, SearchEntry};
 use crate::errors::KamError;
-use reqwest::blocking::Client;
-use reqwest::header::USER_AGENT;
 use std::path::{Path, PathBuf};
 
 pub(crate) fn cache_root_dir() -> Result<PathBuf, KamError> {
@@ -41,62 +39,37 @@ pub(super) fn write_atomic(path: &Path, contents: &str) -> Result<(), KamError> 
     Ok(())
 }
 
-pub(super) fn fetch_index_cached(
-    client: &Client,
-    base_url: &str,
-) -> Result<Vec<SearchEntry>, KamError> {
+pub(super) fn read_local_index(base_url: &str) -> Result<Vec<SearchEntry>, KamError> {
     let path = index_cache_path(base_url)?;
-    let force_refresh = std::env::var("KAM_FORCE_INDEX_REFRESH").is_ok();
-
     if path.exists()
-        && !force_refresh
         && let Ok(buf) = std::fs::read_to_string(&path)
-        && let Ok(entries) = serde_json::from_str::<Vec<SearchEntry>>(&buf)
     {
-        return Ok(entries);
+        return serde_json::from_str::<Vec<SearchEntry>>(&buf)
+            .map_err(|e| KamError::Json(format!("Failed to parse cached index JSON: {e}")));
     }
 
-    if let Some(parent) = path.parent()
-        && let Some(entries) = try_find_index_in_cache_dir(parent)
-    {
-        return Ok(entries);
-    }
+    let Some(parent) = path.parent() else {
+        return Err(missing_index_error(base_url));
+    };
+    try_find_index_in_cache_dir(parent).ok_or_else(|| missing_index_error(base_url))
+}
 
-    let url = format!("{base_url}{SEARCH_INDEX_PATH}");
-    match client
-        .get(&url)
-        .header(USER_AGENT, "kam/repo-search")
-        .send()
-    {
-        Ok(resp) => {
-            if !resp.status().is_success() {
-                if let Some(parent) = path.parent()
-                    && let Some(entries) = try_find_index_in_cache_dir(parent)
-                {
-                    return Ok(entries);
-                }
-                return Err(KamError::FetchFailed(format!(
-                    "{url} returned status {}",
-                    resp.status()
-                )));
-            }
-            let body = resp
-                .text()
-                .map_err(|e| KamError::FetchFailed(format!("Failed to read {url} body: {e}")))?;
-            let entries: Vec<SearchEntry> = serde_json::from_str(&body)
-                .map_err(|e| KamError::Json(format!("Failed to parse {url} JSON: {e}")))?;
-            let _ = write_atomic(&path, &body);
-            Ok(entries)
-        }
-        Err(e) => {
-            if let Some(parent) = path.parent()
-                && let Some(entries) = try_find_index_in_cache_dir(parent)
-            {
-                return Ok(entries);
-            }
-            Err(KamError::FetchFailed(format!("GET {url} failed: {e}")))
-        }
-    }
+pub(super) fn find_entry_by_name(base_url: &str, module_id: &str) -> Result<SearchEntry, KamError> {
+    let entries = read_local_index(base_url)?;
+    entries
+        .into_iter()
+        .find(|entry| entry.name == module_id)
+        .ok_or_else(|| {
+            KamError::PackageNotFound(format!(
+                "Package '{module_id}' was not found in the local module index. Run `kam -Sy` first."
+            ))
+        })
+}
+
+pub(super) fn missing_index_error(base_url: &str) -> KamError {
+    KamError::PackageNotFound(format!(
+        "No local module index for {base_url}. Run `kam -Sy` or `kam repo sync` first."
+    ))
 }
 
 fn sanitize_filename(s: &str) -> String {

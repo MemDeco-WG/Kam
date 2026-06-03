@@ -157,6 +157,7 @@ Kam 将模块的执行过程划分为不同的 **phase** (阶段)，例如 `post
 - `kam init`: 从模板创建一个新的模块项目。
 - `kam add`: 在现有 Kam 项目中新增运行脚本、构建 Hook、WebUI 骨架或 kamfw helper 导入。
 - `kam dev`: 启动真机开发会话，执行 dev hooks、热同步文件、转发端口、启用 MCP 并查看日志。
+- `kam diff`: 对比设备上已安装模块与当前源码目录的文本差异，自动跳过二进制文件。
 - `kam build`: 构建并打包模块为可部署的 ZIP 文件。
 - `kam sim`: 在本地仿真环境中运行模块。
 - `kam version`: 管理模块版本号。

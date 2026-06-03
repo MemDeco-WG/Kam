@@ -1,4 +1,4 @@
-use super::cache::{module_cache_path, module_url, write_atomic};
+use super::cache::{module_cache_path, module_url};
 use super::{Asset, BASE_URL, ModuleDetail, Release};
 use crate::errors::KamError;
 use crate::utils::Utils;
@@ -44,48 +44,13 @@ pub(super) fn process_module_download(
     Ok(())
 }
 
-pub(super) fn fetch_module_detail(
-    client: &Client,
-    module_id: &str,
-    base_url: &str,
-) -> Result<ModuleDetail, KamError> {
+pub(super) fn read_module_detail_from_cache(module_id: &str) -> Result<ModuleDetail, KamError> {
     let path = module_cache_path(module_id)?;
-    let force_refresh = std::env::var("KAM_FORCE_MODULE_REFRESH").is_ok();
-
-    if path.exists()
-        && !force_refresh
-        && let Some(md) = read_cached_module(module_id, &path)
-    {
-        return Ok(md);
-    }
-
-    let url = module_url(base_url, module_id);
-    let resp = client
-        .get(&url)
-        .header(USER_AGENT, "kam/repo-module")
-        .send()
-        .map_err(|e| KamError::FetchFailed(format!("GET {url} failed: {e}")))?;
-
-    if !resp.status().is_success() {
-        if path.exists() {
-            let mut s = String::new();
-            File::open(&path)?.read_to_string(&mut s)?;
-            let md: ModuleDetail = serde_json::from_str(&s)?;
-            return Ok(md);
-        }
-        return Err(KamError::FetchFailed(format!(
-            "{url} returned status {status}",
-            status = resp.status()
-        )));
-    }
-
-    let body = resp
-        .text()
-        .map_err(|e| KamError::FetchFailed(format!("Failed to read {url} body: {e}")))?;
-    let md: ModuleDetail = serde_json::from_str(&body)
-        .map_err(|e| KamError::Json(format!("Failed to parse {url} JSON: {e}")))?;
-    let _ = write_atomic(&path, &body);
-    Ok(md)
+    read_cached_module(module_id, &path).ok_or_else(|| {
+        KamError::PackageNotFound(format!(
+            "No cached package metadata for '{module_id}'. Run `kam -Sy` first."
+        ))
+    })
 }
 
 /// # Errors
@@ -137,17 +102,13 @@ fn read_cached_module(module_id: &str, path: &Path) -> Option<ModuleDetail> {
                 return Some(md);
             }
             Utils::warn(format!(
-                "Cached module JSON for {module_id} could not be parsed; will attempt to refresh from registry"
+                "Cached module JSON for {module_id} could not be parsed"
             ));
         } else {
-            Utils::warn(format!(
-                "Failed to read cached module JSON for {module_id}; will attempt to refresh from registry"
-            ));
+            Utils::warn(format!("Failed to read cached module JSON for {module_id}"));
         }
     } else {
-        Utils::warn(format!(
-            "Failed to open cached module JSON for {module_id}; will attempt to refresh from registry"
-        ));
+        Utils::warn(format!("Failed to open cached module JSON for {module_id}"));
     }
     None
 }

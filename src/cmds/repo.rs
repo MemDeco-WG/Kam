@@ -12,7 +12,7 @@ mod sync;
 
 pub(crate) use cache::cache_root_dir;
 pub use download::download_module_latest;
-pub use search::search_remote;
+pub use search::search_local;
 pub use sync::repo_sync_with_jobs;
 
 const BASE_URL: &str = "https://modules.kernelsu.org";
@@ -160,7 +160,7 @@ pub fn handle_pacman_style(
                 "Search requires a query e.g. `-Ss <term>`".into(),
             ));
         }
-        return search_remote(&q, &base);
+        return search_local(&q, &base);
     }
 
     if sync {
@@ -189,13 +189,13 @@ fn download_targets(
         if !quiet {
             crate::utils::Utils::section(&trf!("repo.download", module_id));
         }
-        match download::fetch_module_detail(&client, module_id, base_url) {
+        match cache::find_entry_by_name(base_url, module_id)
+            .and_then(|_| download::read_module_detail_from_cache(module_id))
+        {
             Ok(md) => {
                 download::process_module_download(&md, module_id, &client, assume_yes, quiet)?;
             }
-            Err(KamError::FetchFailed(ref e))
-                if e.contains("404") || e.contains("not found") || e.contains("Not Found") =>
-            {
+            Err(KamError::PackageNotFound(_)) => {
                 handle_missing_module(module_id, base_url, &client, assume_yes, quiet)?;
             }
             Err(e) => return Err(e),
@@ -212,9 +212,9 @@ fn handle_missing_module(
     quiet: bool,
 ) -> Result<(), KamError> {
     crate::utils::Utils::warn(trf!("repo.module_not_found_showing_similar", module_id));
-    if let Some(selected_module) = search::search_remote_interactive(module_id, base_url)? {
+    if let Some(selected_module) = search::search_local_interactive(module_id, base_url)? {
         crate::utils::Utils::info(trf!("repo.selected_module", selected_module));
-        let md = download::fetch_module_detail(client, &selected_module, base_url)?;
+        let md = download::read_module_detail_from_cache(&selected_module)?;
         download::process_module_download(&md, &selected_module, client, assume_yes, quiet)?;
     } else {
         crate::utils::Utils::info(crate::i18n::tr("repo.skipped_selection"));
@@ -239,8 +239,6 @@ pub(super) struct ModuleDetail {
     pub(super) url: Option<String>,
     pub(super) homepage_url: Option<String>,
     pub(super) authors: Option<Vec<Author>>,
-    pub(super) latest_release: Option<String>,
-    pub(super) latest_release_time: Option<String>,
     pub(super) releases: Option<Vec<Release>>,
     pub(super) summary: Option<String>,
 }
@@ -259,9 +257,6 @@ pub(super) struct Release {
     #[serde(rename = "releaseAssets")]
     pub(super) assets: Option<Vec<Asset>>,
     pub(super) version: Option<String>,
-    pub(super) created_at: Option<String>,
-    pub(super) published_at: Option<String>,
-    pub(super) updated_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

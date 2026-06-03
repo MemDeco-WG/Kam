@@ -155,6 +155,7 @@ kam check
 kam build
 kam install dist/my_module.zip
 kam dev --watch --hot --mcp --logs
+kam diff --device auto
 kam sync
 kam workflow install https://github.com/you/my_module
 ```
@@ -162,12 +163,16 @@ kam workflow install https://github.com/you/my_module
 Pacman-style registry shortcuts:
 
 ```bash
-kam -Ss magic      # search remote modules registry
-kam -S module_id   # download a module by id
-kam -Syu module_id # refresh index, assume yes, then download
+kam -Sy           # refresh the local module package index
+kam -Ss magic     # search the local synced module index
+kam -S module_id  # download a module by id from local package metadata
+kam -Syu module_id # refresh index, then download
 ```
 
 Full command documentation lives in [docs/commands.md](docs/commands.md).
+
+`kam diff` compares the installed device module with the current source tree
+and filters out binary payloads before running diff.
 
 ## Module Configuration
 

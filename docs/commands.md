@@ -218,6 +218,27 @@ kam dev --mcp
 kam dev doctor
 ```
 
+## `kam diff`
+
+Compare the installed module on an Android device with the current module
+source tree. Kam pulls the installed module, filters both sides to text files,
+and skips binary payloads such as images, ZIPs, APKs, `.so` files, and DEX
+files.
+
+```bash
+kam diff --device auto
+kam diff --device <serial>
+kam diff --stat
+kam diff --module-path /data/adb/modules/<module_id>
+kam diff --dry-run
+```
+
+Diff direction is installed device module first, current source second, so
+added lines show what exists in the local source compared with the installed
+module. If direct `adb pull` cannot read the module directory, Kam retries by
+creating a root-side tar archive under `/sdcard/Download/kam-diff/` and pulling
+that archive instead.
+
 ## `kam mcp`
 
 Manage the Kam Dev Runtime Contract v1 for module MCP servers.
@@ -326,6 +347,32 @@ For KernelSU Modules Repo layouts, when the source repo matches the current
 GitHub repository, Kam installs standard validation/build workflows. When it
 points to a different upstream repository, Kam installs a release-mirror
 workflow.
+
+## `kam repo` And `kam -S`
+
+Manage the local module package index and download module release assets.
+
+```bash
+kam -Sy
+kam -Ss magic
+kam -S module_id
+kam -Syu module_id
+kam repo sync
+kam repo search magic
+kam repo download --yes module_id
+```
+
+Pacman-style behavior:
+
+- `kam -Sy` refreshes the local module package index and cached module metadata.
+- `kam -Ss <query>` searches the local synced index. It does not refresh the
+  remote registry implicitly.
+- `kam -S <module_id>` resolves module metadata from the local cache, then
+  downloads the selected release asset.
+- `kam -Syu <module_id>` refreshes the local index first, then downloads the
+  target. Add `--yes` to skip confirmation prompts.
+
+If the local index is missing or stale, run `kam -Sy` or `kam repo sync`.
 
 ## `kam workflow`
 

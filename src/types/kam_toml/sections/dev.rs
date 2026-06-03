@@ -103,7 +103,7 @@ impl Default for DevSection {
 impl Default for DevSyncSection {
     fn default() -> Self {
         Self {
-            stage_dir: Some("/data/local/tmp/kam-dev/{{id}}".to_string()),
+            stage_dir: Some("/sdcard/Download/kam-dev/{{id}}".to_string()),
             mirror: Some(vec!["webroot/**".to_string()]),
             preserve: Some(vec![
                 ".config/**".to_string(),

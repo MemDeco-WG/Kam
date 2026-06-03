@@ -24,5 +24,5 @@
 #![deny(clippy::all)]
 #![deny(missing_docs)]
 
-include!("main_parts/part_01.rs");
-include!("main_parts/part_02.rs");
+include!("main_entry/help_i18n.rs");
+include!("main_entry/cli_runtime.rs");

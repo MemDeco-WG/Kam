@@ -195,6 +195,9 @@ fn sync_mirror_root(ctx: &DevContext, local_root: &Path) -> Result<(), KamError>
         return Ok(());
     }
     let remote_root = remote_path(ctx, local_root)?;
+    let remote_parent = remote_root.parent().ok_or_else(|| {
+        KamError::InvalidDirectory(format!("Invalid remote path: {}", remote_root.display()))
+    })?;
     let stage_root = PathBuf::from(ctx.sync_policy.rendered_stage_dir(&ctx.module_id)).join(
         local_root.file_name().ok_or_else(|| {
             KamError::InvalidDirectory(format!("Invalid mirror root: {}", local_root.display()))
@@ -205,10 +208,7 @@ fn sync_mirror_root(ctx: &DevContext, local_root: &Path) -> Result<(), KamError>
         remote_root.display()
     ));
     log_session(ctx, format!("mirror_device_dir={}", remote_root.display()))?;
-    adb_root(
-        ctx,
-        &format!("rm -rf {}", shell_quote(&stage_root.to_string_lossy())),
-    )?;
+    adb_root(ctx, &prepare_stage_command(&stage_root))?;
     adb_status(
         ctx,
         &[
@@ -220,21 +220,64 @@ fn sync_mirror_root(ctx: &DevContext, local_root: &Path) -> Result<(), KamError>
     adb_root(
         ctx,
         &format!(
-            "set -e; parent=$(dirname {remote}); mkdir -p \"$parent\"; rm -rf {remote}.bak; [ ! -e {remote} ] || cp -a {remote} {remote}.bak; rm -rf {remote}; cp -a {stage} {remote}; rm -rf {stage}",
+            "mkdir -p {parent} || exit 1; rm -rf {remote}.bak || exit 1; [ ! -e {remote} ] || cp -a {remote} {remote}.bak || exit 1; rm -rf {remote} || exit 1; cp -a {stage} {remote} || exit 1; rm -rf {stage} || exit 1",
+            parent = shell_quote(&remote_parent.to_string_lossy()),
             remote = shell_quote(&remote_root.to_string_lossy()),
             stage = shell_quote(&stage_root.to_string_lossy()),
         ),
     )
 }
 
+fn prepare_stage_command(stage_root: &Path) -> String {
+    let stage_path = stage_root.to_string_lossy();
+    let parent_path = stage_root
+        .parent()
+        .unwrap_or_else(|| Path::new("/sdcard/Download/kam-dev"))
+        .to_string_lossy();
+    let stage = shell_quote(&stage_path);
+    let parent = shell_quote(&parent_path);
+    format!(
+        "set -e; rm -rf {stage}; mkdir -p {parent}; chown shell:shell {parent} 2>/dev/null || chown 2000:2000 {parent} 2>/dev/null || true; chmod 0775 {parent} 2>/dev/null || true"
+    )
+}
+
+fn prepare_stage_file_command(stage_file: &Path) -> String {
+    let file_path = stage_file.to_string_lossy();
+    let parent_path = stage_file
+        .parent()
+        .unwrap_or_else(|| Path::new("/sdcard/Download/kam-dev"))
+        .to_string_lossy();
+    let file = shell_quote(&file_path);
+    let parent = shell_quote(&parent_path);
+    format!("set -e; rm -f {file}; mkdir -p {parent}; chmod 0775 {parent} 2>/dev/null || true")
+}
+
 fn push_file_with_backup(ctx: &DevContext, local: &Path) -> Result<(), KamError> {
     let remote = remote_path(ctx, local)?;
     let remote_str = remote.to_string_lossy();
-    let tmp_remote = format!("{remote_str}.kam-tmp");
+    let rel = local.strip_prefix(&ctx.module_root).map_err(|_| {
+        KamError::InvalidDirectory(format!(
+            "{} is outside {}",
+            local.display(),
+            ctx.module_root.display()
+        ))
+    })?;
+    let tmp_remote = PathBuf::from(ctx.sync_policy.rendered_stage_dir(&ctx.module_id)).join(rel);
     let parent = remote.parent().ok_or_else(|| {
         KamError::InvalidDirectory(format!("Invalid remote path: {}", remote.display()))
     })?;
-    adb_status(ctx, &["push", &local.to_string_lossy(), &tmp_remote])?;
+    let tmp_parent = tmp_remote.parent().ok_or_else(|| {
+        KamError::InvalidDirectory(format!("Invalid stage path: {}", tmp_remote.display()))
+    })?;
+    adb_root(ctx, &prepare_stage_file_command(&tmp_remote))?;
+    adb_status(
+        ctx,
+        &[
+            "push",
+            &local.to_string_lossy(),
+            &tmp_remote.to_string_lossy(),
+        ],
+    )?;
     adb_root(
         ctx,
         &format!("mkdir -p {}", shell_quote(&parent.to_string_lossy())),
@@ -242,9 +285,16 @@ fn push_file_with_backup(ctx: &DevContext, local: &Path) -> Result<(), KamError>
     adb_root(
         ctx,
         &format!(
-            "set -e; had_old=0; [ ! -e {remote} ] || {{ cp -a {remote} {remote}.bak; had_old=1; }}; rollback() {{ if [ \"$had_old\" = 1 ] && [ -e {remote}.bak ]; then cp -a {remote}.bak {remote}; fi; rm -f {tmp}; }}; trap rollback EXIT HUP INT TERM; mv {tmp} {remote}; chmod 0644 {remote}; case {remote} in *.sh) chmod 0755 {remote};; esac; trap - EXIT HUP INT TERM",
+            "had_old=0; [ ! -e {remote} ] || {{ cp -a {remote} {remote}.bak || exit 1; had_old=1; }}; rollback() {{ if [ \"$had_old\" = 1 ] && [ -e {remote}.bak ]; then cp -a {remote}.bak {remote}; fi; rm -f {tmp}; }}; trap rollback EXIT HUP INT TERM; mv {tmp} {remote} || exit 1; chmod 0644 {remote} || exit 1; case {remote} in *.sh) chmod 0755 {remote} || exit 1;; esac; trap - EXIT HUP INT TERM",
             remote = shell_quote(&remote_str),
-            tmp = shell_quote(&tmp_remote),
+            tmp = shell_quote(&tmp_remote.to_string_lossy()),
+        ),
+    )?;
+    adb_root(
+        ctx,
+        &format!(
+            "rmdir {} 2>/dev/null || true",
+            shell_quote(&tmp_parent.to_string_lossy())
         ),
     )
 }
@@ -291,5 +341,33 @@ pub(super) fn shell_quote(value: &str) -> String {
         value.to_string()
     } else {
         format!("'{}'", value.replace('\'', "'\"'\"'"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{prepare_stage_command, prepare_stage_file_command};
+
+    #[test]
+    fn prepare_stage_command_makes_parent_writable_by_adb_shell() {
+        let command = prepare_stage_command(Path::new("/sdcard/Download/kam-dev/MagicNet/webroot"));
+
+        assert!(command.contains("rm -rf /sdcard/Download/kam-dev/MagicNet/webroot"));
+        assert!(command.contains("mkdir -p /sdcard/Download/kam-dev/MagicNet"));
+        assert!(command.contains("chown shell:shell /sdcard/Download/kam-dev/MagicNet"));
+        assert!(command.contains("chown 2000:2000 /sdcard/Download/kam-dev/MagicNet"));
+        assert!(command.contains("chmod 0775 /sdcard/Download/kam-dev/MagicNet"));
+    }
+
+    #[test]
+    fn prepare_stage_file_command_makes_parent_writable_by_adb_shell() {
+        let command =
+            prepare_stage_file_command(Path::new("/sdcard/Download/kam-dev/MagicNet/service.sh"));
+
+        assert!(command.contains("rm -f /sdcard/Download/kam-dev/MagicNet/service.sh"));
+        assert!(command.contains("mkdir -p /sdcard/Download/kam-dev/MagicNet"));
+        assert!(command.contains("chmod 0775 /sdcard/Download/kam-dev/MagicNet"));
     }
 }

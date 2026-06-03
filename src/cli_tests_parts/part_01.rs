@@ -194,6 +194,9 @@ fn parses_every_top_level_subcommand_variant() {
         (&["kam", "dev", "--sync-only"], |cmd| {
             matches!(cmd, Commands::Dev(_))
         }),
+        (&["kam", "diff", "--device", "abc"], |cmd| {
+            matches!(cmd, Commands::Diff(_))
+        }),
         (&["kam", "build"], |cmd| matches!(cmd, Commands::Build(_))),
         (&["kam", "version"], |cmd| {
             matches!(cmd, Commands::Version(_))
@@ -318,6 +321,14 @@ fn parses_mcp_command_variants() {
     };
     assert_eq!(mcp.local_port, Some(9876));
     assert!(matches!(mcp.command, McpCommand::Forward));
+}
+
+#[test]
+fn parses_pacman_targets_with_trailing_global_flags() {
+    let cli = parse(&["kam", "-Syu", "MagicNet", "--yes", "-q"]);
+
+    assert!(cli.sync_flag);
+    assert_eq!(cli.targets, vec!["MagicNet", "--yes", "-q"]);
 }
 
 #[test]
