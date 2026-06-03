@@ -8,6 +8,7 @@ mod files;
 mod metadata;
 mod origin;
 mod owner;
+mod package_info;
 mod remove;
 mod upgrades;
 
@@ -17,6 +18,7 @@ use metadata::query_installed_modules;
 pub use metadata::{InstalledModule, ModuleState, parse_installed_modules};
 pub use origin::{OriginFilter, handle_origin_filter};
 pub use owner::{OwnerRequest, handle_owner};
+pub use package_info::{PackageInfoRequest, handle_package_info};
 pub use remove::{RemoveRequest, handle_remove};
 pub use upgrades::handle_upgrades;
 
@@ -53,6 +55,8 @@ pub enum InstalledCommand {
     Owner(InstalledOwnerArgs),
     /// List files owned by installed modules.
     Files(InstalledFilesArgs),
+    /// Show metadata from local module ZIP packages.
+    PackageInfo(InstalledPackageInfoArgs),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -178,6 +182,17 @@ pub struct InstalledFilesArgs {
     pub quiet: bool,
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct InstalledPackageInfoArgs {
+    /// Local module ZIP packages to inspect.
+    #[arg(value_name = "PACKAGE", required = true, num_args = 1..)]
+    pub packages: Vec<std::path::PathBuf>,
+
+    /// Suppress details and print only package ids.
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PacmanQueryRequest {
     pub mode: PacmanQueryMode,
@@ -198,6 +213,7 @@ pub enum PacmanQueryMode {
     Check,
     Owner,
     Files,
+    Package,
 }
 
 /// Run explicit installed-module subcommands.
@@ -276,6 +292,10 @@ pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
                 quiet: files.quiet,
             })
         }
+        Some(InstalledCommand::PackageInfo(package)) => handle_package_info(&PackageInfoRequest {
+            packages: package.packages.clone(),
+            quiet: package.quiet,
+        }),
         None => handle_list("", args.device.as_deref(), false),
     }
 }
@@ -320,6 +340,17 @@ pub fn handle_pacman_style(request: &PacmanQueryRequest) -> Result<(), KamError>
             device: request.device.clone(),
             quiet: request.quiet,
         }),
+        PacmanQueryMode::Package => {
+            let packages = request
+                .targets
+                .iter()
+                .map(std::path::PathBuf::from)
+                .collect();
+            handle_package_info(&PackageInfoRequest {
+                packages,
+                quiet: request.quiet,
+            })
+        }
         PacmanQueryMode::Info => handle_info(&request.targets, request.device.as_deref()),
         PacmanQueryMode::Search => {
             if request.targets.is_empty() {

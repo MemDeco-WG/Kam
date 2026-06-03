@@ -194,11 +194,17 @@ fn pacman_query_files_requested() -> bool {
     has_query_short('l')
 }
 
+fn pacman_query_package_requested() -> bool {
+    has_query_short('p')
+}
+
 fn pacman_query_mode(cli: &Cli) -> kam::cmds::installed::PacmanQueryMode {
     use kam::cmds::installed::PacmanQueryMode;
 
     if pacman_query_upgrades_requested() {
         PacmanQueryMode::Upgrades
+    } else if cli.package_flag || pacman_query_package_requested() {
+        PacmanQueryMode::Package
     } else if cli.foreign_flag || pacman_query_foreign_requested() {
         PacmanQueryMode::Foreign
     } else if cli.native_flag || pacman_query_native_requested() {

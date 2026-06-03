@@ -186,6 +186,7 @@ kam -Qn                # show installed modules present in the cached index
 kam -Qk module_id      # check installed module integrity
 kam -Qo /data/adb/modules/MagicNet/cli # show which module owns a path
 kam -Ql module_id      # list files inside an installed module
+kam -Qp module.zip     # show module.prop metadata from a local package
 kam -Q --device serial # query a specific adb device
 ```
 

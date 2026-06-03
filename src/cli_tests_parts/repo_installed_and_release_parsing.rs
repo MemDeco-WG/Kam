@@ -231,6 +231,16 @@ fn parses_explicit_installed_query_subcommands() {
         installed.command,
         Some(InstalledCommand::Files(files_args)) if files_args.modules == ["MagicNet"]
     ));
+
+    let package = parse(&["kam", "installed", "package-info", "module.zip"]);
+    let Some(Commands::Installed(installed)) = package.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::PackageInfo(package_args))
+            if package_args.packages == [std::path::PathBuf::from("module.zip")]
+    ));
 }
 
 #[test]
