@@ -42,6 +42,30 @@ pub fn handle_package_info(request: &PackageInfoRequest) -> Result<(), KamError>
     Ok(())
 }
 
+/// List files inside local module ZIP packages.
+///
+/// # Errors
+///
+/// Returns an error when no package is supplied or a ZIP cannot be read.
+pub fn handle_package_files(request: &PackageInfoRequest) -> Result<(), KamError> {
+    if request.packages.is_empty() {
+        return Err(KamError::CommandFailed(
+            "Package file query requires a zip path, e.g. `kam -Qpl module.zip`".to_string(),
+        ));
+    }
+
+    for package in &request.packages {
+        for entry in read_package_files(package)? {
+            if request.quiet {
+                println!("{entry}");
+            } else {
+                println!("{} {entry}", package.display());
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn read_package_info(path: &Path) -> Result<PackageInfo, KamError> {
     let file = File::open(path).map_err(KamError::Io)?;
     let mut archive = zip::ZipArchive::new(file).map_err(KamError::Zip)?;
@@ -56,6 +80,21 @@ pub fn read_package_info(path: &Path) -> Result<PackageInfo, KamError> {
         path: path.to_path_buf(),
         properties: parse_module_prop(&contents),
     })
+}
+
+pub fn read_package_files(path: &Path) -> Result<Vec<String>, KamError> {
+    let file = File::open(path).map_err(KamError::Io)?;
+    let mut archive = zip::ZipArchive::new(file).map_err(KamError::Zip)?;
+    let mut names = (0..archive.len())
+        .filter_map(|idx| {
+            archive
+                .by_index(idx)
+                .ok()
+                .map(|entry| entry.name().to_string())
+        })
+        .collect::<Vec<_>>();
+    names.sort();
+    Ok(names)
 }
 
 #[must_use]

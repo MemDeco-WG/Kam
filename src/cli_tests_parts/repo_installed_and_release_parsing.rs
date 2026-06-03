@@ -241,6 +241,16 @@ fn parses_explicit_installed_query_subcommands() {
         Some(InstalledCommand::PackageInfo(package_args))
             if package_args.packages == [std::path::PathBuf::from("module.zip")]
     ));
+
+    let package_files = parse(&["kam", "installed", "package-files", "module.zip"]);
+    let Some(Commands::Installed(installed)) = package_files.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::PackageFiles(package_args))
+            if package_args.packages == [std::path::PathBuf::from("module.zip")]
+    ));
 }
 
 #[test]

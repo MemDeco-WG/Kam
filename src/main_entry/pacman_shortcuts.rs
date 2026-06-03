@@ -203,6 +203,10 @@ fn pacman_query_mode(cli: &Cli) -> kam::cmds::installed::PacmanQueryMode {
 
     if pacman_query_upgrades_requested() {
         PacmanQueryMode::Upgrades
+    } else if (cli.package_flag || pacman_query_package_requested())
+        && (cli.list_flag || pacman_query_files_requested())
+    {
+        PacmanQueryMode::PackageFiles
     } else if cli.package_flag || pacman_query_package_requested() {
         PacmanQueryMode::Package
     } else if cli.foreign_flag || pacman_query_foreign_requested() {

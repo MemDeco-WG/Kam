@@ -207,6 +207,16 @@ fn try_parse_accepts_installed_package_query_combo() {
 }
 
 #[test]
+fn try_parse_accepts_installed_package_file_list_combo() {
+    let cli = parse(&["kam", "-Qpl", "module.zip"]);
+
+    assert!(cli.query_flag);
+    assert!(cli.package_flag);
+    assert!(cli.list_flag);
+    assert_eq!(cli.targets, ["module.zip"]);
+}
+
+#[test]
 fn try_parse_accepts_local_install_flag() {
     let cli = parse(&["kam", "-U", "module.zip"]);
 
