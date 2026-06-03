@@ -58,6 +58,10 @@ pub struct Cli {
     #[arg(short = 'k', action = clap::ArgAction::SetTrue, hide = true)]
     pub check_flag: bool,
 
+    /// Pacman-style file ownership query modifier (use with -Q as '-Qo')
+    #[arg(short = 'o', action = clap::ArgAction::SetTrue, hide = true)]
+    pub owner_flag: bool,
+
     /// Positional targets: module IDs or search terms (used with -S / -s)
     #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
     pub targets: Vec<String>,
@@ -248,7 +252,7 @@ impl Cli {
                     for ch in rest.chars() {
                         match ch {
                             'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
-                            'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' => {}
+                            'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' | 'o' => {}
                             _ => {
                                 all_known = false;
                                 break;
@@ -347,13 +351,13 @@ pub fn inject_double_dash_for_targets(
             } else if tok.starts_with('-') && !tok.starts_with("--") {
                 // Potential combined short flags like `-Syu`, `-yuS`, `-Ss`.
                 // Only treat as combined short flags if every character after '-'
-                // is one of the known short options we support here (S, Q, U, R, s, y, u, q, i, l, v, c, m, n, k).
+                // is one of the known short options we support here (S, Q, U, R, s, y, u, q, i, l, v, c, m, n, k, o).
                 let mut all_known = true;
                 let mut contains_sync_or_search = false;
                 for ch in tok.chars().skip(1) {
                     match ch {
                         'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
-                        'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' => {}
+                        'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' | 'o' => {}
                         _ => {
                             all_known = false;
                             break;

@@ -184,6 +184,7 @@ kam -Qu                # show installed modules with cached updates
 kam -Qm                # show installed modules outside the cached index
 kam -Qn                # show installed modules present in the cached index
 kam -Qk module_id      # check installed module integrity
+kam -Qo /data/adb/modules/MagicNet/cli # show which module owns a path
 kam -Q --device serial # query a specific adb device
 ```
 

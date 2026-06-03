@@ -416,6 +416,7 @@ kam -Qm
 kam -Qn
 kam -Qk
 kam -Qk module_id
+kam -Qo /data/adb/modules/MagicNet/cli
 kam -Q --device 5596d9
 kam installed list
 kam installed search magic
@@ -425,6 +426,7 @@ kam installed foreign
 kam installed native
 kam installed check
 kam installed check module_id
+kam installed owner /data/adb/modules/MagicNet/cli
 kam query info module_id
 ```
 
@@ -446,6 +448,8 @@ Pacman-style behavior:
   modifying the device. It verifies `module.prop` exists, is readable, contains
   required Magisk/KernelSU/APatch metadata fields, and that `id` matches the
   module directory name.
+- `kam -Qo <path>` resolves a device path under `/data/adb/modules/*` to the
+  installed module that owns it, using longest-prefix matching.
 - `--device <serial>` selects an adb device. `--device auto` keeps adb's normal
   single-device behavior.
 

@@ -180,6 +180,15 @@ fn try_parse_accepts_installed_query_check_combo() {
 }
 
 #[test]
+fn try_parse_accepts_installed_query_owner_combo() {
+    let cli = parse(&["kam", "-Qo", "/data/adb/modules/MagicNet/cli"]);
+
+    assert!(cli.query_flag);
+    assert!(cli.owner_flag);
+    assert_eq!(cli.targets, ["/data/adb/modules/MagicNet/cli"]);
+}
+
+#[test]
 fn try_parse_accepts_local_install_flag() {
     let cli = parse(&["kam", "-U", "module.zip"]);
 
