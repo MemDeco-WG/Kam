@@ -132,6 +132,37 @@ fn parses_explicit_repo_search_and_download_subcommands() {
 }
 
 #[test]
+fn parses_explicit_installed_query_subcommands() {
+    let list = parse(&["kam", "installed", "list", "--device", "5596d9", "magic"]);
+    let Some(Commands::Installed(installed)) = list.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::List(list_args))
+            if list_args.device.as_deref() == Some("5596d9") && list_args.query == ["magic"]
+    ));
+
+    let search = parse(&["kam", "installed", "search", "zygisk"]);
+    let Some(Commands::Installed(installed)) = search.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::Search(search_args)) if search_args.query == ["zygisk"]
+    ));
+
+    let info = parse(&["kam", "query", "info", "MagicNet"]);
+    let Some(Commands::Installed(installed)) = info.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::Info(info_args)) if info_args.modules == ["MagicNet"]
+    ));
+}
+
+#[test]
 fn parses_explicit_template_cache_namespace() {
     let legacy = parse(&["kam", "cache", "list"]);
     let Some(Commands::Cache(cache)) = legacy.command else {

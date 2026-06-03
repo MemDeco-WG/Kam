@@ -171,6 +171,15 @@ kam -S module_id  # download a module by id from local package metadata
 kam -Syu module_id # refresh index, then download
 ```
 
+Installed module query shortcuts:
+
+```bash
+kam -Q                 # list installed modules on the connected device
+kam -Qs magic          # search installed module metadata
+kam -Qi module_id      # show installed module.prop metadata
+kam -Q --device serial # query a specific adb device
+```
+
 Full command documentation lives in [docs/commands.md](docs/commands.md).
 
 `kam diff` compares the installed device module with the current source tree

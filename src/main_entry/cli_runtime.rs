@@ -54,6 +54,13 @@ fn cli_from_matches(matches: &clap::ArgMatches) -> Cli {
     cli
 }
 
+fn global_device(cli: &Cli) -> Option<String> {
+    cli.device
+        .as_ref()
+        .filter(|value| !value.eq_ignore_ascii_case("auto"))
+        .cloned()
+}
+
 fn hydrate_global_subcommand_args(matches: &clap::ArgMatches, cli: &mut Cli) {
     let Some(("dev", dev_matches)) = matches.subcommand() else {
         return;
@@ -158,6 +165,30 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
     false
 }
 
+fn handle_top_level_installed_flags(cli: &Cli) -> bool {
+    if !cli.query_flag {
+        return false;
+    }
+    let effective_targets = repo_targets(&cli.targets);
+    let effective_quiet = cli.quiet || query_quiet_requested();
+    let query_info = cli.info_flag || pacman_query_info_requested();
+    let query_search = cli.search_flag || pacman_query_search_requested();
+    let device = global_device(cli).or_else(|| target_option_value(&cli.targets, "--device"));
+    match kam::cmds::installed::handle_pacman_style(
+        query_search,
+        query_info,
+        &effective_targets,
+        device.filter(|value| !value.eq_ignore_ascii_case("auto")),
+        effective_quiet,
+    ) {
+        Ok(()) => true,
+        Err(e) => {
+            print_error_chain(&e);
+            std::process::exit(1);
+        }
+    }
+}
+
 fn pacman_sync_refresh_requested() -> bool {
     has_sync_short('y')
 }
@@ -170,8 +201,20 @@ fn pacman_sync_list_requested() -> bool {
     has_sync_short('l')
 }
 
+fn pacman_query_info_requested() -> bool {
+    has_query_short('i')
+}
+
+fn pacman_query_search_requested() -> bool {
+    has_query_short('s')
+}
+
 fn repo_quiet_requested() -> bool {
     has_sync_short('q') || std::env::args().any(|arg| arg == "-q" || arg == "--quiet")
+}
+
+fn query_quiet_requested() -> bool {
+    has_query_short('q') || std::env::args().any(|arg| arg == "-q" || arg == "--quiet")
 }
 
 fn repo_assume_yes(parsed_assume_yes: bool) -> bool {
@@ -193,6 +236,16 @@ fn has_sync_short(flag: char) -> bool {
     })
 }
 
+fn has_query_short(flag: char) -> bool {
+    std::env::args().skip(1).any(|arg| {
+        if arg.starts_with("--") || !arg.starts_with('-') {
+            return false;
+        }
+        let chars: Vec<char> = arg.chars().skip(1).collect();
+        chars.contains(&'Q') && chars.contains(&flag)
+    })
+}
+
 fn repo_targets(raw_targets: &[String]) -> Vec<String> {
     let mut targets = Vec::new();
     let mut skip_next = false;
@@ -203,15 +256,32 @@ fn repo_targets(raw_targets: &[String]) -> Vec<String> {
         }
         match target.as_str() {
             "-y" | "--yes" | "-q" | "--quiet" | "-u" | "--update" => {}
-            "--modules-url" => skip_next = true,
+            "--modules-url" | "--device" => skip_next = true,
             _ if target.starts_with("--modules-url=") => {}
+            _ if target.starts_with("--device=") => {}
             _ => targets.push(target.clone()),
         }
     }
     targets
 }
 
+fn target_option_value(raw_targets: &[String], name: &str) -> Option<String> {
+    for (idx, target) in raw_targets.iter().enumerate() {
+        if target == name {
+            return raw_targets
+                .get(idx + 1)
+                .filter(|value| !value.starts_with('-'))
+                .cloned();
+        }
+        if let Some(value) = target.strip_prefix(&format!("{name}=")) {
+            return Some(value.to_string());
+        }
+    }
+    None
+}
+
 fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
+    let selected_device = global_device(&cli);
     match cli.command {
         Some(Commands::Init(args)) => kam::cmds::init::run(&args),
         Some(Commands::Add(args)) => kam::cmds::add::run(&args),
@@ -237,6 +307,12 @@ fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
         Some(Commands::Workflow(args)) => kam::cmds::workflow::run(&args),
         Some(Commands::Repo(args)) => {
             kam::cmds::repo::run_with_modules_url(args, cli.modules_url.as_deref())
+        }
+        Some(Commands::Installed(mut args)) => {
+            if args.device.is_none() {
+                args.device = selected_device;
+            }
+            kam::cmds::installed::run(&args)
         }
         Some(Commands::Help(args)) => {
             handle_help_command(cmd, &args.subcommand);
@@ -268,6 +344,9 @@ fn main() {
     let cmd = build_localized_command();
     let matches = parse_cli_matches(&cmd);
     let cli = cli_from_matches(&matches);
+    if handle_top_level_installed_flags(&cli) {
+        return;
+    }
     if handle_top_level_repo_flags(&cli) {
         return;
     }

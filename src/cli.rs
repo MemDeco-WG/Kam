@@ -18,6 +18,10 @@ pub struct Cli {
     #[arg(short = 'S', action = clap::ArgAction::SetTrue)]
     pub sync_flag: bool,
 
+    /// Pacman-style local installed-module query flag (equivalent to pacman -Q)
+    #[arg(short = 'Q', action = clap::ArgAction::SetTrue)]
+    pub query_flag: bool,
+
     /// Pacman-style search modifier (use with -S as '-Ss' to search or '-s' alone to search)
     #[arg(short = 's', long = "search", action = clap::ArgAction::SetTrue)]
     pub search_flag: bool,
@@ -37,6 +41,10 @@ pub struct Cli {
     /// URL for the modules registry API (default: <https://modules.kernelsu.org>). Overrides the built-in modules endpoint.
     #[arg(long = "modules-url", value_name = "URL", global = true)]
     pub modules_url: Option<String>,
+
+    /// adb device serial for commands that inspect or mutate an Android device. Use auto to require exactly one connected device.
+    #[arg(long = "device", value_name = "SERIAL", global = true)]
+    pub device: Option<String>,
 
     /// Assume "yes" to all confirmation prompts (equivalent to -y). Use `-y` or `--yes` to skip confirmation.
     #[arg(short = 'y', long = "yes", action = clap::ArgAction::SetTrue, global = true)]
@@ -129,6 +137,10 @@ pub enum Commands {
     /// Interact with module repository (search/download)
     Repo(crate::cmds::repo::RepoArgs),
 
+    /// Query installed Magisk/KernelSU/APatch modules on a connected device
+    #[command(visible_alias = "query")]
+    Installed(crate::cmds::installed::InstalledArgs),
+
     /// Display about information for Kam and credits
     About(crate::cmds::about::AboutArgs),
 
@@ -180,8 +192,14 @@ impl Cli {
         for i in 1..args_os.len() {
             if let Some(tok) = args_os[i].to_str() {
                 // Exact matches we historically supported.
-                let explicit =
-                    tok == "-S" || tok == "-s" || tok == "-Ss" || tok == "-sS" || tok == "--search";
+                let explicit = tok == "-S"
+                    || tok == "-Q"
+                    || tok == "-s"
+                    || tok == "-Ss"
+                    || tok == "-sS"
+                    || tok == "-Qs"
+                    || tok == "-sQ"
+                    || tok == "--search";
 
                 // Detect combined short flags like `-Syu` or `-yuS`. We only accept letters
                 // from the known set to avoid surprising behavior with unrelated flags.
@@ -191,7 +209,7 @@ impl Cli {
                     let mut contains_sync_or_search = false;
                     for ch in rest.chars() {
                         match ch {
-                            'S' | 's' => contains_sync_or_search = true,
+                            'S' | 'Q' | 's' => contains_sync_or_search = true,
                             'y' | 'u' | 'q' | 'i' | 'l' => {}
                             _ => {
                                 all_known = false;
@@ -276,17 +294,25 @@ pub fn inject_double_dash_for_targets(
             let mut should_inject = false;
 
             // Exact matches (long or simple short forms)
-            if tok == "-S" || tok == "-s" || tok == "-Ss" || tok == "-sS" || tok == "--search" {
+            if tok == "-S"
+                || tok == "-Q"
+                || tok == "-s"
+                || tok == "-Ss"
+                || tok == "-sS"
+                || tok == "-Qs"
+                || tok == "-sQ"
+                || tok == "--search"
+            {
                 should_inject = true;
             } else if tok.starts_with('-') && !tok.starts_with("--") {
                 // Potential combined short flags like `-Syu`, `-yuS`, `-Ss`.
                 // Only treat as combined short flags if every character after '-'
-                // is one of the known short options we support here (S, s, y, u, q, i, l).
+                // is one of the known short options we support here (S, Q, s, y, u, q, i, l).
                 let mut all_known = true;
                 let mut contains_sync_or_search = false;
                 for ch in tok.chars().skip(1) {
                     match ch {
-                        'S' | 's' => contains_sync_or_search = true,
+                        'S' | 'Q' | 's' => contains_sync_or_search = true,
                         'y' | 'u' | 'q' | 'i' | 'l' => {}
                         _ => {
                             all_known = false;

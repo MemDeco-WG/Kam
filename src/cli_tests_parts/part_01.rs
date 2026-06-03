@@ -2,6 +2,7 @@ use super::{Cli, Commands, inject_double_dash_for_targets};
 use crate::cmds::add::{AddCommands, HookPhase, ScriptPhase, WebuiTemplate};
 use crate::cmds::cache::{CacheCommands, TemplateCacheCommands};
 use crate::cmds::dev::DevCommand;
+use crate::cmds::installed::InstalledCommand;
 use crate::cmds::init::KernelSuRepoMode;
 use crate::cmds::mcp::McpCommand;
 use crate::cmds::repo::RepoCommand;
@@ -42,6 +43,14 @@ fn injects_after_explicit_sync_before_target() {
     let args = inject_double_dash_for_targets(os_args(&["kam", "-S", "module"]), &mut cmd);
 
     assert_eq!(args, os_args(&["kam", "-S", "--", "module"]));
+}
+
+#[test]
+fn injects_after_explicit_query_before_target() {
+    let mut cmd = Cli::command();
+    let args = inject_double_dash_for_targets(os_args(&["kam", "-Q", "module"]), &mut cmd);
+
+    assert_eq!(args, os_args(&["kam", "-Q", "--", "module"]));
 }
 
 #[test]
@@ -101,6 +110,32 @@ fn try_parse_accepts_explicit_search_combo() {
     assert!(cli.sync_flag);
     assert!(cli.search_flag);
     assert_eq!(cli.targets, vec!["term"]);
+}
+
+#[test]
+fn try_parse_accepts_explicit_installed_query_search_combo() {
+    let cli = parse(&["kam", "-Qs", "term"]);
+
+    assert!(cli.query_flag);
+    assert!(cli.search_flag);
+    assert_eq!(cli.targets, vec!["term"]);
+}
+
+#[test]
+fn try_parse_accepts_installed_query_info_combo() {
+    let cli = parse(&["kam", "-Qi", "MagicNet"]);
+
+    assert!(cli.query_flag);
+    assert!(cli.info_flag);
+    assert_eq!(cli.targets, vec!["MagicNet"]);
+}
+
+#[test]
+fn try_parse_accepts_global_device_for_query() {
+    let cli = parse(&["kam", "--device", "5596d9", "-Q"]);
+
+    assert!(cli.query_flag);
+    assert_eq!(cli.device.as_deref(), Some("5596d9"));
 }
 
 #[test]
@@ -235,6 +270,9 @@ fn parses_every_top_level_subcommand_variant() {
         }),
         (&["kam", "install", "module.zip"], |cmd| {
             matches!(cmd, Commands::Install(_))
+        }),
+        (&["kam", "installed", "list"], |cmd| {
+            matches!(cmd, Commands::Installed(_))
         }),
         (&["kam", "mcp", "status"], |cmd| {
             matches!(cmd, Commands::Mcp(_))

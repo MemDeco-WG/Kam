@@ -380,6 +380,36 @@ Pacman-style behavior:
 
 If the local index is missing or stale, run `kam -Sy` or `kam repo sync`.
 
+## `kam installed`, `kam query`, And `kam -Q`
+
+Query the read-only installed-module database on a connected Android device.
+Kam reads `/data/adb/modules/*/module.prop` through adb root and reports
+Magisk/KernelSU/APatch module metadata without touching the module files.
+
+```bash
+kam -Q
+kam -Qs magic
+kam -Qi module_id
+kam -Q --device 5596d9
+kam installed list
+kam installed search magic
+kam installed info module_id
+kam query info module_id
+```
+
+Pacman-style behavior:
+
+- `kam -Q` lists installed modules from `/data/adb/modules`.
+- `kam -Qs <query>` searches installed module ids, names, versions, authors,
+  and descriptions.
+- `kam -Qi <module_id>` shows installed `module.prop` metadata, module state,
+  and module path.
+- `--device <serial>` selects an adb device. `--device auto` keeps adb's normal
+  single-device behavior.
+
+Module state is derived from manager marker files: `disable` means disabled,
+`remove` means removal is pending, otherwise the module is shown as enabled.
+
 ## `kam workflow`
 
 Install GitHub Actions workflows.
