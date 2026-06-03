@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 ui_print() {
     printf "  ${NC}• %s${NC}\n" "$1"
 }

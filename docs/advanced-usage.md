@@ -1,0 +1,243 @@
+# Kam Advanced Usage
+
+This page covers build-time hooks, development hooks, workspace builds,
+configuration sync, WebUI packaging, and optional online features.
+
+## Release Hooks
+
+Kam executes build hooks directly and lets the operating system choose the
+interpreter. Hook scripts should include a shebang and executable bit.
+
+Pre-build hooks live in:
+
+```text
+hooks/pre-build/
+├── 0.EXAMPLE.sh
+├── 1.SYNC_MODULE_FILES.sh
+└── 2.BUILD_WEBUI.sh
+```
+
+Post-build hooks live in:
+
+```text
+hooks/post-build/
+├── 0.EXAMPLE.sh
+├── 1.VERIFY.sh
+├── 2.UPLOAD.sh
+└── 3.NOTIFY.sh
+```
+
+## Development Hooks
+
+`kam dev` uses separate hooks from release builds:
+
+```text
+hooks/dev-build/
+hooks/dev-webui/
+hooks/dev-binary/
+hooks/dev-sync/
+hooks/dev-install/
+hooks/dev-start/
+hooks/dev-stop/
+```
+
+`kam dev --watch` runs narrower hooks when possible:
+
+- `webui/**` or module `webroot/**` changes run `hooks/dev-webui/`, then sync
+  `webroot/**`.
+- `crates/**` or module `.local/bin/**` changes run `hooks/dev-binary/`, then
+  sync `.local/bin/**`.
+- allowlisted module scripts, templates, and property files are pushed directly
+  with backup and rollback.
+- structural changes are not hot-pushed automatically; run `kam dev --install`.
+
+## Hook Environment
+
+Hook scripts receive these common variables:
+
+| Variable | Description |
+| --- | --- |
+| `KAM_PROJECT_ROOT` | Absolute project root |
+| `KAM_HOOKS_ROOT` | Absolute hooks directory |
+| `KAM_MODULE_ROOT` | Module source directory |
+| `KAM_WEB_ROOT` | Module webroot directory |
+| `KAM_DIST_DIR` | Build output directory |
+| `KAM_MODULE_ID` | Module id |
+| `KAM_MODULE_VERSION` | Module version |
+| `KAM_MODULE_VERSION_CODE` | Module version code |
+| `KAM_MODULE_NAME` | Module name |
+| `KAM_MODULE_AUTHOR` | Module author |
+| `KAM_MODULE_DESCRIPTION` | Module description |
+| `KAM_MODULE_UPDATE_JSON` | Update JSON URL |
+| `KAM_STAGE` | Current stage, such as `pre-build` or `dev-webui` |
+| `KAM_DEV_SESSION_LOG` | Latest dev-session log for `dev-*` hooks |
+| `KAM_DEBUG` | Set to `1` for debug output |
+| `KAM_HOME` | Override global Kam home, defaulting to `~/.kam/` |
+
+## Dev Configuration
+
+Configure hot sync, logs, forwarding, and MCP in `kam.toml`:
+
+```toml
+[dev]
+device = "auto"
+module_path = "/data/adb/modules/MagicNet"
+hot = ["webroot/**", "service.sh", "action.sh", ".local/bin/**", "templates/**"]
+watch = [
+  "webui",
+  "crates",
+  "src/MagicNet",
+  "hooks/dev-build",
+  "hooks/dev-webui",
+  "hooks/dev-binary",
+  "hooks/dev-sync",
+]
+logs = ["/data/adb/modules/MagicNet/logs/*.log"]
+forward = ["mcp"]
+webui_port = 8080
+webui_local_port = 8080
+
+[dev.mcp]
+enabled = true
+port = 8765
+local_port = 8765
+endpoint = "/mcp"
+transport = "streamable-http"
+```
+
+Hot sync skips `.config/**` by default so runtime and user configuration are
+not overwritten accidentally. Kam prints device paths before writing and backs
+up replaced device files to `<path>.bak`.
+
+The latest dev plan and stage summary are recorded at
+`.kam/dev/last-session.log`. `kam dev --logs` prints this log, common manager
+install logs, configured device logs, and recent filtered `logcat` lines.
+
+## Workspace Builds
+
+Kam can build multiple modules in one workspace:
+
+```toml
+[kam.workspace]
+members = [
+  ".",
+  "modules/module_a",
+  "modules/module_b",
+]
+```
+
+Build all members:
+
+```bash
+kam build --all
+```
+
+## Build Configuration
+
+Common build options in `kam.toml`:
+
+```toml
+[kam.build]
+target_dir = "dist"
+output_file = "{{id}}"
+hooks_dir = "hooks"
+source_dir = "src/{{id}}"
+exclude = [
+  ".git/",
+  "target/",
+  "node_modules/",
+  ".DS_Store",
+  "Thumbs.db",
+  "*.tmp",
+  "*.log",
+  "*.bak",
+  ".kam/",
+]
+include = []
+respect_gitignore = false
+```
+
+When a path matches both `exclude` and `include`, `include` wins. Prefer
+explicit `exclude` / `include` rules over `respect_gitignore` for packaging.
+
+## Metadata Sync
+
+Kam syncs `kam.toml` metadata into generated files:
+
+- `module.prop` goes to `$KAM_MODULE_ROOT/module.prop`.
+- `update.json` goes to `$KAM_PROJECT_ROOT/update.json`.
+- `module.json`, `repo.json`, `track.json`, and `config.json` are generated for
+  registry and marketplace use.
+
+Run manual sync after metadata, workflow, or template baseline edits:
+
+```bash
+kam sync
+kam sync workflow --source-repo owner/repo
+kam sync --remote all
+```
+
+## WebUI Packaging
+
+For modules with WebUI:
+
+1. Develop the frontend in `webui/`.
+2. Build hooks copy output into `src/<module_id>/webroot/`.
+3. Kam packages `webroot/` into the module ZIP.
+4. The installed module exposes it through the target manager's WebUI feature.
+
+During development, use:
+
+```bash
+kam dev --webui --forward webui
+```
+
+## Conditional Template Logic
+
+Declare template variables:
+
+```toml
+[kam.tmpl.variables.feature_x]
+var_type = "bool"
+required = false
+default = false
+```
+
+Use them in template files:
+
+```bash
+{% if feature_x %}
+# Feature X related code
+{% endif %}
+```
+
+## Optional Online Features
+
+Most Kam commands work offline. Network-backed features are opt-in or explicit:
+
+- `kam tmpl pull` and `kam tmpl update` download remote template archives.
+- `kam repo sync`, `kam -Ss`, and `kam -S` use the configured module registry.
+- `kam sign` does not request RFC 3161 timestamps by default; timestamping or
+  Sigstore integrations may contact external services when enabled.
+- Workflow commands may call GitHub or rely on GitHub Actions after files are
+  committed and pushed.
+
+## Localization CI
+
+Kam keeps CLI and WebUI wording aligned through exported localization data.
+
+`.github/workflows/i18n-check.yml` runs the exporter and verifies localized
+`--help` output, such as `kam build --help` and `kam tmpl import --help`, under
+`KAM_UI_LANGUAGE=zh` and `KAM_UI_LANGUAGE=en`.
+
+The same workflow verifies exported JSON files are committed, preventing drift
+between CLI TOML and WebUI data. To extend translations, add missing keys to
+`src/i18n/en.toml`, provide translations in `src/i18n/zh.toml`, run the
+exporter, and commit the resulting files.
+
+## Kamcp
+
+If you want interactive command help, Kamcp exposes a `kam_exec` MCP tool and
+an AI assistant that can explain or run Kam commands.
+
+See <https://github.com/MemDeco-WG/Kamcp>.
