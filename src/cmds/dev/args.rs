@@ -3,9 +3,6 @@ use clap::{Args, Subcommand};
 #[derive(Args, Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct DevArgs {
-    #[command(subcommand)]
-    pub command: Option<DevCommand>,
-
     /// adb device serial. Use auto to require exactly one connected device.
     #[arg(long, global = true)]
     pub device: Option<String>,
@@ -45,6 +42,9 @@ pub struct DevArgs {
     /// Print planned local and device writes without executing them.
     #[arg(long, global = true)]
     pub dry_run: bool,
+
+    #[command(subcommand)]
+    pub command: Option<DevCommand>,
 }
 
 #[derive(Subcommand, Debug, Clone)]

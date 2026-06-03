@@ -9,20 +9,43 @@ use crate::utils::Utils;
 use super::adb::{adb_root, adb_status};
 use super::context::DevContext;
 use super::session::log_session;
+use super::sync_plan::{
+    SyncMode, all_mirror_roots, is_under_mirror_root, mirror_roots_for_patterns, sync_mode,
+};
 
 pub(super) fn planned_hot_files(
     ctx: &DevContext,
     args: &super::args::DevArgs,
 ) -> Result<Vec<PathBuf>, KamError> {
     if args.webui {
-        collect_matching_hot_files(ctx, &["webroot/**"])
+        Ok(Vec::new())
     } else {
-        collect_hot_files(ctx)
+        overlay_files(ctx, &collect_hot_files(ctx)?)
     }
 }
 
+pub(super) fn planned_mirror_roots(
+    ctx: &DevContext,
+    args: &super::args::DevArgs,
+) -> Result<Vec<PathBuf>, KamError> {
+    let roots = if args.webui {
+        mirror_roots_for_patterns(ctx, &["webroot/**"])
+    } else {
+        all_mirror_roots(ctx)
+    };
+    roots
+        .iter()
+        .map(|root| remote_path(ctx, root))
+        .collect::<Result<Vec<_>, _>>()
+}
+
 pub(super) fn sync_hot_files(ctx: &DevContext) -> Result<(), KamError> {
-    sync_selected_hot_files(ctx, &collect_hot_files(ctx)?)?;
+    let files = collect_hot_files(ctx)?;
+    for root in all_mirror_roots(ctx) {
+        sync_mirror_root(ctx, &root)?;
+    }
+    let overlay_files = overlay_files(ctx, &files)?;
+    sync_selected_hot_files(ctx, &overlay_files)?;
     run_restart_command(ctx)?;
     Ok(())
 }
@@ -38,8 +61,12 @@ fn sync_selected_hot_files(ctx: &DevContext, files: &[PathBuf]) -> Result<(), Ka
 }
 
 pub(super) fn sync_matching_hot_files(ctx: &DevContext, patterns: &[&str]) -> Result<(), KamError> {
+    for root in mirror_roots_for_patterns(ctx, patterns) {
+        sync_mirror_root(ctx, &root)?;
+    }
     let files = collect_matching_hot_files(ctx, patterns)?;
-    sync_selected_hot_files(ctx, &files)?;
+    let overlay_files = overlay_files(ctx, &files)?;
+    sync_selected_hot_files(ctx, &overlay_files)?;
     Ok(())
 }
 
@@ -64,7 +91,9 @@ fn collect_matching_hot_files(
             ))
         })?;
         let rel_str = rel.to_string_lossy().replace('\\', "/");
-        if patterns.iter().any(|pattern| pattern.matches(&rel_str)) {
+        if patterns.iter().any(|pattern| pattern.matches(&rel_str))
+            && matches!(sync_mode(ctx, &file)?, Some(SyncMode::Overlay))
+        {
             files.push(file);
         }
     }
@@ -78,7 +107,10 @@ pub(super) fn sync_incremental_hot_files(
 ) -> Result<(), KamError> {
     let mut selected = Vec::new();
     for file in files {
-        if file.exists() && is_allowed_hot_file(ctx, file)? {
+        if file.exists()
+            && is_allowed_hot_file(ctx, file)?
+            && matches!(sync_mode(ctx, file)?, Some(SyncMode::Overlay))
+        {
             selected.push(file.clone());
         }
     }
@@ -113,7 +145,7 @@ pub(super) fn matches_hot_path(ctx: &DevContext, file: &Path) -> Result<bool, Ka
         return Ok(false);
     };
     let rel_str = rel.to_string_lossy().replace('\\', "/");
-    if rel_str.starts_with(".config/") {
+    if sync_mode(ctx, file)?.is_none() {
         return Ok(false);
     }
     Ok(compile_patterns(&ctx.hot_patterns)?
@@ -138,15 +170,61 @@ pub(super) fn collect_hot_files(ctx: &DevContext) -> Result<Vec<PathBuf>, KamErr
         }
         let rel = path.strip_prefix(&ctx.module_root).unwrap_or(path);
         let rel_str = rel.to_string_lossy().replace('\\', "/");
-        if rel_str.starts_with(".config/") {
-            continue;
-        }
         if patterns.iter().any(|pattern| pattern.matches(&rel_str)) {
             files.push(path.to_path_buf());
         }
     }
     files.sort();
     Ok(files)
+}
+
+fn overlay_files(ctx: &DevContext, files: &[PathBuf]) -> Result<Vec<PathBuf>, KamError> {
+    let mut out = Vec::new();
+    for file in files {
+        if matches!(sync_mode(ctx, file)?, Some(SyncMode::Overlay))
+            && !is_under_mirror_root(ctx, file)?
+        {
+            out.push(file.clone());
+        }
+    }
+    Ok(out)
+}
+
+fn sync_mirror_root(ctx: &DevContext, local_root: &Path) -> Result<(), KamError> {
+    if !local_root.exists() {
+        return Ok(());
+    }
+    let remote_root = remote_path(ctx, local_root)?;
+    let stage_root = PathBuf::from(ctx.sync_policy.rendered_stage_dir(&ctx.module_id)).join(
+        local_root.file_name().ok_or_else(|| {
+            KamError::InvalidDirectory(format!("Invalid mirror root: {}", local_root.display()))
+        })?,
+    );
+    Utils::info(format!(
+        "Mirroring device directory: {}",
+        remote_root.display()
+    ));
+    log_session(ctx, format!("mirror_device_dir={}", remote_root.display()))?;
+    adb_root(
+        ctx,
+        &format!("rm -rf {}", shell_quote(&stage_root.to_string_lossy())),
+    )?;
+    adb_status(
+        ctx,
+        &[
+            "push",
+            &local_root.to_string_lossy(),
+            &stage_root.to_string_lossy(),
+        ],
+    )?;
+    adb_root(
+        ctx,
+        &format!(
+            "set -e; parent=$(dirname {remote}); mkdir -p \"$parent\"; rm -rf {remote}.bak; [ ! -e {remote} ] || cp -a {remote} {remote}.bak; rm -rf {remote}; cp -a {stage} {remote}; rm -rf {stage}",
+            remote = shell_quote(&remote_root.to_string_lossy()),
+            stage = shell_quote(&stage_root.to_string_lossy()),
+        ),
+    )
 }
 
 fn push_file_with_backup(ctx: &DevContext, local: &Path) -> Result<(), KamError> {
@@ -199,6 +277,10 @@ pub(super) fn default_hot_patterns() -> Vec<String> {
 
 pub(super) fn default_watch_paths() -> Vec<String> {
     DevSection::default().watch.unwrap_or_default()
+}
+
+pub(super) fn default_sync_policy() -> crate::types::kam_toml::sections::DevSyncSection {
+    crate::types::kam_toml::sections::DevSyncSection::default()
 }
 
 pub(super) fn shell_quote(value: &str) -> String {

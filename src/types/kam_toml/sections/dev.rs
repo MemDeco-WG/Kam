@@ -22,8 +22,24 @@ pub struct DevSection {
     pub webui_local_port: Option<u16>,
     /// Optional root shell command to run after a successful hot update.
     pub restart_command: Option<String>,
+    /// Device synchronization policy used by `kam dev`.
+    pub sync: Option<DevSyncSection>,
     /// Standard MCP runtime contract.
     pub mcp: Option<McpSection>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[allow(non_snake_case)]
+/// Device synchronization policy for `kam dev`.
+pub struct DevSyncSection {
+    /// Device staging directory used before root-side apply.
+    pub stage_dir: Option<String>,
+    /// Path globs that should be mirrored directory-by-directory.
+    pub mirror: Option<Vec<String>>,
+    /// Path globs that should never be overwritten on the device.
+    pub preserve: Option<Vec<String>>,
+    /// Path globs that should never be synchronized.
+    pub ignore: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -78,7 +94,32 @@ impl Default for DevSection {
             webui_port: None,
             webui_local_port: None,
             restart_command: None,
+            sync: Some(DevSyncSection::default()),
             mcp: Some(McpSection::default()),
+        }
+    }
+}
+
+impl Default for DevSyncSection {
+    fn default() -> Self {
+        Self {
+            stage_dir: Some("/data/local/tmp/kam-dev/{{id}}".to_string()),
+            mirror: Some(vec!["webroot/**".to_string()]),
+            preserve: Some(vec![
+                ".config/**".to_string(),
+                "config.yaml".to_string(),
+                "config.yml".to_string(),
+                "subscriptions/**".to_string(),
+                "*.user.yaml".to_string(),
+                "*.user.yml".to_string(),
+            ]),
+            ignore: Some(vec![
+                "logs/**".to_string(),
+                ".log/**".to_string(),
+                "cache/**".to_string(),
+                "*.bak".to_string(),
+                "*.kam-tmp".to_string(),
+            ]),
         }
     }
 }

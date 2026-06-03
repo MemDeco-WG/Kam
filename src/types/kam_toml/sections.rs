@@ -28,7 +28,7 @@ pub mod workspace;
 // Re-export main types
 pub use crate::types::kam_toml::enums::{ModuleType, SupportedArch};
 pub use build::BuildSection;
-pub use dev::{DevSection, McpSection};
+pub use dev::{DevSection, DevSyncSection, McpSection};
 
 pub use kam::KamSection;
 pub use manager::ManagerSection;

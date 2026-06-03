@@ -223,6 +223,7 @@ fn snapshot(ctx: &DevContext) -> Result<BTreeMap<PathBuf, SystemTime>, KamError>
 #[cfg(test)]
 mod tests {
     use super::super::sync::default_hot_patterns;
+    use super::super::sync::default_sync_policy;
     use super::*;
     use crate::cmds::build::args::BuildArgs;
     use crate::cmds::mcp::McpRuntime;
@@ -264,6 +265,7 @@ mod tests {
             module_path: "/data/adb/modules/MagicNet".to_string(),
             device: None,
             hot_patterns: default_hot_patterns(),
+            sync_policy: super::super::sync_plan::SyncPolicy::from_section(&default_sync_policy()),
             watch_paths: Vec::new(),
             logs: Vec::new(),
             forwards: Vec::new(),

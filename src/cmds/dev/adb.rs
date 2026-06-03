@@ -21,9 +21,18 @@ pub(super) fn detect_device(ctx: &DevContext) -> Result<(), KamError> {
     if output.status.success() {
         Ok(())
     } else {
-        Err(KamError::CommandFailed(
-            "No usable adb device. Connect one device or pass --device <serial>.".to_string(),
-        ))
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        Err(KamError::CommandFailed(format!(
+            "No usable adb device. Command: {}. {}",
+            adb_command(ctx, &["get-state"]),
+            if detail.is_empty() {
+                "Connect one device or pass --device <serial>.".to_string()
+            } else {
+                detail
+            }
+        )))
     }
 }
 

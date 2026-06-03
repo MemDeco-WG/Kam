@@ -294,6 +294,13 @@ fn parses_dev_command_variants() {
     };
     assert!(matches!(dev.command, Some(DevCommand::Doctor)));
     assert!(dev.dry_run);
+
+    let doctor_with_device = parse(&["kam", "dev", "--device", "5596d9", "doctor"]);
+    let Some(Commands::Dev(dev)) = doctor_with_device.command else {
+        panic!("expected dev command");
+    };
+    assert!(matches!(dev.command, Some(DevCommand::Doctor)));
+    assert_eq!(dev.device.as_deref(), Some("5596d9"));
 }
 
 #[test]
@@ -410,4 +417,3 @@ fn parses_sync_command_variants() {
     assert!(sync.remote);
     assert!(matches!(sync.command, Some(SyncCommand::All { .. })));
 }
-

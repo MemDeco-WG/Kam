@@ -97,6 +97,12 @@ forward = ["mcp"]
 webui_port = 8080
 webui_local_port = 8080
 
+[dev.sync]
+stage_dir = "/data/local/tmp/kam-dev/{{id}}"
+mirror = ["webroot/**"]
+preserve = [".config/**", "config.yaml", "config.yml", "subscriptions/**", "*.user.yaml", "*.user.yml"]
+ignore = ["logs/**", ".log/**", "cache/**", "*.bak", "*.kam-tmp"]
+
 [dev.mcp]
 enabled = true
 port = 8765
@@ -105,9 +111,17 @@ endpoint = "/mcp"
 transport = "streamable-http"
 ```
 
-Hot sync skips `.config/**` by default so runtime and user configuration are
-not overwritten accidentally. Kam prints device paths before writing and backs
-up replaced device files to `<path>.bak`.
+Hot sync has three default behaviors:
+
+- `mirror`: `webroot/**` is mirrored as a directory, so stale hashed frontend
+  bundles are removed from the device.
+- `overlay`: allowlisted scripts, binaries, templates, `system.prop`, and
+  `sepolicy.rule` are copied over existing files.
+- `preserve` / `ignore`: runtime config, subscriptions, logs, cache files, and
+  temporary files are not overwritten accidentally.
+
+Kam stages mirrored directories under `[dev.sync].stage_dir`, applies them from
+a root shell, and backs up replaced device paths to `<path>.bak`.
 
 The latest dev plan and stage summary are recorded at
 `.kam/dev/last-session.log`. `kam dev --logs` prints this log, common manager

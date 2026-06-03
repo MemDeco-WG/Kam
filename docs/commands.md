@@ -198,7 +198,7 @@ Options:
 - `--device <serial|auto>`: select an adb device.
 - `--watch`: poll dev paths and run incremental actions.
 - `--hot`: only hot-update allowlisted files.
-- `--webui`: run WebUI hooks, sync `webroot/**`, and forward WebUI port.
+- `--webui`: run WebUI hooks, mirror `webroot/**`, and forward WebUI port.
 - `--sync-only`: skip dev-build hooks and only sync files.
 - `--install`: build a ZIP, install it, then run `hooks/dev-install/`.
 - `--logs`: print local session, install, module, and filtered logcat logs.

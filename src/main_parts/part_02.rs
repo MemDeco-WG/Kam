@@ -42,13 +42,64 @@ fn parse_cli_matches(cmd: &clap::Command) -> clap::ArgMatches {
 }
 
 fn cli_from_matches(matches: &clap::ArgMatches) -> Cli {
-    match Cli::from_arg_matches(matches) {
+    let mut cli = match Cli::from_arg_matches(matches) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error parsing arguments: {e}");
             std::process::exit(2);
         }
+    };
+    hydrate_global_subcommand_args(matches, &mut cli);
+    hydrate_dev_args_from_argv(&mut cli);
+    cli
+}
+
+fn hydrate_global_subcommand_args(matches: &clap::ArgMatches, cli: &mut Cli) {
+    let Some(("dev", dev_matches)) = matches.subcommand() else {
+        return;
+    };
+    let Some(Commands::Dev(dev)) = &mut cli.command else {
+        return;
+    };
+    if dev.device.is_none()
+        && let Some(device) = dev_matches.get_one::<String>("device")
+    {
+        dev.device = Some(device.clone());
     }
+    if !dev.dry_run && dev_matches.get_flag("dry_run") {
+        dev.dry_run = true;
+    }
+}
+
+fn hydrate_dev_args_from_argv(cli: &mut Cli) {
+    let Some(Commands::Dev(dev)) = &mut cli.command else {
+        return;
+    };
+    let args: Vec<String> = std::env::args().collect();
+    let Some(dev_pos) = args.iter().position(|arg| arg == "dev") else {
+        return;
+    };
+    let dev_args = &args[dev_pos..];
+    if dev.device.is_none()
+        && let Some(device) = find_option_value(dev_args, "--device")
+    {
+        dev.device = Some(device);
+    }
+    if !dev.dry_run && dev_args.iter().any(|arg| arg == "--dry-run") {
+        dev.dry_run = true;
+    }
+}
+
+fn find_option_value(args: &[String], name: &str) -> Option<String> {
+    for (idx, arg) in args.iter().enumerate() {
+        if arg == name {
+            return args.get(idx + 1).filter(|value| !value.starts_with('-')).cloned();
+        }
+        if let Some(value) = arg.strip_prefix(&format!("{name}=")) {
+            return Some(value.to_string());
+        }
+    }
+    None
 }
 
 fn handle_top_level_repo_flags(cli: &Cli) -> bool {

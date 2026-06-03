@@ -7,7 +7,8 @@ use crate::errors::KamError;
 use crate::types::kam_toml::KamToml;
 
 use super::args::DevArgs;
-use super::sync::{default_hot_patterns, default_watch_paths};
+use super::sync::{default_hot_patterns, default_sync_policy, default_watch_paths};
+use super::sync_plan::SyncPolicy;
 
 #[derive(Debug)]
 pub(super) struct DevContext {
@@ -18,6 +19,7 @@ pub(super) struct DevContext {
     pub(super) module_path: String,
     pub(super) device: Option<String>,
     pub(super) hot_patterns: Vec<String>,
+    pub(super) sync_policy: SyncPolicy,
     pub(super) watch_paths: Vec<PathBuf>,
     pub(super) logs: Vec<String>,
     pub(super) forwards: Vec<String>,
@@ -56,6 +58,7 @@ pub(super) fn load_context(args: &DevArgs) -> Result<DevContext, KamError> {
         .or(dev.device.clone())
         .filter(|value| !value.eq_ignore_ascii_case("auto"));
     let hot_patterns = dev.hot.clone().unwrap_or_else(default_hot_patterns);
+    let sync_policy = SyncPolicy::from_section(&dev.sync.unwrap_or_else(default_sync_policy));
     let watch_paths = dev
         .watch
         .clone()
@@ -106,6 +109,7 @@ pub(super) fn load_context(args: &DevArgs) -> Result<DevContext, KamError> {
         module_path,
         device,
         hot_patterns,
+        sync_policy,
         watch_paths,
         logs,
         forwards,

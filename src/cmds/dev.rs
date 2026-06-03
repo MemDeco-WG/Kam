@@ -7,6 +7,7 @@ mod handler;
 mod logs;
 mod session;
 mod sync;
+mod sync_plan;
 mod watch;
 
 pub use args::{DevArgs, DevCommand};

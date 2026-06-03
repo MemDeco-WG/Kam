@@ -12,7 +12,9 @@ use super::context::{DevContext, load_context};
 use super::forward::{enable_mcp, run_forwards};
 use super::logs::show_logs;
 use super::session::{dev_mode_label, log_session, reset_session_log, should_show_logs};
-use super::sync::{planned_hot_files, remote_path, sync_hot_files, sync_matching_hot_files};
+use super::sync::{
+    planned_hot_files, planned_mirror_roots, remote_path, sync_hot_files, sync_matching_hot_files,
+};
 use super::watch::watch;
 
 /// Run the dev command.
@@ -147,6 +149,9 @@ fn print_plan(ctx: &DevContext, args: &DevArgs) -> Result<(), KamError> {
             "Will write device file: {}",
             remote_path(ctx, &file)?.display()
         ));
+    }
+    for root in planned_mirror_roots(ctx, args)? {
+        Utils::info(format!("Will mirror device directory: {}", root.display()));
     }
     run_forwards(ctx, args, true)?;
     if args.mcp {
