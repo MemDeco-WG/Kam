@@ -3,11 +3,13 @@ use clap::{Args, Subcommand};
 use crate::errors::KamError;
 use crate::utils::Utils;
 
+mod check;
 mod metadata;
 mod origin;
 mod remove;
 mod upgrades;
 
+pub use check::{CheckRequest, handle_check};
 use metadata::query_installed_modules;
 pub use metadata::{InstalledModule, ModuleState, parse_installed_modules};
 pub use origin::{OriginFilter, handle_origin_filter};
@@ -41,6 +43,8 @@ pub enum InstalledCommand {
     Foreign(InstalledOriginArgs),
     /// List installed modules present in the cached repository index.
     Native(InstalledOriginArgs),
+    /// Check installed module directory and module.prop integrity.
+    Check(InstalledCheckArgs),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -121,23 +125,64 @@ pub struct InstalledOriginArgs {
     pub quiet: bool,
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct InstalledCheckArgs {
+    /// Optional installed module ids or names to check.
+    #[arg(value_name = "MODULE", num_args = 0..)]
+    pub modules: Vec<String>,
+
+    /// adb device serial. Use auto to require exactly one connected device.
+    #[arg(long)]
+    pub device: Option<String>,
+
+    /// Suppress successful checks and print only problems.
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PacmanQueryRequest {
+    pub mode: PacmanQueryMode,
+    pub targets: Vec<String>,
+    pub device: Option<String>,
+    pub modules_url: Option<String>,
+    pub quiet: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PacmanQueryMode {
+    List,
+    Search,
+    Info,
+    Upgrades,
+    Foreign,
+    Native,
+    Check,
+}
+
+/// Run explicit installed-module subcommands.
+///
+/// # Errors
+///
+/// Returns an error when adb/root queries fail, requested modules are missing,
+/// or a subcommand-specific validation fails.
 pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
     match &args.command {
         Some(InstalledCommand::List(list)) => {
             let device = list.device.as_ref().or(args.device.as_ref());
-            handle_list(&list.query.join(" "), device.cloned(), false)
+            handle_list(&list.query.join(" "), device.map(String::as_str), false)
         }
         Some(InstalledCommand::Search(search)) => {
             let device = search.device.as_ref().or(args.device.as_ref());
-            handle_search(&search.query.join(" "), device.cloned(), false)
+            handle_search(&search.query.join(" "), device.map(String::as_str), false)
         }
         Some(InstalledCommand::Info(info)) => {
             let device = info.device.as_ref().or(args.device.as_ref());
-            handle_info(&info.modules, device.cloned())
+            handle_info(&info.modules, device.map(String::as_str))
         }
         Some(InstalledCommand::Upgrades(upgrades)) => {
             let device = upgrades.device.as_ref().or(args.device.as_ref());
-            handle_upgrades(device.cloned(), None, upgrades.quiet)
+            handle_upgrades(device.map(String::as_str), None, upgrades.quiet)
         }
         Some(InstalledCommand::Remove(remove)) => {
             let device = remove.device.as_ref().or(args.device.as_ref()).cloned();
@@ -151,52 +196,87 @@ pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
         }
         Some(InstalledCommand::Foreign(origin)) => {
             let device = origin.device.as_ref().or(args.device.as_ref());
-            handle_origin_filter(OriginFilter::Foreign, device.cloned(), None, origin.quiet)
+            handle_origin_filter(
+                OriginFilter::Foreign,
+                device.map(String::as_str),
+                None,
+                origin.quiet,
+            )
         }
         Some(InstalledCommand::Native(origin)) => {
             let device = origin.device.as_ref().or(args.device.as_ref());
-            handle_origin_filter(OriginFilter::Native, device.cloned(), None, origin.quiet)
+            handle_origin_filter(
+                OriginFilter::Native,
+                device.map(String::as_str),
+                None,
+                origin.quiet,
+            )
         }
-        None => handle_list("", args.device.clone(), false),
+        Some(InstalledCommand::Check(check)) => {
+            let device = check.device.as_ref().or(args.device.as_ref()).cloned();
+            handle_check(&CheckRequest {
+                modules: check.modules.clone(),
+                device,
+                quiet: check.quiet,
+            })
+        }
+        None => handle_list("", args.device.as_deref(), false),
     }
 }
 
-pub fn handle_pacman_style(
-    search: bool,
-    info: bool,
-    upgrades: bool,
-    foreign: bool,
-    native: bool,
-    targets: &[String],
-    device: Option<String>,
-    modules_url: Option<&str>,
-    quiet: bool,
-) -> Result<(), KamError> {
-    if upgrades {
-        return handle_upgrades(device, modules_url, quiet);
-    }
-    if foreign {
-        return handle_origin_filter(OriginFilter::Foreign, device, modules_url, quiet);
-    }
-    if native {
-        return handle_origin_filter(OriginFilter::Native, device, modules_url, quiet);
-    }
-    if info {
-        return handle_info(targets, device);
-    }
-    if search {
-        if targets.is_empty() {
-            return Err(KamError::CommandFailed(
-                "Search requires a query, e.g. `kam -Qs <term>`".to_string(),
-            ));
+/// Run pacman-style `kam -Q...` installed-module queries.
+///
+/// # Errors
+///
+/// Returns an error when adb/root queries fail, cached repository metadata is
+/// unavailable for origin/upgrade checks, or requested modules are missing.
+pub fn handle_pacman_style(request: &PacmanQueryRequest) -> Result<(), KamError> {
+    match request.mode {
+        PacmanQueryMode::Upgrades => handle_upgrades(
+            request.device.as_deref(),
+            request.modules_url.as_deref(),
+            request.quiet,
+        ),
+        PacmanQueryMode::Foreign => handle_origin_filter(
+            OriginFilter::Foreign,
+            request.device.as_deref(),
+            request.modules_url.as_deref(),
+            request.quiet,
+        ),
+        PacmanQueryMode::Native => handle_origin_filter(
+            OriginFilter::Native,
+            request.device.as_deref(),
+            request.modules_url.as_deref(),
+            request.quiet,
+        ),
+        PacmanQueryMode::Check => handle_check(&CheckRequest {
+            modules: request.targets.clone(),
+            device: request.device.clone(),
+            quiet: request.quiet,
+        }),
+        PacmanQueryMode::Info => handle_info(&request.targets, request.device.as_deref()),
+        PacmanQueryMode::Search => {
+            if request.targets.is_empty() {
+                return Err(KamError::CommandFailed(
+                    "Search requires a query, e.g. `kam -Qs <term>`".to_string(),
+                ));
+            }
+            handle_search(
+                &request.targets.join(" "),
+                request.device.as_deref(),
+                request.quiet,
+            )
         }
-        return handle_search(&targets.join(" "), device, quiet);
+        PacmanQueryMode::List => handle_list(
+            &request.targets.join(" "),
+            request.device.as_deref(),
+            request.quiet,
+        ),
     }
-    handle_list(&targets.join(" "), device, quiet)
 }
 
-fn handle_list(query: &str, device: Option<String>, quiet: bool) -> Result<(), KamError> {
-    let mut modules = query_installed_modules(device.as_deref())?;
+fn handle_list(query: &str, device: Option<&str>, quiet: bool) -> Result<(), KamError> {
+    let mut modules = query_installed_modules(device)?;
     modules.sort_by_key(|module| module.id.to_ascii_lowercase());
     let query = query.trim();
     for module in modules {
@@ -218,17 +298,17 @@ fn handle_list(query: &str, device: Option<String>, quiet: bool) -> Result<(), K
     Ok(())
 }
 
-fn handle_search(query: &str, device: Option<String>, quiet: bool) -> Result<(), KamError> {
+fn handle_search(query: &str, device: Option<&str>, quiet: bool) -> Result<(), KamError> {
     handle_list(query, device, quiet)
 }
 
-fn handle_info(modules: &[String], device: Option<String>) -> Result<(), KamError> {
+fn handle_info(modules: &[String], device: Option<&str>) -> Result<(), KamError> {
     if modules.is_empty() {
         return Err(KamError::CommandFailed(
             "Info requires a module id, e.g. `kam -Qi <moduleId>`".to_string(),
         ));
     }
-    let installed = query_installed_modules(device.as_deref())?;
+    let installed = query_installed_modules(device)?;
     for requested in modules {
         let Some(module) = installed
             .iter()

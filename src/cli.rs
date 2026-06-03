@@ -54,6 +54,10 @@ pub struct Cli {
     #[arg(short = 'n', action = clap::ArgAction::SetTrue, hide = true)]
     pub native_flag: bool,
 
+    /// Pacman-style installed package integrity check modifier (use with -Q as '-Qk')
+    #[arg(short = 'k', action = clap::ArgAction::SetTrue, hide = true)]
+    pub check_flag: bool,
+
     /// Positional targets: module IDs or search terms (used with -S / -s)
     #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
     pub targets: Vec<String>,
@@ -244,7 +248,7 @@ impl Cli {
                     for ch in rest.chars() {
                         match ch {
                             'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
-                            'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' => {}
+                            'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' => {}
                             _ => {
                                 all_known = false;
                                 break;
@@ -343,13 +347,13 @@ pub fn inject_double_dash_for_targets(
             } else if tok.starts_with('-') && !tok.starts_with("--") {
                 // Potential combined short flags like `-Syu`, `-yuS`, `-Ss`.
                 // Only treat as combined short flags if every character after '-'
-                // is one of the known short options we support here (S, Q, U, R, s, y, u, q, i, l, v, c, m, n).
+                // is one of the known short options we support here (S, Q, U, R, s, y, u, q, i, l, v, c, m, n, k).
                 let mut all_known = true;
                 let mut contains_sync_or_search = false;
                 for ch in tok.chars().skip(1) {
                     match ch {
                         'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
-                        'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' => {}
+                        'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' | 'm' | 'n' | 'k' => {}
                         _ => {
                             all_known = false;
                             break;

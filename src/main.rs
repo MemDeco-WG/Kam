@@ -25,4 +25,5 @@
 #![deny(missing_docs)]
 
 include!("main_entry/help_i18n.rs");
+include!("main_entry/pacman_shortcuts.rs");
 include!("main_entry/cli_runtime.rs");

@@ -1,3 +1,9 @@
+use crate::cmds::cache::{CacheCommands, TemplateCacheCommands};
+use crate::cmds::installed::InstalledCommand;
+use crate::cmds::init::KernelSuRepoMode;
+use crate::cmds::repo::RepoCommand;
+use crate::cmds::secret::SecretCommands;
+
 #[test]
 fn parses_kernel_su_secret_subcommands() {
     let generated = parse(&["kam", "secret", "ksu-generate", "--no-gpg"]);
@@ -196,6 +202,15 @@ fn parses_explicit_installed_query_subcommands() {
     assert!(matches!(
         installed.command,
         Some(InstalledCommand::Native(_))
+    ));
+
+    let check = parse(&["kam", "installed", "check", "MagicNet"]);
+    let Some(Commands::Installed(installed)) = check.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::Check(check_args)) if check_args.modules == ["MagicNet"]
     ));
 }
 

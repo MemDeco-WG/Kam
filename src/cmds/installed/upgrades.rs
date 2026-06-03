@@ -12,13 +12,18 @@ pub struct UpgradeCandidate {
     pub module_name: String,
 }
 
+/// Print installed modules whose cached repository metadata has newer versions.
+///
+/// # Errors
+///
+/// Returns an error when adb/root queries fail.
 pub fn handle_upgrades(
-    device: Option<String>,
+    device: Option<&str>,
     modules_url: Option<&str>,
     quiet: bool,
 ) -> Result<(), KamError> {
-    let installed = query_installed_modules(device.as_deref())?;
-    let upgrades = find_upgrade_candidates(&installed, modules_url)?;
+    let installed = query_installed_modules(device)?;
+    let upgrades = find_upgrade_candidates(&installed, modules_url);
     for upgrade in upgrades {
         if quiet {
             println!("{}", upgrade.id);
@@ -35,10 +40,11 @@ pub fn handle_upgrades(
     Ok(())
 }
 
+#[must_use]
 pub fn find_upgrade_candidates(
     installed: &[InstalledModule],
     modules_url: Option<&str>,
-) -> Result<Vec<UpgradeCandidate>, KamError> {
+) -> Vec<UpgradeCandidate> {
     let base = repo::effective_base_url(modules_url);
     let mut candidates = Vec::new();
     for module in installed {
@@ -62,7 +68,7 @@ pub fn find_upgrade_candidates(
         });
     }
     candidates.sort_by_key(|candidate| candidate.id.to_ascii_lowercase());
-    Ok(candidates)
+    candidates
 }
 
 fn is_available_newer(installed: &str, available: &str) -> bool {

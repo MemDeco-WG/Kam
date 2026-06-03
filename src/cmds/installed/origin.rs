@@ -11,13 +11,19 @@ pub enum OriginFilter {
     Foreign,
 }
 
+/// Print installed modules classified by cached repository origin.
+///
+/// # Errors
+///
+/// Returns an error when adb/root queries fail or the cached module index is
+/// unavailable.
 pub fn handle_origin_filter(
     filter: OriginFilter,
-    device: Option<String>,
+    device: Option<&str>,
     modules_url: Option<&str>,
     quiet: bool,
 ) -> Result<(), KamError> {
-    let installed = query_installed_modules(device.as_deref())?;
+    let installed = query_installed_modules(device)?;
     let modules = classify_installed_modules(&installed, filter, modules_url)?;
     for module in modules {
         if quiet {

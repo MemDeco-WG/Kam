@@ -414,6 +414,8 @@ kam -Qi module_id
 kam -Qu
 kam -Qm
 kam -Qn
+kam -Qk
+kam -Qk module_id
 kam -Q --device 5596d9
 kam installed list
 kam installed search magic
@@ -421,6 +423,8 @@ kam installed info module_id
 kam installed upgrades
 kam installed foreign
 kam installed native
+kam installed check
+kam installed check module_id
 kam query info module_id
 ```
 
@@ -438,6 +442,10 @@ Pacman-style behavior:
   index. This is useful for modules installed from local ZIPs, development
   builds, private repositories, or manager-only sources.
 - `kam -Qn` lists installed modules present in the local cached module index.
+- `kam -Qk [module_id...]` checks installed module directory integrity without
+  modifying the device. It verifies `module.prop` exists, is readable, contains
+  required Magisk/KernelSU/APatch metadata fields, and that `id` matches the
+  module directory name.
 - `--device <serial>` selects an adb device. `--device auto` keeps adb's normal
   single-device behavior.
 

@@ -46,6 +46,7 @@ pub fn run_root_script(
     adb_root_output(device, script)
 }
 
+#[must_use]
 pub fn parse_installed_modules(input: &str) -> Vec<InstalledModule> {
     let mut modules = Vec::new();
     let mut current = BTreeMap::new();
@@ -157,6 +158,7 @@ impl ModuleState {
         }
     }
 
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Enabled => "enabled",

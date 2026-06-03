@@ -183,6 +183,7 @@ kam -Qi module_id      # show installed module.prop metadata
 kam -Qu                # show installed modules with cached updates
 kam -Qm                # show installed modules outside the cached index
 kam -Qn                # show installed modules present in the cached index
+kam -Qk module_id      # check installed module integrity
 kam -Q --device serial # query a specific adb device
 ```
 
