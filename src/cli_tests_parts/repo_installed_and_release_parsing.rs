@@ -222,6 +222,15 @@ fn parses_explicit_installed_query_subcommands() {
         Some(InstalledCommand::Owner(owner_args))
             if owner_args.paths == ["/data/adb/modules/MagicNet/cli"]
     ));
+
+    let files = parse(&["kam", "installed", "files", "MagicNet"]);
+    let Some(Commands::Installed(installed)) = files.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::Files(files_args)) if files_args.modules == ["MagicNet"]
+    ));
 }
 
 #[test]

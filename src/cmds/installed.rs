@@ -4,6 +4,7 @@ use crate::errors::KamError;
 use crate::utils::Utils;
 
 mod check;
+mod files;
 mod metadata;
 mod origin;
 mod owner;
@@ -11,6 +12,7 @@ mod remove;
 mod upgrades;
 
 pub use check::{CheckRequest, handle_check};
+pub use files::{FilesRequest, handle_files};
 use metadata::query_installed_modules;
 pub use metadata::{InstalledModule, ModuleState, parse_installed_modules};
 pub use origin::{OriginFilter, handle_origin_filter};
@@ -49,6 +51,8 @@ pub enum InstalledCommand {
     Check(InstalledCheckArgs),
     /// Find which installed module owns a device path.
     Owner(InstalledOwnerArgs),
+    /// List files owned by installed modules.
+    Files(InstalledFilesArgs),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -159,6 +163,21 @@ pub struct InstalledOwnerArgs {
     pub quiet: bool,
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct InstalledFilesArgs {
+    /// Installed module ids or names.
+    #[arg(value_name = "MODULE", required = true, num_args = 1..)]
+    pub modules: Vec<String>,
+
+    /// adb device serial. Use auto to require exactly one connected device.
+    #[arg(long)]
+    pub device: Option<String>,
+
+    /// Suppress module id prefixes and print paths only.
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PacmanQueryRequest {
     pub mode: PacmanQueryMode,
@@ -178,6 +197,7 @@ pub enum PacmanQueryMode {
     Native,
     Check,
     Owner,
+    Files,
 }
 
 /// Run explicit installed-module subcommands.
@@ -248,6 +268,14 @@ pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
                 quiet: owner.quiet,
             })
         }
+        Some(InstalledCommand::Files(files)) => {
+            let device = files.device.as_ref().or(args.device.as_ref()).cloned();
+            handle_files(&FilesRequest {
+                modules: files.modules.clone(),
+                device,
+                quiet: files.quiet,
+            })
+        }
         None => handle_list("", args.device.as_deref(), false),
     }
 }
@@ -284,6 +312,11 @@ pub fn handle_pacman_style(request: &PacmanQueryRequest) -> Result<(), KamError>
         }),
         PacmanQueryMode::Owner => handle_owner(&OwnerRequest {
             paths: request.targets.clone(),
+            device: request.device.clone(),
+            quiet: request.quiet,
+        }),
+        PacmanQueryMode::Files => handle_files(&FilesRequest {
+            modules: request.targets.clone(),
             device: request.device.clone(),
             quiet: request.quiet,
         }),

@@ -190,6 +190,10 @@ fn pacman_query_owner_requested() -> bool {
     has_query_short('o')
 }
 
+fn pacman_query_files_requested() -> bool {
+    has_query_short('l')
+}
+
 fn pacman_query_mode(cli: &Cli) -> kam::cmds::installed::PacmanQueryMode {
     use kam::cmds::installed::PacmanQueryMode;
 
@@ -203,6 +207,8 @@ fn pacman_query_mode(cli: &Cli) -> kam::cmds::installed::PacmanQueryMode {
         PacmanQueryMode::Check
     } else if cli.owner_flag || pacman_query_owner_requested() {
         PacmanQueryMode::Owner
+    } else if cli.list_flag || pacman_query_files_requested() {
+        PacmanQueryMode::Files
     } else if cli.info_flag || pacman_query_info_requested() {
         PacmanQueryMode::Info
     } else if cli.search_flag || pacman_query_search_requested() {

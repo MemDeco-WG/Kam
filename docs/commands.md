@@ -417,6 +417,7 @@ kam -Qn
 kam -Qk
 kam -Qk module_id
 kam -Qo /data/adb/modules/MagicNet/cli
+kam -Ql module_id
 kam -Q --device 5596d9
 kam installed list
 kam installed search magic
@@ -427,6 +428,7 @@ kam installed native
 kam installed check
 kam installed check module_id
 kam installed owner /data/adb/modules/MagicNet/cli
+kam installed files module_id
 kam query info module_id
 ```
 
@@ -450,6 +452,9 @@ Pacman-style behavior:
   module directory name.
 - `kam -Qo <path>` resolves a device path under `/data/adb/modules/*` to the
   installed module that owns it, using longest-prefix matching.
+- `kam -Ql <module_id...>` lists files inside installed module directories.
+  Quiet mode prints paths only; default output prefixes each path with the
+  owning module id.
 - `--device <serial>` selects an adb device. `--device auto` keeps adb's normal
   single-device behavior.
 

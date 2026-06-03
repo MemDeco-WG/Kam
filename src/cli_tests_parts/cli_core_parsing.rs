@@ -189,6 +189,15 @@ fn try_parse_accepts_installed_query_owner_combo() {
 }
 
 #[test]
+fn try_parse_accepts_installed_query_files_combo() {
+    let cli = parse(&["kam", "-Ql", "MagicNet"]);
+
+    assert!(cli.query_flag);
+    assert!(cli.list_flag);
+    assert_eq!(cli.targets, ["MagicNet"]);
+}
+
+#[test]
 fn try_parse_accepts_local_install_flag() {
     let cli = parse(&["kam", "-U", "module.zip"]);
 
