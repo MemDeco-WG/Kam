@@ -54,6 +54,14 @@ fn injects_after_explicit_query_before_target() {
 }
 
 #[test]
+fn injects_after_explicit_local_install_before_target() {
+    let mut cmd = Cli::command();
+    let args = inject_double_dash_for_targets(os_args(&["kam", "-U", "module.zip"]), &mut cmd);
+
+    assert_eq!(args, os_args(&["kam", "-U", "--", "module.zip"]));
+}
+
+#[test]
 fn injects_after_long_search_before_target() {
     let mut cmd = Cli::command();
     let args = inject_double_dash_for_targets(os_args(&["kam", "--search", "module"]), &mut cmd);
@@ -137,6 +145,33 @@ fn try_parse_accepts_installed_query_upgrade_combo() {
     assert!(cli.query_flag);
     assert!(cli.update_index);
     assert!(cli.targets.is_empty());
+}
+
+#[test]
+fn try_parse_accepts_local_install_flag() {
+    let cli = parse(&["kam", "-U", "module.zip"]);
+
+    assert!(cli.local_install_flag);
+    assert_eq!(cli.targets, vec!["module.zip"]);
+}
+
+#[test]
+fn try_parse_accepts_local_install_with_adb_options() {
+    let cli = parse(&[
+        "kam",
+        "-U",
+        "module.zip",
+        "--adb",
+        "--manager",
+        "KernelSU",
+        "--dry-run",
+    ]);
+
+    assert!(cli.local_install_flag);
+    assert_eq!(
+        cli.targets,
+        vec!["module.zip", "--adb", "--manager", "KernelSU", "--dry-run"]
+    );
 }
 
 #[test]

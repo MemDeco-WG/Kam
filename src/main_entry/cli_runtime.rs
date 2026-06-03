@@ -192,6 +192,41 @@ fn handle_top_level_installed_flags(cli: &Cli) -> bool {
     }
 }
 
+fn handle_top_level_local_install_flags(cli: &Cli) -> bool {
+    if !cli.local_install_flag {
+        return false;
+    }
+    let targets = repo_targets(&cli.targets);
+    if targets.is_empty() {
+        print_error_chain(&KamError::CommandFailed(
+            "Local package install requires a zip path, e.g. `kam -U module.zip`".to_string(),
+        ));
+        std::process::exit(1);
+    }
+    if targets.len() > 1 {
+        print_error_chain(&KamError::CommandFailed(
+            "Local package install accepts one zip path at a time.".to_string(),
+        ));
+        std::process::exit(1);
+    }
+    let args = kam::cmds::install::InstallArgs {
+        path: Some(std::path::PathBuf::from(&targets[0])),
+        manager: target_option_value(&cli.targets, "--manager").or_else(|| cli.manager.clone()),
+        dry_run: cli.dry_run || target_flag_present(&cli.targets, "--dry-run"),
+        adb: cli.adb || target_flag_present(&cli.targets, "--adb"),
+        verbose: has_local_install_short('v'),
+        quiet: cli.quiet || has_local_install_short('q'),
+        assume_yes: cli.assume_yes || has_local_install_short('y'),
+    };
+    match kam::cmds::install::run(&args) {
+        Ok(()) => true,
+        Err(e) => {
+            print_error_chain(&e);
+            std::process::exit(1);
+        }
+    }
+}
+
 fn pacman_sync_refresh_requested() -> bool {
     has_sync_short('y')
 }
@@ -253,6 +288,16 @@ fn has_query_short(flag: char) -> bool {
     })
 }
 
+fn has_local_install_short(flag: char) -> bool {
+    std::env::args().skip(1).any(|arg| {
+        if arg.starts_with("--") || !arg.starts_with('-') {
+            return false;
+        }
+        let chars: Vec<char> = arg.chars().skip(1).collect();
+        chars.contains(&'U') && chars.contains(&flag)
+    })
+}
+
 fn repo_targets(raw_targets: &[String]) -> Vec<String> {
     let mut targets = Vec::new();
     let mut skip_next = false;
@@ -262,14 +307,20 @@ fn repo_targets(raw_targets: &[String]) -> Vec<String> {
             continue;
         }
         match target.as_str() {
-            "-y" | "--yes" | "-q" | "--quiet" | "-u" | "--update" => {}
-            "--modules-url" | "--device" => skip_next = true,
+            "-y" | "--yes" | "-q" | "--quiet" | "-u" | "--update" | "-v" | "--verbose"
+            | "--adb" | "--dry-run" => {}
+            "--modules-url" | "--device" | "--manager" => skip_next = true,
             _ if target.starts_with("--modules-url=") => {}
             _ if target.starts_with("--device=") => {}
+            _ if target.starts_with("--manager=") => {}
             _ => targets.push(target.clone()),
         }
     }
     targets
+}
+
+fn target_flag_present(raw_targets: &[String], name: &str) -> bool {
+    raw_targets.iter().any(|target| target == name)
 }
 
 fn target_option_value(raw_targets: &[String], name: &str) -> Option<String> {
@@ -351,6 +402,9 @@ fn main() {
     let cmd = build_localized_command();
     let matches = parse_cli_matches(&cmd);
     let cli = cli_from_matches(&matches);
+    if handle_top_level_local_install_flags(&cli) {
+        return;
+    }
     if handle_top_level_installed_flags(&cli) {
         return;
     }

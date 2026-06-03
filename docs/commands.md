@@ -380,6 +380,24 @@ Pacman-style behavior:
 
 If the local index is missing or stale, run `kam -Sy` or `kam repo sync`.
 
+## `kam install` And `kam -U`
+
+Install a local module ZIP through the existing Kam install compatibility
+layer. `kam -U` is the pacman-style alias for installing a local package file.
+
+```bash
+kam install dist/module.zip --adb --manager Auto
+kam -U dist/module.zip --adb --manager Auto
+kam -U dist/module.zip --dry-run
+```
+
+Behavior:
+
+- `kam -U <zip>` delegates to `kam install <zip>`.
+- `--adb`, `--manager`, `--dry-run`, `--yes`, `--quiet`, and `-v/--verbose`
+  keep the same meaning as `kam install`.
+- Only one local package path is accepted at a time.
+
 ## `kam installed`, `kam query`, And `kam -Q`
 
 Query the read-only installed-module database on a connected Android device.
