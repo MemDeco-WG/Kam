@@ -111,7 +111,18 @@ fn find_option_value(args: &[String], name: &str) -> Option<String> {
 
 fn handle_top_level_repo_flags(cli: &Cli) -> bool {
     let repo_refresh = cli.update_index || pacman_sync_refresh_requested();
+    let repo_clean = cli.clean_flag || pacman_sync_clean_requested();
     let repo_assume_yes = repo_assume_yes(cli.assume_yes);
+
+    if repo_clean {
+        match kam::cmds::cache::handler::clean_module_cache() {
+            Ok(()) => return true,
+            Err(e) => {
+                print_error_chain(&e);
+                std::process::exit(1);
+            }
+        }
+    }
 
     if repo_refresh && !cli.sync_flag && !cli.search_flag && !cli.info_flag && !cli.list_flag {
         let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
@@ -259,6 +270,10 @@ fn pacman_sync_info_requested() -> bool {
 
 fn pacman_sync_list_requested() -> bool {
     has_sync_short('l')
+}
+
+fn pacman_sync_clean_requested() -> bool {
+    has_sync_short('c')
 }
 
 fn pacman_query_info_requested() -> bool {

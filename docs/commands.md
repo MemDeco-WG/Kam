@@ -359,6 +359,7 @@ kam -Si module_id
 kam -Sl
 kam -S module_id
 kam -Syu module_id
+kam -Sc
 kam repo sync
 kam repo search magic
 kam repo info module_id
@@ -377,6 +378,8 @@ Pacman-style behavior:
   downloads the selected release asset.
 - `kam -Syu <module_id>` refreshes the local index first, then downloads the
   target. Add `--yes` to skip confirmation prompts.
+- `kam -Sc` removes the local module index cache and cached module detail JSON,
+  equivalent to `kam cache modules clean`.
 
 If the local index is missing or stale, run `kam -Sy` or `kam repo sync`.
 

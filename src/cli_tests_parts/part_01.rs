@@ -120,6 +120,14 @@ fn try_parse_accepts_combined_sync_update_yes_flags() {
 }
 
 #[test]
+fn try_parse_accepts_sync_clean_combo() {
+    let cli = parse(&["kam", "-Sc"]);
+
+    assert!(cli.sync_flag);
+    assert!(cli.targets.is_empty());
+}
+
+#[test]
 fn try_parse_accepts_explicit_search_combo() {
     let cli = parse(&["kam", "-Ss", "term"]);
 

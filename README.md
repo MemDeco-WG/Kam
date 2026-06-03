@@ -169,6 +169,7 @@ kam -Si module_id # show local package metadata
 kam -Sl           # list packages in the local synced index
 kam -S module_id  # download a module by id from local package metadata
 kam -Syu module_id # refresh index, then download
+kam -Sc           # clean the local module package index cache
 kam -U module.zip # install a local module package
 kam -R module_id  # mark an installed module for removal
 ```

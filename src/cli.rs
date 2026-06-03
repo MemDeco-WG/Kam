@@ -42,6 +42,10 @@ pub struct Cli {
     #[arg(short = 'l', long = "list", action = clap::ArgAction::SetTrue)]
     pub list_flag: bool,
 
+    /// Pacman-style cache clean modifier (use with -S as '-Sc')
+    #[arg(short = 'c', long = "clean", action = clap::ArgAction::SetTrue, hide = true)]
+    pub clean_flag: bool,
+
     /// Positional targets: module IDs or search terms (used with -S / -s)
     #[arg(value_name = "TARGETS", num_args = 0.., last = true)]
     pub targets: Vec<String>,
@@ -232,7 +236,7 @@ impl Cli {
                     for ch in rest.chars() {
                         match ch {
                             'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
-                            'y' | 'u' | 'q' | 'i' | 'l' | 'v' => {}
+                            'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' => {}
                             _ => {
                                 all_known = false;
                                 break;
@@ -331,13 +335,13 @@ pub fn inject_double_dash_for_targets(
             } else if tok.starts_with('-') && !tok.starts_with("--") {
                 // Potential combined short flags like `-Syu`, `-yuS`, `-Ss`.
                 // Only treat as combined short flags if every character after '-'
-                // is one of the known short options we support here (S, Q, U, R, s, y, u, q, i, l, v).
+                // is one of the known short options we support here (S, Q, U, R, s, y, u, q, i, l, v, c).
                 let mut all_known = true;
                 let mut contains_sync_or_search = false;
                 for ch in tok.chars().skip(1) {
                     match ch {
                         'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
-                        'y' | 'u' | 'q' | 'i' | 'l' | 'v' => {}
+                        'y' | 'u' | 'q' | 'i' | 'l' | 'v' | 'c' => {}
                         _ => {
                             all_known = false;
                             break;

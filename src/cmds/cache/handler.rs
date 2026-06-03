@@ -70,6 +70,38 @@ fn handle_template_cache_command(command: TemplateCacheCommands) -> Result<(), K
     }
 }
 
+pub fn clean_module_cache() -> Result<(), KamError> {
+    use crate::utils::Utils;
+
+    let cache_root = crate::cmds::repo::cache_root_dir()?;
+    if cache_root.exists()
+        && let Ok(rd) = std::fs::read_dir(&cache_root)
+    {
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_file()
+                && let Some(name) = p.file_name().and_then(|n| n.to_str())
+                && name.starts_with("index_")
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+            {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+        let modules_dir = cache_root.join("modules");
+        if modules_dir.exists() {
+            let _ = std::fs::remove_dir_all(&modules_dir);
+        }
+        Utils::success(crate::i18n::tr("cache.modules.cleaned_successfully"));
+    } else {
+        Utils::info(crate::i18n::tr(
+            "cache.modules.directory_empty_or_not_exists",
+        ));
+    }
+    Ok(())
+}
+
 /// 处理模板缓存相关的命令
 ///
 /// # Errors
@@ -147,35 +179,7 @@ pub fn run(args: CacheArgs) -> Result<(), KamError> {
                     }
                 }
 
-                super::args::ModuleCacheCommands::Clean => {
-                    if cache_root.exists()
-                        && let Ok(rd) = std::fs::read_dir(&cache_root)
-                    {
-                        // remove index_*.json files
-                        for e in rd.flatten() {
-                            let p = e.path();
-                            if p.is_file()
-                                && let Some(name) = p.file_name().and_then(|n| n.to_str())
-                                && name.starts_with("index_")
-                                && std::path::Path::new(name)
-                                    .extension()
-                                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-                            {
-                                let _ = std::fs::remove_file(&p);
-                            }
-                        }
-                        // remove modules directory if present
-                        let modules_dir = cache_root.join("modules");
-                        if modules_dir.exists() {
-                            let _ = std::fs::remove_dir_all(&modules_dir);
-                        }
-                        Utils::success(crate::i18n::tr("cache.modules.cleaned_successfully"));
-                    } else {
-                        Utils::info(crate::i18n::tr(
-                            "cache.modules.directory_empty_or_not_exists",
-                        ));
-                    }
-                }
+                super::args::ModuleCacheCommands::Clean => clean_module_cache()?,
 
                 super::args::ModuleCacheCommands::Remove { name } => {
                     // Try exact filename in cache root
