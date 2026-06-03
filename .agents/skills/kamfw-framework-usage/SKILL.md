@@ -12,6 +12,10 @@ Use this skill for the shell runtime embedded in Kam module templates:
 
 - Keep kamfw pure shell and Android/root-manager compatible.
 - Before adding helpers, search existing kamfw files first.
+- Do not reimplement existing kamfw helpers in module scripts. If a task needs
+  logging, watchdogs, file watching, notifications, cached downloads, installer
+  filters, or rich output, import the matching kamfw module and extend that
+  module only when the existing API is insufficient.
 - Do not put reusable framework helpers in `customize.sh`, hooks, or module
   business scripts. Add `lib/kamfw/<name>.sh`, then load it with `import <name>`.
 - Importing a helper must not start long-running background work. Provide an
@@ -145,6 +149,36 @@ watchdog stop network-check
 
 Start long-running watchdogs only from runtime phases such as `service`, not
 from install/customize paths.
+
+## Cached Downloads
+
+Use `import cache_download` when module runtime code needs to download a URL
+only when content changes. Importing it must not download anything.
+
+Prefer this helper over hand-written `curl` plus `sha256sum` logic. Common
+triggers include downloading rule sets, geodata, remote configs, small binaries,
+or "update only when hash changed" flows. Do not create one-off cache/hash
+files in business scripts unless `cache_download --hash-file <file>` cannot
+express the requirement.
+
+```sh
+import cache_download
+
+cache_download "$url" "$KAM_HOME/.config/rules.dat"
+cache_download --hash "$sha256" "$url" "$dest"
+cache_download --hash-url "$url.sha256" "$url" "$dest"
+cache_download --hash-file "$KAM_HOME/.cache/hashes/rules.sha256" "$url" "$dest"
+download_if_changed "$url" "$dest"
+```
+
+The helper writes sha256 state under `$KAM_HOME/.cache/downloads` by default and
+sets `KAM_CACHE_DOWNLOAD_CHANGED=1` when it replaces the destination, otherwise
+`0`. Use `--hash-file <file>` or `KAM_CACHE_DOWNLOAD_STATE_DIR` for module-owned
+state paths.
+
+If a future download flow needs GitHub release digests, ETag/Last-Modified, or
+archive extraction, extend `cache_download.sh` or compose it with `binstall`;
+do not duplicate the same cache comparison logic elsewhere.
 
 ## Module CLI MCP Runtime
 
