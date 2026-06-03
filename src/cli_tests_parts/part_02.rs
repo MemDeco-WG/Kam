@@ -1,0 +1,166 @@
+#[test]
+fn parses_kernel_su_secret_subcommands() {
+    let generated = parse(&["kam", "secret", "ksu-generate", "--no-gpg"]);
+    let Some(Commands::Secret(secret)) = generated.command else {
+        panic!("expected secret command");
+    };
+    assert!(matches!(
+        secret.command,
+        Some(SecretCommands::KsuGenerate { no_gpg: true, .. })
+    ));
+
+    let submit = parse(&[
+        "kam",
+        "secret",
+        "ksu-submit",
+        "--username",
+        "octo",
+        "--public-key",
+        "key.pem",
+    ]);
+    let Some(Commands::Secret(secret)) = submit.command else {
+        panic!("expected secret command");
+    };
+    assert!(matches!(
+        secret.command,
+        Some(SecretCommands::KsuSubmit { username, .. }) if username == "octo"
+    ));
+
+    let revoke = parse(&[
+        "kam",
+        "secret",
+        "ksu-revoke",
+        "--username",
+        "octo",
+        "--serial-number",
+        "01ab",
+        "--reason",
+        "lost",
+    ]);
+    let Some(Commands::Secret(secret)) = revoke.command else {
+        panic!("expected secret command");
+    };
+    assert!(matches!(
+        secret.command,
+        Some(SecretCommands::KsuRevoke {
+            serial_number: Some(serial),
+            ..
+        }) if serial == "01ab"
+    ));
+}
+
+#[test]
+fn parses_readable_command_aliases() {
+    let singular_tmpl_alias = parse(&["kam", "template", "list"]);
+    assert!(matches!(
+        singular_tmpl_alias.command,
+        Some(Commands::Tmpl(_))
+    ));
+
+    let plural_tmpl_alias = parse(&["kam", "templates", "list"]);
+    assert!(matches!(plural_tmpl_alias.command, Some(Commands::Tmpl(_))));
+
+    let completion_alias = parse(&["kam", "completion", "bash"]);
+    assert!(matches!(
+        completion_alias.command,
+        Some(Commands::Completions(_))
+    ));
+}
+
+#[test]
+fn parses_kernelsu_reference_init_options() {
+    let cli = parse(&[
+        "kam",
+        "init",
+        "org.example.module",
+        "--repo-mode",
+        "reference",
+        "--source-url",
+        "https://github.com/example/source",
+        "--metamodule",
+    ]);
+    let Some(Commands::Init(args)) = cli.command else {
+        panic!("expected init command");
+    };
+
+    assert_eq!(args.repo_mode, KernelSuRepoMode::Reference);
+    assert_eq!(
+        args.source_url.as_deref(),
+        Some("https://github.com/example/source")
+    );
+    assert!(args.metamodule);
+}
+
+#[test]
+fn parses_explicit_repo_search_and_download_subcommands() {
+    let search = parse(&["kam", "repo", "search", "zygisk", "module"]);
+    let Some(Commands::Repo(repo)) = search.command else {
+        panic!("expected repo command");
+    };
+    assert!(matches!(
+        repo.command,
+        Some(RepoCommand::Search(search_args)) if search_args.query == ["zygisk", "module"]
+    ));
+
+    let download = parse(&["kam", "repo", "download", "--yes", "zygisk-next"]);
+    let Some(Commands::Repo(repo)) = download.command else {
+        panic!("expected repo command");
+    };
+    assert!(matches!(
+        repo.command,
+        Some(RepoCommand::Download(download_args))
+            if download_args.assume_yes && download_args.modules == ["zygisk-next"]
+    ));
+}
+
+#[test]
+fn parses_explicit_template_cache_namespace() {
+    let legacy = parse(&["kam", "cache", "list"]);
+    let Some(Commands::Cache(cache)) = legacy.command else {
+        panic!("expected cache command");
+    };
+    assert!(matches!(cache.command, CacheCommands::List));
+
+    let namespaced = parse(&["kam", "cache", "templates", "list"]);
+    let Some(Commands::Cache(cache)) = namespaced.command else {
+        panic!("expected cache command");
+    };
+    assert!(matches!(
+        cache.command,
+        CacheCommands::Templates(template_args)
+            if matches!(template_args.command, TemplateCacheCommands::List)
+    ));
+}
+
+#[test]
+fn parses_publish_command_options() {
+    let cli = parse(&[
+        "kam",
+        "publish",
+        "--repo",
+        "KernelSU-Modules-Repo/demo",
+        "--tag",
+        "v1.0.0",
+        "--dist",
+        "out",
+        "--title",
+        "Demo Release",
+        "--notes",
+        "release notes",
+        "--prerelease",
+        "--all-assets",
+        "--dry-run",
+    ]);
+    let Some(Commands::Publish(args)) = cli.command else {
+        panic!("expected publish command");
+    };
+
+    assert_eq!(args.repo.as_deref(), Some("KernelSU-Modules-Repo/demo"));
+    assert_eq!(args.tag.as_deref(), Some("v1.0.0"));
+    assert_eq!(args.dist, std::path::PathBuf::from("out"));
+    assert_eq!(args.title.as_deref(), Some("Demo Release"));
+    assert_eq!(args.notes.as_deref(), Some("release notes"));
+    assert!(args.prerelease);
+    assert!(args.all_assets);
+    assert!(args.dry_run);
+}

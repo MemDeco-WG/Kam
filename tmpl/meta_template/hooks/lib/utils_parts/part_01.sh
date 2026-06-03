@@ -1,0 +1,300 @@
+#!/bin/bash
+# Common utility functions for Kam hooks
+
+# Colors
+# Error color: can be overridden via KAM_COLOR_ERROR env var (format: #RRGGBB or RRGGBB)
+_kam_color_err="${KAM_COLOR_ERROR:-#FF9150}"
+_kam_color_hex="${_kam_color_err#\#}"
+# Validate length, fallback to default if malformed
+if [ ${#_kam_color_hex} -ne 6 ]; then
+    _kam_color_hex="FF9150"
+fi
+_r_hex=$(printf "%s" "$_kam_color_hex" | cut -c1-2)
+_g_hex=$(printf "%s" "$_kam_color_hex" | cut -c3-4)
+_b_hex=$(printf "%s" "$_kam_color_hex" | cut -c5-6)
+_r_dec=$(printf "%d" "0x${_r_hex}" 2>/dev/null || printf "%d" "0xFF")
+_g_dec=$(printf "%d" "0x${_g_hex}" 2>/dev/null || printf "%d" "0x91")
+_b_dec=$(printf "%d" "0x${_b_hex}" 2>/dev/null || printf "%d" "0x50")
+RED=$(printf '\033[38;2;%d;%d;%dm' "$_r_dec" "$_g_dec" "$_b_dec")
+GREEN=$(printf '\033[0;32m')
+YELLOW=$(printf '\033[1;33m')
+BLUE=$(printf '\033[0;34m')
+NC=$(printf '\033[0m') # No Color
+
+log_info() {
+    printf "${BLUE}[INFO]${NC} %s\n" "$1"
+}
+
+log_success() {
+    printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"
+}
+
+log_warn() {
+    printf "${YELLOW}[WARN]${NC} %s\n" "$1"
+}
+
+log_error() {
+    printf "${RED}[ERROR]${NC} %s\n" "$1" >&2
+}
+
+# exit_if_sudo [<message>] [--return]
+# If --return (or -r) is passed as second arg, the function returns 1 instead of exiting.
+# This implementation is Bash-only and relies on $EUID (no POSIX fallbacks).
+exit_if_sudo() {
+    local message="${1:-Do not run this script as root or via sudo. Please run as a normal user.}"
+    local do_return=0
+
+    case "$2" in
+    --return | -r) do_return=1 ;;
+    esac
+
+    # Running as root or invoked via sudo (Bash-only).
+    if ((EUID == 0)) || [[ -n "${SUDO_USER:-}" ]] || [[ -n "${SUDO_UID:-}" ]] || [[ -n "${SUDO_COMMAND:-}" ]]; then
+        if declare -F log_error >/dev/null 2>&1; then
+            log_error "$message"
+        else
+            printf '%s\n' "$message" >&2
+        fi
+
+        # Explicit request to return instead of exit
+        if ((do_return != 0)); then
+            return 1
+        fi
+
+        # If this function was invoked from a sourced script (rather than a top-level
+        # invoked script), prefer returning so we don't terminate the caller's shell.
+        # BASH_SOURCE[1] is the caller; $0 is the top-level invocation.
+        if [[ "${BASH_SOURCE[1]:-}" != "${0}" ]]; then
+            return 1
+        fi
+
+        exit 1
+    fi
+}
+
+# Check if a command exists
+has_command() {
+    cmd="$1"
+
+    if [ -z "$cmd" ]; then
+        log_error "has_command: command name is required"
+        return 1 # Changed to return 1 instead of exit to avoid terminating the script
+    fi
+
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Usage: require_command <command> [<error message>]
+# If the command is not available and a custom message is provided, it will be printed;
+# otherwise a default error message is shown.
+require_command() {
+    cmd="$1"
+    msg="$2"
+
+    if has_command "$cmd"; then
+        return 0
+    else
+        if [ -n "$msg" ]; then
+            log_error "$msg"
+        else
+            log_error "Command '$cmd' is required but not found."
+        fi
+        exit 1
+    fi
+}
+
+# Check if a variable is set
+require_env() {
+    var_name="$1"
+    # Use indirect expansion to read the named environment variable safely (avoid eval).
+    local value="${!var_name:-}"
+    if [ -z "$value" ]; then
+        log_error "Environment variable '$var_name' is not set."
+        exit 1
+    fi
+}
+
+# Magisk-like utility functions
+
+is_github_actions() {
+    # GitHub Actions sets GITHUB_ACTIONS to a truthy value. Treat common truthy forms as true.
+    case "${GITHUB_ACTIONS:-}" in
+    true | TRUE | 1 | yes | YES)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
+is_ci() {
+    # Generic CI detection: prefer the generic CI variable and some common CI-specific ones.
+    if [ -n "${CI:-}" ] && [ "${CI:-}" != "false" ]; then
+        return 0
+    fi
+
+    if is_github_actions; then
+        return 0
+    fi
+
+    if [ -n "${GITLAB_CI:-}" ] || [ -n "${TRAVIS:-}" ] || [ -n "${CIRCLECI:-}" ] || [ -n "${BUILDKITE:-}" ]; then
+        return 0
+    fi
+
+    if [ -n "${JENKINS_URL:-}" ] || [ -n "${BUILD_NUMBER:-}" ] || [ -n "${TEAMCITY_VERSION:-}" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+is_termux() {
+    # Detect Termux environment.
+    # Termux typically sets TERMUX_VERSION and uses paths under /data/data/com.termux.
+    # This function returns 0 (true) when it is likely running under Termux, otherwise 1 (false).
+
+    # Fast env-var check
+    if [ -n "${TERMUX_VERSION:-}" ]; then
+        return 0
+    fi
+
+    # Check common environment variables for Termux paths
+    case "${PREFIX:-}" in
+    */data/data/com.termux*) return 0 ;;
+    esac
+
+    case "${HOME:-}" in
+    */data/data/com.termux*) return 0 ;;
+    esac
+
+    # Check for Termux-specific files/directories
+    if [ -d "/data/data/com.termux" ] || [ -d "/data/data/com.termux/files/usr" ]; then
+        return 0
+    fi
+
+    if [ -f "/data/data/com.termux/files/usr/etc/termux/termux.env" ] || [ -x "/data/data/com.termux/files/usr/bin/termux-change-repo" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+run_as_root() {
+    # Run a command as root using sudo if needed (and available), otherwise run as-is (best-effort).
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+        return $?
+    fi
+
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+        return $?
+    fi
+
+    log_warn "run_as_root: sudo not found; attempting to run the command without escalation"
+    "$@"
+    return $?
+}
+
+ci_install() {
+    # Usage: ci_install <pkg1> [pkg2 ...]
+    # Try multiple package managers in CI (apt-get, apk, pacman, dnf, yum, zypper, pkg, brew).
+    if ! is_ci; then
+        log_warn "ci_install: not running in a recognized CI environment; skipping installation: $*"
+        return 1
+    fi
+
+    if [ $# -eq 0 ]; then
+        log_error "ci_install: at least one package name is required"
+        return 1
+    fi
+
+    pkgs=("$@")
+
+    # Debian/Ubuntu: apt-get
+    if command -v apt-get >/dev/null 2>&1; then
+        log_info "ci_install: attempting apt-get install: ${pkgs[*]}"
+        # update - ignore failures
+        run_as_root apt-get update || true
+        if run_as_root apt-get install -y "${pkgs[@]}"; then
+            log_success "ci_install: installed ${pkgs[*]} via apt-get"
+            return 0
+        fi
+        log_warn "ci_install: apt-get install failed"
+    fi
+
+    # Alpine: apk
+    if command -v apk >/dev/null 2>&1; then
+        log_info "ci_install: attempting apk add: ${pkgs[*]}"
+        if run_as_root apk add --no-cache "${pkgs[@]}"; then
+            log_success "ci_install: installed ${pkgs[*]} via apk"
+            return 0
+        fi
+        log_warn "ci_install: apk add failed"
+    fi
+
+    # Arch: pacman
+    if command -v pacman >/dev/null 2>&1; then
+        log_info "ci_install: attempting pacman -S: ${pkgs[*]}"
+        if run_as_root pacman -S --noconfirm "${pkgs[@]}"; then
+            log_success "ci_install: installed ${pkgs[*]} via pacman"
+            return 0
+        fi
+        log_warn "ci_install: pacman install failed"
+    fi
+
+    # Fedora/RHEL (dnf)
+    if command -v dnf >/dev/null 2>&1; then
+        log_info "ci_install: attempting dnf install: ${pkgs[*]}"
+        if run_as_root dnf install -y "${pkgs[@]}"; then
+            log_success "ci_install: installed ${pkgs[*]} via dnf"
+            return 0
+        fi
+        log_warn "ci_install: dnf install failed"
+    fi
+
+    # RHEL/CentOS (yum)
+    if command -v yum >/dev/null 2>&1; then
+        log_info "ci_install: attempting yum install: ${pkgs[*]}"
+        if run_as_root yum install -y "${pkgs[@]}"; then
+            log_success "ci_install: installed ${pkgs[*]} via yum"
+            return 0
+        fi
+        log_warn "ci_install: yum install failed"
+    fi
+
+    # openSUSE (zypper)
+    if command -v zypper >/dev/null 2>&1; then
+        log_info "ci_install: attempting zypper install: ${pkgs[*]}"
+        if run_as_root zypper --non-interactive install "${pkgs[@]}"; then
+            log_success "ci_install: installed ${pkgs[*]} via zypper"
+            return 0
+        fi
+        log_warn "ci_install: zypper install failed"
+    fi
+
+    # FreeBSD pkg
+    if command -v pkg >/dev/null 2>&1; then
+        log_info "ci_install: attempting pkg install: ${pkgs[*]}"
+        if run_as_root pkg install -y "${pkgs[@]}"; then
+            log_success "ci_install: installed ${pkgs[*]} via pkg"
+            return 0
+        fi
+        log_warn "ci_install: pkg install failed"
+    fi
+
+    # Homebrew (macOS)
+    if command -v brew >/dev/null 2>&1; then
+        log_info "ci_install: attempting brew install: ${pkgs[*]}"
+        if brew install "${pkgs[@]}"; then
+            log_success "ci_install: installed ${pkgs[*]} via brew"
+            return 0
+        fi
+        log_warn "ci_install: brew install failed"
+    fi
+

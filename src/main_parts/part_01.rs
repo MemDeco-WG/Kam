@@ -1,0 +1,362 @@
+use clap::error::ErrorKind;
+use clap::{CommandFactory, FromArgMatches};
+use colored::Colorize;
+use dotenvy::dotenv;
+use kam::errors::KamError;
+use std::error::Error;
+
+use kam::cli::{Cli, Commands};
+
+fn debug_i18n_enabled() -> bool {
+    std::env::var("KAM_DEBUG_I18N").is_ok_and(|v| v == "1")
+}
+
+fn print_error_chain(e: &KamError) {
+    use kam::utils::Utils;
+    Utils::error(format!("{e}"));
+    let mut source = e.source();
+    while let Some(s) = source {
+        eprintln!("  {} {}", "→".dimmed(), s.to_string().dimmed());
+        source = s.source();
+    }
+}
+
+fn help_key_base(subcommand_path: &[String]) -> String {
+    if subcommand_path.is_empty() {
+        "cli".to_string()
+    } else {
+        format!("cli.commands.{}", subcommand_path.join("."))
+    }
+}
+
+fn apply_i18n_arg_help(
+    command: &clap::Command,
+    raw_help: &str,
+    subcommand_path: &[String],
+) -> String {
+    let mut cleaned = dedupe_help(raw_help);
+    let cmd_key_base = help_key_base(subcommand_path);
+
+    for arg in command.get_arguments() {
+        if let Some(orig_help) = arg.get_help() {
+            let dotted_key = format!("{}.flags.{}", cmd_key_base, arg.get_id().as_str());
+            let tr_help = kam::i18n::tr(&dotted_key);
+            if tr_help != dotted_key {
+                cleaned = cleaned.replace(&orig_help.to_string(), &tr_help);
+            }
+        }
+    }
+
+    cleaned
+}
+
+fn write_localized_help(command: &mut clap::Command, subcommand_path: &[String]) -> Option<String> {
+    let mut buf: Vec<u8> = Vec::new();
+    command.write_long_help(&mut buf).ok()?;
+    let raw = String::from_utf8_lossy(&buf);
+    Some(apply_i18n_arg_help(command, &raw, subcommand_path))
+}
+
+fn print_localized_help(mut command: clap::Command, subcommand_path: &[String]) {
+    if let Some(cleaned) = write_localized_help(&mut command, subcommand_path) {
+        print!("{cleaned}");
+        if !cleaned.ends_with('\n') {
+            println!();
+        }
+        return;
+    }
+
+    if let Err(e) = command.print_long_help() {
+        kam::utils::Utils::error(format!("Failed to write help: {e}"));
+        std::process::exit(1);
+    }
+    println!();
+}
+
+fn find_subcommand(root: &clap::Command, subcommand_path: &[String]) -> Option<clap::Command> {
+    let mut current = root.clone();
+    for name in subcommand_path {
+        let next = current
+            .get_subcommands()
+            .find(|sub| sub.get_name() == name.as_str())?
+            .clone();
+        current = next;
+    }
+    Some(current)
+}
+
+fn subcommand_path_before_help(tokens: &[String], help_pos: usize) -> Vec<String> {
+    tokens[1..help_pos]
+        .iter()
+        .filter(|s| !s.starts_with('-') && s.as_str() != "--")
+        .cloned()
+        .collect()
+}
+
+fn dump_command_debug(command: &clap::Command) {
+    eprintln!("KAM_DEBUG_I18N=1: dumping top-level arguments and subcommands...");
+
+    for arg in command.get_arguments() {
+        let id = arg.get_id().as_str();
+        let long = arg.get_long().unwrap_or("");
+        let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
+        eprintln!("TOP ARG: id='{id}' long='{long}' short='{short}'");
+    }
+
+    dump_subcommands(command, "");
+}
+
+fn dump_subcommands(command: &clap::Command, prefix: &str) {
+    for sub in command.get_subcommands() {
+        let name = sub.get_name();
+        eprintln!("SUBCMD: {prefix}{name}");
+        for arg in sub.get_arguments() {
+            let id = arg.get_id().as_str();
+            let long = arg.get_long().unwrap_or("");
+            let short = arg.get_short().map(|c| c.to_string()).unwrap_or_default();
+            eprintln!("  ARG: id='{id}' long='{long}' short='{short}'");
+        }
+        dump_subcommands(sub, &format!("{prefix}{name} "));
+    }
+}
+
+fn dedupe_help(raw: &str) -> String {
+    // Split into lines for simple, robust processing.
+    let lines: Vec<&str> = raw.lines().collect();
+
+    // Walk lines and process `Arguments:` and `Options:` sections.
+    let mut out_lines: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        let trimmed = line.trim_end();
+        if trimmed == "Arguments:" || trimmed == "Options:" {
+            // emit section header
+            out_lines.push(line.to_string());
+            i += 1;
+
+            // collect section lines until next top-level header (line ending with ':')
+            // or EOF.
+            let mut sec_lines: Vec<&str> = Vec::new();
+            while i < lines.len() {
+                let nxt = lines[i];
+                // stop if next is a new top-level header like 'Commands:' or 'Options:'
+                if nxt.trim_end().ends_with(':') {
+                    break;
+                }
+                sec_lines.push(nxt);
+                i += 1;
+            }
+
+            // Dedupe this section and append the cleaned lines.
+            let cleaned_block = dedupe_section(&sec_lines);
+            for l in cleaned_block {
+                out_lines.push(l);
+            }
+
+            // preserve a single blank line boundary if present in original
+            if i < lines.len() && lines[i].trim().is_empty() {
+                out_lines.push(String::new());
+                // consume the original blank line
+                i += 1;
+            }
+        } else {
+            out_lines.push(line.to_string());
+            i += 1;
+        }
+    }
+
+    // Normalize the Usage line: collapse consecutive duplicated tokens while preserving order.
+    // Example: `Usage: kam install [OPTIONS] [PATH] [PATH]` -> `Usage: kam install [OPTIONS] [PATH]`
+    for ln in &mut out_lines {
+        if ln.trim_start().starts_with("Usage:") {
+            let tokens: Vec<&str> = ln.split_whitespace().collect();
+            if tokens.len() > 1 {
+                let mut new_tokens: Vec<&str> = Vec::new();
+                // Keep the 'Usage:' prefix and collapse ONLY consecutive duplicates.
+                new_tokens.push(tokens[0]);
+                for tok in tokens.into_iter().skip(1) {
+                    if new_tokens.last().copied() != Some(tok) {
+                        new_tokens.push(tok);
+                    }
+                }
+                *ln = new_tokens.join(" ");
+            }
+        }
+    }
+
+    // Make sure final string ends with a newline (like clap's help does).
+    let mut res = out_lines.join("\n");
+    if !res.ends_with('\n') {
+        res.push('\n');
+    }
+    res
+}
+
+fn dedupe_section(section_lines: &[&str]) -> Vec<String> {
+    use std::collections::HashMap;
+    let mut blocks: Vec<Vec<String>> = Vec::new();
+    let mut i = 0;
+    while i < section_lines.len() {
+        while i < section_lines.len() && section_lines[i].trim().is_empty() {
+            i += 1;
+        }
+        if i >= section_lines.len() {
+            break;
+        }
+
+        let mut block: Vec<String> = Vec::new();
+        while i < section_lines.len() && !section_lines[i].trim().is_empty() {
+            block.push(section_lines[i].to_string());
+            i += 1;
+        }
+        blocks.push(block);
+    }
+
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    let mut order: Vec<String> = Vec::new();
+    for block in blocks.into_iter().rev() {
+        if block.is_empty() {
+            continue;
+        }
+        let header = block[0].trim_start().to_string();
+        map.entry(header.clone()).or_insert_with(|| {
+            order.push(header.clone());
+            block
+        });
+    }
+    order.reverse();
+
+    let mut out: Vec<String> = Vec::new();
+    for key in order {
+        if let Some(block) = map.get(&key) {
+            out.extend(block.clone());
+            out.push(String::new());
+        }
+    }
+    if out.last().is_some_and(std::string::String::is_empty) {
+        out.pop();
+    }
+    out
+}
+
+fn build_localized_command() -> clap::Command {
+    let mut cmd = Cli::command();
+
+    // Localize top-level about / long_about (if translations exist).
+    let about_text = kam::i18n::tr("cli.about");
+    if about_text != "cli.about" {
+        // Use an owned String to avoid lifetime issues with clap's API.
+        cmd = cmd.about(about_text.clone());
+    }
+    let long_about_text = kam::i18n::tr("cli.long_about");
+    if long_about_text != "cli.long_about" {
+        cmd = cmd.long_about(long_about_text.clone());
+    }
+
+    // Localize top-level/global arguments (if translations exist).
+    // Collect replacements first, then apply, to avoid borrowing issues.
+    //
+    // Avoid adding duplicate args: if an argument with the same id already exists
+    // on the command we skip re-adding it to prevent clap from panicking about
+    // duplicate long/short option names.
+    {
+        let mut replacements = Vec::new();
+        for arg in cmd.get_arguments() {
+            let arg_id = arg.get_id().as_str();
+            let key = format!("cli.flags.{arg_id}");
+            let tr = kam::i18n::tr(&key);
+
+            // Debug: print attempted localization for each argument if KAM_DEBUG_I18N=1
+            if debug_i18n_enabled() {
+                eprintln!("i18n: arg_id='{arg_id}' key='{key}' tr='{tr}'");
+            }
+
+            if tr != key {
+                replacements.push(arg.clone().help(tr.clone()));
+            }
+        }
+
+        if !replacements.is_empty() {
+            for repl in replacements {
+                let repl_id = repl.get_id().as_str();
+                // Derive the translated help text (if any) from the replacement Arg.
+                // `repl.get_help()` yields Option<&str> for the localized help we want to apply.
+                // Keep the value (with a leading underscore to avoid unused warnings) so templates
+                // that rely on it remain expressible; we don't need to mutate args via a mutable
+                // iterator because re-adding the Arg will replace the previous definition.
+                let _tr_help = repl
+                    .get_help()
+                    .map(std::string::ToString::to_string)
+                    .unwrap_or_default();
+
+                // If an arg with the same id already exists on this command, skip re-adding it
+                // to avoid duplicate-argument panics. We intentionally do not mutate in-place
+                // here because there is no stable public API across clap versions for that.
+                if cmd.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
+                    if debug_i18n_enabled() {
+                        eprintln!("Skipping localization for existing arg '{repl_id}'");
+                    }
+                } else {
+                    // No existing arg — add the localized argument.
+                    cmd = cmd.clone().arg(repl);
+                }
+            }
+        }
+    }
+
+    localize_command(&mut cmd, "cli.commands");
+
+    // The `help` subcommand is provided as a real subcommand (see `Commands::Help`)
+    // and is localized above via `localize_command`. Disable clap's built-in `help`
+    // subcommand so it doesn't collide with the derived `Help` subcommand.
+    cmd.clone().disable_help_subcommand(true)
+}
+
+fn localize_command(cmd: &mut clap::Command, prefix: &str) {
+    for sub in cmd.get_subcommands_mut() {
+        let name = sub.get_name();
+        let sub_prefix = format!("{prefix}.{name}");
+
+        localize_subcommand_text(sub, &sub_prefix);
+        localize_subcommand_args(sub, &sub_prefix);
+        localize_command(sub, &sub_prefix);
+    }
+}
+
+fn localize_subcommand_text(sub: &mut clap::Command, sub_prefix: &str) {
+    let summary_key = format!("{sub_prefix}.summary");
+    let summary = kam::i18n::tr(&summary_key);
+    if summary != summary_key {
+        *sub = sub.clone().about(summary.clone());
+    }
+
+    let desc_key = format!("{sub_prefix}.description");
+    let desc = kam::i18n::tr(&desc_key);
+    if desc != desc_key {
+        *sub = sub.clone().long_about(desc.clone());
+    }
+}
+
+fn localize_subcommand_args(sub: &mut clap::Command, sub_prefix: &str) {
+    let mut arg_repls: Vec<clap::Arg> = Vec::new();
+    for arg in sub.get_arguments() {
+        let arg_id = arg.get_id().as_str();
+        let arg_key = format!("{sub_prefix}.flags.{arg_id}");
+        let arg_tr = kam::i18n::tr(&arg_key);
+        if arg_tr != arg_key {
+            arg_repls.push(arg.clone().help(arg_tr.clone()));
+        }
+    }
+
+    for repl in arg_repls {
+        let repl_id = repl.get_id().as_str();
+        if sub.get_arguments().any(|a| a.get_id().as_str() == repl_id) {
+            if debug_i18n_enabled() {
+                eprintln!("Skipping localization for arg '{repl_id}' (already present)");
+            }
+            continue;
+        }
+        *sub = sub.clone().arg(repl);
+    }
+}
