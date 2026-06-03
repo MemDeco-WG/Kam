@@ -36,6 +36,7 @@
 主要步骤：
 - 递归 checkout 子模块并拉取完整历史
 - 通过 `MemDeco-WG/setup-kam@v3` 安装 Kam
+- 安装 KamHooks 构建 Rust crate 所需的 Android Rust targets
 - 运行 `kam build`
 - 校验生成的模块 ZIP 内含必要安装文件
 - 拒绝 ZIP 中意外包含 `.git`、`.github`、`.gitignore`

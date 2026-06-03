@@ -88,14 +88,20 @@ The build workflow should:
 2. Cache Cargo/Rustup when Rust dependencies may be built.
 3. Use `MemDeco-WG/setup-kam@v3`.
 4. Install artifact tools: `unzip zip`.
-5. Verify tools:
+5. Install Android Rust targets used by KamHooks:
+
+```bash
+rustup target add aarch64-linux-android x86_64-linux-android
+```
+
+6. Verify tools:
 
 ```bash
 kam --version
 gh --version
 ```
 
-6. Build:
+7. Build:
 
 ```bash
 find hooks src -type f -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
@@ -103,11 +109,11 @@ rm -rf dist
 kam build
 ```
 
-7. Verify ZIP contents:
+8. Verify ZIP contents:
    - `module.prop` exists at ZIP root.
    - `META-INF/com/google/android/update-binary` exists.
    - `.git`, `.github`, and `.gitignore` are not packaged.
-8. Upload `dist/*` with `actions/upload-artifact@v7`.
+9. Upload `dist/*` with `actions/upload-artifact@v7`.
 
 ## Releases
 

@@ -36,6 +36,7 @@ Manual inputs:
 Main steps:
 - checkout with recursive submodules and full history
 - install Kam through `MemDeco-WG/setup-kam@v3`
+- install Android Rust targets for KamHooks crate builds
 - run `kam build`
 - verify the generated module ZIP contains required installer files
 - reject accidental `.git`, `.github`, and `.gitignore` entries inside the ZIP

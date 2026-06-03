@@ -136,6 +136,9 @@ jobs:
       - name: Install artifact tools
         run: sudo apt-get update && sudo apt-get install -y unzip zip
 
+      - name: Install Android Rust targets
+        run: rustup target add aarch64-linux-android x86_64-linux-android
+
       - name: Verify tools
         shell: bash
         run: |
