@@ -332,6 +332,17 @@ fn parses_pacman_targets_with_trailing_global_flags() {
 }
 
 #[test]
+fn parses_pacman_info_and_list_flags() {
+    let info = parse(&["kam", "-Si", "MagicNet"]);
+    assert!(info.sync_flag);
+    assert_eq!(info.targets, vec!["MagicNet"]);
+
+    let list = parse(&["kam", "-Sl", "magic"]);
+    assert!(list.sync_flag);
+    assert_eq!(list.targets, vec!["magic"]);
+}
+
+#[test]
 fn parses_add_command_variants() {
     let script = parse(&["kam", "add", "script", "service", "--dry-run"]);
     let Some(Commands::Add(add)) = script.command else {

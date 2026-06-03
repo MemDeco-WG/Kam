@@ -111,6 +111,24 @@ fn parses_explicit_repo_search_and_download_subcommands() {
         Some(RepoCommand::Download(download_args))
             if download_args.assume_yes && download_args.modules == ["zygisk-next"]
     ));
+
+    let info = parse(&["kam", "repo", "info", "MagicNet"]);
+    let Some(Commands::Repo(repo)) = info.command else {
+        panic!("expected repo command");
+    };
+    assert!(matches!(
+        repo.command,
+        Some(RepoCommand::Info(info_args)) if info_args.modules == ["MagicNet"]
+    ));
+
+    let list = parse(&["kam", "repo", "list", "magic"]);
+    let Some(Commands::Repo(repo)) = list.command else {
+        panic!("expected repo command");
+    };
+    assert!(matches!(
+        repo.command,
+        Some(RepoCommand::List(list_args)) if list_args.query == ["magic"]
+    ));
 }
 
 #[test]

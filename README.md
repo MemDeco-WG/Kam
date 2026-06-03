@@ -165,6 +165,8 @@ Pacman-style registry shortcuts:
 ```bash
 kam -Sy           # refresh the local module package index
 kam -Ss magic     # search the local synced module index
+kam -Si module_id # show local package metadata
+kam -Sl           # list packages in the local synced index
 kam -S module_id  # download a module by id from local package metadata
 kam -Syu module_id # refresh index, then download
 ```

@@ -23,7 +23,7 @@ pub(super) fn process_module_download(
         return Ok(());
     };
 
-    print_module_detail(md, asset, release_label);
+    print_module_download_detail(md, asset, release_label);
     let confirmed = prompt_confirm_download(module_id, &asset.name, assume_yes)?;
     if !confirmed {
         return Ok(());
@@ -113,11 +113,25 @@ fn read_cached_module(module_id: &str, path: &Path) -> Option<ModuleDetail> {
     None
 }
 
-fn print_module_detail(md: &ModuleDetail, asset: &Asset, release_label: &str) {
-    let size_str = asset
-        .size
-        .map(|s| format!(" ({})", format_size(s)))
-        .unwrap_or_default();
+pub(super) fn print_module_info(md: &ModuleDetail) {
+    print_module_metadata(md);
+    if let Some((asset, release_label)) = select_zip_asset(md) {
+        println!("{}", trf!("repo.module_detail.release", release_label));
+        println!(
+            "{}",
+            trf!(
+                "repo.module_detail.asset",
+                asset.name,
+                asset
+                    .size
+                    .map(|s| format!(" ({})", format_size(s)))
+                    .unwrap_or_default()
+            )
+        );
+    }
+}
+
+fn print_module_metadata(md: &ModuleDetail) {
     println!(
         "{}",
         trf!(
@@ -130,6 +144,14 @@ fn print_module_detail(md: &ModuleDetail, asset: &Asset, release_label: &str) {
     print_optional_detail("repo.module_detail.homepage", md.homepage_url.as_deref());
     print_optional_detail("repo.module_detail.summary", md.summary.as_deref());
     print_authors(md);
+}
+
+fn print_module_download_detail(md: &ModuleDetail, asset: &Asset, release_label: &str) {
+    let size_str = asset
+        .size
+        .map(|s| format!(" ({})", format_size(s)))
+        .unwrap_or_default();
+    print_module_metadata(md);
     println!("{}", trf!("repo.module_detail.release", release_label));
     println!("{}", trf!("repo.module_detail.asset", asset.name, size_str));
     println!(

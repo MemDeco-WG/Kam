@@ -50,6 +50,10 @@ pub enum RepoCommand {
     Sync(SyncArgs),
     /// Search the module repository
     Search(SearchArgs),
+    /// Show package metadata from the local module index
+    Info(InfoArgs),
+    /// List packages from the local module index
+    List(ListArgs),
     /// Download one or more modules from the repository
     Download(DownloadArgs),
 }
@@ -75,6 +79,22 @@ pub struct SyncArgs {
 pub struct SearchArgs {
     /// Search terms to match against the remote module catalog
     #[arg(value_name = "QUERY", required = true, num_args = 1..)]
+    pub query: Vec<String>,
+}
+
+/// Arguments for `kam repo info`.
+#[derive(Args, Debug, Clone)]
+pub struct InfoArgs {
+    /// Module IDs to inspect
+    #[arg(value_name = "MODULE", required = true, num_args = 1..)]
+    pub modules: Vec<String>,
+}
+
+/// Arguments for `kam repo list`.
+#[derive(Args, Debug, Clone)]
+pub struct ListArgs {
+    /// Optional query to filter package names, descriptions, summaries, or authors
+    #[arg(value_name = "QUERY", num_args = 0..)]
     pub query: Vec<String>,
 }
 
@@ -113,13 +133,23 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
             RepoCommand::Search(search_args) => handle_pacman_style(
                 false,
                 true,
+                false,
+                false,
                 &search_args.query,
                 false,
                 modules_url,
                 args.quiet,
             ),
+            RepoCommand::Info(info_args) => {
+                handle_repo_info(&info_args.modules, modules_url, args.quiet)
+            }
+            RepoCommand::List(list_args) => {
+                handle_repo_list(&list_args.query.join(" "), modules_url, args.quiet)
+            }
             RepoCommand::Download(download_args) => handle_pacman_style(
                 true,
+                false,
+                false,
                 false,
                 &download_args.modules,
                 download_args.assume_yes,
@@ -132,6 +162,8 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
     handle_pacman_style(
         args.sync,
         args.search,
+        false,
+        false,
         &args.targets,
         false,
         modules_url,
@@ -145,6 +177,8 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
 pub fn handle_pacman_style(
     sync: bool,
     search: bool,
+    info: bool,
+    list: bool,
     targets: &[String],
     yes: bool,
     modules_url: Option<&str>,
@@ -163,8 +197,65 @@ pub fn handle_pacman_style(
         return search_local(&q, &base);
     }
 
+    if info {
+        return handle_repo_info(targets, modules_url, quiet);
+    }
+
+    if list {
+        return handle_repo_list(&targets.join(" "), modules_url, quiet);
+    }
+
     if sync {
         return download_targets(targets, &base, assume_yes, quiet);
+    }
+    Ok(())
+}
+
+pub(crate) fn handle_repo_info(
+    modules: &[String],
+    modules_url: Option<&str>,
+    quiet: bool,
+) -> Result<(), KamError> {
+    if modules.is_empty() {
+        return Err(KamError::CommandFailed(
+            "Info requires a module id, e.g. `-Si <moduleId>`".into(),
+        ));
+    }
+    let base = effective_base_url(modules_url);
+    for module_id in modules {
+        cache::find_entry_by_name(&base, module_id)?;
+        let md = download::read_module_detail_from_cache(module_id)?;
+        if !quiet && modules.len() > 1 {
+            crate::utils::Utils::section(module_id);
+        }
+        download::print_module_info(&md);
+    }
+    Ok(())
+}
+
+pub(crate) fn handle_repo_list(
+    query: &str,
+    modules_url: Option<&str>,
+    quiet: bool,
+) -> Result<(), KamError> {
+    let base = effective_base_url(modules_url);
+    let mut entries = cache::read_local_index(&base)?;
+    entries.sort_by_key(|entry| entry.name.to_ascii_lowercase());
+    let query = query.trim();
+    for entry in entries {
+        if !query.is_empty() && repo_search::score_search_entry(&entry, query) < 0.60 {
+            continue;
+        }
+        if quiet {
+            println!("{}", entry.name);
+        } else {
+            let desc = entry
+                .description
+                .as_deref()
+                .or(entry.summary.as_deref())
+                .unwrap_or("");
+            println!("{name} — {desc}", name = entry.name);
+        }
     }
     Ok(())
 }

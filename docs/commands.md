@@ -355,10 +355,14 @@ Manage the local module package index and download module release assets.
 ```bash
 kam -Sy
 kam -Ss magic
+kam -Si module_id
+kam -Sl
 kam -S module_id
 kam -Syu module_id
 kam repo sync
 kam repo search magic
+kam repo info module_id
+kam repo list
 kam repo download --yes module_id
 ```
 
@@ -367,6 +371,8 @@ Pacman-style behavior:
 - `kam -Sy` refreshes the local module package index and cached module metadata.
 - `kam -Ss <query>` searches the local synced index. It does not refresh the
   remote registry implicitly.
+- `kam -Si <module_id>` shows cached package metadata for one or more modules.
+- `kam -Sl [query]` lists packages from the local synced index.
 - `kam -S <module_id>` resolves module metadata from the local cache, then
   downloads the selected release asset.
 - `kam -Syu <module_id>` refreshes the local index first, then downloads the

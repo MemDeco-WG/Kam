@@ -106,7 +106,7 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
     let repo_refresh = cli.update_index || pacman_sync_refresh_requested();
     let repo_assume_yes = repo_assume_yes(cli.assume_yes);
 
-    if repo_refresh && !cli.sync_flag && !cli.search_flag {
+    if repo_refresh && !cli.sync_flag && !cli.search_flag && !cli.info_flag && !cli.list_flag {
         let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
         match kam::cmds::repo::repo_sync_with_jobs(&base, true, None::<usize>, cli.quiet) {
             Ok(()) => return true,
@@ -117,9 +117,11 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
         }
     }
 
-    if cli.sync_flag || cli.search_flag {
+    if cli.sync_flag || cli.search_flag || cli.info_flag || cli.list_flag {
         let effective_targets = repo_targets(&cli.targets);
         let effective_quiet = cli.quiet || repo_quiet_requested();
+        let repo_info = cli.info_flag || pacman_sync_info_requested();
+        let repo_list = cli.list_flag || pacman_sync_list_requested();
 
         if repo_refresh {
             let base = kam::cmds::repo::effective_base_url(cli.modules_url.as_deref());
@@ -138,6 +140,8 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
         match kam::cmds::repo::handle_pacman_style(
             cli.sync_flag,
             cli.search_flag,
+            repo_info,
+            repo_list,
             &effective_targets,
             repo_assume_yes,
             cli.modules_url.as_deref(),
@@ -156,6 +160,14 @@ fn handle_top_level_repo_flags(cli: &Cli) -> bool {
 
 fn pacman_sync_refresh_requested() -> bool {
     has_sync_short('y')
+}
+
+fn pacman_sync_info_requested() -> bool {
+    has_sync_short('i')
+}
+
+fn pacman_sync_list_requested() -> bool {
+    has_sync_short('l')
 }
 
 fn repo_quiet_requested() -> bool {
