@@ -54,6 +54,8 @@ pub enum RepoCommand {
     Info(InfoArgs),
     /// List packages from the local module index
     List(ListArgs),
+    /// Print cached package download URLs without downloading
+    Url(UrlArgs),
     /// Download one or more modules from the repository
     Download(DownloadArgs),
 }
@@ -98,6 +100,18 @@ pub struct ListArgs {
     pub query: Vec<String>,
 }
 
+/// Arguments for `kam repo url`.
+#[derive(Args, Debug, Clone)]
+pub struct UrlArgs {
+    /// Module IDs whose selected package URL should be printed
+    #[arg(value_name = "MODULE", required = true, num_args = 1..)]
+    pub modules: Vec<String>,
+
+    /// Suppress module labels and print URLs only
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
+}
+
 /// Arguments for `kam repo download`.
 #[derive(Args, Debug, Clone)]
 pub struct DownloadArgs {
@@ -135,6 +149,7 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
                 true,
                 false,
                 false,
+                false,
                 &search_args.query,
                 false,
                 modules_url,
@@ -146,8 +161,12 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
             RepoCommand::List(list_args) => {
                 handle_repo_list(&list_args.query.join(" "), modules_url, args.quiet)
             }
+            RepoCommand::Url(url_args) => {
+                handle_repo_urls(&url_args.modules, modules_url, args.quiet || url_args.quiet)
+            }
             RepoCommand::Download(download_args) => handle_pacman_style(
                 true,
+                false,
                 false,
                 false,
                 false,
@@ -162,6 +181,7 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
     handle_pacman_style(
         args.sync,
         args.search,
+        false,
         false,
         false,
         &args.targets,
@@ -179,6 +199,7 @@ pub fn handle_pacman_style(
     search: bool,
     info: bool,
     list: bool,
+    print_url: bool,
     targets: &[String],
     yes: bool,
     modules_url: Option<&str>,
@@ -203,6 +224,10 @@ pub fn handle_pacman_style(
 
     if list {
         return handle_repo_list(&targets.join(" "), modules_url, quiet);
+    }
+
+    if print_url {
+        return handle_repo_urls(targets, modules_url, quiet);
     }
 
     if sync {
@@ -289,6 +314,34 @@ pub(crate) fn handle_repo_list(
                 .or(entry.summary.as_deref())
                 .unwrap_or("");
             println!("{name} — {desc}", name = entry.name);
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn handle_repo_urls(
+    modules: &[String],
+    modules_url: Option<&str>,
+    quiet: bool,
+) -> Result<(), KamError> {
+    if modules.is_empty() {
+        return Err(KamError::CommandFailed(
+            "Package URL print requires a module id, e.g. `-Sp <moduleId>`".into(),
+        ));
+    }
+    let base = effective_base_url(modules_url);
+    for module_id in modules {
+        cache::find_entry_by_name(&base, module_id)?;
+        let md = download::read_module_detail_from_cache(module_id)?;
+        let Some(url) = download::selected_zip_asset_url(&md) else {
+            return Err(KamError::PackageNotFound(format!(
+                "No downloadable zip asset found for module {module_id}"
+            )));
+        };
+        if quiet || modules.len() == 1 {
+            println!("{url}");
+        } else {
+            println!("{module_id} {url}");
         }
     }
     Ok(())

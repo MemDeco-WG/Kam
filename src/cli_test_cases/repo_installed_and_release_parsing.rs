@@ -135,6 +135,16 @@ fn parses_explicit_repo_search_and_download_subcommands() {
         repo.command,
         Some(RepoCommand::List(list_args)) if list_args.query == ["magic"]
     ));
+
+    let url = parse(&["kam", "repo", "url", "--quiet", "MagicNet"]);
+    let Some(Commands::Repo(repo)) = url.command else {
+        panic!("expected repo command");
+    };
+    assert!(matches!(
+        repo.command,
+        Some(RepoCommand::Url(url_args))
+            if url_args.quiet && url_args.modules == ["MagicNet"]
+    ));
 }
 
 #[test]

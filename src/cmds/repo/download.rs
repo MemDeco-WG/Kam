@@ -141,6 +141,10 @@ pub(super) fn print_module_info(md: &ModuleDetail) {
     }
 }
 
+pub(super) fn selected_zip_asset_url(md: &ModuleDetail) -> Option<&str> {
+    select_zip_asset(md).map(|(asset, _)| asset.download_url.as_str())
+}
+
 fn print_module_metadata(md: &ModuleDetail) {
     println!(
         "{}",

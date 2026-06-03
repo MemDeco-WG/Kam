@@ -207,6 +207,25 @@ fn try_parse_accepts_installed_package_query_combo() {
 }
 
 #[test]
+fn try_parse_accepts_sync_package_url_combo() {
+    let cli = parse(&["kam", "-Sp", "MagicNet"]);
+
+    assert!(cli.sync_flag);
+    assert!(cli.package_flag);
+    assert_eq!(cli.targets, ["MagicNet"]);
+}
+
+#[test]
+fn try_parse_keeps_package_modifier_inactive_without_mode() {
+    let cli = parse(&["kam", "-p", "--", "MagicNet"]);
+
+    assert!(!cli.sync_flag);
+    assert!(!cli.query_flag);
+    assert!(cli.package_flag);
+    assert_eq!(cli.targets, ["MagicNet"]);
+}
+
+#[test]
 fn try_parse_accepts_installed_package_file_list_combo() {
     let cli = parse(&["kam", "-Qpl", "module.zip"]);
 
