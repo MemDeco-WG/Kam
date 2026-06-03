@@ -8,11 +8,13 @@ mod cache;
 mod download;
 mod repo_search;
 mod search;
+mod status;
 mod sync;
 
 pub(crate) use cache::cache_root_dir;
 pub use download::download_module_latest;
 pub use search::search_local;
+pub(crate) use status::handle_repo_status;
 pub use sync::repo_sync_with_jobs;
 
 const BASE_URL: &str = "https://modules.kernelsu.org";
@@ -48,6 +50,8 @@ pub struct RepoArgs {
 pub enum RepoCommand {
     /// Sync (refresh) the index cache from remote (similar to pacman -Sy)
     Sync(SyncArgs),
+    /// Show local module package index/cache status
+    Status(StatusArgs),
     /// Search the module repository
     Search(SearchArgs),
     /// Show package metadata from the local module index
@@ -72,6 +76,14 @@ pub struct SyncArgs {
     pub jobs: Option<usize>,
 
     /// Suppress progress output (quiet mode)
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
+}
+
+/// Arguments for `kam repo status`.
+#[derive(Args, Debug, Clone)]
+pub struct StatusArgs {
+    /// Suppress labels and print compact key=value records
     #[arg(short = 'q', long = "quiet")]
     pub quiet: bool,
 }
@@ -143,6 +155,9 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
             RepoCommand::Sync(sync_args) => {
                 let base = effective_base_url(modules_url);
                 repo_sync_with_jobs(&base, sync_args.force, sync_args.jobs, sync_args.quiet)
+            }
+            RepoCommand::Status(status_args) => {
+                handle_repo_status(modules_url, args.quiet || status_args.quiet)
             }
             RepoCommand::Search(search_args) => handle_pacman_style(
                 false,

@@ -362,6 +362,7 @@ kam -S module_id
 kam -Syu module_id
 kam -Sc
 kam repo sync
+kam repo status
 kam repo search magic
 kam repo info module_id
 kam repo list
@@ -372,6 +373,8 @@ kam repo download --yes module_id
 Pacman-style behavior:
 
 - `kam -Sy` refreshes the local module package index and cached module metadata.
+- `kam repo status` shows the local index/cache root, index path, indexed
+  package count, and cached module metadata count.
 - `kam -Ss <query>` searches the local synced index. It does not refresh the
   remote registry implicitly.
 - `kam -Si <module_id>` shows cached package metadata for one or more modules.

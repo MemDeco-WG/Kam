@@ -158,6 +158,7 @@ kam dev --watch --hot --mcp --logs
 kam diff --device auto
 kam sync
 kam workflow install https://github.com/you/my_module
+kam repo status # inspect the local module package index/cache
 ```
 
 Pacman-style registry shortcuts:

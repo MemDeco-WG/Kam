@@ -108,6 +108,15 @@ fn parses_explicit_repo_search_and_download_subcommands() {
         Some(RepoCommand::Search(search_args)) if search_args.query == ["zygisk", "module"]
     ));
 
+    let status = parse(&["kam", "repo", "status", "--quiet"]);
+    let Some(Commands::Repo(repo)) = status.command else {
+        panic!("expected repo command");
+    };
+    assert!(matches!(
+        repo.command,
+        Some(RepoCommand::Status(status_args)) if status_args.quiet
+    ));
+
     let download = parse(&["kam", "repo", "download", "--yes", "zygisk-next"]);
     let Some(Commands::Repo(repo)) = download.command else {
         panic!("expected repo command");

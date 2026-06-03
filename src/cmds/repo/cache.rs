@@ -14,14 +14,14 @@ pub(crate) fn cache_root_dir() -> Result<PathBuf, KamError> {
     Ok(base)
 }
 
-pub(super) fn index_cache_path(base_url: &str) -> Result<PathBuf, KamError> {
+pub(crate) fn index_cache_path(base_url: &str) -> Result<PathBuf, KamError> {
     let mut p = cache_root_dir()?;
     let fname = format!("index_{}.json", sanitize_filename(base_url));
     p.push(fname);
     Ok(p)
 }
 
-pub(super) fn module_cache_path(module_id: &str) -> Result<PathBuf, KamError> {
+pub(crate) fn module_cache_path(module_id: &str) -> Result<PathBuf, KamError> {
     let mut p = cache_root_dir()?;
     p.push("modules");
     std::fs::create_dir_all(&p)?;
