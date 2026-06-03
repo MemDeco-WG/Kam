@@ -31,6 +31,8 @@ target
 
 # Node.js dependencies
 node_modules/
+/package.json
+/bun.lock
 
 templates
 
