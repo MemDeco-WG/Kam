@@ -26,6 +26,10 @@ pub struct Cli {
     #[arg(short = 'U', action = clap::ArgAction::SetTrue)]
     pub local_install_flag: bool,
 
+    /// Pacman-style installed package remove flag (equivalent to pacman -R)
+    #[arg(short = 'R', action = clap::ArgAction::SetTrue)]
+    pub remove_flag: bool,
+
     /// Pacman-style search modifier (use with -S as '-Ss' to search or '-s' alone to search)
     #[arg(short = 's', long = "search", action = clap::ArgAction::SetTrue)]
     pub search_flag: bool,
@@ -211,6 +215,7 @@ impl Cli {
                 let explicit = tok == "-S"
                     || tok == "-Q"
                     || tok == "-U"
+                    || tok == "-R"
                     || tok == "-s"
                     || tok == "-Ss"
                     || tok == "-sS"
@@ -226,7 +231,7 @@ impl Cli {
                     let mut contains_sync_or_search = false;
                     for ch in rest.chars() {
                         match ch {
-                            'S' | 'Q' | 'U' | 's' => contains_sync_or_search = true,
+                            'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
                             'y' | 'u' | 'q' | 'i' | 'l' | 'v' => {}
                             _ => {
                                 all_known = false;
@@ -314,6 +319,7 @@ pub fn inject_double_dash_for_targets(
             if tok == "-S"
                 || tok == "-Q"
                 || tok == "-U"
+                || tok == "-R"
                 || tok == "-s"
                 || tok == "-Ss"
                 || tok == "-sS"
@@ -325,12 +331,12 @@ pub fn inject_double_dash_for_targets(
             } else if tok.starts_with('-') && !tok.starts_with("--") {
                 // Potential combined short flags like `-Syu`, `-yuS`, `-Ss`.
                 // Only treat as combined short flags if every character after '-'
-                // is one of the known short options we support here (S, Q, U, s, y, u, q, i, l, v).
+                // is one of the known short options we support here (S, Q, U, R, s, y, u, q, i, l, v).
                 let mut all_known = true;
                 let mut contains_sync_or_search = false;
                 for ch in tok.chars().skip(1) {
                     match ch {
-                        'S' | 'Q' | 'U' | 's' => contains_sync_or_search = true,
+                        'S' | 'Q' | 'U' | 'R' | 's' => contains_sync_or_search = true,
                         'y' | 'u' | 'q' | 'i' | 'l' | 'v' => {}
                         _ => {
                             all_known = false;

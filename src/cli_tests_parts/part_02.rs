@@ -169,6 +169,16 @@ fn parses_explicit_installed_query_subcommands() {
         installed.command,
         Some(InstalledCommand::Upgrades(upgrade_args)) if upgrade_args.quiet
     ));
+
+    let remove = parse(&["kam", "installed", "remove", "--dry-run", "MagicNet"]);
+    let Some(Commands::Installed(installed)) = remove.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::Remove(remove_args))
+            if remove_args.dry_run && remove_args.modules == ["MagicNet"]
+    ));
 }
 
 #[test]

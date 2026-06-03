@@ -62,6 +62,14 @@ fn injects_after_explicit_local_install_before_target() {
 }
 
 #[test]
+fn injects_after_explicit_remove_before_target() {
+    let mut cmd = Cli::command();
+    let args = inject_double_dash_for_targets(os_args(&["kam", "-R", "module"]), &mut cmd);
+
+    assert_eq!(args, os_args(&["kam", "-R", "--", "module"]));
+}
+
+#[test]
 fn injects_after_long_search_before_target() {
     let mut cmd = Cli::command();
     let args = inject_double_dash_for_targets(os_args(&["kam", "--search", "module"]), &mut cmd);
@@ -172,6 +180,29 @@ fn try_parse_accepts_local_install_with_adb_options() {
         cli.targets,
         vec!["module.zip", "--adb", "--manager", "KernelSU", "--dry-run"]
     );
+}
+
+#[test]
+fn try_parse_accepts_remove_flag() {
+    let cli = parse(&["kam", "-R", "MagicNet"]);
+
+    assert!(cli.remove_flag);
+    assert_eq!(cli.targets, vec!["MagicNet"]);
+}
+
+#[test]
+fn try_parse_accepts_remove_with_dry_run_device() {
+    let cli = parse(&[
+        "kam",
+        "-R",
+        "MagicNet",
+        "--dry-run",
+        "--device",
+        "5596d9",
+    ]);
+
+    assert!(cli.remove_flag);
+    assert_eq!(cli.targets, vec!["MagicNet", "--dry-run", "--device", "5596d9"]);
 }
 
 #[test]

@@ -227,6 +227,28 @@ fn handle_top_level_local_install_flags(cli: &Cli) -> bool {
     }
 }
 
+fn handle_top_level_remove_flags(cli: &Cli) -> bool {
+    if !cli.remove_flag {
+        return false;
+    }
+    let targets = repo_targets(&cli.targets);
+    let device = global_device(cli).or_else(|| target_option_value(&cli.targets, "--device"));
+    let request = kam::cmds::installed::RemoveRequest {
+        modules: targets,
+        device: device.filter(|value| !value.eq_ignore_ascii_case("auto")),
+        dry_run: cli.dry_run || target_flag_present(&cli.targets, "--dry-run"),
+        assume_yes: cli.assume_yes || has_remove_short('y'),
+        quiet: cli.quiet || has_remove_short('q'),
+    };
+    match kam::cmds::installed::handle_remove(&request) {
+        Ok(()) => true,
+        Err(e) => {
+            print_error_chain(&e);
+            std::process::exit(1);
+        }
+    }
+}
+
 fn pacman_sync_refresh_requested() -> bool {
     has_sync_short('y')
 }
@@ -295,6 +317,16 @@ fn has_local_install_short(flag: char) -> bool {
         }
         let chars: Vec<char> = arg.chars().skip(1).collect();
         chars.contains(&'U') && chars.contains(&flag)
+    })
+}
+
+fn has_remove_short(flag: char) -> bool {
+    std::env::args().skip(1).any(|arg| {
+        if arg.starts_with("--") || !arg.starts_with('-') {
+            return false;
+        }
+        let chars: Vec<char> = arg.chars().skip(1).collect();
+        chars.contains(&'R') && chars.contains(&flag)
     })
 }
 
@@ -403,6 +435,9 @@ fn main() {
     let matches = parse_cli_matches(&cmd);
     let cli = cli_from_matches(&matches);
     if handle_top_level_local_install_flags(&cli) {
+        return;
+    }
+    if handle_top_level_remove_flags(&cli) {
         return;
     }
     if handle_top_level_installed_flags(&cli) {

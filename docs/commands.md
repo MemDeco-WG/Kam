@@ -433,6 +433,26 @@ Pacman-style behavior:
 Module state is derived from manager marker files: `disable` means disabled,
 `remove` means removal is pending, otherwise the module is shown as enabled.
 
+## `kam installed remove` And `kam -R`
+
+Mark installed modules for removal using the standard Magisk/KernelSU/APatch
+module marker file. This is the pacman-style remove path for the device-side
+installed module database.
+
+```bash
+kam -R module_id --device 5596d9
+kam -R module_id --dry-run
+kam installed remove module_id --yes
+```
+
+Behavior:
+
+- `kam -R <module_id>` finds the installed module under `/data/adb/modules`.
+- Removal is implemented by creating `<module_path>/remove`; the manager applies
+  it on reboot.
+- `--dry-run` prints the marker path without changing the device.
+- `--yes` skips confirmation. Without it, Kam asks before marking modules.
+
 ## `kam workflow`
 
 Install GitHub Actions workflows.

@@ -26,7 +26,7 @@ pub enum ModuleState {
 
 pub fn query_installed_modules(device: Option<&str>) -> Result<Vec<InstalledModule>, KamError> {
     ensure_adb()?;
-    let output = adb_root_output(device, installed_modules_script())?;
+    let output = run_root_script(device, installed_modules_script())?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     if !output.status.success() {
@@ -36,6 +36,14 @@ pub fn query_installed_modules(device: Option<&str>) -> Result<Vec<InstalledModu
         )));
     }
     Ok(parse_installed_modules(&stdout))
+}
+
+pub fn run_root_script(
+    device: Option<&str>,
+    script: &str,
+) -> Result<std::process::Output, KamError> {
+    ensure_adb()?;
+    adb_root_output(device, script)
 }
 
 pub fn parse_installed_modules(input: &str) -> Vec<InstalledModule> {
