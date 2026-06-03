@@ -46,11 +46,19 @@ pub(super) fn process_module_download(
 
 pub(super) fn read_module_detail_from_cache(module_id: &str) -> Result<ModuleDetail, KamError> {
     let path = module_cache_path(module_id)?;
-    read_cached_module(module_id, &path).ok_or_else(|| {
+    read_cached_module(module_id, &path, false).ok_or_else(|| {
         KamError::PackageNotFound(format!(
             "No cached package metadata for '{module_id}'. Run `kam -Sy` first."
         ))
     })
+}
+
+pub(super) fn try_read_module_detail_from_cache(
+    module_id: &str,
+    quiet: bool,
+) -> Result<Option<ModuleDetail>, KamError> {
+    let path = module_cache_path(module_id)?;
+    Ok(read_cached_module(module_id, &path, quiet))
 }
 
 /// # Errors
@@ -94,20 +102,22 @@ pub fn download_module_latest(
         })
 }
 
-fn read_cached_module(module_id: &str, path: &Path) -> Option<ModuleDetail> {
+fn read_cached_module(module_id: &str, path: &Path, quiet: bool) -> Option<ModuleDetail> {
     if let Ok(mut f) = File::open(path) {
         let mut buf = String::new();
         if f.read_to_string(&mut buf).is_ok() {
             if let Ok(md) = serde_json::from_str::<ModuleDetail>(&buf) {
                 return Some(md);
             }
-            Utils::warn(format!(
-                "Cached module JSON for {module_id} could not be parsed"
-            ));
-        } else {
+            if !quiet {
+                Utils::warn(format!(
+                    "Cached module JSON for {module_id} could not be parsed"
+                ));
+            }
+        } else if !quiet {
             Utils::warn(format!("Failed to read cached module JSON for {module_id}"));
         }
-    } else {
+    } else if !quiet {
         Utils::warn(format!("Failed to open cached module JSON for {module_id}"));
     }
     None

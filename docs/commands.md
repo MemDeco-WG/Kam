@@ -390,10 +390,12 @@ Magisk/KernelSU/APatch module metadata without touching the module files.
 kam -Q
 kam -Qs magic
 kam -Qi module_id
+kam -Qu
 kam -Q --device 5596d9
 kam installed list
 kam installed search magic
 kam installed info module_id
+kam installed upgrades
 kam query info module_id
 ```
 
@@ -404,6 +406,9 @@ Pacman-style behavior:
   and descriptions.
 - `kam -Qi <module_id>` shows installed `module.prop` metadata, module state,
   and module path.
+- `kam -Qu` lists installed modules whose cached repository metadata reports a
+  different latest release version. It does not refresh the remote index; run
+  `kam -Sy` first when you need fresh repository metadata.
 - `--device <serial>` selects an adb device. `--device auto` keeps adb's normal
   single-device behavior.
 

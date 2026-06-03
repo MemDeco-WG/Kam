@@ -1,11 +1,14 @@
 use clap::{Args, Subcommand};
-use std::collections::BTreeMap;
-use std::io::Write;
-use std::process::Command;
-use std::process::Stdio;
 
 use crate::errors::KamError;
 use crate::utils::Utils;
+
+mod metadata;
+mod upgrades;
+
+use metadata::query_installed_modules;
+pub use metadata::{InstalledModule, ModuleState, parse_installed_modules};
+pub use upgrades::handle_upgrades;
 
 #[derive(Args, Debug, Clone)]
 pub struct InstalledArgs {
@@ -26,6 +29,8 @@ pub enum InstalledCommand {
     Search(InstalledSearchArgs),
     /// Show installed module metadata.
     Info(InstalledInfoArgs),
+    /// List installed modules with a newer cached repository release.
+    Upgrades(InstalledUpgradesArgs),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -61,24 +66,15 @@ pub struct InstalledInfoArgs {
     pub device: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InstalledModule {
-    pub id: String,
-    pub name: String,
-    pub version: String,
-    pub version_code: String,
-    pub author: String,
-    pub description: String,
-    pub state: ModuleState,
-    pub path: String,
-    pub properties: BTreeMap<String, String>,
-}
+#[derive(Args, Debug, Clone)]
+pub struct InstalledUpgradesArgs {
+    /// adb device serial. Use auto to require exactly one connected device.
+    #[arg(long)]
+    pub device: Option<String>,
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModuleState {
-    Enabled,
-    Disabled,
-    RemovePending,
+    /// Suppress details and print only module ids.
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
 }
 
 pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
@@ -95,6 +91,10 @@ pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
             let device = info.device.as_ref().or(args.device.as_ref());
             handle_info(&info.modules, device.cloned())
         }
+        Some(InstalledCommand::Upgrades(upgrades)) => {
+            let device = upgrades.device.as_ref().or(args.device.as_ref());
+            handle_upgrades(device.cloned(), None, upgrades.quiet)
+        }
         None => handle_list("", args.device.clone(), false),
     }
 }
@@ -102,10 +102,15 @@ pub fn run(args: &InstalledArgs) -> Result<(), KamError> {
 pub fn handle_pacman_style(
     search: bool,
     info: bool,
+    upgrades: bool,
     targets: &[String],
     device: Option<String>,
+    modules_url: Option<&str>,
     quiet: bool,
 ) -> Result<(), KamError> {
+    if upgrades {
+        return handle_upgrades(device, modules_url, quiet);
+    }
     if info {
         return handle_info(targets, device);
     }
@@ -168,108 +173,6 @@ fn handle_info(modules: &[String], device: Option<String>) -> Result<(), KamErro
     Ok(())
 }
 
-fn query_installed_modules(device: Option<&str>) -> Result<Vec<InstalledModule>, KamError> {
-    ensure_adb()?;
-    let output = adb_root_output(device, installed_modules_script())?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if !output.status.success() {
-        return Err(KamError::CommandFailed(format!(
-            "Failed to query installed modules: {}",
-            stderr.trim()
-        )));
-    }
-    Ok(parse_installed_modules(&stdout))
-}
-
-fn adb_root_output(device: Option<&str>, script: &str) -> Result<std::process::Output, KamError> {
-    let mut cmd = adb(device);
-    cmd.arg("shell")
-        .arg("su")
-        .arg("-c")
-        .arg("sh")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = cmd.spawn().map_err(KamError::Io)?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin.write_all(script.as_bytes()).map_err(KamError::Io)?;
-        stdin.write_all(b"\n").map_err(KamError::Io)?;
-    }
-    child.wait_with_output().map_err(KamError::Io)
-}
-
-fn adb(device: Option<&str>) -> Command {
-    let mut cmd = Command::new("adb");
-    if let Some(device) = normalize_device(device) {
-        cmd.arg("-s").arg(device);
-    }
-    cmd
-}
-
-fn installed_modules_script() -> &'static str {
-    r#"for d in /data/adb/modules/*; do
-  [ -f "$d/module.prop" ] || continue
-  state=enabled
-  [ -e "$d/disable" ] && state=disabled
-  [ -e "$d/remove" ] && state=remove-pending
-  printf '__kam_module_begin__\n'
-  printf 'path=%s\n' "$d"
-  printf 'state=%s\n' "$state"
-  sed -n 's/\r$//;/^[[:space:]]*#/d;/^[[:space:]]*$/d;/=/p' "$d/module.prop"
-  printf '__kam_module_end__\n'
-done"#
-}
-
-pub fn parse_installed_modules(input: &str) -> Vec<InstalledModule> {
-    let mut modules = Vec::new();
-    let mut current = BTreeMap::new();
-    let mut in_module = false;
-    for line in input.lines() {
-        match line.trim() {
-            "__kam_module_begin__" => {
-                current.clear();
-                in_module = true;
-            }
-            "__kam_module_end__" => {
-                if in_module && let Some(module) = module_from_properties(&current) {
-                    modules.push(module);
-                }
-                current = BTreeMap::new();
-                in_module = false;
-            }
-            _ if in_module => {
-                if let Some((key, value)) = line.split_once('=') {
-                    current.insert(key.trim().to_string(), value.trim().to_string());
-                }
-            }
-            _ => {}
-        }
-    }
-    modules
-}
-
-fn module_from_properties(properties: &BTreeMap<String, String>) -> Option<InstalledModule> {
-    let path = properties.get("path").cloned().unwrap_or_default();
-    let id = properties
-        .get("id")
-        .cloned()
-        .or_else(|| path.rsplit('/').next().map(str::to_string))?;
-    Some(InstalledModule {
-        id,
-        name: properties.get("name").cloned().unwrap_or_default(),
-        version: properties.get("version").cloned().unwrap_or_default(),
-        version_code: properties.get("versionCode").cloned().unwrap_or_default(),
-        author: properties.get("author").cloned().unwrap_or_default(),
-        description: properties.get("description").cloned().unwrap_or_default(),
-        state: properties
-            .get("state")
-            .map_or(ModuleState::Enabled, |value| ModuleState::from_str(value)),
-        path,
-        properties: properties.clone(),
-    })
-}
-
 fn print_module_info(module: &InstalledModule) {
     Utils::section(&module.id);
     println!("Name           : {}", display_or_dash(&module.name));
@@ -300,75 +203,9 @@ fn display_or_dash(value: &str) -> &str {
     if value.trim().is_empty() { "-" } else { value }
 }
 
-fn normalize_device(device: Option<&str>) -> Option<&str> {
-    device.filter(|value| !value.eq_ignore_ascii_case("auto"))
-}
-
-fn ensure_adb() -> Result<(), KamError> {
-    if crate::utils::command_exists("adb") {
-        Ok(())
-    } else {
-        Err(KamError::CommandFailed(
-            "adb not found on PATH. Install Android platform-tools.".to_string(),
-        ))
-    }
-}
-
-impl ModuleState {
-    fn from_str(value: &str) -> Self {
-        match value {
-            "disabled" => Self::Disabled,
-            "remove-pending" => Self::RemovePending,
-            _ => Self::Enabled,
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Enabled => "enabled",
-            Self::Disabled => "disabled",
-            Self::RemovePending => "remove-pending",
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{ModuleState, matches_query, parse_installed_modules};
-
-    #[test]
-    fn parses_installed_module_blocks() {
-        let modules = parse_installed_modules(
-            "__kam_module_begin__\n\
-             path=/data/adb/modules/MagicNet\n\
-             state=disabled\n\
-             id=MagicNet\n\
-             name=MagicNet\n\
-             version=1.2.3\n\
-             versionCode=42\n\
-             author=LIghtJUNction\n\
-             description=Proxy module\n\
-             __kam_module_end__\n",
-        );
-
-        assert_eq!(modules.len(), 1);
-        assert_eq!(modules[0].id, "MagicNet");
-        assert_eq!(modules[0].state, ModuleState::Disabled);
-        assert_eq!(modules[0].version_code, "42");
-    }
-
-    #[test]
-    fn falls_back_to_directory_name_when_id_is_missing() {
-        let modules = parse_installed_modules(
-            "__kam_module_begin__\n\
-             path=/data/adb/modules/demo\n\
-             state=enabled\n\
-             name=Demo Module\n\
-             __kam_module_end__\n",
-        );
-
-        assert_eq!(modules[0].id, "demo");
-    }
+    use super::{matches_query, parse_installed_modules};
 
     #[test]
     fn query_matches_multiple_metadata_fields() {

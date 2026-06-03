@@ -233,6 +233,35 @@ pub(crate) fn handle_repo_info(
     Ok(())
 }
 
+pub(crate) fn cached_entry_exists(base_url: &str, module_id: &str) -> Result<(), KamError> {
+    cache::find_entry_by_name(base_url, module_id).map(|_| ())
+}
+
+pub(crate) fn cached_module_update_metadata(
+    module_id: &str,
+) -> Result<Option<(String, String)>, KamError> {
+    let Some(detail) = download::try_read_module_detail_from_cache(module_id, true)? else {
+        return Ok(None);
+    };
+    let Some(version) = latest_release_version(detail.releases.as_ref()) else {
+        return Ok(None);
+    };
+    Ok(Some((
+        detail.module_name.unwrap_or_else(|| module_id.to_string()),
+        version.to_string(),
+    )))
+}
+
+fn latest_release_version(releases: Option<&Vec<Release>>) -> Option<&str> {
+    releases?.iter().find_map(|release| {
+        release
+            .version
+            .as_deref()
+            .or(release.name.as_deref())
+            .filter(|value| !value.trim().is_empty())
+    })
+}
+
 pub(crate) fn handle_repo_list(
     query: &str,
     modules_url: Option<&str>,

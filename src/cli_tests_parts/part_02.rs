@@ -160,6 +160,15 @@ fn parses_explicit_installed_query_subcommands() {
         installed.command,
         Some(InstalledCommand::Info(info_args)) if info_args.modules == ["MagicNet"]
     ));
+
+    let upgrades = parse(&["kam", "installed", "upgrades", "--quiet"]);
+    let Some(Commands::Installed(installed)) = upgrades.command else {
+        panic!("expected installed command");
+    };
+    assert!(matches!(
+        installed.command,
+        Some(InstalledCommand::Upgrades(upgrade_args)) if upgrade_args.quiet
+    ));
 }
 
 #[test]

@@ -131,6 +131,15 @@ fn try_parse_accepts_installed_query_info_combo() {
 }
 
 #[test]
+fn try_parse_accepts_installed_query_upgrade_combo() {
+    let cli = parse(&["kam", "-Qu"]);
+
+    assert!(cli.query_flag);
+    assert!(cli.update_index);
+    assert!(cli.targets.is_empty());
+}
+
+#[test]
 fn try_parse_accepts_global_device_for_query() {
     let cli = parse(&["kam", "--device", "5596d9", "-Q"]);
 

@@ -177,6 +177,7 @@ Installed module query shortcuts:
 kam -Q                 # list installed modules on the connected device
 kam -Qs magic          # search installed module metadata
 kam -Qi module_id      # show installed module.prop metadata
+kam -Qu                # show installed modules with cached updates
 kam -Q --device serial # query a specific adb device
 ```
 
