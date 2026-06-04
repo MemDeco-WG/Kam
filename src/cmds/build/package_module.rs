@@ -1,5 +1,5 @@
 use super::args::BuildArgs;
-use super::package_filter::should_skip_file;
+use super::package_filter::PackageFilter;
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::utils::Utils;
@@ -145,9 +145,12 @@ fn add_module_source_files(
     options: FileOptions<()>,
     src_dir: &Path,
 ) -> Result<(), KamError> {
-    let exclude_patterns = build_exclude_patterns(kam_toml);
-    let include_patterns = build_include_patterns(kam_toml);
-    let file_count = count_module_files(src_dir, &exclude_patterns, &include_patterns);
+    let filter = PackageFilter::from_root(
+        src_dir,
+        build_exclude_patterns(kam_toml),
+        build_include_patterns(kam_toml),
+    );
+    let file_count = count_module_files(src_dir, &filter);
     let pb = packaging_progress(args, file_count);
     let walker = ignore::WalkBuilder::new(src_dir)
         .git_ignore(false)
@@ -166,12 +169,7 @@ fn add_module_source_files(
             .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {e}")))?;
         let rel_str = rel_path.to_string_lossy();
         let file_name_opt = path.file_name().and_then(|s| s.to_str());
-        if should_skip_file(
-            &rel_str,
-            file_name_opt,
-            &exclude_patterns,
-            &include_patterns,
-        ) {
+        if filter.should_skip_file(&rel_str, file_name_opt) {
             continue;
         }
         if path.is_dir() {
@@ -198,11 +196,7 @@ fn add_module_source_files(
     Ok(())
 }
 
-fn count_module_files(
-    src_dir: &Path,
-    exclude_patterns: &[String],
-    include_patterns: &[String],
-) -> usize {
+fn count_module_files(src_dir: &Path, filter: &PackageFilter) -> usize {
     ignore::WalkBuilder::new(src_dir)
         .git_ignore(false)
         .hidden(false)
@@ -218,7 +212,7 @@ fn count_module_files(
             };
             let rel_str = rel_path.to_string_lossy();
             let file_name_opt = path.file_name().and_then(|s| s.to_str());
-            !should_skip_file(&rel_str, file_name_opt, exclude_patterns, include_patterns)
+            !filter.should_skip_file(&rel_str, file_name_opt)
         })
         .count()
 }
@@ -324,5 +318,62 @@ pub(super) fn update_packaging_progress(pb: Option<&ProgressBar>, rel_str: &str)
             crate::i18n::tr("packaging.packaging"),
             display_name
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::kam_toml::KamToml;
+    use crate::types::kam_toml::sections::build::BuildSection;
+    use tempfile::tempdir;
+
+    #[test]
+    fn module_zip_respects_source_dir_kamignore() {
+        let temp = tempdir().unwrap();
+        let project = temp.path();
+        let src = project.join("src/example");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("keep.sh"), "echo keep\n").unwrap();
+        std::fs::write(src.join("debug.log"), "debug\n").unwrap();
+        std::fs::write(src.join("important.log"), "important\n").unwrap();
+        std::fs::write(src.join(".kamignore"), "*.log\n!important.log\n").unwrap();
+
+        let mut kam_toml = KamToml::default();
+        kam_toml.prop.id = "example".to_string();
+        kam_toml.prop.version = "v1.0.0".to_string();
+        kam_toml.prop.versionCode = 1;
+        kam_toml.prop.description = "Example".to_string();
+        kam_toml.kam.build = Some(BuildSection {
+            source_dir: Some("src/example".to_string()),
+            ..BuildSection::default()
+        });
+
+        let out = project.join("dist");
+        std::fs::create_dir_all(&out).unwrap();
+        let args = BuildArgs {
+            path: ".".to_string(),
+            all: false,
+            output: None,
+            bump: false,
+            release: false,
+            sign: false,
+            interactive: false,
+            pre_release: false,
+            quiet: true,
+            jobs: None,
+        };
+
+        let zip_path =
+            create_kam_module_zip(&kam_toml, &out, "example", "example", project, &args).unwrap();
+        let file = File::open(zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let names = (0..archive.len())
+            .map(|idx| archive.by_index(idx).unwrap().name().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(names.iter().any(|name| name == "keep.sh"));
+        assert!(names.iter().any(|name| name == "important.log"));
+        assert!(!names.iter().any(|name| name == "debug.log"));
     }
 }

@@ -162,23 +162,32 @@ target_dir = "dist"
 output_file = "{{id}}"
 hooks_dir = "hooks"
 source_dir = "src/{{id}}"
-exclude = [
-  ".git/",
-  "target/",
-  "node_modules/",
-  ".DS_Store",
-  "Thumbs.db",
-  "*.tmp",
-  "*.log",
-  "*.bak",
-  ".kam/",
-]
 include = []
 respect_gitignore = false
 ```
 
-When a path matches both `exclude` and `include`, `include` wins. Prefer
-explicit `exclude` / `include` rules over `respect_gitignore` for packaging.
+Put packaging ignore rules in `.kamignore` beside the packaged root:
+
+```gitignore
+target/
+node_modules/
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+*.bak
+.kam/
+!important.log
+```
+
+Module ZIP builds read `.kamignore` from `source_dir`. Template archive builds
+read `.kamignore` from the template project root. `.gitignore` is still not used
+for packaging because Git development ignores and module release contents are
+different concerns.
+
+Existing `exclude` and `include` entries in `kam.toml` remain supported for
+compatibility and generated overrides. `include` wins over both `.kamignore` and
+`exclude`; `.kamignore` `!pattern` rules win over `.kamignore` exclude rules.
 
 ## Metadata Sync
 

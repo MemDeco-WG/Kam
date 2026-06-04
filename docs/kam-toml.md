@@ -64,12 +64,12 @@ Kam 自身的项目配置。
 | `target_dir` | string | `dist` | 输出目录。相对路径基于项目根目录。 |
 | `output_file` | string | `{{id}}-{{versionCode}}-{{version}}` | 输出文件名，不含扩展名。构建时支持 `{{id}}`、`{{name}}`、`{{version}}`、`{{versionCode}}`。 |
 | `hooks_dir` | string | `hooks` | hook 根目录。 |
-| `exclude` | string array | 常见临时目录和文件 | 构建或模板复制时排除的路径/模式。 |
-| `include` | string array | `[]` | 强制包含的路径/模式。匹配时优先级高于 `exclude`。 |
-| `respect_gitignore` | bool | `false` | 保留字段。当前打包流程明确不依赖 `.gitignore`，应使用 `include`/`exclude` 控制产物。 |
+| `exclude` | string array | 常见临时目录和文件 | 兼容字段。构建或模板复制时排除的路径/模式；日常排除规则建议写入 `.kamignore`。 |
+| `include` | string array | `[]` | 强制包含的路径/模式。匹配时优先级高于 `.kamignore` 和 `exclude`。 |
+| `respect_gitignore` | bool | `false` | 保留字段。当前打包流程明确不依赖 `.gitignore`，应使用 `.kamignore` 控制产物。 |
 | `extra_includes` | array of table | 无 | 额外包含项，结构为 `{ source, dest }`。 |
 
-`exclude`/`include` 应写项目相对路径或文件名模式。`.gitignore` 文件本身不会因为排除规则被跳过。
+`.kamignore` 使用与 Kam `exclude` 相同的模式语义，一行一个规则，支持空行、`#` 注释和 `!pattern` 重新包含。模块 ZIP 构建从 `source_dir` 读取 `.kamignore`；模板归档构建从模板项目根读取 `.kamignore`。`.gitignore` 不作为打包过滤来源。
 
 模块目录兼容性建议：
 

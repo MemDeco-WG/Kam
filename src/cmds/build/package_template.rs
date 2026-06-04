@@ -1,5 +1,5 @@
 use super::args::BuildArgs;
-use super::package_filter::should_skip_file;
+use super::package_filter::PackageFilter;
 use super::package_module::{packaging_progress, update_packaging_progress};
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
@@ -23,16 +23,13 @@ pub fn create_template_archive(
     let tar_gz = File::create(&source_output_file)?;
     let enc = flate2::write::GzEncoder::new(tar_gz, flate2::Compression::default());
     let mut tar = TarBuilder::new(enc);
-    let exclude_patterns = build_exclude_patterns(kam_toml);
-    let include_patterns = build_include_patterns(kam_toml);
-    let exclude_dir_names = crate::utils::default_exclude_dir_names();
-    let file_count = count_template_files(
+    let filter = PackageFilter::from_root(
         project_root,
-        output_dir,
-        &exclude_dir_names,
-        &exclude_patterns,
-        &include_patterns,
+        build_exclude_patterns(kam_toml),
+        build_include_patterns(kam_toml),
     );
+    let exclude_dir_names = crate::utils::default_exclude_dir_names();
+    let file_count = count_template_files(project_root, output_dir, &exclude_dir_names, &filter);
     let walker = ignore::WalkBuilder::new(project_root)
         .git_ignore(false)
         .hidden(false)
@@ -58,12 +55,7 @@ pub fn create_template_archive(
         }
         let rel_str = rel_path.to_string_lossy();
         let file_name_opt = entry.file_name().to_str();
-        if should_skip_file(
-            &rel_str,
-            file_name_opt,
-            &exclude_patterns,
-            &include_patterns,
-        ) {
+        if filter.should_skip_file(&rel_str, file_name_opt) {
             continue;
         }
         if path.is_dir() {
@@ -97,8 +89,7 @@ fn count_template_files(
     project_root: &Path,
     output_dir: &Path,
     exclude_dir_names: &[String],
-    exclude_patterns: &[String],
-    include_patterns: &[String],
+    filter: &PackageFilter,
 ) -> usize {
     let exclude_dir_names = exclude_dir_names.to_owned();
     ignore::WalkBuilder::new(project_root)
@@ -120,7 +111,7 @@ fn count_template_files(
             };
             let rel_str = rel_path.to_string_lossy();
             let file_name_opt = e.file_name().to_str();
-            !should_skip_file(&rel_str, file_name_opt, exclude_patterns, include_patterns)
+            !filter.should_skip_file(&rel_str, file_name_opt)
         })
         .count()
 }

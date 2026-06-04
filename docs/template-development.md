@@ -63,9 +63,15 @@ module_type = "template"
 target_dir = "../../templates/"
 output_file = "my_template"
 hooks_dir = "hooks"
-exclude = ["src/my_template/"]
 include = []
 respect_gitignore = false
+```
+
+将模板自身不应进入生成项目的路径写入模板根目录 `.kamignore`：
+
+```gitignore
+src/my_template/
+target/
 ```
 
 规则：
@@ -73,7 +79,7 @@ respect_gitignore = false
 - `module_type = "template"` 表示构建产物是模板归档，构建时不会运行 pre/post build hooks。
 - `output_file` 应等于模板 ID，方便 `kam tmpl import/export/list` 形成稳定名称。
 - 模板源码中的示例模块目录通常写成 `src/{{prop.id}}/`。路径变量会被渲染。
-- `exclude` 用来排除模板自身不应进入生成项目的文件。不要依赖 `.gitignore` 控制模板产物。
+- `.kamignore` 用来排除模板自身不应进入生成项目的文件。不要依赖 `.gitignore` 控制模板产物。
 - 模板变量定义放在 `[kam.tmpl.variables.<name>]`，所有变量都应写 `var_type`、`required`，并尽量写 `default`、`help`、`example`。
 
 ## 变量与渲染
@@ -133,33 +139,28 @@ Kam 使用 Tera 渲染模板文本文件和路径。
 
 ## Include / Exclude
 
-模板初始化和模板打包都使用 `kam.build.exclude` / `kam.build.include`。
+模板初始化和模板打包都使用 `.kamignore`，并兼容 `kam.build.exclude` / `kam.build.include`。
 
 规则：
 
-- `include` 优先级高于 `exclude`。
+- `kam.build.include` 优先级最高，高于 `.kamignore` 和 `exclude`。
+- `.kamignore` 支持 `#` 注释、空行和 `!pattern` 重新包含。
 - `.gitignore` 不作为打包过滤来源。
-- 隐藏文件默认可进入模板产物，除非被 `exclude` 排除。
+- 隐藏文件默认可进入模板产物，除非被 `.kamignore` 或 `exclude` 排除。
 - 模板打包会自动跳过输出目录，避免把产物打进产物。
-- 模板项目应显式排除临时目录、构建目录和模板自身不应复制到用户项目的目录。
+- 模板项目应在 `.kamignore` 中显式排除临时目录、构建目录和模板自身不应复制到用户项目的目录。
 
-推荐基础配置：
+推荐 `.kamignore`：
 
-```toml
-[kam.build]
-exclude = [
-    ".git/",
-    "target/",
-    "node_modules/",
-    ".DS_Store",
-    "Thumbs.db",
-    "*.tmp",
-    "*.log",
-    "*.bak",
-    ".kam/",
-]
-include = []
-respect_gitignore = false
+```gitignore
+target/
+node_modules/
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+*.bak
+.kam/
 ```
 
 ## Hook 规范
