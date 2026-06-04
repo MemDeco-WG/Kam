@@ -271,6 +271,12 @@ fn shell_command(cli_bin: &str, cli_args: &[String]) -> String {
         .join(" ")
 }
 
+const ADB_REMOTE_PACKAGE_DIR: &str = "/sdcard/kam/tmp";
+
+fn adb_remote_package_dir() -> &'static str {
+    ADB_REMOTE_PACKAGE_DIR
+}
+
 fn adb_remote_path(artifact: &Path) -> Result<String, KamError> {
     let file_name = artifact
         .file_name()
@@ -281,7 +287,7 @@ fn adb_remote_path(artifact: &Path) -> Result<String, KamError> {
                 artifact.display()
             ))
         })?;
-    Ok(format!("/data/local/tmp/{file_name}"))
+    Ok(format!("{ADB_REMOTE_PACKAGE_DIR}/{file_name}"))
 }
 
 fn run_status(mut cmd: Command, verbose: bool) -> Result<std::process::ExitStatus, KamError> {
@@ -361,4 +367,3 @@ fn install_cli_for_manager_name(
         ))),
     }
 }
-

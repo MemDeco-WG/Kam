@@ -40,7 +40,7 @@ pub struct InstallArgs {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Install through adb: push the module ZIP to /data/local/tmp, then run the
+    /// Install through adb: push the module ZIP to /sdcard/kam/tmp, then run the
     /// selected root manager on the connected device via `adb shell su -c`.
     #[arg(long)]
     pub adb: bool,
@@ -426,4 +426,3 @@ fn create_tempdir_with_fallback_override(
 fn create_tempdir_with_fallback() -> Result<TempDir, io::Error> {
     create_tempdir_with_fallback_override(None)
 }
-

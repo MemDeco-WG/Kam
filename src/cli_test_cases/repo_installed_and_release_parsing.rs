@@ -167,6 +167,7 @@ fn parses_explicit_repo_search_and_download_subcommands() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn parses_explicit_installed_query_subcommands() {
     let list = parse(&["kam", "installed", "list", "--device", "5596d9", "magic"]);
     let Some(Commands::Installed(installed)) = list.command else {

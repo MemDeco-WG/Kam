@@ -1,3 +1,4 @@
+#[allow(clippy::too_many_lines)]
 fn execute_adb_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Result<(), KamError> {
     if !crate::utils::command_exists("adb") {
         return Err(KamError::CommandFailed(
@@ -45,6 +46,23 @@ fn execute_adb_install_from_artifact(artifact: &Path, args: &InstallArgs) -> Res
             artifact.display()
         ));
     }
+    let mkdir_status = run_status(
+        {
+            let mut cmd = Command::new("adb");
+            cmd.arg("shell")
+                .arg("mkdir")
+                .arg("-p")
+                .arg(adb_remote_package_dir());
+            cmd
+        },
+        args.verbose,
+    )?;
+    if !mkdir_status.success() {
+        return Err(KamError::CommandFailed(format!(
+            "adb shell mkdir failed with status: {mkdir_status}"
+        )));
+    }
+
     let push_status = run_status(
         {
             let mut cmd = Command::new("adb");
@@ -334,4 +352,15 @@ pub fn run(args: &InstallArgs) -> Result<(), KamError> {
     // Default (local) behavior
     let artifact = resolve_artifact_path(args.path.clone())?;
     execute_install_from_artifact(&artifact, args)
+}
+
+#[cfg(test)]
+mod install_flow_tests {
+    use super::*;
+
+    #[test]
+    fn adb_remote_path_uses_sdcard_staging_dir() {
+        let path = adb_remote_path(Path::new("/tmp/MagicNet.zip")).unwrap();
+        assert_eq!(path, "/sdcard/kam/tmp/MagicNet.zip");
+    }
 }

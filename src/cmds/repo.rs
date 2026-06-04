@@ -241,7 +241,7 @@ pub fn run_with_modules_url(args: RepoArgs, modules_url: Option<&str>) -> Result
 
 /// # Errors
 /// Returns `KamError` when network, I/O, or parsing operations fail.
-#[allow(clippy::fn_params_excessive_bools)]
+#[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
 pub fn handle_pacman_style(
     sync: bool,
     search: bool,

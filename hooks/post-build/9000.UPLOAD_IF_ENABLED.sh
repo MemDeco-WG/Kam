@@ -62,27 +62,34 @@ EOF
 )
 printf "%s\n" "$RELEASE_NOTES" > "$TMP_CHANGELOG"
 log_info "打包以下文件：$(ls -1 "$DIST")"
-# Check if release already exists
-if gh release view "$TAG" >/dev/null 2>&1; then
-    log_error "Release $TAG already exists and is immutable, cannot proceed"
-    exit 1
-fi
-
-# Create release and upload all assets in one step
+# Create release and upload all assets in one step, or refresh assets for an
+# existing release so repeated release builds are idempotent.
 if [ -d "$DIST" ] && [ "$(ls -A "$DIST")" ]; then
-    log_info "Creating GitHub release $TAG and uploading assets from $DIST"
     assets=("$DIST"/*)
+    if gh release view "$TAG" >/dev/null 2>&1; then
+        if [ "${KAM_IMMUTABLE_RELEASE:-0}" = "1" ]; then
+            log_warn "Release $TAG already exists; KAM_IMMUTABLE_RELEASE=1, skipping upload"
+        else
+            log_warn "Release $TAG already exists; updating assets from $DIST"
+            if ! gh release upload "$TAG" --clobber "${assets[@]}"; then
+                log_error "Failed to update release $TAG assets"
+                exit 1
+            fi
+        fi
+    else
+        log_info "Creating GitHub release $TAG and uploading assets from $DIST"
 
-    # Build arguments in an array so an empty prerelease flag doesn't expand into an extra empty param
-    gh_args=("$TAG" "--title" "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" "--notes-file" "$TMP_CHANGELOG")
-    if [ "${KAM_PRE_RELEASE:-0}" = "1" ]; then
-        gh_args+=("--prerelease")
-    fi
-    gh_args+=("${assets[@]}")
+        # Build arguments in an array so an empty prerelease flag doesn't expand into an extra empty param
+        gh_args=("$TAG" "--title" "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" "--notes-file" "$TMP_CHANGELOG")
+        if [ "${KAM_PRE_RELEASE:-0}" = "1" ]; then
+            gh_args+=("--prerelease")
+        fi
+        gh_args+=("${assets[@]}")
 
-    if ! gh release create "${gh_args[@]}"; then
-        log_error "Failed to create release $TAG and upload assets"
-        exit 1
+        if ! gh release create "${gh_args[@]}"; then
+            log_error "Failed to create release $TAG and upload assets"
+            exit 1
+        fi
     fi
 else
     log_warn "Dist directory not found or empty: $DIST"

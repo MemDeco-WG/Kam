@@ -129,6 +129,10 @@ The latest dev plan and stage summary are recorded at
 `.kam/dev/last-session.log`. `kam dev --logs` prints this log, common manager
 install logs, configured device logs, and recent filtered `logcat` lines.
 
+`kam install --adb` uses the same device-friendly staging rule for module ZIPs:
+it creates `/sdcard/kam/tmp` and pushes the package there before invoking the
+selected root manager through `adb shell su -c`.
+
 ## Workspace Builds
 
 Kam can build multiple modules in one workspace:

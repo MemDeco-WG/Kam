@@ -106,29 +106,36 @@ fi
 
 log_info "Using repository '$REPO' for release (source: $REPO_SOURCE)"
 
-# Check if release already exists in target repo
-if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-    log_error "Release $TAG already exists in $REPO and is immutable, cannot proceed"
-    exit 1
-fi
-
-# Create release and upload all assets in one step
+# Create release and upload all assets in one step, or refresh assets for an
+# existing release so repeated release builds are idempotent.
 PRE_FLAG=""
 if [ "${KAM_PRE_RELEASE:-0}" = "1" ]; then
     PRE_FLAG="--prerelease"
 fi
 if [ -d "$DIST" ] && [ "$(ls -A "$DIST")" ]; then
-    log_info "Creating GitHub release $TAG and uploading assets from $DIST to $REPO"
     assets=("$DIST"/*)
-    # Build arguments in an array so $PRE_FLAG (when empty) doesn't expand into an extra empty param
-    gh_args=("$TAG" "--repo" "$REPO" "--title" "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" "--notes-file" "$TMP_CHANGELOG")
-    if [ -n "$PRE_FLAG" ]; then
-        gh_args+=("$PRE_FLAG")
-    fi
-    gh_args+=("${assets[@]}")
-    if ! gh release create "${gh_args[@]}"; then
-        log_error "Failed to create release $TAG and upload assets to $REPO"
-        exit 1
+    if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+        if [ "${KAM_IMMUTABLE_RELEASE:-0}" = "1" ]; then
+            log_warn "Release $TAG already exists in $REPO; KAM_IMMUTABLE_RELEASE=1, skipping upload"
+        else
+            log_warn "Release $TAG already exists in $REPO; updating assets from $DIST"
+            if ! gh release upload "$TAG" --repo "$REPO" --clobber "${assets[@]}"; then
+                log_error "Failed to update release $TAG assets in $REPO"
+                exit 1
+            fi
+        fi
+    else
+        log_info "Creating GitHub release $TAG and uploading assets from $DIST to $REPO"
+        # Build arguments in an array so $PRE_FLAG (when empty) doesn't expand into an extra empty param
+        gh_args=("$TAG" "--repo" "$REPO" "--title" "${KAM_MODULE_ID}-${KAM_MODULE_VERSION_CODE}-${KAM_MODULE_VERSION}" "--notes-file" "$TMP_CHANGELOG")
+        if [ -n "$PRE_FLAG" ]; then
+            gh_args+=("$PRE_FLAG")
+        fi
+        gh_args+=("${assets[@]}")
+        if ! gh release create "${gh_args[@]}"; then
+            log_error "Failed to create release $TAG and upload assets to $REPO"
+            exit 1
+        fi
     fi
 else
     log_warn "Dist directory not found or empty: $DIST"

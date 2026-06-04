@@ -12,6 +12,8 @@ pub struct RemoveRequest {
     pub quiet: bool,
 }
 
+/// # Errors
+/// Returns `KamError` when module discovery fails or a requested module cannot be removed.
 pub fn handle_remove(request: &RemoveRequest) -> Result<(), KamError> {
     if request.modules.is_empty() {
         return Err(KamError::CommandFailed(

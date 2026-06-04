@@ -199,6 +199,13 @@ fn release_exists(repo: &str, tag: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
+fn immutable_release_enabled() -> bool {
+    matches!(
+        std::env::var("KAM_IMMUTABLE_RELEASE").as_deref(),
+        Ok("1" | "true" | "TRUE" | "yes" | "YES")
+    )
+}
+
 fn run_gh(args: &[String], dry_run: bool) -> Result<(), KamError> {
     if dry_run {
         println!("gh {}", args.join(" "));
@@ -218,6 +225,19 @@ fn run_gh(args: &[String], dry_run: bool) -> Result<(), KamError> {
             status
         )))
     }
+}
+
+fn build_upload_args(repo: &str, tag: &str, assets: &[PathBuf]) -> Vec<String> {
+    let mut gh_args = vec![
+        "release".to_string(),
+        "upload".to_string(),
+        tag.to_string(),
+        "--repo".to_string(),
+        repo.to_string(),
+        "--clobber".to_string(),
+    ];
+    gh_args.extend(assets.iter().map(|asset| asset.display().to_string()));
+    gh_args
 }
 
 fn build_create_args(
@@ -270,10 +290,12 @@ pub fn run(args: &PublishArgs) -> Result<(), KamError> {
     let title = resolve_title(args, &kam_toml);
     let assets = collect_assets(&args.dist, args.all_assets)?;
 
-    if !args.dry_run && release_exists(&repo, &tag) {
-        return Err(KamError::UploadFailed(format!(
-            "Release {tag} already exists in {repo}; immutable releases cannot be modified"
-        )));
+    let exists = !args.dry_run && release_exists(&repo, &tag);
+    if exists && immutable_release_enabled() {
+        Utils::warn(format!(
+            "Release {tag} already exists in {repo}; KAM_IMMUTABLE_RELEASE=1, skipping upload"
+        ));
+        return Ok(());
     }
 
     Utils::info(format!(
@@ -281,6 +303,13 @@ pub fn run(args: &PublishArgs) -> Result<(), KamError> {
         assets.len()
     ));
 
-    let create_args = build_create_args(&repo, &tag, &title, args, &assets);
-    run_gh(&create_args, args.dry_run)
+    let gh_args = if exists {
+        Utils::warn(format!(
+            "Release {tag} already exists in {repo}; updating assets with --clobber"
+        ));
+        build_upload_args(&repo, &tag, &assets)
+    } else {
+        build_create_args(&repo, &tag, &title, args, &assets)
+    };
+    run_gh(&gh_args, args.dry_run)
 }

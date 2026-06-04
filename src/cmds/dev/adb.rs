@@ -110,9 +110,7 @@ pub(super) fn adb_root(ctx: &DevContext, command: &str) -> Result<(), KamError> 
         Err(KamError::CommandFailed(format!(
             "adb root command failed with adb status {} and root rc {}: {command}",
             output.status,
-            reported_rc
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "unknown".to_string())
+            reported_rc.map_or_else(|| "unknown".to_string(), |value| value.to_string())
         )))
     }
 }

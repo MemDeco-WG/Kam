@@ -70,6 +70,8 @@ fn handle_template_cache_command(command: TemplateCacheCommands) -> Result<(), K
     }
 }
 
+/// # Errors
+/// Returns `KamError` when the module cache directory cannot be resolved.
 pub fn clean_module_cache() -> Result<(), KamError> {
     use crate::utils::Utils;
 

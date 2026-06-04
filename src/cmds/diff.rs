@@ -39,6 +39,8 @@ struct DiffContext {
     device: Option<String>,
 }
 
+/// # Errors
+/// Returns `KamError` when the project cannot be inspected or adb/diff commands fail.
 pub fn run(args: &DiffArgs) -> Result<(), KamError> {
     let ctx = load_context(args)?;
     let temp = tempfile::tempdir().map_err(KamError::Io)?;
@@ -188,7 +190,7 @@ fn run_diff(device: &Path, local: &Path, args: &DiffArgs) -> Result<(), KamError
     cmd.arg(device).arg(local);
     let status = Utils::run_and_stream_no_stderr_header(cmd).map_err(KamError::Io)?;
     match status.code() {
-        Some(0) | Some(1) => Ok(()),
+        Some(0 | 1) => Ok(()),
         _ => Err(KamError::CommandFailed(format!(
             "diff failed with status {status}"
         ))),
@@ -265,9 +267,7 @@ fn adb_root(ctx: &DiffContext, command: &str) -> Result<(), KamError> {
         Err(KamError::CommandFailed(format!(
             "adb root command failed with adb status {} and root rc {}",
             output.status,
-            reported_rc
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "unknown".to_string())
+            reported_rc.map_or_else(|| "unknown".to_string(), |value| value.to_string())
         )))
     }
 }
