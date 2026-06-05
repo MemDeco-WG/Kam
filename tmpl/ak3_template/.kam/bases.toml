@@ -1,8 +1,8 @@
 [[base]]
-name = "kamfw"
-path = "src/{{prop.id}}/lib/kamfw"
-url = "https://github.com/MemDeco-WG/kamfw.git"
-branch = "main"
+name = "anykernel3"
+path = "src/AnyKernel3"
+url = "https://github.com/osm0sis/AnyKernel3.git"
+branch = "master"
 kind = "submodule"
 
 [[base]]
@@ -12,11 +12,7 @@ url = "https://github.com/MemDeco-WG/KamHooks.git"
 branch = "main"
 kind = "submodule"
 include = [
-  "pre-build/0500.CHECK_NDK.sh",
   "pre-build/1000.SYNC_MODULE_FILES.sh",
-  "pre-build/2000.BUILD_WEBUI.sh",
-  "pre-build/3000.BUILD_CRATES.sh",
-  "pre-build/4000.XTASK.sh",
   "post-build/7000.SANITIZE_MODULE_ZIP.sh",
   "post-build/8000.SIGN_IF_ENABLE.sh",
   "post-build/8900.UPDATE_CHANGE_LOG.sh",

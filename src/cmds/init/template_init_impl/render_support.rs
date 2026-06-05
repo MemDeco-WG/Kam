@@ -295,7 +295,13 @@ fn finalize_rendered_kam_toml(
             .build
             .get_or_insert_with(|| default_build.clone());
 
-        build.source_dir = Some(format!("src/{}", rendered_kt.prop.id));
+        if build
+            .source_dir
+            .as_deref()
+            .is_none_or(|source_dir| source_dir == "src/{{id}}")
+        {
+            build.source_dir = Some(format!("src/{}", rendered_kt.prop.id));
+        }
         build.target_dir = Some("dist".to_string());
         build.output_file = Some("{{id}}".to_string());
         build.hooks_dir = Some("hooks".to_string());
@@ -426,4 +432,3 @@ fn project_local_template_candidates(spec: &str) -> Vec<PathBuf> {
     }
     candidates
 }
-

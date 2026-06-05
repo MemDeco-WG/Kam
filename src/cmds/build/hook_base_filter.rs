@@ -12,8 +12,7 @@ struct HookBasesManifest {
 struct HookBaseEntry {
     name: Option<String>,
     path: Option<String>,
-    #[serde(default)]
-    include: Vec<String>,
+    include: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default)]
@@ -48,12 +47,12 @@ impl HookBaseFilter {
             return Ok(Self::default());
         };
 
-        if hooks_base.include.is_empty() {
+        let Some(include) = hooks_base.include.as_ref() else {
             return Ok(Self::default());
-        }
+        };
 
         Ok(Self {
-            filenames: Some(stage_filenames(stage, &hooks_base.include)),
+            filenames: Some(stage_filenames(stage, include)),
         })
     }
 

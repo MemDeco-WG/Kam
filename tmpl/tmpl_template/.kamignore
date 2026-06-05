@@ -1,1 +1,3 @@
 src/tmpl_template/
+.github/workflows/
+!.kam/bases.toml

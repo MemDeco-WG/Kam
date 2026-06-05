@@ -1,0 +1,9 @@
+[[base]]
+name = "workflows"
+path = ".kam/bases/workflows"
+url = "https://github.com/MemDeco-WG/KamModuleX.git"
+branch = "main"
+kind = "submodule"
+subdir = ".github/workflows"
+overlay = ".github/workflows"
+include = ["README-CN.md", "README.md", "exec.yml", "init.yml"]

@@ -83,6 +83,9 @@ pub fn init_impl(path: &Path, params: &mut InitImplParams<'_>) -> Result<(), Kam
     )?;
     write_template_env_file(path, &kt, params.template_vars)?;
     restore_kam_bases(path)?;
+    if materialize_workflow_bases(path, false)? {
+        crate::utils::Utils::success("Restored GitHub Actions workflows from .kam base.");
+    }
 
     Ok(())
 }

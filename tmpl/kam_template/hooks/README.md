@@ -8,6 +8,12 @@ base hooks plus local overlay hooks. When both directories contain the same hook
 filename for a stage, the local `hooks/<stage>/<file>` version overrides the
 official base version.
 
+Treat `.kam/bases/hooks` as read-only. To remove an official hook, edit
+`.kam/bases.toml` and remove that hook path from the `hooks` base `include`
+list. To disable all official hooks, set `include = []`. To change an official
+hook, copy or create a same-name file under `hooks/<stage>/`; the overlay wins
+without forking the base repository.
+
 Useful environment variables:
 
 | Variable | Description |

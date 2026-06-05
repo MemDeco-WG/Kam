@@ -74,9 +74,11 @@ conflicts = []
 module_type = "template"
 
 [kam.build]
+source_dir = "src/AnyKernel3"
 target_dir = "../../templates/"
 output_file = "ak3_template"
 hooks_dir = "hooks"
+include = [".kam/bases.toml"]
 
 [kam.tmpl.variables.repository]
 var_type = "string"

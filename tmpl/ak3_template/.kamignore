@@ -1,5 +1,4 @@
-src/kam_template/
-src/{{prop.id}}/lib/kamfw/
+src/AnyKernel3/
 hooks/lib/
 hooks/pre-build/*.sh
 hooks/post-build/*.sh

@@ -1,1 +1,3 @@
 src/meta_template/
+.github/workflows/
+!.kam/bases.toml

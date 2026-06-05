@@ -8,6 +8,13 @@ configuration sync, WebUI packaging, and optional online features.
 Kam executes build hooks directly and lets the operating system choose the
 interpreter. Hook scripts should include a shebang and executable bit.
 
+Templates may restore official base hooks into `.kam/bases/hooks`. Treat that
+directory as read-only because `kam sync bases --remote` updates it from the
+remote base repository. Control official hooks from `.kam/bases.toml`: remove a
+path from the `hooks` base `include` list to skip it, set `include = []` to
+disable all official hooks, or add a same-name file under `hooks/<stage>/` to
+override one hook locally. Extra files in `hooks/` are always user-owned.
+
 Pre-build hooks live in:
 
 ```text
