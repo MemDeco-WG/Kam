@@ -105,6 +105,8 @@ fn check_sh_with_tool(path: &Path, do_fix: bool) -> Result<FileResult, KamError>
     // 运行shellcheck，输出JSON格式（方便解析）
     match Command::new("shellcheck")
         .arg("-x")
+        .arg("-e")
+        .arg("SC2148")
         .arg("--format=json")
         .arg(path)
         .output()
@@ -245,4 +247,3 @@ fn apply_sh_filename_checks(path: &Path, content: &str, fr: &mut FileResult) {
         }
     }
 }
-
