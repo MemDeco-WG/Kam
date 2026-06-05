@@ -67,6 +67,17 @@ Supported phases:
 - `action`
 - `post-mount`
 
+For module startup behavior, choose either `service.sh` or
+`boot-completed.sh` as the business entrypoint, or override either
+`kamfw_phase_service` or `kamfw_phase_boot_completed`. Do not duplicate the
+same startup logic in both phases unless the module intentionally has two
+different startup moments.
+
+Do not add Magisk/KernelSU/APatch branching in module business scripts for
+lifecycle differences: kamfw already normalizes root-manager behavior,
+including compatibility dispatch and script renaming where needed. Only touch
+`magisk.sh`, `ksu.sh`, or `ap.sh` when changing the framework adapter itself.
+
 Default phase handlers are no-ops. Module code may override functions such as:
 
 ```sh

@@ -74,7 +74,7 @@ Kam 自身的项目配置。
 模块目录兼容性建议：
 
 - `action.sh` 需要 ShiroSU、Magisk 27008+、KernelSU 1.0.2+ 或 APatch 11039+；低版本不支持按钮入口，应通过文档和 `mmrl.repo.manager.*.require` 表达最低版本，而不是伪装兼容。
-- `post-mount.sh`、`boot-completed.sh` 面向 ShiroSU、KernelSU、APatch；Magisk 兼容项目可在 `service.sh` 里主动执行 `boot-completed.sh`。
+- 启动类业务逻辑在 `service.sh` 与 `boot-completed.sh` 中二选一即可；需要同时区分两个时机时才同时提供两个脚本。跨 Magisk、KernelSU、APatch、ShiroSU 的兼容调度和必要的脚本重命名由 kamfw 处理，模块脚本不要手写管理器分支，也不要为了兼容在 `service.sh` 中主动调用 `boot-completed.sh`。
 - 仅支持 ShiroSU、KernelSU、APatch 的模块通常不需要 `META-INF/`。
 - `zygisk/`、`bin/` 可以手写，但更推荐由 `c++_native/`、`go_native/` 项目按规范生成。
 

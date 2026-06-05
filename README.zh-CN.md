@@ -147,6 +147,8 @@ hello-world/
 
 Kam 将模块的执行过程划分为不同的 **phase** (阶段)，例如 `post-fs-data`、`service` 等。开发者可以将自己的业务逻辑代码放置在相应的脚本文件中，`kamfw` 会在模块生命周期的正确时间点自动执行它们。
 
+启动类业务逻辑在 `service.sh` 与 `boot-completed.sh` 中二选一即可。kamfw 会处理不同 root 管理器的生命周期差异，包括必要的兼容调度和脚本重命名；模块业务脚本不需要手写 Magisk、KernelSU、APatch、ShiroSU 分支。
+
 
 ---
 

@@ -33,7 +33,7 @@ my_template/
 模板应按目标管理器选择模块根目录内容，不要为了旧环境盲目塞入所有脚本。
 
 - `action.sh` 的按钮入口仅在 ShiroSU 默认支持、Magisk 27008+、KernelSU 1.0.2+、APatch 11039+ 可用。低版本没有按钮能力，模板应明确最低版本要求；不要为不支持按钮的低版本做降级按钮逻辑。建议用户升级到受支持版本，非 GKI 原版 KernelSU 用户应转向兼容分支。
-- `post-mount.sh`、`boot-completed.sh` 仅由 ShiroSU、KernelSU、APatch 原生支持。需要兼容 Magisk 时，可在 `service.sh` 中主动调用 `boot-completed.sh`。
+- 启动类业务逻辑在 `service.sh` 与 `boot-completed.sh` 中二选一即可；需要同时区分两个时机时才同时提供两个脚本。跨 Magisk、KernelSU、APatch、ShiroSU 的兼容调度和必要的脚本重命名由 kamfw 处理，模块脚本不要手写管理器分支，也不要为了兼容在 `service.sh` 中主动调用 `boot-completed.sh`。
 - 仅支持 ShiroSU、KernelSU、APatch 的模板无需包含 `META-INF/`。
 - `zygisk/`、`bin/` 通常由 `c++_native/` 或 `go_native/` 下的 native 项目自动生成；模板确有静态文件需求时也可以自行提供。
 - `changelog.md`、`update.json` 等发布文件可按项目需要自定义名称和路径，但路径应同步写入 `kam.toml` / README。
