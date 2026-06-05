@@ -1,4 +1,5 @@
 use super::args::BuildArgs;
+use super::hook_base_filter::HookBaseFilter;
 use super::hook_command::hook_command;
 use super::hook_env::build_hook_env;
 use crate::errors::KamError;
@@ -8,6 +9,7 @@ use crate::utils::Utils;
 
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -162,8 +164,9 @@ fn run_hooks(
 
     let hook_env = build_hook_env(project_root, kam_toml, output_dir, stage, args);
     let hooks_dir = hook_env.hooks_dir;
+    let hooks_base_dir = hook_env.hooks_base_dir;
 
-    if !hooks_dir.exists() {
+    if !hooks_dir.exists() && !hooks_base_dir.exists() {
         return Ok(());
     }
 
@@ -172,27 +175,31 @@ fn run_hooks(
     // 如果脚本在当前平台无法执行，会失败并返回错误
     // 在确定hook总数后再显示header
 
-    let entries = hook_entries(&hooks_dir)?;
-    let total_hooks = entries.iter().filter(|e| e.path().is_file()).count();
+    let base_filter = HookBaseFilter::from_project(project_root, stage)?;
+    let entries = hook_entries(&hooks_base_dir, &hooks_dir, &base_filter)?;
+    let total_hooks = entries.len();
     if !args.quiet {
         let hd = hooks_dir.display();
+        let base_hd = hooks_base_dir.display();
         Utils::section(format!(
-            "✿ Running {stage} hooks from {hd} ({total_hooks} script(s)) ✿"
+            "✿ Running {stage} hooks from {base_hd} + {hd} ({total_hooks} script(s)) ✿"
         ));
     }
     let pb = hook_progress(args, total_hooks);
 
     let mut idx = 0usize;
-    for entry in entries {
-        let path = entry.path();
-        if should_skip_hook_path(&path) {
-            continue;
-        }
+    for path in entries {
         idx += 1;
+        let hooks_root = if path.starts_with(&hooks_base_dir) {
+            hooks_base_dir.parent()
+        } else {
+            hooks_dir.parent()
+        };
         run_one_hook(
             &path,
             project_root,
             &hook_env.vars,
+            hooks_root,
             stage,
             idx,
             total_hooks,
@@ -207,13 +214,43 @@ fn run_hooks(
     Ok(())
 }
 
-fn hook_entries(hooks_dir: &Path) -> Result<Vec<std::fs::DirEntry>, KamError> {
-    let mut entries: Vec<_> = fs::read_dir(hooks_dir)
-        .map_err(KamError::Io)?
-        .filter_map(Result::ok)
-        .collect();
-    entries.sort_by_key(std::fs::DirEntry::file_name);
-    Ok(entries)
+fn hook_entries(
+    base_dir: &Path,
+    overlay_dir: &Path,
+    base_filter: &HookBaseFilter,
+) -> Result<Vec<PathBuf>, KamError> {
+    let mut merged = BTreeMap::new();
+    collect_hook_entries(base_dir, &mut merged, Some(base_filter))?;
+    collect_hook_entries(overlay_dir, &mut merged, None)?;
+    Ok(merged.into_values().collect())
+}
+
+fn collect_hook_entries(
+    dir: &Path,
+    merged: &mut BTreeMap<String, PathBuf>,
+    base_filter: Option<&HookBaseFilter>,
+) -> Result<(), KamError> {
+    if !dir.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(dir).map_err(KamError::Io)? {
+        let entry = entry.map_err(KamError::Io)?;
+        let path = entry.path();
+        if should_skip_hook_path(&path) {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if let Some(filter) = base_filter
+            && !filter.allows(file_name)
+        {
+            continue;
+        }
+        merged.insert(file_name.to_string(), path);
+    }
+    Ok(())
 }
 
 fn hook_progress(args: &BuildArgs, total_hooks: usize) -> Option<ProgressBar> {
@@ -244,6 +281,7 @@ fn run_one_hook(
     path: &Path,
     project_root: &Path,
     env_vars: &[(String, String)],
+    hooks_root: Option<&Path>,
     stage: &str,
     idx: usize,
     total_hooks: usize,
@@ -255,7 +293,8 @@ fn run_one_hook(
     );
     announce_hook(stage, idx, total_hooks, &filename, pb);
 
-    let mut cmd = hook_command(path, project_root, env_vars, stage);
+    let effective_env = hook_env_for_path(env_vars, hooks_root);
+    let mut cmd = hook_command(path, project_root, &effective_env, stage);
     let status_res = Utils::suspend_progressbar(pb, || cmd.status());
     match status_res {
         Ok(status) if status.success() => {
@@ -283,6 +322,24 @@ fn run_one_hook(
             )))
         }
     }
+}
+
+fn hook_env_for_path(
+    env_vars: &[(String, String)],
+    hooks_root: Option<&Path>,
+) -> Vec<(String, String)> {
+    let mut vars: Vec<_> = env_vars
+        .iter()
+        .filter(|(key, _)| key != "KAM_HOOKS_ROOT")
+        .cloned()
+        .collect();
+    if let Some(root) = hooks_root {
+        vars.push((
+            "KAM_HOOKS_ROOT".to_string(),
+            root.to_string_lossy().to_string(),
+        ));
+    }
+    vars
 }
 
 fn announce_hook(
@@ -331,5 +388,68 @@ fn warn_hook_exec_error(filename: &str, err: &std::io::Error) {
             ));
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hook_entries;
+
+    #[test]
+    fn overlay_hook_replaces_same_named_base_hook() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let base = temp.path().join(".kam/bases/hooks/pre-build");
+        let overlay = temp.path().join("hooks/pre-build");
+        std::fs::create_dir_all(&base).expect("base dir");
+        std::fs::create_dir_all(&overlay).expect("overlay dir");
+        std::fs::write(base.join("1000.BASE.sh"), "").expect("base hook");
+        std::fs::write(base.join("2000.OVERRIDE.sh"), "base").expect("base override hook");
+        std::fs::write(overlay.join("2000.OVERRIDE.sh"), "overlay").expect("overlay hook");
+        std::fs::write(overlay.join("3000.USER.sh"), "").expect("user hook");
+
+        let entries =
+            hook_entries(&base, &overlay, &super::HookBaseFilter::default()).expect("hook entries");
+        let paths: Vec<_> = entries
+            .iter()
+            .map(|path| path.strip_prefix(temp.path()).unwrap().to_string_lossy())
+            .map(|path| path.to_string())
+            .collect();
+
+        assert_eq!(
+            paths,
+            vec![
+                ".kam/bases/hooks/pre-build/1000.BASE.sh",
+                "hooks/pre-build/2000.OVERRIDE.sh",
+                "hooks/pre-build/3000.USER.sh",
+            ]
+        );
+    }
+
+    #[test]
+    fn base_include_filters_official_hooks_only() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let base = temp.path().join(".kam/bases/hooks/pre-build");
+        let overlay = temp.path().join("hooks/pre-build");
+        std::fs::create_dir_all(&base).expect("base dir");
+        std::fs::create_dir_all(&overlay).expect("overlay dir");
+        std::fs::write(base.join("1000.DEFAULT.sh"), "").expect("base hook");
+        std::fs::write(base.join("5000.SPECIAL.sh"), "").expect("base skipped hook");
+        std::fs::write(overlay.join("5000.SPECIAL.sh"), "").expect("overlay hook");
+
+        let filter = super::HookBaseFilter::from_filenames(vec!["1000.DEFAULT.sh".to_string()]);
+        let entries = hook_entries(&base, &overlay, &filter).expect("hook entries");
+        let paths: Vec<_> = entries
+            .iter()
+            .map(|path| path.strip_prefix(temp.path()).unwrap().to_string_lossy())
+            .map(|path| path.to_string())
+            .collect();
+
+        assert_eq!(
+            paths,
+            vec![
+                ".kam/bases/hooks/pre-build/1000.DEFAULT.sh",
+                "hooks/pre-build/5000.SPECIAL.sh",
+            ]
+        );
     }
 }

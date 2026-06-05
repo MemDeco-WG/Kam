@@ -312,13 +312,18 @@ fn should_skip(
     includes: Option<&[String]>,
     excludes: Option<&[String]>,
 ) -> bool {
-    // If includes exist and any of them matches, do NOT skip (force include).
-    if let Some(includes_vec) = includes {
-        for inc in includes_vec {
-            if crate::utils::pattern_matches(inc, rel_path, file_name) {
-                return false;
-            }
-        }
+    let is_included = includes.is_some_and(|includes_vec| {
+        includes_vec
+            .iter()
+            .any(|inc| crate::utils::pattern_matches(inc, rel_path, file_name))
+    });
+
+    if is_included {
+        return false;
+    }
+
+    if is_template_metadata_path(rel_path, file_name) {
+        return true;
     }
 
     // If excludes exist and any matches, we skip unless included above.
@@ -330,6 +335,14 @@ fn should_skip(
         }
     }
     false
+}
+
+fn is_template_metadata_path(rel_path: &str, file_name: Option<&str>) -> bool {
+    file_name == Some(".gitignore")
+        || rel_path == ".git"
+        || rel_path.starts_with(".git/")
+        || rel_path == ".github"
+        || rel_path.starts_with(".github/")
 }
 
 fn has_tar_gz_suffix(filename: &str) -> bool {

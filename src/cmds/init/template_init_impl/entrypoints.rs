@@ -32,8 +32,32 @@ pub fn init_impl(path: &Path, params: &mut InitImplParams<'_>) -> Result<(), Kam
     let kam_toml_existed_before_copy = kam_toml_path.exists();
 
     // Copy files (respect build.include/build.exclude if present)
-    let excludes = kt.kam.build.as_ref().and_then(|b| b.exclude.as_deref());
-    let includes = kt.kam.build.as_ref().and_then(|b| b.include.as_deref());
+    let mut init_excludes = kt
+        .kam
+        .build
+        .as_ref()
+        .and_then(|b| b.exclude.clone())
+        .unwrap_or_default();
+    for generated_base in init_managed_base_excludes(params.id) {
+        if !init_excludes.iter().any(|item| item == &generated_base) {
+            init_excludes.push(generated_base);
+        }
+    }
+    for generated_base in managed_base_excludes_from_template(&template_path, params.template_vars)?
+    {
+        if !init_excludes.iter().any(|item| item == &generated_base) {
+            init_excludes.push(generated_base);
+        }
+    }
+    let mut init_includes = kt
+        .kam
+        .build
+        .as_ref()
+        .and_then(|b| b.include.clone())
+        .unwrap_or_default();
+    if !init_includes.iter().any(|item| item == ".kam/bases.toml") {
+        init_includes.push(".kam/bases.toml".to_string());
+    }
 
     crate::template::TemplateManager::copy_and_replace_with_rules(
         &template_path,
@@ -41,9 +65,10 @@ pub fn init_impl(path: &Path, params: &mut InitImplParams<'_>) -> Result<(), Kam
         params.template_vars,
         params.force,
         &archive_id,
-        excludes,
-        includes,
-    )?;
+        Some(&init_excludes),
+        Some(&init_includes),
+    )
+    .map_err(|err| add_template_refresh_hint(err, &archive_id))?;
 
     // If kam.toml doesn't exist (not in template), write the generated one
     if !kam_toml_path.exists() {
@@ -57,8 +82,22 @@ pub fn init_impl(path: &Path, params: &mut InitImplParams<'_>) -> Result<(), Kam
         kam_toml_existed_before_copy,
     )?;
     write_template_env_file(path, &kt, params.template_vars)?;
+    restore_kam_bases(path)?;
 
     Ok(())
+}
+
+fn init_managed_base_excludes(module_id: &str) -> Vec<String> {
+    vec![format!("src/{module_id}/.local/bin/kamfw")]
+}
+
+fn add_template_refresh_hint(err: KamError, template_id: &str) -> KamError {
+    match err {
+        KamError::TemplateRenderError(message) => KamError::TemplateRenderError(format!(
+            "{message}\n提示：模板可能已过期或缓存模板与当前 Kam 版本不兼容，请先运行 `kam tmpl pull` 拉取/更新模板后重试。template_id: {template_id}"
+        )),
+        other => other,
+    }
 }
 
 /* legacy wrapper removed - use `InitTemplateParams`-based signature:
@@ -157,7 +196,8 @@ pub fn init_template(path: &Path, params: &InitTemplateParams<'_>) -> Result<(),
 
 #[cfg(test)]
 mod tests {
-    use super::merge_template_defaults;
+    use super::{add_template_refresh_hint, merge_template_defaults};
+    use crate::errors::KamError;
     use std::collections::HashMap;
 
     #[test]
@@ -229,5 +269,19 @@ default = "https://github.com/example/repo"
             vars.get("repository").map(String::as_str),
             Some("https://github.com/user/repo")
         );
+    }
+
+    #[test]
+    fn render_error_mentions_tmpl_pull() {
+        let err = add_template_refresh_hint(
+            KamError::TemplateRenderError("Failed to render template README.md".to_string()),
+            "kam_template",
+        );
+
+        let KamError::TemplateRenderError(message) = err else {
+            panic!("expected TemplateRenderError");
+        };
+        assert!(message.contains("kam tmpl pull"));
+        assert!(message.contains("template_id: kam_template"));
     }
 }

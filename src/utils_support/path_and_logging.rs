@@ -54,6 +54,9 @@ pub fn default_exclude_dir_names() -> Vec<String> {
         if s_trim.is_empty() {
             continue;
         }
+        if s_trim == ".kam" {
+            continue;
+        }
         if let Some(first) = s_trim.split('/').next() {
             let first = first.to_string();
             if !names.contains(&first) {
@@ -244,4 +247,3 @@ enum LogLevel<'a> {
     Info(&'a str),
     Empty,
 }
-

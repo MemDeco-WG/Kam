@@ -10,6 +10,7 @@ use std::process::Command;
 
 pub(super) struct HookEnv {
     pub(super) hooks_dir: PathBuf,
+    pub(super) hooks_base_dir: PathBuf,
     pub(super) vars: Vec<(String, String)>,
 }
 
@@ -29,6 +30,8 @@ pub(super) fn build_hook_env(
         .map_or("hooks", |s| s.as_str());
     let hooks_root = project_root.join(hooks_dir_name);
     let hooks_dir = hooks_root.join(stage);
+    let hooks_base_root = project_root.join(".kam").join("bases").join("hooks");
+    let hooks_base_dir = hooks_base_root.join(stage);
     let module_root = module_root(project_root, kam_toml);
     let web_root = module_root.join("webroot");
     let (detected_repo, detected_ref) = detect_repo(project_root, kam_toml, &parsed_env);
@@ -49,6 +52,10 @@ pub(super) fn build_hook_env(
         project_root.to_string_lossy().to_string(),
     );
     add_env("KAM_HOOKS_ROOT", hooks_root.to_string_lossy().to_string());
+    add_env(
+        "KAM_HOOKS_BASE_ROOT",
+        hooks_base_root.to_string_lossy().to_string(),
+    );
     add_env("KAM_MODULE_ROOT", module_root.to_string_lossy().to_string());
     add_env("KAM_WEB_ROOT", web_root.to_string_lossy().to_string());
     add_env("KAM_DIST_DIR", output_dir.to_string_lossy().to_string());
@@ -84,7 +91,11 @@ pub(super) fn build_hook_env(
     add_tmpl_env(kam_toml, &mut add_env);
     add_flattened_kam_env(kam_toml, &mut add_env);
 
-    HookEnv { hooks_dir, vars }
+    HookEnv {
+        hooks_dir,
+        hooks_base_dir,
+        vars,
+    }
 }
 
 fn parse_env_file(project_root: &Path) -> HashMap<String, String> {
