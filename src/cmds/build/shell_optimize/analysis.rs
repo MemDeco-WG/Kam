@@ -14,6 +14,7 @@ pub(super) struct ScriptInfo {
     pub(super) imports: BTreeSet<String>,
     pub(super) sources: BTreeSet<String>,
     pub(super) dynamic: bool,
+    pub(super) dynamic_load: bool,
     pub(super) parse_failed: bool,
 }
 
@@ -41,6 +42,7 @@ pub(super) fn analyze_script(rel_path: &str, content: &str) -> Result<ScriptInfo
         imports: BTreeSet::new(),
         sources: BTreeSet::new(),
         dynamic: content_contains_dynamic_shell(content),
+        dynamic_load: false,
         parse_failed,
     };
 
@@ -71,6 +73,8 @@ pub(super) fn find_function_calls(
 pub(super) fn is_shell_script(rel_path: &str, content: &[u8]) -> bool {
     has_shell_extension(rel_path)
         || rel_path == "cli"
+        || rel_path.ends_with("/.kamfwrc")
+        || rel_path == "lib/kamfw/.kamfwrc"
         || content.starts_with(b"#!/system/bin/sh")
         || content.starts_with(b"#!/sbin/sh")
         || content.starts_with(b"#!/bin/sh")
@@ -78,6 +82,10 @@ pub(super) fn is_shell_script(rel_path: &str, content: &[u8]) -> bool {
 
 pub(super) fn resolve_source_path(current_rel: &str, raw: &str, module_id: &str) -> Option<String> {
     let raw = raw
+        .replace("${KAMFW_DIR}", "lib/kamfw")
+        .replace("$KAMFW_DIR", "lib/kamfw")
+        .replace("${MODDIR}", "")
+        .replace("$MODDIR", "")
         .replace("${MODPATH}", "")
         .replace("$MODPATH", "")
         .replace("${KAM_MODULE_ROOT}", "")
@@ -106,6 +114,10 @@ pub(super) fn parent_dir(rel: &str) -> String {
         .and_then(Path::to_str)
         .unwrap_or("")
         .to_string()
+}
+
+pub(super) fn is_dynamic_source(value: &str) -> bool {
+    is_dynamic_word(value) || value.contains('{') || value.contains('}')
 }
 
 pub(super) fn lifecycle_roots(rel: &str) -> &'static [&'static str] {
@@ -156,14 +168,27 @@ fn inspect_command(node: Node<'_>, src: &str, info: &mut ScriptInfo) {
     };
     if first == "." || first == "source" {
         if let Some(target) = words.get(1) {
-            info.sources.insert(strip_shell_quotes(target));
+            let target = strip_shell_quotes(target);
+            if is_dynamic_word(&target)
+                && !is_known_static_path_word(&target)
+                && dynamic_source_may_load_kamfw(&target)
+                && !is_kamfw_env_source_word(&target)
+            {
+                info.dynamic_load = true;
+            }
+            info.sources.insert(target);
         }
         return;
     }
-    if first == "import" {
-        for target in words.iter().skip(1) {
-            info.imports.insert(strip_shell_quotes(target));
-        }
+    if first == "_kamfw_load" && matches!(words.get(1).map(String::as_str), Some("$@")) {
+        return;
+    }
+    if matches!(first.as_str(), "import" | "_kamfw_load") {
+        inspect_kamfw_imports(words.iter().skip(1), info);
+        return;
+    }
+    if first == "kamfw" && matches!(words.get(1).map(String::as_str), Some("load" | "import")) {
+        inspect_kamfw_imports(words.iter().skip(2), info);
         return;
     }
     if first == "eval" || first == "alias" || first.contains('$') {
@@ -215,6 +240,13 @@ fn find_regex_fallbacks(content: &str, info: &mut ScriptInfo) {
 
     let import_re = Regex::new(r"(?m)(?:^|[;&]\s*)import\s+([A-Za-z0-9_./*-]+)").unwrap();
     for caps in import_re.captures_iter(content) {
+        if let Some(m) = caps.get(1) {
+            info.imports.insert(strip_shell_quotes(m.as_str()));
+        }
+    }
+
+    let load_re = Regex::new(r"(?m)(?:^|[;&]\s*)_kamfw_load\s+([A-Za-z0-9_./*-]+)").unwrap();
+    for caps in load_re.captures_iter(content) {
         if let Some(m) = caps.get(1) {
             info.imports.insert(strip_shell_quotes(m.as_str()));
         }
@@ -291,6 +323,48 @@ fn content_contains_dynamic_shell(content: &str) -> bool {
         || content.contains("command ")
         || content.contains("$(printf")
         || content.contains("${!")
+}
+
+fn inspect_kamfw_imports<'a>(targets: impl Iterator<Item = &'a String>, info: &mut ScriptInfo) {
+    let mut saw_target = false;
+    for target in targets {
+        saw_target = true;
+        let target = strip_shell_quotes(target);
+        if is_dynamic_word(&target) {
+            info.dynamic_load = true;
+        } else {
+            info.imports.insert(target);
+        }
+    }
+    if !saw_target {
+        info.dynamic_load = true;
+    }
+}
+
+fn is_dynamic_word(value: &str) -> bool {
+    value.contains('$') || value.contains('`') || value.contains("$(") || value.contains("${")
+}
+
+fn is_known_static_path_word(value: &str) -> bool {
+    value.contains("$MODDIR")
+        || value.contains("${MODDIR}")
+        || value.contains("$MODPATH")
+        || value.contains("${MODPATH}")
+        || value.contains("$KAMFW_DIR")
+        || value.contains("${KAMFW_DIR}")
+        || value.contains("$KAM_MODULE_ROOT")
+        || value.contains("${KAM_MODULE_ROOT}")
+}
+
+fn dynamic_source_may_load_kamfw(value: &str) -> bool {
+    value.contains("KAMFW_DIR") || value.contains("lib/kamfw") || value.contains("/kamfw/")
+}
+
+fn is_kamfw_env_source_word(value: &str) -> bool {
+    value.contains("_kamfw_rcfile")
+        || value.contains(".config/kamfw/")
+        || value.contains("env.d/")
+        || value.contains(".envrc")
 }
 
 fn strip_shell_quotes(value: &str) -> String {

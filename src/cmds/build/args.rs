@@ -49,7 +49,7 @@ pub struct BuildArgs {
     pub trim_shell: bool,
 
     /// Trim shell scripts down to referenced functions where possible
-    #[arg(long = "trim-shell-functions", requires = "trim_shell")]
+    #[arg(long = "trim-shell-functions")]
     pub trim_shell_functions: bool,
 
     /// Obfuscate shell scripts after optional trimming and embed encrypted audit backups

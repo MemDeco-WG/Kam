@@ -126,6 +126,23 @@ fn parses_add_command_variants() {
 }
 
 #[test]
+fn parses_shell_build_optimization_flags() {
+    let build = parse(&[
+        "kam",
+        "build",
+        "--trim-shell-functions",
+        "--obfuscate-shell",
+        "--quiet",
+    ]);
+    let Some(Commands::Build(build)) = build.command else {
+        panic!("expected build command");
+    };
+    assert!(build.trim_shell_functions);
+    assert!(!build.trim_shell);
+    assert!(build.obfuscate_shell);
+}
+
+#[test]
 fn parses_sync_command_variants() {
     let default_sync = parse(&["kam", "sync", "--dry-run"]);
     let Some(Commands::Sync(sync)) = default_sync.command else {

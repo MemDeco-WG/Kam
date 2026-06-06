@@ -3,6 +3,9 @@ use self::analysis::{
     resolve_source_path,
 };
 use self::audit::{insert_audit_preamble_after_shebang, obfuscation_audit_preamble};
+use self::kamfw_semantics::{
+    is_kamfw_shell_path, semantic_function_roots, semantic_sources, should_keep_all_kamfw,
+};
 use self::rewrite::{obfuscate_body, remove_unused_functions};
 use super::args::BuildArgs;
 use crate::errors::kam::KamError;
@@ -11,6 +14,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 mod analysis;
 mod audit;
+mod kamfw_semantics;
 mod rewrite;
 
 #[derive(Clone)]
@@ -111,6 +115,7 @@ impl ShellPackageOptimizer {
     fn reachable_functions(&self) -> HashMap<String, BTreeSet<String>> {
         let mut result = HashMap::new();
         let script_roots = self.reachable_scripts();
+        let duplicate_functions = self.duplicate_functions();
         let function_index = self.function_index();
         let mut queue = VecDeque::new();
 
@@ -122,12 +127,19 @@ impl ShellPackageOptimizer {
                 result.insert(rel.clone(), info.functions.keys().cloned().collect());
                 continue;
             }
+            let used = result.entry(rel.clone()).or_insert_with(BTreeSet::new);
+            for name in info.functions.keys() {
+                if duplicate_functions.contains(name) {
+                    used.insert(name.clone());
+                }
+            }
             let mut roots = info.references.clone();
             for sourced in self.resolve_sources(info) {
                 if let Some(sourced_info) = self.scripts.get(&sourced) {
                     roots.extend(sourced_info.references.clone());
                 }
             }
+            roots.extend(semantic_function_roots(info));
             for name in lifecycle_roots(rel) {
                 if info.functions.contains_key(*name) {
                     roots.insert((*name).to_string());
@@ -202,12 +214,25 @@ impl ShellPackageOptimizer {
 
     fn resolve_sources(&self, info: &ScriptInfo) -> BTreeSet<String> {
         let mut out = BTreeSet::new();
+        if should_keep_all_kamfw(info) {
+            out.extend(
+                self.scripts
+                    .keys()
+                    .filter(|path| is_kamfw_shell_path(path))
+                    .cloned(),
+            );
+        }
+        out.extend(
+            semantic_sources(info)
+                .into_iter()
+                .filter(|path| self.scripts.contains_key(path)),
+        );
         for raw in info.sources.iter().chain(info.imports.iter()) {
             if let Some(path) = resolve_source_path(&info.rel_path, raw, &self.module_id) {
                 if self.scripts.contains_key(&path) {
                     out.insert(path);
                 }
-            } else if raw == "*" || raw.contains('*') {
+            } else if (raw == "*" || raw.contains('*')) && !analysis::is_dynamic_source(raw) {
                 out.extend(
                     self.scripts
                         .keys()
@@ -239,6 +264,19 @@ impl ShellPackageOptimizer {
             }
         }
         index
+    }
+
+    fn duplicate_functions(&self) -> BTreeSet<String> {
+        let mut counts = HashMap::<String, usize>::new();
+        for info in self.scripts.values() {
+            for name in info.functions.keys() {
+                *counts.entry(name.clone()).or_default() += 1;
+            }
+        }
+        counts
+            .into_iter()
+            .filter_map(|(name, count)| (count > 1).then_some(name))
+            .collect()
     }
 }
 
