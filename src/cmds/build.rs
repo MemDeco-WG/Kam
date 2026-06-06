@@ -15,6 +15,7 @@ mod output;
 mod package_filter;
 mod package_module;
 mod package_template;
+mod shell_optimize;
 
 pub use args::*;
 pub use handler::run;

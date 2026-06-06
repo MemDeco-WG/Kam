@@ -238,6 +238,9 @@ fn add_build_flag_env(args: &BuildArgs, add_env: &mut impl FnMut(&str, String)) 
     add_env("KAM_SIGN_ENABLED", flag(args.sign));
     add_env("KAM_PRE_RELEASE", flag(args.pre_release));
     add_env("KAM_INTERACTIVE", flag(args.interactive));
+    add_env("KAM_TRIM_SHELL", flag(args.trim_shell));
+    add_env("KAM_TRIM_SHELL_FUNCTIONS", flag(args.trim_shell_functions));
+    add_env("KAM_OBFUSCATE_SHELL", flag(args.obfuscate_shell));
 }
 
 fn add_prop_env(kam_toml: &KamToml, add_env: &mut impl FnMut(&str, String)) {

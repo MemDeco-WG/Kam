@@ -91,6 +91,9 @@ pub(super) fn load_context(args: &DevArgs) -> Result<DevContext, KamError> {
         pre_release: false,
         quiet: false,
         jobs: None,
+        trim_shell: false,
+        trim_shell_functions: false,
+        obfuscate_shell: false,
     };
     let output_dir = determine_output_dir(&project_root, &build_args, &kam_toml)?;
     let mcp = mcp::runtime_from_toml(

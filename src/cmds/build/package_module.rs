@@ -1,5 +1,6 @@
 use super::args::BuildArgs;
 use super::package_filter::PackageFilter;
+use super::shell_optimize::{PackageFile, ShellPackageOptimizer};
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::utils::Utils;
@@ -150,44 +151,29 @@ fn add_module_source_files(
         build_exclude_patterns(kam_toml),
         build_include_patterns(kam_toml),
     );
-    let file_count = count_module_files(src_dir, &filter);
+    let mut files = collect_module_files(src_dir, &filter)?;
+    let effective_args = effective_package_args(args, kam_toml);
+    let mut optimizer = ShellPackageOptimizer::new(&effective_args, &kam_toml.prop.id);
+    if optimizer.enabled() {
+        optimizer.prepare(&files)?;
+        files.retain(|file| optimizer.should_package(&file.rel_path));
+    }
+    let file_count = files.len();
     let pb = packaging_progress(args, file_count);
-    let walker = ignore::WalkBuilder::new(src_dir)
-        .git_ignore(false)
-        .hidden(false)
-        .build();
     let mut count = 0;
 
-    for result in walker {
-        let entry = result.map_err(|e| KamError::Io(std::io::Error::other(e)))?;
-        let path = entry.path();
-        if path == src_dir {
-            continue;
-        }
-        let rel_path = path
-            .strip_prefix(src_dir)
-            .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {e}")))?;
-        let rel_str = rel_path.to_string_lossy();
-        let file_name_opt = path.file_name().and_then(|s| s.to_str());
-        if filter.should_skip_file(&rel_str, file_name_opt) {
-            continue;
-        }
-        if path.is_dir() {
-            zip.add_directory(rel_str.to_string(), options)?;
-        } else if path.is_file() {
-            update_packaging_progress(pb.as_ref(), &rel_str);
-            zip.start_file(rel_str.to_string(), options)?;
-            let mut f = File::open(path).map_err(|e| {
-                KamError::Io(std::io::Error::new(
-                    e.kind(),
-                    format!("Failed to open source file '{}': {e}", path.display()),
-                ))
-            })?;
-            std::io::copy(&mut f, zip)?;
-            count += 1;
-            if let Some(p) = &pb {
-                p.set_position(count);
-            }
+    for file in files {
+        update_packaging_progress(pb.as_ref(), &file.rel_path);
+        zip.start_file(file.rel_path.clone(), options)?;
+        let content = if optimizer.enabled() {
+            optimizer.transform_file(&file)?
+        } else {
+            file.content
+        };
+        zip.write_all(&content)?;
+        count += 1;
+        if let Some(p) = &pb {
+            p.set_position(count);
         }
     }
     if let Some(p) = pb {
@@ -196,25 +182,61 @@ fn add_module_source_files(
     Ok(())
 }
 
-fn count_module_files(src_dir: &Path, filter: &PackageFilter) -> usize {
-    ignore::WalkBuilder::new(src_dir)
+fn effective_package_args(args: &BuildArgs, kam_toml: &KamToml) -> BuildArgs {
+    let mut effective = args.clone();
+    if let Some(build) = &kam_toml.kam.build {
+        effective.trim_shell |= build.trim_shell.unwrap_or(false);
+        effective.trim_shell_functions |= build.trim_shell_functions.unwrap_or(false);
+        effective.obfuscate_shell |= build.obfuscate_shell.unwrap_or(false);
+    }
+    if effective.trim_shell_functions {
+        effective.trim_shell = true;
+    }
+    effective
+}
+
+fn collect_module_files(
+    src_dir: &Path,
+    filter: &PackageFilter,
+) -> Result<Vec<PackageFile>, KamError> {
+    let walker = ignore::WalkBuilder::new(src_dir)
         .git_ignore(false)
         .hidden(false)
-        .build()
-        .filter_map(Result::ok)
-        .filter(|e| {
-            let path = e.path();
-            if path == src_dir || path.is_dir() {
-                return false;
-            }
-            let Ok(rel_path) = path.strip_prefix(src_dir) else {
-                return false;
-            };
-            let rel_str = rel_path.to_string_lossy();
-            let file_name_opt = path.file_name().and_then(|s| s.to_str());
-            !filter.should_skip_file(&rel_str, file_name_opt)
-        })
-        .count()
+        .build();
+    let mut files = Vec::new();
+
+    for result in walker {
+        let entry = result.map_err(|e| KamError::Io(std::io::Error::other(e)))?;
+        let path = entry.path();
+        if path == src_dir || path.is_dir() {
+            continue;
+        }
+        if !path.is_file() {
+            continue;
+        }
+        let rel_path = path
+            .strip_prefix(src_dir)
+            .map_err(|e| KamError::InvalidDirectory(format!("strip_prefix failed: {e}")))?;
+        let rel_str = rel_path.to_string_lossy().to_string();
+        let file_name_opt = path.file_name().and_then(|s| s.to_str());
+        if filter.should_skip_file(&rel_str, file_name_opt) {
+            continue;
+        }
+        let mut f = File::open(path).map_err(|e| {
+            KamError::Io(std::io::Error::new(
+                e.kind(),
+                format!("Failed to open source file '{}': {e}", path.display()),
+            ))
+        })?;
+        let mut content = Vec::new();
+        f.read_to_end(&mut content)?;
+        files.push(PackageFile {
+            rel_path: rel_str,
+            content,
+        });
+    }
+
+    Ok(files)
 }
 
 fn add_mmrl_files(
@@ -362,6 +384,9 @@ mod tests {
             pre_release: false,
             quiet: true,
             jobs: None,
+            trim_shell: false,
+            trim_shell_functions: false,
+            obfuscate_shell: false,
         };
 
         let zip_path =
@@ -375,5 +400,76 @@ mod tests {
         assert!(names.iter().any(|name| name == "keep.sh"));
         assert!(names.iter().any(|name| name == "important.log"));
         assert!(!names.iter().any(|name| name == "debug.log"));
+    }
+
+    #[test]
+    fn module_zip_can_trim_and_obfuscate_shell_payload() {
+        let temp = tempdir().unwrap();
+        let project = temp.path();
+        let src = project.join("src/example");
+        std::fs::create_dir_all(src.join("lib/kamfw")).unwrap();
+        std::fs::write(
+            src.join("service.sh"),
+            ". \"$MODPATH/lib/kamfw/base.sh\"\nmain\n",
+        )
+        .unwrap();
+        std::fs::write(
+            src.join("lib/kamfw/base.sh"),
+            "main() { _helper; }\n_helper() { _value=1; echo $_value; }\n_unused() { echo no; }\n",
+        )
+        .unwrap();
+        std::fs::write(src.join("lib/kamfw/unused.sh"), "_unused_file() { :; }\n").unwrap();
+
+        let mut kam_toml = KamToml::default();
+        kam_toml.prop.id = "example".to_string();
+        kam_toml.prop.version = "v1.0.0".to_string();
+        kam_toml.prop.versionCode = 1;
+        kam_toml.prop.description = "Example".to_string();
+        kam_toml.kam.build = Some(BuildSection {
+            source_dir: Some("src/example".to_string()),
+            ..BuildSection::default()
+        });
+
+        let out = project.join("dist");
+        std::fs::create_dir_all(&out).unwrap();
+        let args = BuildArgs {
+            path: ".".to_string(),
+            all: false,
+            output: None,
+            bump: false,
+            release: false,
+            sign: false,
+            interactive: false,
+            pre_release: false,
+            quiet: true,
+            jobs: None,
+            trim_shell: true,
+            trim_shell_functions: true,
+            obfuscate_shell: true,
+        };
+
+        let zip_path =
+            create_kam_module_zip(&kam_toml, &out, "example", "example", project, &args).unwrap();
+        let file = File::open(zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let names = (0..archive.len())
+            .map(|idx| archive.by_index(idx).unwrap().name().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(names.iter().any(|name| name == "service.sh"));
+        assert!(names.iter().any(|name| name == "lib/kamfw/base.sh"));
+        assert!(!names.iter().any(|name| name == "lib/kamfw/unused.sh"));
+
+        let mut base = String::new();
+        archive
+            .by_name("lib/kamfw/base.sh")
+            .unwrap()
+            .read_to_string(&mut base)
+            .unwrap();
+        assert!(base.contains("KAM-AUDIT-BACKUP-BEGIN"));
+        assert!(base.contains("-----BEGIN PGP MESSAGE-----"));
+        assert!(!base.contains("_unused()"));
+        assert!(!base.contains("_helper"));
+        assert!(!base.contains("_value"));
     }
 }

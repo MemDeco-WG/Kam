@@ -219,6 +219,9 @@ fn handle_git_install(spec: &str, args: &InstallArgs) -> Result<(PathBuf, TempDi
             pre_release: false,
             quiet: args.quiet,
             jobs: None,
+            trim_shell: false,
+            trim_shell_functions: false,
+            obfuscate_shell: false,
         };
         crate::cmds::build::build_project::build_project(&workdir, &build_args, Some(kt.clone()))?;
 

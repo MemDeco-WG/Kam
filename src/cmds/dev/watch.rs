@@ -245,6 +245,9 @@ mod tests {
             pre_release: false,
             quiet: false,
             jobs: None,
+            trim_shell: false,
+            trim_shell_functions: false,
+            obfuscate_shell: false,
         };
         let mcp = McpRuntime {
             project_root: project_root.clone(),

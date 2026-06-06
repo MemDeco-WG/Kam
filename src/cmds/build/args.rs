@@ -43,4 +43,16 @@ pub struct BuildArgs {
     /// Number of parallel jobs (default: number of CPU cores)
     #[arg(short = 'j', long = "jobs")]
     pub jobs: Option<usize>,
+
+    /// Trim unused shell files and functions before packaging
+    #[arg(long = "trim-shell")]
+    pub trim_shell: bool,
+
+    /// Trim shell scripts down to referenced functions where possible
+    #[arg(long = "trim-shell-functions", requires = "trim_shell")]
+    pub trim_shell_functions: bool,
+
+    /// Obfuscate shell scripts after optional trimming and embed encrypted audit backups
+    #[arg(long = "obfuscate-shell")]
+    pub obfuscate_shell: bool,
 }
