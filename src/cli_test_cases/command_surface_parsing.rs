@@ -143,6 +143,19 @@ fn parses_shell_build_optimization_flags() {
 }
 
 #[test]
+fn parses_test_command_pass_through_args() {
+    let test = parse(&["kam", "test", "-C", ".", "quick", "--keep-going"]);
+    let Some(Commands::Test(test)) = test.command else {
+        panic!("expected test command");
+    };
+    assert_eq!(test.directory, std::path::PathBuf::from("."));
+    assert_eq!(
+        test.args,
+        vec!["quick".to_string(), "--keep-going".to_string()]
+    );
+}
+
+#[test]
 fn parses_sync_command_variants() {
     let default_sync = parse(&["kam", "sync", "--dry-run"]);
     let Some(Commands::Sync(sync)) = default_sync.command else {

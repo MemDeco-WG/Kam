@@ -129,6 +129,9 @@ pub enum Commands {
     /// Build and package a module into a deployable ZIP artifact
     Build(crate::cmds::build::BuildArgs),
 
+    /// Run the current project's local test script
+    Test(crate::cmds::test::TestArgs),
+
     /// Manage module versions and bump policies
     Version(crate::cmds::version::VersionArgs),
 

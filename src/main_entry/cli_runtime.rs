@@ -117,6 +117,7 @@ fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
         Some(Commands::Dev(args)) => kam::cmds::dev::run(&args),
         Some(Commands::Diff(args)) => kam::cmds::diff::run(&args),
         Some(Commands::Build(args)) => kam::cmds::build::run(&args),
+        Some(Commands::Test(args)) => kam::cmds::test::run(&args),
         Some(Commands::Version(args)) => kam::cmds::version::run(args),
         Some(Commands::Cache(args)) => kam::cmds::cache::run(args),
         Some(Commands::Tmpl(args)) => kam::cmds::tmpl::run(args),
