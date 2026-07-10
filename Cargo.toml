@@ -1,6 +1,6 @@
 [package]
 name = "kam"
-version = "0.6.11"
+version = "0.6.12"
 edition = "2024"
 description = "A Powerful CLI for scaffolding and packaging Magisk/Kernelsu/APU/Anykernel3/... modules."
 documentation = "https://github.com/MemDeco-WG/Kam/blob/main/README.md"
