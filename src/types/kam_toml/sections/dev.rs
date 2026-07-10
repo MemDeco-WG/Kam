@@ -33,6 +33,7 @@ pub struct DevSection {
 /// Device synchronization policy for `kam dev`.
 pub struct DevSyncSection {
     /// Device staging directory used before root-side apply.
+    #[serde(alias = "staging")]
     pub stage_dir: Option<String>,
     /// Path globs that should be mirrored directory-by-directory.
     pub mirror: Option<Vec<String>>,
@@ -134,5 +135,22 @@ impl Default for McpSection {
             transport: Some("streamable-http".to_string()),
             cli: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DevSyncSection;
+
+    #[test]
+    fn dev_sync_section_deserializes_legacy_staging_key() {
+        let sync: DevSyncSection =
+            toml::from_str(r#"staging = "/sdcard/Download/MagicNet/kam-dev/{{id}}""#)
+                .expect("legacy staging key should deserialize");
+
+        assert_eq!(
+            sync.stage_dir.as_deref(),
+            Some("/sdcard/Download/MagicNet/kam-dev/{{id}}")
+        );
     }
 }

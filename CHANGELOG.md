@@ -1,5 +1,11 @@
 ## Unreleased
 
+## v0.6.12 (2026-07-10)
+
+### Fix
+
+- **dev**: accept the legacy `[dev.sync] staging` key as an alias for `stage_dir`
+
 ## v0.5.29 (2025-12-28)
 
 ## v0.5.28 (2025-12-28)
