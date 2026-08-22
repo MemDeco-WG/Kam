@@ -115,6 +115,18 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build module archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked
+          find hooks src -type f -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+          PATH="$PWD/target/release:$PATH" kam build --quiet
+          test -s dist/Kam.zip
+
       - name: Resolve release tag
         id: release
         shell: bash
@@ -173,7 +185,7 @@ jobs:
             echo "Release ${TAG} already exists; immutable releases cannot be modified." >&2
             exit 1
           fi
-          gh release create "${TAG}" dist/android/* dist/templates/templates.zip \
+          gh release create "${TAG}" dist/android/* dist/templates/templates.zip dist/Kam.zip \
             --title "${TAG}" \
             --generate-notes \
             --verify-tag
