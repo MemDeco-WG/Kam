@@ -305,7 +305,17 @@ fn finalize_rendered_kam_toml(
         build.target_dir = Some("dist".to_string());
         build.output_file = Some("{{id}}".to_string());
         build.hooks_dir = Some("hooks".to_string());
-        build.exclude.clone_from(&default_build.exclude);
+
+        // Keep the safe defaults, but retain template-specific excludes such
+        // as generated runtime configuration and vendored submodule metadata.
+        let template_excludes = build.exclude.take().unwrap_or_default();
+        let mut excludes = default_build.exclude.clone().unwrap_or_default();
+        for pattern in template_excludes {
+            if !excludes.iter().any(|existing| existing == &pattern) {
+                excludes.push(pattern);
+            }
+        }
+        build.exclude = Some(excludes);
         build.include.clone_from(&default_build.include);
         build.respect_gitignore = default_build.respect_gitignore;
     }

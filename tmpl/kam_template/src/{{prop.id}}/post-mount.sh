@@ -1,7 +1,9 @@
 # shellcheck shell=ash
-# post-mount.sh - 最小 wrapper
-MODDIR=${0%/*}
-[ -f "$MODDIR/lib/kamfw/.kamfwrc" ] && . "$MODDIR/lib/kamfw/.kamfwrc" || abort '! File "kamfw/.kamfwrc" does not exist!'
+# post-mount.sh - dispatch the post-mount phase through kamfw.
+MODDIR="${MODDIR:-${0%/*}}"
+export MODDIR
 
-import __runtime__
+# shellcheck disable=SC1090
+. "$MODDIR/lib/kamfw/.kamfwrc" || exit 1
+import __runtime__ || exit 1
 kamfw run post-mount -- "$@"

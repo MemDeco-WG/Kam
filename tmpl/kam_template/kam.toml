@@ -71,6 +71,7 @@ module_type = "template"
 target_dir = "../../templates/"
 output_file = "kam_template"
 hooks_dir = "hooks"
+exclude = [".git", ".git/", "lib/kamfw/.envrc"]
 include = [".kam/bases.toml"]
 
 [kam.tmpl.variables.repository]

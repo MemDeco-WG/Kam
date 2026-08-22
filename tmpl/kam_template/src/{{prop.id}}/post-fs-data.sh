@@ -1,14 +1,11 @@
 #!/system/bin/sh
 # shellcheck shell=ash
-# post-fs-data.sh - minimal wrapper (RECTIFY-FINAL)
+# post-fs-data.sh - dispatch the post-fs-data phase through kamfw.
 
-MODDIR=${0%/*}
+MODDIR="${MODDIR:-${0%/*}}"
+export MODDIR
 
-# 第一行有效代码必须 source .kamfwrc（提供 print/ui_print/abort 等）
 # shellcheck disable=SC1090
 . "$MODDIR/lib/kamfw/.kamfwrc" || exit 1
-
-# 业务 phase 占位：后续可改为调度器
-print "[kamfw] phase=post-fs-data"
-
-exit 0
+import __runtime__ || exit 1
+kamfw run post-fs-data -- "$@"

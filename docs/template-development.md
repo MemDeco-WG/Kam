@@ -145,8 +145,9 @@ Kam 使用 Tera 渲染模板文本文件和路径。
 
 - `kam.build.include` 优先级最高，高于 `.kamignore` 和 `exclude`。
 - `.kamignore` 支持 `#` 注释、空行和 `!pattern` 重新包含。
-- `.gitignore` 不作为打包过滤来源。
+- `.gitignore` 不作为打包过滤来源；归档中的嵌套 `.git` 元数据会自动跳过。
 - 隐藏文件默认可进入模板产物，除非被 `.kamignore` 或 `exclude` 排除。
+- `kam init` 会保留模板自身的 `kam.build.exclude`，并与生成项目的安全默认值合并；路径应相对于生成项目的 `source_dir`。
 - 模板打包会自动跳过输出目录，避免把产物打进产物。
 - 模板项目应在 `.kamignore` 中显式排除临时目录、构建目录和模板自身不应复制到用户项目的目录。
 

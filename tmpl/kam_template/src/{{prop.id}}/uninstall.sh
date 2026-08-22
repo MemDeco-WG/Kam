@@ -1,12 +1,11 @@
 #!/system/bin/sh
 # shellcheck shell=ash
-# uninstall.sh - minimal wrapper (RECTIFY-FINAL)
+# uninstall.sh - dispatch the uninstall phase through kamfw.
 
-MODDIR=${0%/*}
+MODDIR="${MODDIR:-${0%/*}}"
+export MODDIR
 
 # shellcheck disable=SC1090
 . "$MODDIR/lib/kamfw/.kamfwrc" || exit 1
-
-print "[kamfw] phase=uninstall"
-
-exit 0
+import __runtime__ || exit 1
+kamfw run uninstall -- "$@"

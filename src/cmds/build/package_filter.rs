@@ -80,6 +80,7 @@ pub(super) fn should_skip_file(
 
 fn is_project_metadata_path(rel_path: &str, file_name: Option<&str>) -> bool {
     file_name == Some(".gitignore")
+        || file_name == Some(".git")
         || rel_path == ".git"
         || rel_path.starts_with(".git/")
         || rel_path == ".github"
@@ -89,6 +90,18 @@ fn is_project_metadata_path(rel_path: &str, file_name: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::should_skip_file;
+
+    #[test]
+    fn nested_git_metadata_file_is_skipped() {
+        let exclude_patterns: Vec<String> = vec![];
+        let include_patterns: Vec<String> = vec![];
+        assert!(should_skip_file(
+            "lib/kamfw/.git",
+            Some(".git"),
+            &exclude_patterns,
+            &include_patterns
+        ));
+    }
 
     #[test]
     fn gitignore_skipped_by_default() {

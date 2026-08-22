@@ -1,5 +1,8 @@
 ## Unreleased
 
+- **kamfw template**: sync the runtime to `5495cd3`, dispatch lifecycle scripts through `kamfw run`, and install module files through the framework installer.
+- **template build**: preserve template-specific excludes and omit nested Git metadata from generated module archives.
+
 ## v0.6.13 (2026-08-21)
 
 ### Fix
