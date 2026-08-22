@@ -6,7 +6,7 @@
 _kam_color_err="${KAM_COLOR_ERROR:-#FF9150}"
 _kam_color_hex="${_kam_color_err#\#}"
 # Validate length, fallback to default if malformed
-if [ ${{ "{{" }}#_kam_color_hex{{ "}}" }} -ne 6 ]; then
+if [ ${#_kam_color_hex} -ne 6 ]; then
     _kam_color_hex="FF9150"
 fi
 _r_hex=$(printf "%s" "$_kam_color_hex" | cut -c1-2)

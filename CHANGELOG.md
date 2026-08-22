@@ -1,5 +1,13 @@
 ## Unreleased
 
+## v0.6.13 (2026-08-21)
+
+### Fix
+
+- **template**: refresh all bundled template archives, fix rendered README examples, and preserve executable hook modes so Cargo installs behave like source checkouts.
+- **workflow**: keep generated build workflows aligned with Android targets and `cargo-ndk` setup.
+- **release**: use current Node 24 GitHub Actions and publish the verified bundled template archive.
+
 ## v0.6.12 (2026-07-10)
 
 ### Fix

@@ -101,13 +101,12 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Cache Cargo and Rustup
+      - name: Cache Cargo
         uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.rustup
           key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-rust-
@@ -125,7 +124,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y unzip zip
 
       - name: Install Android Rust targets
-        run: rustup target add aarch64-linux-android x86_64-linux-android
+        shell: bash
+        run: |
+          set -euo pipefail
+          sysroot="$(rustc --print sysroot)"
+          rm -rf \
+            "${sysroot}/lib/rustlib/aarch64-linux-android" \
+            "${sysroot}/lib/rustlib/x86_64-linux-android"
+          rustup target add aarch64-linux-android x86_64-linux-android
+
+      - name: Install Android cargo build tool
+        run: cargo install cargo-ndk --locked
 
       - name: Verify tools
         shell: bash
@@ -133,6 +142,7 @@ jobs:
           set -euo pipefail
           kam --version
           gh --version
+          cargo ndk --version
 
       - name: Build module
         shell: bash
@@ -190,7 +200,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download latest upstream release
         shell: bash

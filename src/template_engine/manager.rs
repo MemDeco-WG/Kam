@@ -75,6 +75,7 @@ impl TemplateManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assets::tmpl::TmplAssets;
     use crate::errors::KamError;
     use std::collections::HashMap;
     use std::fs;
@@ -117,6 +118,20 @@ mod tests {
     // a parse/render error (for example, by creating an actual malformed
     // template file and asserting the error), rather than relying on filename
     // parsing semantics which may vary across Tera versions.
+
+    #[test]
+    fn bundled_template_archives_are_complete() {
+        for template in [
+            "ak3_template",
+            "kam_template",
+            "meta_template",
+            "tmpl_template",
+        ] {
+            let asset = format!("{template}.tar.gz");
+            let archive = TmplAssets::get(&asset).unwrap_or_else(|| panic!("missing {asset}"));
+            assert!(!archive.data.is_empty(), "empty bundled archive: {asset}");
+        }
+    }
 
     #[test]
     fn test_is_binary_detects_null_byte() {

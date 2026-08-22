@@ -21,6 +21,7 @@ permissions:
   contents: write
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CARGO_TERM_COLOR: always
   ANDROID_API_LEVEL: "23"
   ANDROID_NDK_VERSION: "27.2.12479018"
@@ -45,7 +46,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: recursive
@@ -94,7 +95,7 @@ jobs:
         run: sha256sum "${{ matrix.asset-name }}" > "${{ matrix.asset-name }}.sha256"
 
       - name: Upload Android artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset-name }}
           path: |
@@ -109,7 +110,7 @@ jobs:
     if: ${{ github.event_name == 'push' || inputs.publish }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: recursive
@@ -136,7 +137,7 @@ jobs:
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
 
       - name: Download Android artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/android
           merge-multiple: true
@@ -154,7 +155,10 @@ jobs:
           set -euo pipefail
           mkdir -p dist/templates
           for template in ak3_template kam_template meta_template tmpl_template; do
-            tar -C "tmpl/${template}" -czf "dist/templates/${template}.tar.gz" .
+            archive="src/assets/tmpl/${template}.tar.gz"
+            test -s "${archive}"
+            tar -tzf "${archive}" >/dev/null
+            cp "${archive}" dist/templates/
           done
           (cd dist/templates && zip -q templates.zip ./*.tar.gz)
 

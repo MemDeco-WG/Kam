@@ -12,7 +12,7 @@ if [ "$KAM_INTERACTIVE" = "1" ]; then
     # Collect connected adb device IDs (ignore header and offline lines)
     mapfile -t ADB_DEVICES < <(adb devices | awk 'NR>1 && NF>=2 && $2 != "offline" {print $1}')
 
-    if [ ${{ "{{" }}#ADB_DEVICES[@]{{ "}}" }} -eq 0 ]; then
+    if [ ${#ADB_DEVICES[@]} -eq 0 ]; then
         log_warn "No adb devices detected"
         prompt DEVICE "No adb devices found. Enter device id" ""
     else
