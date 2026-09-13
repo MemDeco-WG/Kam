@@ -8,7 +8,7 @@ Kam 模板开发以两份规范为准：
 内置模板源码位于 `tmpl/`，Cargo 安装包使用 `src/assets/tmpl/*.tar.gz` 中的归档。修改内置模板时，应重新生成归档并检查生成项目行为：
 
 ```bash
-for template in ak3_template kam_template meta_template tmpl_template; do
+for template in ak3_template downloader_template kam_template meta_template tmpl_template; do
   cargo run -- build "tmpl/${template}" --quiet
   cp "templates/${template}.tar.gz" "src/assets/tmpl/${template}.tar.gz"
 done
@@ -18,3 +18,13 @@ cargo run -- validate /tmp/kam-template-smoke
 cargo run -- build /tmp/kam-template-smoke
 ```
 
+For a ready-to-customize incremental module installer, use the bundled wrapper:
+
+```bash
+kam installer ./my-installer --repository owner/module --asset Module.zip \
+  --module-id Module --project-name "Module Installer" --author "Your Name"
+```
+
+The generated downloader verifies GitHub's release digest, ZIP integrity, and
+module ID. Verified archives are cached under `/data/adb/cache/{module_id}`;
+override with `--cache-dir` when a manager-specific location is required.

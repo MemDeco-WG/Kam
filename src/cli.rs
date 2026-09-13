@@ -117,6 +117,9 @@ pub enum Commands {
     /// Initialize a new Kam project from templates (supports meta and kernel templates)
     Init(crate::cmds::init::InitArgs),
 
+    /// Create a customizable module downloader installer.
+    Installer(crate::cmds::installer::InstallerArgs),
+
     /// Add scripts, hooks, WebUI assets, or kamfw imports to an existing project
     Add(crate::cmds::add::AddArgs),
 

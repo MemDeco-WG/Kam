@@ -113,6 +113,7 @@ fn dispatch_command(cli: Cli, cmd: &clap::Command) -> Result<(), KamError> {
     let selected_device = global_device(&cli);
     match cli.command {
         Some(Commands::Init(args)) => kam::cmds::init::run(&args),
+        Some(Commands::Installer(args)) => kam::cmds::installer::run(&args),
         Some(Commands::Add(args)) => kam::cmds::add::run(&args),
         Some(Commands::Dev(args)) => kam::cmds::dev::run(&args),
         Some(Commands::Diff(args)) => kam::cmds::diff::run(&args),

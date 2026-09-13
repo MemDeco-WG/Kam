@@ -123,6 +123,7 @@ mod tests {
     fn bundled_template_archives_are_complete() {
         for template in [
             "ak3_template",
+            "downloader_template",
             "kam_template",
             "meta_template",
             "tmpl_template",

@@ -76,6 +76,7 @@ pub fn create_kam_module_zip(
     }
     add_mmrl_files(kam_toml, args, &mut zip, options, project_path)?;
     zip.finish()?;
+    validate_module_zip(&module_output_file)?;
 
     if !args.quiet {
         println!();
@@ -85,6 +86,17 @@ pub fn create_kam_module_zip(
         ));
     }
     Ok(module_output_file)
+}
+
+// Read every local header and CRC before exposing an installable archive. A
+// valid central directory alone is not enough for module managers to open it.
+fn validate_module_zip(path: &Path) -> Result<(), KamError> {
+    let mut archive = zip::ZipArchive::new(File::open(path)?)?;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        std::io::copy(&mut entry, &mut std::io::sink())?;
+    }
+    Ok(())
 }
 
 fn module_prop_content(kam_toml: &KamToml) -> Result<String, KamError> {

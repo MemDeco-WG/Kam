@@ -1,7 +1,9 @@
-## Unreleased
+## v0.6.14 (2026-09-14)
 
 - **kamfw template**: sync the runtime to `5495cd3`, dispatch lifecycle scripts through `kamfw run`, and install module files through the framework installer.
 - **template build**: preserve template-specific excludes and omit nested Git metadata from generated module archives.
+- **downloader template**: add a built-in, verified latest-release downloader for Magisk, KernelSU, and APatch modules.
+- **module build**: read every ZIP entry after packaging so corrupt local headers or CRCs fail before publication.
 
 ## v0.6.13 (2026-08-21)
 

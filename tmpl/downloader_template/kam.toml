@@ -1,0 +1,43 @@
+[prop]
+id = "downloader_template"
+name = "Module Downloader Template"
+version = "1.0.2"
+versionCode = 3
+author = "LIghtJUNction"
+description = "Verified latest-release module downloader with direct-first mirror selection"
+[kam]
+module_type = "template"
+[kam.build]
+target_dir = "../../templates"
+output_file = "downloader_template"
+hooks_dir = "hooks"
+[kam.tmpl.variables.target_repository]
+var_type = "string"
+required = true
+default = "LIghtJUNction/MagicNet"
+help = "GitHub owner/repository"
+[kam.tmpl.variables.target_asset]
+var_type = "string"
+required = true
+default = "MagicNet.zip"
+help = "Exact release ZIP asset name"
+[kam.tmpl.variables.target_module]
+var_type = "string"
+required = true
+default = "MagicNet"
+help = "Expected module.prop id"
+[kam.tmpl.variables.target_cache_dir]
+var_type = "string"
+required = false
+default = ""
+help = "Persistent cache directory; empty uses /data/adb/cache/{module_id}"
+[kam.tmpl.variables.target_proxies_json]
+var_type = "string"
+required = false
+default = '"https://ghfast.top/", "https://ghproxy.net/", "https://gh-proxy.com/"'
+help = "JSON string entries for HTTPS mirrors"
+[kam.tmpl.variables.target_direct_min_kib]
+var_type = "integer"
+required = false
+default = "256"
+help = "Direct speed threshold in KiB/s"

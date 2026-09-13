@@ -30,6 +30,8 @@ pub mod init;
 pub mod install;
 /// Query installed Magisk/KernelSU/APatch modules on a connected Android device.
 pub mod installed;
+/// Create a module downloader installer from the bundled template.
+pub mod installer;
 /// Manage the standard Kam Dev Runtime MCP contract.
 pub mod mcp;
 /// Publish build artifacts to GitHub Releases.

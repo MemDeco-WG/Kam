@@ -160,3 +160,24 @@ fn zip_text(path: &Path, name: &str) -> String {
         .unwrap();
     text
 }
+
+#[test]
+fn rejects_invalid_local_header_before_publication() {
+    use std::io::{Seek, SeekFrom, Write};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("bad.zip");
+    let file = std::fs::File::create(&path).unwrap();
+    let mut writer = zip::ZipWriter::new(file);
+    writer
+        .start_file("module.prop", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    writer.write_all(b"id=test\n").unwrap();
+    writer.finish().unwrap();
+    super::validate_module_zip(&path).unwrap();
+
+    let mut file = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.write_all(b"FAIL").unwrap();
+    assert!(super::validate_module_zip(&path).is_err());
+}

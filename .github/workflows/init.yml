@@ -26,6 +26,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.7"
+          cache: false
+
       - name: Setup kam
         uses: MemDeco-WG/setup-kam@v3
         with:
@@ -44,3 +50,20 @@ jobs:
           set -euo pipefail
           kam validate
           kam check
+
+      - name: Test downloader template
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd tmpl/downloader_template/downloader && go test ./...)
+          kam validate tmpl/downloader_template
+          kam build tmpl/downloader_template --quiet
+          kam init "$RUNNER_TEMP/downloader-smoke" \
+            -t templates/downloader_template.tar.gz \
+            --id downloader_smoke --project-name 'Downloader Smoke' \
+            --author Kam --version 1.0.0 \
+            --var target_repository=MemDeco-WG/Kam \
+            --var target_asset=Kam.zip --var target_module=Kam
+          kam validate "$RUNNER_TEMP/downloader-smoke"
+          kam build "$RUNNER_TEMP/downloader-smoke" --quiet
+          unzip -t "$RUNNER_TEMP/downloader-smoke/dist/downloader_smoke.zip"

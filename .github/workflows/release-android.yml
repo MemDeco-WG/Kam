@@ -166,7 +166,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/templates
-          for template in ak3_template kam_template meta_template tmpl_template; do
+          for template in ak3_template downloader_template kam_template meta_template tmpl_template; do
             archive="src/assets/tmpl/${template}.tar.gz"
             test -s "${archive}"
             tar -tzf "${archive}" >/dev/null
