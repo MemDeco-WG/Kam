@@ -47,6 +47,11 @@ pub struct InstallerArgs {
 }
 
 /// Initialize the configured installer project.
+///
+/// # Errors
+///
+/// Returns an error when the destination cannot be initialized or the bundled
+/// downloader template cannot be rendered.
 pub fn run(args: &InstallerArgs) -> Result<(), KamError> {
     let mut vars = vec![
         format!("target_repository={}", args.repository),
