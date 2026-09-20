@@ -4,6 +4,8 @@ description: Use this skill when developing, refactoring, validating, packaging,
 ---
 
 # Magisk Module Development With Kam
+## Refer to and learn from
+MagicNet : https://github.com/LIghtJUNction/MagicNet
 
 ## Operating Mode
 
