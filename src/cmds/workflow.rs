@@ -26,7 +26,7 @@ env:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -34,13 +34,12 @@ jobs:
           submodules: recursive
 
       - name: Setup kam
-        uses: MemDeco-WG/setup-kam@v3
+        uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
         with:
           github-token: ${{ github.token }}
           enable-cache: 'true'
           cache-targets: cargo,kam
           install-commitizen: 'false'
-          warn-private-key: 'false'
 
       - name: Install lint dependencies
         run: sudo apt-get update && sudo apt-get install -y shellcheck jq python3-yaml
@@ -86,11 +85,8 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
-      KAM_PRIVATE_KEY_AVAILABLE: ${{ secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
-      KAM_SIGN_ENABLED: ${{ inputs.release == true && secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
-      KAM_SIGN_REQUIRED: ${{ inputs.release == true && secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
       KAM_CHANGELOG_ENABLED: '0'
       GH_TOKEN: ${{ github.token }}
 
@@ -112,13 +108,12 @@ jobs:
             ${{ runner.os }}-rust-
 
       - name: Setup kam
-        uses: MemDeco-WG/setup-kam@v3
+        uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
         with:
           github-token: ${{ github.token }}
           enable-cache: 'true'
           cache-targets: cargo,kam
           install-commitizen: 'false'
-          private-key: ${{ secrets.KAM_PRIVATE_KEY }}
 
       - name: Install artifact tools
         run: sudo apt-get update && sudo apt-get install -y unzip zip
@@ -194,7 +189,7 @@ on:
 
 jobs:
   mirror:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       UPSTREAM_REPO: __UPSTREAM_REPO__
       GH_TOKEN: ${{ github.token }}
@@ -402,7 +397,27 @@ pub fn run(args: &WorkflowArgs) -> Result<(), KamError> {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_github_repo;
+    use super::{install_standard_workflows, normalize_github_repo};
+
+    #[test]
+    fn installs_workflows_that_publish_without_developer_keys() {
+        let directory = tempfile::tempdir().unwrap();
+        install_standard_workflows(directory.path()).unwrap();
+        for name in ["init.yml", "exec.yml"] {
+            let text = std::fs::read_to_string(directory.path().join(name)).unwrap();
+            let workflow: serde_yaml::Value = serde_yaml::from_str(&text).unwrap();
+            assert!(workflow["jobs"].is_mapping());
+            assert!(!text.contains("KAM_PRIVATE_KEY"));
+            assert!(!text.contains("private-key"));
+            if name == "exec.yml" {
+                let steps = workflow["jobs"]["build"]["steps"].as_sequence().unwrap();
+                assert!(steps.iter().any(|step| {
+                    step["name"] == "Create GitHub release"
+                        && step["run"].as_str().unwrap().contains("kam publish")
+                }));
+            }
+        }
+    }
 
     #[test]
     fn normalizes_common_github_repository_specs() {

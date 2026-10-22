@@ -164,9 +164,6 @@ Kam 将模块的执行过程划分为不同的 **phase** (阶段)，例如 `post
 - `kam version`: 管理模块版本号。
 - `kam sync`: 根据当前项目配置同步生成的元数据、GitHub Actions 工作流和可选远程模板缓存。
 - `kam mcp`: 管理标准模块 MCP runtime contract。
-- `kam secret ksu-generate`: 生成 KernelSU developer P-256 密钥；如可交互且系统存在 `gpg`，默认用 `gpg` 加密私钥。
-- `kam secret ksu-submit`: 根据公钥生成 KernelSU developer keyring 申请 issue 表单 URL。
-- `kam secret ksu-revoke`: 根据序列号或证书生成 KernelSU developer 证书吊销 issue 表单 URL。
 
 常用新增文件命令：
 

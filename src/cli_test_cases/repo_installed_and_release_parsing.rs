@@ -2,57 +2,13 @@ use crate::cmds::cache::{CacheCommands, TemplateCacheCommands};
 use crate::cmds::installed::InstalledCommand;
 use crate::cmds::init::KernelSuRepoMode;
 use crate::cmds::repo::RepoCommand;
-use crate::cmds::secret::SecretCommands;
 
 #[test]
-fn parses_kernel_su_secret_subcommands() {
-    let generated = parse(&["kam", "secret", "ksu-generate", "--no-gpg"]);
-    let Some(Commands::Secret(secret)) = generated.command else {
-        panic!("expected secret command");
-    };
-    assert!(matches!(
-        secret.command,
-        Some(SecretCommands::KsuGenerate { no_gpg: true, .. })
-    ));
-
-    let submit = parse(&[
-        "kam",
-        "secret",
-        "ksu-submit",
-        "--username",
-        "octo",
-        "--public-key",
-        "key.pem",
-    ]);
-    let Some(Commands::Secret(secret)) = submit.command else {
-        panic!("expected secret command");
-    };
-    assert!(matches!(
-        secret.command,
-        Some(SecretCommands::KsuSubmit { username, .. }) if username == "octo"
-    ));
-
-    let revoke = parse(&[
-        "kam",
-        "secret",
-        "ksu-revoke",
-        "--username",
-        "octo",
-        "--serial-number",
-        "01ab",
-        "--reason",
-        "lost",
-    ]);
-    let Some(Commands::Secret(secret)) = revoke.command else {
-        panic!("expected secret command");
-    };
-    assert!(matches!(
-        secret.command,
-        Some(SecretCommands::KsuRevoke {
-            serial_number: Some(serial),
-            ..
-        }) if serial == "01ab"
-    ));
+fn rejects_removed_kernel_su_developer_key_commands() {
+    for command in ["ksu-generate", "ksu-submit", "ksu-revoke"] {
+        let error = parse_err(&["kam", "secret", command]);
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidSubcommand);
+    }
 }
 
 #[test]

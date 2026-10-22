@@ -94,7 +94,7 @@ Examples:
 kam build
 kam build --all
 kam build --bump
-kam build --release --sign
+kam build --release
 KAM_DEBUG=1 kam build
 ```
 
@@ -301,7 +301,7 @@ kam config list
 
 ## `kam secret`
 
-Manage signing and KernelSU developer secrets.
+Manage secrets and optional artifact signing keys.
 
 ```bash
 kam secret list
@@ -309,9 +309,6 @@ kam secret add main --file private_key.pem
 kam secret get main
 kam secret remove main
 kam secret export-pub main
-kam secret ksu-generate --name kernelsu-developer
-kam secret ksu-submit --username <github-user> --public-key kernelsu-developer.public.pem --open
-kam secret ksu-revoke --username <github-user> --serial-number <serial> --reason lost --open
 ```
 
 ## `kam sign`

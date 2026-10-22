@@ -32,8 +32,6 @@ APatch, when the module scripts themselves are manager-compatible.
 - Development sessions with adb sync, hot update, logs, forwarding, and MCP.
 - Metadata sync from `kam.toml` to `module.prop`, `update.json`, `module.json`,
   `repo.json`, `track.json`, and `config.json`.
-- KernelSU developer key generation, submission, revocation, and certificate
-  helpers.
 - Template import, export, cache, pull, and update flows.
 - GitHub Actions workflow installation for build/release or release mirroring.
 - Project-local and global configuration via `kam config`.

@@ -62,25 +62,6 @@ pub fn run(args: SecretArgs) -> Result<(), KamError> {
             list,
             remove,
         } => handle_trust(add_root, ca_name, list, remove)?,
-        SecretCommands::KsuGenerate {
-            name,
-            out,
-            no_gpg,
-            force,
-        } => handle_ksu_generate(&name, &out, no_gpg, force)?,
-        SecretCommands::KsuSubmit {
-            username,
-            public_key,
-            open,
-        } => handle_ksu_submit(&username, &public_key, open)?,
-        SecretCommands::KsuRevoke {
-            username,
-            serial_number,
-            cert,
-            reason,
-            details,
-            open,
-        } => handle_ksu_revoke(&username, serial_number, cert, &reason, &details, open)?,
     }
     Ok(())
 }

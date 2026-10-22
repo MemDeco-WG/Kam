@@ -178,7 +178,6 @@ secret-interactive-summary-added = 摘要已添加
 init-interactive-choice-pull-default-templates = 拉取默认模板
 termux-ssh-auto-connecting = 自动连接中
 init-interactive-preview-failed-read-dir = 读取目录预览失败
-about-developer = 关于开发者
 secret-interactive-enter-value = 输入值
 check-errors-header = 检查错误
 secret-interactive-title = 标题

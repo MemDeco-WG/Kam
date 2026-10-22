@@ -19,7 +19,7 @@ env:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -33,13 +33,12 @@ jobs:
           cache: false
 
       - name: Setup kam
-        uses: MemDeco-WG/setup-kam@v3
+        uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
         with:
           github-token: ${{ github.token }}
           enable-cache: 'true'
           cache-targets: cargo,kam
           install-commitizen: 'false'
-          warn-private-key: 'false'
 
       - name: Install lint dependencies
         run: sudo apt-get update && sudo apt-get install -y shellcheck jq python3-yaml

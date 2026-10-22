@@ -31,11 +31,8 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
-      KAM_PRIVATE_KEY_AVAILABLE: ${{ secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
-      KAM_SIGN_ENABLED: ${{ inputs.release == true && secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
-      KAM_SIGN_REQUIRED: ${{ inputs.release == true && secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
       KAM_CHANGELOG_ENABLED: '0'
       GH_TOKEN: ${{ github.token }}
 
@@ -57,13 +54,12 @@ jobs:
             ${{ runner.os }}-rust-
 
       - name: Setup kam
-        uses: MemDeco-WG/setup-kam@v3
+        uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
         with:
           github-token: ${{ github.token }}
           enable-cache: 'true'
           cache-targets: cargo,kam
           install-commitizen: 'false'
-          private-key: ${{ secrets.KAM_PRIVATE_KEY }}
 
       - name: Install artifact tools
         run: sudo apt-get update && sudo apt-get install -y unzip zip

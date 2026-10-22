@@ -112,9 +112,6 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
         email = extract_email(pkg_authors);
     }
 
-    // 开发者网站链接
-    let dev_site = "https://developers.kernelsu.org/";
-
     // 用comfy_table做个好看的表格
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
@@ -140,11 +137,6 @@ pub fn run(_args: AboutArgs) -> Result<(), KamError> {
             Cell::new(email),
         ]));
     }
-
-    table.add_row(Row::from(vec![
-        Cell::new(crate::i18n::tr("about.developer")).add_attribute(Attribute::Bold),
-        Cell::new(dev_site),
-    ]));
 
     if !description.is_empty() {
         table.add_row(Row::from(vec![

@@ -1,12 +1,12 @@
 ---
 name: setup-kam-workflow
-description: Use this skill when writing, installing, reviewing, or debugging GitHub Actions workflows that use MemDeco-WG/setup-kam for Kam module repositories. Applies to kam workflow install, .github/workflows/init.yml, exec.yml, mirror-upstream-release.yml, setup-kam@v3 inputs, Kam validation/build/release CI, GitHub release publishing, workflow artifacts, submodules, cache, and KAM_PRIVATE_KEY signing secrets.
+description: Use this skill when writing, installing, reviewing, or debugging GitHub Actions workflows that use MemDeco-WG/setup-kam for Kam module repositories. Applies to kam workflow install, .github/workflows/init.yml, exec.yml, mirror-upstream-release.yml, setup-kam inputs, Kam validation/build/release CI, GitHub release publishing, workflow artifacts, submodules, and cache.
 ---
 
 # Setup Kam Workflow
 
 Use this skill for GitHub Actions workflow work around Kam module repositories
-and the `MemDeco-WG/setup-kam@v3` action.
+and the `MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb` action.
 
 ## Fast Path
 
@@ -35,7 +35,7 @@ Use the current setup action version:
 
 ```yaml
 - name: Setup kam
-  uses: MemDeco-WG/setup-kam@v3
+  uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
   with:
     github-token: ${{ github.token }}
     enable-cache: 'true'
@@ -43,31 +43,14 @@ Use the current setup action version:
     install-commitizen: 'false'
 ```
 
-For release signing, pass the private key secret:
-
-```yaml
-- name: Setup kam
-  uses: MemDeco-WG/setup-kam@v3
-  with:
-    github-token: ${{ github.token }}
-    enable-cache: 'true'
-    cache-targets: cargo,kam
-    install-commitizen: 'false'
-    private-key: ${{ secrets.KAM_PRIVATE_KEY }}
-```
-
-For validation-only workflows that should not warn about missing signing keys:
-
-```yaml
-warn-private-key: 'false'
-```
+Setup and release publishing do not require a KernelSU developer key.
 
 ## Standard Validate Workflow
 
 The validation workflow should:
 
 1. Use `actions/checkout@v6` with `submodules: recursive`.
-2. Use `MemDeco-WG/setup-kam@v3`.
+2. Use `MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb`.
 3. Install lint dependencies when shell/YAML/JSON checks are needed:
    `shellcheck jq python3-yaml`.
 4. Run:
@@ -86,7 +69,7 @@ The build workflow should:
 
 1. Use `actions/checkout@v6` with `submodules: recursive` and `fetch-depth: 0`.
 2. Cache Cargo/Rustup when Rust dependencies may be built.
-3. Use `MemDeco-WG/setup-kam@v3`.
+3. Use `MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb`.
 4. Install artifact tools: `unzip zip`.
 5. Install Android Rust targets used by KamHooks:
 
@@ -147,14 +130,6 @@ fi
 kam publish "${args[@]}"
 ```
 
-Signing convention:
-
-```yaml
-KAM_PRIVATE_KEY_AVAILABLE: ${{ secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
-KAM_SIGN_ENABLED: ${{ inputs.release == true && secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
-KAM_SIGN_REQUIRED: ${{ inputs.release == true && secrets.KAM_PRIVATE_KEY != '' && '1' || '0' }}
-```
-
 ## Mirror-Only Repositories
 
 For KernelSU Modules Repo metadata-only repositories where source code lives
@@ -178,6 +153,6 @@ The mirror workflow should use:
 - Use recursive submodule checkout for Kam module repos.
 - Keep release jobs manual unless the repository explicitly wants tag-based
   publishing.
-- Never print `KAM_PRIVATE_KEY` or other secrets.
+- Never print secrets.
 - For docs changes only, `git diff --check` is enough; for workflow generator
   changes, run `cargo test --workspace` and compare generated workflow content.

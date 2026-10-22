@@ -178,7 +178,6 @@ secret-interactive-summary-added = Summary added
 init-interactive-choice-pull-default-templates = Pull default templates
 termux-ssh-auto-connecting = Auto connecting
 init-interactive-preview-failed-read-dir = Failed read dir
-about-developer = About developer
 secret-interactive-enter-value = Enter value
 check-errors-header = Check errors header
 secret-interactive-title = Secrets
