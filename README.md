@@ -58,7 +58,7 @@ and package a module manually:
 
 ```bash
 kam init hello_root -t kam --id hello_root --project-name "Hello Root" \
-  --author Example --version 1.0.0 --description "Example Magisk module"
+  --author Example --version v1.0.0 --description "Example Magisk module"
 cd hello_root
 # Implement behavior under src/hello_root/ using the generated kamfw entrypoints.
 kam check

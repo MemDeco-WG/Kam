@@ -53,7 +53,7 @@ $magisk-module-development 使用 Kam 创建 hello_root Magisk 模块，
 
 ```bash
 kam init hello_root -t kam --id hello_root --project-name "Hello Root" \
-  --author Example --version 1.0.0 --description "Example Magisk module"
+  --author Example --version v1.0.0 --description "Example Magisk module"
 cd hello_root
 # 在 src/hello_root/ 中实现模块行为，复用生成的 kamfw 入口。
 kam check

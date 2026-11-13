@@ -61,7 +61,7 @@ Check `kam init --help` for the installed CLI, then use the standard template:
 
 ```bash
 kam init hello_root -t kam --id hello_root --project-name "Hello Root" \
-  --author Example --version 1.0.0 --description "Example Magisk module"
+  --author Example --version v1.0.0 --description "Example Magisk module"
 cd hello_root
 kam check
 kam build
