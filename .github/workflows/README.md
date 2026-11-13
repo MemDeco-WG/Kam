@@ -57,3 +57,16 @@ kam workflow install owner/repo
 If `owner/repo` matches the current repository, Kam installs `init.yml` and `exec.yml`.
 
 If `owner/repo` is different from the current repository, Kam installs `mirror-upstream-release.yml` instead. That workflow mirrors the latest upstream GitHub Release without rebuilding it.
+
+## Kam source CI
+
+Unlike generated module workflows, this repository builds and tests the current
+Kam checkout. The downloader toolchain follows its `go.mod`. Android releases
+use NDK r30 LTS (`30.0.16248370`), check out the requested tag in both jobs, and
+verify downloaded binaries against their SHA-256 manifests.
+
+Upstream references (checked 2026-11-13):
+[NDK downloads](https://developer.android.com/ndk/downloads),
+[checkout](https://github.com/actions/checkout),
+[upload-artifact](https://github.com/actions/upload-artifact),
+[download-artifact](https://github.com/actions/download-artifact).

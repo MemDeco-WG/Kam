@@ -57,3 +57,14 @@ kam workflow install owner/repo
 如果 `owner/repo` 与当前仓库一致，Kam 会安装 `init.yml` 和 `exec.yml`。
 
 如果 `owner/repo` 与当前仓库不一致，Kam 会安装 `mirror-upstream-release.yml`，只同步上游最新 GitHub Release，不重新构建。
+
+## Kam 源码 CI
+
+本仓库直接构建、测试当前提交的 Kam；生成给模块仓库的工作流仍使用发布版 Kam。
+下载器的 Go 工具链依据其 `go.mod`。Android 发布固定使用 NDK r30 LTS
+（`30.0.16248370`），构建与发布均检出指定标签，下载产物后校验 SHA-256。
+
+官方依据（2026-11-13 核实）：[NDK](https://developer.android.com/ndk/downloads)、
+[checkout](https://github.com/actions/checkout)、
+[upload-artifact](https://github.com/actions/upload-artifact)、
+[download-artifact](https://github.com/actions/download-artifact)。

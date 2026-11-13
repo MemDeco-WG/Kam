@@ -23,6 +23,11 @@ Kam 支持常见 Android root/module 打包目标：
 
 标准 `kam_template` / `-t kam` 会生成 Magisk 风格模块 ZIP；只要模块脚本本身兼容目标管理器，它也适用于 KernelSU 和 APatch。内核 ZIP 项目应使用 AnyKernel3 模板，而不是普通用户态模块模板。
 
+
+兼容性以各管理器当前接口为准：KernelSU 的 `system/` 挂载需要提供挂载能力的 metamodule；纯脚本、`system.prop` 和 sepolicy 功能不需要。普通模块依赖挂载功能不代表它本身应设置 `metamodule=true`。APatch 的 AndroidPatch Module（APM）与 KernelPatch Module（KPM）不同，本项目的普通模块模板面向 APM。`post-mount.sh`、`boot-completed.sh` 等阶段不是所有管理器都有的通用入口，跨管理器脚本应通过 kamfw 的生命周期适配。
+
+官方依据：[KernelSU 模块指南](https://kernelsu.org/guide/module.html)、[metamodule](https://kernelsu.org/guide/metamodule.html)、[APatch APM](https://apatch.dev/apm-guide.html)、[Magisk 开发指南](https://topjohnwu.github.io/Magisk/guides.html)、[AnyKernel3](https://github.com/osm0sis/AnyKernel3)。最后核实：2026-11-13。
+
 ###  Kam 生态系统
 
 Kam 的核心由三大组件构成，旨在提供一个连贯而高效的开发体验：

@@ -24,6 +24,11 @@ The standard `kam_template` / `-t kam` template creates a Magisk-style module
 ZIP that can work across Magisk-compatible managers, including KernelSU and
 APatch, when the module scripts themselves are manager-compatible.
 
+
+Compatibility follows each manager's current interfaces. KernelSU requires a mounting metamodule for `system/` overlays; scripts, `system.prop`, and sepolicy rules do not require one. Depending on a mounting provider does not make an ordinary module a metamodule: do not set `metamodule=true` for that reason. The standard template targets APatch AndroidPatch Modules (APM), not KernelPatch Modules (KPM). Lifecycle entrypoints such as `post-mount.sh` and `boot-completed.sh` are manager-specific; use kamfw lifecycle adapters for portable scripts.
+
+Official references: [KernelSU module guide](https://kernelsu.org/guide/module.html), [metamodules](https://kernelsu.org/guide/metamodule.html), [APatch APM](https://apatch.dev/apm-guide.html), [Magisk developer guide](https://topjohnwu.github.io/Magisk/guides.html), and [AnyKernel3](https://github.com/osm0sis/AnyKernel3). Last checked: 2026-11-13.
+
 ## Features
 
 - Fast project initialization from built-in, local, archive, and cached

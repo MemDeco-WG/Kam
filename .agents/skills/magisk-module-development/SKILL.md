@@ -13,6 +13,24 @@ Work in the target module repository, not only in the Kam source tree. Prefer re
 
 Use this skill for Magisk-compatible modules as well as KernelSU and APatch targets when Kam is the build tool.
 
+## Target Compatibility (verified 2026-11-13)
+
+- KernelSU: mounting `system/` requires a mounting metamodule. Scripts,
+  `system.prop`, and sepolicy rules do not. Do not mark ordinary modules as
+  metamodules merely because they need system overlays.
+- APatch: the standard template targets APM, not KPM. Check manager-specific
+  lifecycle hooks instead of assuming complete Magisk parity.
+- Magisk: keep `module.prop` at ZIP root and use the documented installer layout.
+- AnyKernel3: use `ak3_template` for kernel ZIP projects.
+- Use kamfw lifecycle adapters for portable runtime scripts.
+
+Official sources:
+- https://kernelsu.org/guide/module.html
+- https://kernelsu.org/guide/metamodule.html
+- https://apatch.dev/apm-guide.html
+- https://topjohnwu.github.io/Magisk/guides.html
+- https://github.com/osm0sis/AnyKernel3
+
 ## First Pass
 
 1. Inspect the repository shape:

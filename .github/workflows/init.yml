@@ -29,19 +29,27 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.26.7"
+          go-version-file: tmpl/downloader_template/downloader/go.mod
           cache: false
 
-      - name: Setup kam
-        uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
-        with:
-          github-token: ${{ github.token }}
-          enable-cache: 'true'
-          cache-targets: cargo,kam
-          install-commitizen: 'false'
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build current Kam source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked
+          echo "$PWD/target/debug" >> "$GITHUB_PATH"
 
       - name: Install lint dependencies
         run: sudo apt-get update && sudo apt-get install -y shellcheck jq python3-yaml
+
+      - name: Test current Kam source
+        run: cargo test --workspace --locked
 
       - name: Validate repository
         shell: bash

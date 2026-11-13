@@ -24,7 +24,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CARGO_TERM_COLOR: always
   ANDROID_API_LEVEL: "23"
-  ANDROID_NDK_VERSION: "27.2.12479018"
+  ANDROID_NDK_VERSION: "30.0.16248370"
 
 jobs:
   build-android:
@@ -48,6 +48,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
           submodules: recursive
 
@@ -112,6 +113,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
           submodules: recursive
 
@@ -151,6 +153,7 @@ jobs:
       - name: Download Android artifacts
         uses: actions/download-artifact@v8
         with:
+          pattern: kam-android-*
           path: dist/android
           merge-multiple: true
 
@@ -160,6 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           cat ./*.sha256 > SHA256SUMS
+          sha256sum --check SHA256SUMS
 
       - name: Generate template archive
         shell: bash

@@ -1,3 +1,11 @@
+## v0.6.15 (2026-11-13)
+
+- **targets**: document current KernelSU mounting metamodule requirements, APatch APM scope, and portable lifecycle entrypoints with official references.
+- **CI**: build and test the current Kam checkout, follow the downloader Go module toolchain, and update generated workflows to the keyless setup-kam revision.
+- **Android release**: use NDK r30 LTS, build the requested release tag in both jobs, and verify downloaded Android binary checksums.
+- **skills**: refresh module and workflow development guidance for global installation.
+- **installer**: include the customizable module installer and retire KernelSU developer-key requirements added since v0.6.14.
+
 ## v0.6.14 (2026-09-14)
 
 - **kamfw template**: sync the runtime to `5495cd3`, dispatch lifecycle scripts through `kamfw run`, and install module files through the framework installer.

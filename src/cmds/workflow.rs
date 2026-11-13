@@ -34,7 +34,7 @@ jobs:
           submodules: recursive
 
       - name: Setup kam
-        uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
+        uses: MemDeco-WG/setup-kam@69957940b6e155b84f0e924ca6d668e077377ad2
         with:
           github-token: ${{ github.token }}
           enable-cache: 'true'
@@ -108,7 +108,7 @@ jobs:
             ${{ runner.os }}-rust-
 
       - name: Setup kam
-        uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
+        uses: MemDeco-WG/setup-kam@69957940b6e155b84f0e924ca6d668e077377ad2
         with:
           github-token: ${{ github.token }}
           enable-cache: 'true'
@@ -122,10 +122,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sysroot="$(rustc --print sysroot)"
-          rm -rf \
-            "${sysroot}/lib/rustlib/aarch64-linux-android" \
-            "${sysroot}/lib/rustlib/x86_64-linux-android"
           rustup target add aarch64-linux-android x86_64-linux-android
 
       - name: Install Android cargo build tool

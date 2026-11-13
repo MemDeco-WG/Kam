@@ -43,23 +43,18 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Cache Cargo
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Setup kam
-        uses: MemDeco-WG/setup-kam@2a0e9193a7e84dc7da78e99af586f8a4bb823bcb
-        with:
-          github-token: ${{ github.token }}
-          enable-cache: 'true'
-          cache-targets: cargo,kam
-          install-commitizen: 'false'
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build current Kam source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked
+          echo "$PWD/target/debug" >> "$GITHUB_PATH"
 
       - name: Install artifact tools
         run: sudo apt-get update && sudo apt-get install -y unzip zip
@@ -68,10 +63,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sysroot="$(rustc --print sysroot)"
-          rm -rf \
-            "${sysroot}/lib/rustlib/aarch64-linux-android" \
-            "${sysroot}/lib/rustlib/x86_64-linux-android"
           rustup target add aarch64-linux-android x86_64-linux-android
 
       - name: Install Android cargo build tool
