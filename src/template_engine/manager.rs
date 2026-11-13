@@ -125,12 +125,71 @@ mod tests {
             "ak3_template",
             "downloader_template",
             "kam_template",
+            "lsposed_template",
+            "zygisk_template",
             "meta_template",
             "tmpl_template",
         ] {
             let asset = format!("{template}.tar.gz");
             let archive = TmplAssets::get(&asset).unwrap_or_else(|| panic!("missing {asset}"));
             assert!(!archive.data.is_empty(), "empty bundled archive: {asset}");
+        }
+    }
+
+    #[test]
+    fn bundled_injection_templates_render_payload_paths_and_keep_hooks_executable() {
+        for (template, payload) in [
+            ("zygisk_template", "native/jni/module.cpp"),
+            (
+                "lsposed_template",
+                "android/app/src/main/assets/xposed_init",
+            ),
+        ] {
+            let archive = TmplAssets::get(&format!("{template}.tar.gz")).unwrap();
+            let source = tempdir().unwrap();
+            let output = tempdir().unwrap();
+            tar::Archive::new(flate2::read::GzDecoder::new(archive.data.as_ref()))
+                .unpack(source.path())
+                .unwrap();
+            let vars = HashMap::from([
+                ("prop.id".to_string(), "org.example.injection".to_string()),
+                ("prop.name".to_string(), "Injection Example".to_string()),
+            ]);
+            TemplateManager::copy_and_replace(source.path(), output.path(), &vars, true, template)
+                .unwrap();
+            assert!(output.path().join(payload).is_file());
+            assert!(
+                output
+                    .path()
+                    .join("src/org.example.injection/customize.sh")
+                    .is_file()
+            );
+            assert!(
+                fs::read_to_string(output.path().join("README.md"))
+                    .unwrap()
+                    .starts_with("# Injection Example")
+            );
+            assert!(!output.path().join("src/{{prop.id}}").exists());
+            assert_eq!(
+                fs::read_to_string(
+                    output.path().join(
+                        "src/org.example.injection/META-INF/com/google/android/updater-script"
+                    )
+                )
+                .unwrap()
+                .trim(),
+                "#MAGISK"
+            );
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let hook = fs::read_dir(output.path().join("hooks/pre-build"))
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .unwrap();
+                assert_ne!(hook.metadata().unwrap().permissions().mode() & 0o111, 0);
+            }
         }
     }
 

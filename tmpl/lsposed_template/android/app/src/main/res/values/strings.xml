@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Kam LSPosed Example</string>
+    <string name="module_description">Minimal LSPosed hook scaffold</string>
+    <string-array name="xposed_scope"><item>com.android.settings</item></string-array>
+</resources>

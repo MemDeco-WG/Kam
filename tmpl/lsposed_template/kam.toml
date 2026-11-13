@@ -1,0 +1,13 @@
+[prop]
+id = "lsposed_template"
+name = "LSPosed Hook APK Companion Template"
+version = "v1.0.0"
+versionCode = 1
+author = "LIghtJUNction"
+description = "LSPosed Hook APK Companion scaffold"
+[kam]
+module_type = "template"
+[kam.build]
+target_dir = "../../templates"
+output_file = "lsposed_template"
+hooks_dir = "hooks"

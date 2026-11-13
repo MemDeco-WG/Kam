@@ -130,6 +130,8 @@ cd hello-world
 | `-t kam_template` (`-t kam`) | 标准 Magisk 风格模块模板 | KernelSU / APatch / Magisk 兼容模块开发 |
 | `-t meta_template` (`-t meta`) | 元模块模板 | KernelSU 元数据 / metamodule 工作流 |
 | `-t ak3_template` (`-t ak3`) | AnyKernel3 模板 | 内核 ZIP / AnyKernel3 模块项目 |
+| `-t zygisk` | Zygisk 原生模板 | 四种 Android ABI，NDK 编译注入库 |
+| `-t lsposed` | LSPosed Hook 模板 | Hook APK 与可选 companion ZIP，APK 需单独启用 |
 
 KernelSU Modules Repo 支持两种仓库形态，`kam init` 都可以快速生成。
 

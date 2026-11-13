@@ -166,6 +166,8 @@ Built-in template aliases:
 | `-t kam` | `kam_template` | Standard user-space module |
 | `-t meta` | `meta_template` | Metadata/metamodule workflows |
 | `-t ak3` | `ak3_template` | AnyKernel3 kernel ZIP projects |
+| `-t zygisk` | `zygisk_template` | Native Zygisk module with four Android ABIs |
+| `-t lsposed` | `lsposed_template` | LSPosed hook APK with optional companion ZIP |
 | `--tmpl` | `tmpl_template` | Template authoring project |
 
 Examples:

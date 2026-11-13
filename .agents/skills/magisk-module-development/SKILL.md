@@ -320,3 +320,21 @@ Before finishing:
 - Report exact commands run and whether they passed.
 - If a command cannot run because Kam or platform tools are missing, state the missing dependency and the unverified risk.
 - Keep changes scoped to module config, hooks, payload files, or Kam templates relevant to the request.
+
+## Zygisk and LSPosed templates
+
+- `kam init demo -t zygisk`: native Zygisk API module. Requires Android NDK
+  (`ANDROID_NDK_HOME`). The hook builds four ABIs into `zygisk/<abi>.so`.
+  Keep the pinned upstream API header and its license; choose target processes
+  before adding hooks. Magisk needs Zygisk enabled; KernelSU/APatch need a
+  compatible provider. A successful ZIP build is not device injection proof.
+- `kam init demo -t lsposed`: legacy Xposed API 82 hook APK, plus a companion
+  Kam ZIP containing `apk/module.apk`. Requires JDK 17+, Gradle 8.9 and Android
+  SDK 35. Install the APK separately and enable/select scope in LSPosed; the ZIP
+  alone never activates the APK. The example only logs in Settings.
+- Change application ID, namespace, Java package, `assets/xposed_init`, strings
+  and scope together before publishing an APK. Keep API 82 `compileOnly`.
+  Modern libxposed entrypoints and META-INF/xposed files are a different format.
+- Check `kam check`, build hooks, ZIP paths and APK contents locally. Report
+  missing SDK/NDK/Gradle dependencies and distinguish packaging from device
+  acceptance. Never silently package stale native libraries or a stale APK.

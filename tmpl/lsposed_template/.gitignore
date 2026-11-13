@@ -1,0 +1,7 @@
+dist/
+.kam/
+native/libs/
+native/obj/
+android/.gradle/
+android/**/build/
+android/local.properties

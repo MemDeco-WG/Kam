@@ -1,0 +1,13 @@
+[prop]
+id = "zygisk_template"
+name = "Zygisk Native Module Template"
+version = "v1.0.0"
+versionCode = 1
+author = "LIghtJUNction"
+description = "Zygisk Native Module scaffold"
+[kam]
+module_type = "template"
+[kam.build]
+target_dir = "../../templates"
+output_file = "zygisk_template"
+hooks_dir = "hooks"

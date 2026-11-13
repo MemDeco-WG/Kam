@@ -1,3 +1,10 @@
+## v0.6.16 (2026-11-13)
+
+- **templates**: add built-in Zygisk native and LSPosed hook APK companion templates (`-t zygisk`, `-t lsposed`).
+- **Zygisk**: bundle a pinned public API header and build all four Android ABIs with NDK; the starter safely unloads without modifying processes.
+- **LSPosed**: provide a legacy API 82 Gradle project, entrypoint, scope metadata and a companion ZIP build hook; document separate APK activation and release signing.
+- **skills and release**: update template/module development skills and include both templates in release archives.
+
 ## v0.6.15 (2026-11-13)
 
 - **targets**: document current KernelSU mounting metamodule requirements, APatch APM scope, and portable lifecycle entrypoints with official references.

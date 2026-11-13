@@ -177,3 +177,19 @@ Official sources:
 - https://github.com/actions/download-artifact
 - https://developer.android.com/ndk/downloads
 - https://github.com/bbqsrc/cargo-ndk
+
+## Injection Template Toolchains
+
+- Zygisk (`kam init ... -t zygisk`): install Android NDK and export
+  `ANDROID_NDK_HOME` before `kam build`. The template invokes `ndk-build`
+  for arm64-v8a, armeabi-v7a, x86 and x86_64. Check the resulting
+  `zygisk/<abi>.so` entries; Rust targets alone do not build this template.
+- LSPosed (`kam init ... -t lsposed`): install JDK 17+, Gradle 8.9, Android
+  SDK platform 35 and build tools 35.0.0. Export `ANDROID_HOME`; the hook
+  runs `:app:assembleDebug` and bundles `apk/module.apk`. For release APKs,
+  configure project signing and `assembleRelease` explicitly.
+- The LSPosed companion ZIP does not install/enable the APK or the LSPosed
+  framework. Keep APK installation, LSPosed scope selection and device
+  acceptance separate from artifact checks.
+- Kam's Android release template bundle must include both
+  `zygisk_template.tar.gz` and `lsposed_template.tar.gz`.
