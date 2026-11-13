@@ -67,6 +67,8 @@ unzip -t dist/hello_root.zip
 unzip -p dist/hello_root.zip module.prop
 ```
 
+Read the `kam check` report as well as its exit code; resolve or explain reported findings before claiming validation passed.
+
 When GitHub CI is needed, ask for `kam workflow install owner/repo`.
 Report local packaging separately from installation and post-reboot device tests.
 

@@ -62,6 +62,8 @@ unzip -t dist/hello_root.zip
 unzip -p dist/hello_root.zip module.prop
 ```
 
+请阅读 `kam check` 的完整报告；部分版本即使报告错误也返回零，需处理或解释具体问题后再宣称检查通过。
+
 需要 GitHub CI 时，再要求技能执行 `kam workflow install owner/repo`。本地打包成功与真机安装、重启后的功能验收分别报告。
 
 ###  Kam 生态系统

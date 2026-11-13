@@ -86,6 +86,11 @@ If these skills are unavailable, inspect the generated project's own runtime,
 CLI help, and official manager docs; do not assume a machine-specific skill path.
 
 Finish with `kam check`, `kam build`, ZIP integrity and root-layout inspection.
+Read the `kam check` report, not only its exit status: some versions return zero
+while reporting errors. Investigate flagged shell commands with their full
+redirections and callers before deciding whether they are defects or false
+positives; `/dev/zero` as an input alone does not imply a device write.
+Report unresolved findings explicitly.
 Report the artifact path and the behavior implemented. Installation, reboot,
 and physical-device acceptance are separate from local packaging; execute them
 only when within the user's requested scope and a suitable device is available.
