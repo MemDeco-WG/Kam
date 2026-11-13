@@ -28,6 +28,42 @@ Kam 支持常见 Android root/module 打包目标：
 
 官方依据：[KernelSU 模块指南](https://kernelsu.org/guide/module.html)、[metamodule](https://kernelsu.org/guide/metamodule.html)、[APatch APM](https://apatch.dev/apm-guide.html)、[Magisk 开发指南](https://topjohnwu.github.io/Magisk/guides.html)、[AnyKernel3](https://github.com/osm0sis/AnyKernel3)。最后核实：2026-11-13。
 
+## 使用 AI 技能快速开发 Magisk 模块
+
+先安装 Kam CLI，再将本仓库技能安装到 Codex 全局目录（已存在时先检查差异）：
+
+```bash
+git clone https://github.com/MemDeco-WG/Kam.git
+mkdir -p ~/.codex/skills
+cp -R Kam/.agents/skills/magisk-module-development ~/.codex/skills/
+cp -R Kam/.agents/skills/kamfw-framework-usage ~/.codex/skills/
+cp -R Kam/.agents/skills/kam-template-development ~/.codex/skills/
+cp -R Kam/.agents/skills/setup-kam-workflow ~/.codex/skills/
+```
+
+已克隆本仓库时，直接从当前目录的 `.agents/skills/` 复制即可。安装后的下一轮对话可使用技能。在模块项目的父目录启动 Codex，输入：
+
+```text
+$magisk-module-development 使用 Kam 创建 hello_root Magisk 模块，
+在开机时向模块自己的目录写入一条启动记录。复用 kamfw 生命周期和日志，
+完成本地检查、构建及 ZIP 验证，告诉我产物路径。
+```
+
+技能会按任务需要使用模板、kamfw 和工作流技能。等价的手动创建流程是：
+
+```bash
+kam init hello_root -t kam --id hello_root --project-name "Hello Root" \
+  --author Example --version 1.0.0 --description "Example Magisk module"
+cd hello_root
+# 在 src/hello_root/ 中实现模块行为，复用生成的 kamfw 入口。
+kam check
+kam build
+unzip -t dist/hello_root.zip
+unzip -p dist/hello_root.zip module.prop
+```
+
+需要 GitHub CI 时，再要求技能执行 `kam workflow install owner/repo`。本地打包成功与真机安装、重启后的功能验收分别报告。
+
 ###  Kam 生态系统
 
 Kam 的核心由三大组件构成，旨在提供一个连贯而高效的开发体验：

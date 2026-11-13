@@ -50,27 +50,54 @@ Official sources:
    - `cargo run -- export`
    Otherwise use the installed `kam` CLI.
 
-## Create A Module
+## Quick Start: Build A Magisk Module With Kam
 
-For a standard Magisk-style module:
+For a request such as “快速使用 Kam 建立一个 Magisk 模块”, create a working
+Kam project and package it. Infer noncritical example metadata when omitted;
+ask only for behavior that materially changes the module. For an existing
+repository, inspect and extend its layout instead of nesting a new project.
+
+Check `kam init --help` for the installed CLI, then use the standard template:
 
 ```bash
-kam init my_module -t kam_template
-cd my_module
+kam init hello_root -t kam --id hello_root --project-name "Hello Root" \
+  --author Example --version 1.0.0 --description "Example Magisk module"
+cd hello_root
 kam check
 kam build
+unzip -t dist/hello_root.zip
+unzip -p dist/hello_root.zip module.prop
 ```
+
+Implement the requested behavior under `src/<module_id>/`, using the generated
+kamfw runtime and existing helpers. Inspect generated scripts before editing;
+prefer a minimal working change over extra services or dependencies. For a
+simple boot action, use one `service` lifecycle handler; use a dedicated
+boot-completed handler only when the behavior requires completed boot.
+Do not duplicate the business logic in both phases.
+
+Use the companion skills when the task reaches their scope:
+- `kam-template-development`: template rendering, `kam init`, packaging templates.
+- `kamfw-framework-usage`: lifecycle, i18n, logging, installer and runtime helpers.
+- `setup-kam-workflow`: generate validation/build/release workflows with
+  `kam workflow install owner/repo` when CI is requested.
+
+If these skills are unavailable, inspect the generated project's own runtime,
+CLI help, and official manager docs; do not assume a machine-specific skill path.
+
+Finish with `kam check`, `kam build`, ZIP integrity and root-layout inspection.
+Report the artifact path and the behavior implemented. Installation, reboot,
+and physical-device acceptance are separate from local packaging; execute them
+only when within the user's requested scope and a suitable device is available.
+Do not imply that a successful ZIP build proves runtime compatibility.
 
 For template-backed variants:
 
 ```bash
 kam tmpl list
-kam init my_module -t kam_template
 kam init my_meta_module -t meta_template
 kam init my_kernel_module -t ak3_template
 ```
-
-Use `--interactive` when project metadata is unclear and the user has not supplied enough details.
 
 ## Module Layout Rules
 

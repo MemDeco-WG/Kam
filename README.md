@@ -29,6 +29,47 @@ Compatibility follows each manager's current interfaces. KernelSU requires a mou
 
 Official references: [KernelSU module guide](https://kernelsu.org/guide/module.html), [metamodules](https://kernelsu.org/guide/metamodule.html), [APatch APM](https://apatch.dev/apm-guide.html), [Magisk developer guide](https://topjohnwu.github.io/Magisk/guides.html), and [AnyKernel3](https://github.com/osm0sis/AnyKernel3). Last checked: 2026-11-13.
 
+## Develop a Magisk module with AI skills
+
+Install the Kam CLI, then install this repository's skills globally for Codex
+(compare existing skill directories before replacing them):
+
+```bash
+git clone https://github.com/MemDeco-WG/Kam.git
+mkdir -p ~/.codex/skills
+cp -R Kam/.agents/skills/magisk-module-development ~/.codex/skills/
+cp -R Kam/.agents/skills/kamfw-framework-usage ~/.codex/skills/
+cp -R Kam/.agents/skills/kam-template-development ~/.codex/skills/
+cp -R Kam/.agents/skills/setup-kam-workflow ~/.codex/skills/
+```
+
+If already working in this checkout, copy from its `.agents/skills/` directory.
+The skills are available on the next turn. Start Codex in the intended parent
+folder and ask:
+
+```text
+$magisk-module-development Create a hello_root Magisk module with Kam.
+Write a boot record inside the module directory using kamfw lifecycle and
+logging helpers. Check, build, verify the ZIP, and report the artifact path.
+```
+
+The skill uses the template, kamfw, and workflow skills as needed. To scaffold
+and package a module manually:
+
+```bash
+kam init hello_root -t kam --id hello_root --project-name "Hello Root" \
+  --author Example --version 1.0.0 --description "Example Magisk module"
+cd hello_root
+# Implement behavior under src/hello_root/ using the generated kamfw entrypoints.
+kam check
+kam build
+unzip -t dist/hello_root.zip
+unzip -p dist/hello_root.zip module.prop
+```
+
+When GitHub CI is needed, ask for `kam workflow install owner/repo`.
+Report local packaging separately from installation and post-reboot device tests.
+
 ## Features
 
 - Fast project initialization from built-in, local, archive, and cached
