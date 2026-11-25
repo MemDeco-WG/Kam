@@ -17,6 +17,7 @@ mod audit;
 mod kamfw_semantics;
 mod rewrite;
 
+#[cfg(test)]
 #[derive(Clone)]
 pub(super) struct PackageFile {
     pub(super) rel_path: String,
@@ -42,17 +43,30 @@ impl ShellPackageOptimizer {
         self.args.trim_shell || self.args.obfuscate_shell
     }
 
+    pub(super) fn inspect(
+        &mut self,
+        name: &str,
+        mut input: impl std::io::Read,
+    ) -> Result<(), KamError> {
+        use std::io::Read;
+        let mut content = Vec::new();
+        // The longest recognized shebang is "#!/system/bin/sh".
+        (&mut input).take(16).read_to_end(&mut content)?;
+        if is_shell_script(name, &content) {
+            input.read_to_end(&mut content)?;
+            if let Ok(text) = std::str::from_utf8(&content) {
+                self.scripts
+                    .insert(name.to_owned(), analyze_script(name, text)?);
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
     pub(super) fn prepare(&mut self, files: &[PackageFile]) -> Result<(), KamError> {
         self.scripts.clear();
         for file in files {
-            if !is_shell_script(&file.rel_path, &file.content) {
-                continue;
-            }
-            let Ok(content) = String::from_utf8(file.content.clone()) else {
-                continue;
-            };
-            let info = analyze_script(&file.rel_path, &content)?;
-            self.scripts.insert(file.rel_path.clone(), info);
+            self.inspect(&file.rel_path, &file.content[..])?;
         }
         Ok(())
     }
@@ -64,9 +78,16 @@ impl ShellPackageOptimizer {
         self.reachable_scripts().contains(rel_path)
     }
 
+    #[cfg(test)]
     pub(super) fn transform_file(&self, file: &PackageFile) -> Result<Vec<u8>, KamError> {
-        let Some(info) = self.scripts.get(&file.rel_path) else {
-            return Ok(file.content.clone());
+        Ok(self
+            .transform_script(&file.rel_path)?
+            .unwrap_or_else(|| file.content.clone()))
+    }
+
+    pub(super) fn transform_script(&self, name: &str) -> Result<Option<Vec<u8>>, KamError> {
+        let Some(info) = self.scripts.get(name) else {
+            return Ok(None);
         };
         let mut content = info.content.clone();
         let reachable_functions = self.reachable_functions();
@@ -82,7 +103,7 @@ impl ShellPackageOptimizer {
             let obfuscated = obfuscate_body(&content, info, &self.module_id)?;
             content = insert_audit_preamble_after_shebang(&obfuscated, &audit_preamble);
         }
-        Ok(content.into_bytes())
+        Ok(Some(content.into_bytes()))
     }
 
     fn reachable_scripts(&self) -> BTreeSet<String> {
