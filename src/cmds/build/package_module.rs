@@ -1,13 +1,13 @@
 use super::args::BuildArgs;
 use super::package_filter::PackageFilter;
-use super::shell_optimize::{PackageFile, ShellPackageOptimizer};
+use super::shell_optimize::ShellPackageOptimizer;
 use crate::errors::kam::KamError;
 use crate::types::kam_toml::KamToml;
 use crate::utils::Utils;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use zip::{ZipWriter, write::FileOptions};
 
@@ -167,22 +167,23 @@ fn add_module_source_files(
     let effective_args = effective_package_args(args, kam_toml);
     let mut optimizer = ShellPackageOptimizer::new(&effective_args, &kam_toml.prop.id);
     if optimizer.enabled() {
-        optimizer.prepare(&files)?;
-        files.retain(|file| optimizer.should_package(&file.rel_path));
+        for (name, path) in &files {
+            optimizer.inspect(name, File::open(path)?)?;
+        }
+        files.retain(|(name, _)| optimizer.should_package(name));
     }
     let file_count = files.len();
     let pb = packaging_progress(args, file_count);
     let mut count = 0;
 
-    for file in files {
-        update_packaging_progress(pb.as_ref(), &file.rel_path);
-        zip.start_file(file.rel_path.clone(), options)?;
-        let content = if optimizer.enabled() {
-            optimizer.transform_file(&file)?
+    for (name, path) in files {
+        update_packaging_progress(pb.as_ref(), &name);
+        zip.start_file(&name, options)?;
+        if let Some(content) = optimizer.transform_script(&name)? {
+            zip.write_all(&content)?;
         } else {
-            file.content
-        };
-        zip.write_all(&content)?;
+            std::io::copy(&mut File::open(path)?, zip)?;
+        }
         count += 1;
         if let Some(p) = &pb {
             p.set_position(count);
@@ -210,7 +211,7 @@ fn effective_package_args(args: &BuildArgs, kam_toml: &KamToml) -> BuildArgs {
 fn collect_module_files(
     src_dir: &Path,
     filter: &PackageFilter,
-) -> Result<Vec<PackageFile>, KamError> {
+) -> Result<Vec<(String, PathBuf)>, KamError> {
     let walker = ignore::WalkBuilder::new(src_dir)
         .git_ignore(false)
         .hidden(false)
@@ -234,20 +235,9 @@ fn collect_module_files(
         if filter.should_skip_file(&rel_str, file_name_opt) {
             continue;
         }
-        let mut f = File::open(path).map_err(|e| {
-            KamError::Io(std::io::Error::new(
-                e.kind(),
-                format!("Failed to open source file '{}': {e}", path.display()),
-            ))
-        })?;
-        let mut content = Vec::new();
-        f.read_to_end(&mut content)?;
-        files.push(PackageFile {
-            rel_path: rel_str,
-            content,
-        });
+        files.push((rel_str, path.to_owned()));
     }
-
+    files.sort_unstable_by(|a, b| a.0.cmp(&b.0));
     Ok(files)
 }
 
@@ -275,10 +265,7 @@ fn add_mmrl_files(
         let file_path = project_path.join(&file_name);
         if file_path.exists() {
             zip.start_file(&file_name, options)?;
-            let mut file = File::open(&file_path)?;
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer)?;
-            zip.write_all(&buffer)?;
+            std::io::copy(&mut File::open(&file_path)?, zip)?;
             if !args.quiet {
                 Utils::info(&file_name);
             }

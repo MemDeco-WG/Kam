@@ -1,6 +1,7 @@
 use super::*;
 use crate::types::kam_toml::KamToml;
 use crate::types::kam_toml::sections::build::BuildSection;
+use std::io::Read;
 use tempfile::tempdir;
 
 fn quiet_args() -> BuildArgs {
@@ -180,4 +181,35 @@ fn rejects_invalid_local_header_before_publication() {
     file.seek(SeekFrom::Start(0)).unwrap();
     file.write_all(b"FAIL").unwrap();
     assert!(super::validate_module_zip(&path).is_err());
+}
+
+#[test]
+fn raw_assets_keep_their_bytes_with_and_without_shell_optimization() {
+    let temp = tempdir().unwrap();
+    let src = temp.path().join("src/example");
+    std::fs::create_dir_all(&src).unwrap();
+    let bytes: Vec<u8> = (0_u8..=255).cycle().take(256 * 1024).collect();
+    std::fs::write(src.join("payload"), &bytes).unwrap();
+    std::fs::write(src.join("service.sh"), "#!/system/bin/sh\necho ok\n").unwrap();
+    for trim_shell in [false, true] {
+        let mut args = quiet_args();
+        args.trim_shell = trim_shell;
+        let path = create_kam_module_zip(
+            &base_kam_toml(),
+            temp.path(),
+            "result",
+            "example",
+            temp.path(),
+            &args,
+        )
+        .unwrap();
+        let mut archive = zip::ZipArchive::new(File::open(path).unwrap()).unwrap();
+        let mut actual = Vec::new();
+        archive
+            .by_name("payload")
+            .unwrap()
+            .read_to_end(&mut actual)
+            .unwrap();
+        assert_eq!(actual, bytes);
+    }
 }
